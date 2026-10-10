@@ -1,0 +1,9 @@
+{
+  "name": "wild-echoes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node qa-engine.mjs",
+    "check": "node --check dist/app.js && node --check dist/engine.js"
+  }
+}

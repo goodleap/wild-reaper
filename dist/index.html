@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111a15">
+  <meta name="description" content="无尽的荒野生存。自动攻击、自由走位，怪潮持续进化，挑战你的生存极限。">
+  <title>荒野回响 · 割草生存</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <a class="brand" href="./" aria-label="荒野回响首页"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none"><path d="M17 3 6 19h9l-2 10L27 12H17l3-9Z" fill="currentColor"/></svg></span><span>荒野回响<small>WILD ECHOES</small></span></a>
+      <div class="header-center"><span class="live-dot"></span>一人，一片荒野，无限可能。</div>
+      <div class="header-actions"><button id="sound-button" class="icon-button" aria-label="开启音效" title="开启音效"><svg id="sound-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m11 5-5 4H3v6h3l5 4V5Z"/><path class="sound-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-off" d="m16 9 6 6m0-6-6 6"/></svg></button><button id="help-button" class="icon-button" title="玩法说明" aria-label="玩法说明">?</button><span class="header-divider"></span><span class="edition">生存试炼 <span>01</span></span></div>
+    </header>
+
+    <main>
+      <section class="arena" id="arena" aria-label="荒野回响游戏区域">
+        <canvas id="game-canvas" aria-label="使用 WASD 或方向键移动，空格冲刺；手机拖动屏幕移动"></canvas>
+        <div class="vignette"></div>
+        <div class="terrain-label"><span>01 / THE WHISPERING WOODS</span><span>低语之森</span></div>
+
+        <div id="hud" class="hud hidden">
+          <div class="vitals"><div class="vitals-label"><span class="hp-heart">♥</span><span id="hp-label">100 / 100</span><span id="level-label">LV. 1</span></div><div class="health-track"><i id="health-fill"></i></div><div class="xp-track"><i id="xp-fill"></i></div></div>
+          <div class="timer-block"><span class="hud-caption" id="phase-label">存活时间</span><strong id="timer">00:00</strong><span class="timer-goal" id="wave-label">第 1 波 · 无尽模式</span></div>
+          <div class="combat-actions"><div class="kills-block"><span class="hud-caption">击败</span><strong id="kills">0</strong></div><button id="pause-button" class="icon-button pause-button" aria-label="暂停游戏" title="暂停 (Esc)">Ⅱ</button></div>
+        </div>
+
+        <div id="boss-bar" class="boss-bar hidden"><div><span id="boss-name">荒野领主</span><span id="boss-hp">100%</span></div><div class="boss-track"><i id="boss-fill"></i></div></div>
+        <div id="toast" class="toast" role="status"></div>
+
+        <div class="intro" id="intro">
+          <div class="intro-content">
+            <div class="eyebrow"><span></span> ROGUELITE SURVIVAL <span class="eyebrow-line"></span></div>
+            <h1>活下来。<br>然后，<em>横扫荒野。</em></h1>
+            <p class="intro-description">怪潮已至，魔法在手。<br>走位、收集、进化，成为森林最后的幸存者。</p>
+            <div class="intro-tags"><span><svg viewBox="0 0 16 16"><path d="m9 1-6 8h5l-1 6 6-9H8Z"/></svg>自动攻击</span><span><svg viewBox="0 0 16 16"><path d="m8 1 6 7-6 7-6-7Z"/></svg>随机升级</span><span><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 2"/></svg>无尽生存</span></div>
+            <div class="start-row"><button id="start-button" class="primary-button"><span>进入荒野</span><span class="button-arrow">↗</span></button><fieldset class="difficulty-control"><legend>挑战难度</legend><div class="difficulty-options"><label class="difficulty-option"><input id="difficulty-normal" type="radio" name="difficulty" value="normal" checked><span>标准试炼</span></label><label class="difficulty-option"><input id="difficulty-casual" type="radio" name="difficulty" value="casual"><span>轻松漫游</span></label></div></fieldset></div>
+            <div class="best-line"><span class="trophy">♜</span><span id="best-label">新的冒险，等你书写。</span></div>
+          </div>
+          <div class="hero-caption"><span class="tiny-star">✦</span><span>林间旅人<small>THE WANDERER</small></span><span class="hero-line"></span></div>
+          <div class="intro-bottom"><span><i class="live-dot"></i> 无需下载，即刻开战</span><span>探索你的生存流派 <span>↘</span></span></div>
+        </div>
+
+        <div class="game-bottom hidden" id="game-bottom"><div class="loadout" id="loadout"></div><div class="dash-box"><span class="dash-key">SPACE</span><span id="dash-label">冲刺就绪</span><div class="dash-track"><i id="dash-fill"></i></div></div></div>
+        <div id="joystick" class="joystick hidden"><div id="joystick-thumb"></div></div>
+        <button class="touch-dash hidden" id="touch-dash" aria-label="冲刺">ϟ<small>冲刺</small></button>
+
+        <div class="modal-layer hidden" id="upgrade-overlay"><div class="upgrade-panel" role="dialog" aria-modal="true" aria-labelledby="upgrade-title"><div class="eyebrow centered">✦ &nbsp; LEVEL UP</div><h2 id="upgrade-title">荒野的馈赠</h2><p>选择一项强化，让下一波怪潮记住你。</p><div id="upgrade-cards" class="upgrade-cards"></div><span class="modal-footnote">时间已暂停 · 选择后继续冒险</span></div></div>
+        <div class="modal-layer hidden" id="pause-overlay"><div class="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="eyebrow centered">TAKE A BREATH</div><h2 id="pause-title">在此，稍作停留。</h2><p>荒野会等你。准备好了就继续。</p><button class="primary-button wide" id="resume-button">继续冒险 <span>→</span></button><button class="secondary-button wide" id="quit-button">结束本局，返回首页</button></div></div>
+        <div class="modal-layer hidden" id="end-overlay"><div class="dialog-panel end-panel" role="dialog" aria-modal="true" aria-labelledby="end-title"><div class="end-emblem" id="end-emblem">✦</div><div class="eyebrow centered" id="end-kicker">THE JOURNEY CONTINUES</div><h2 id="end-title">荒野记住了你。</h2><p id="end-description">每一次出发，都比上一次更强。</p><div class="end-stats"><div><strong id="end-time">00:00</strong><span>存活时间</span></div><div><strong id="end-kills">0</strong><span>击败怪物</span></div><div><strong id="end-level">1</strong><span>最终等级</span></div></div><button id="restart-button" class="primary-button wide">再次出发 <span>↗</span></button><button id="home-button" class="secondary-button wide">返回首页</button></div></div>
+        <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list"><div><b>01</b><p><strong>保持移动</strong><span>WASD / 方向键移动；手机拖动屏幕。灵弹会自动瞄准最近的敌人。</span></p></div><div><b>02</b><p><strong>收集与进化</strong><span>靠近绿色灵晶可拾取经验，升级时三选一，组合你的专属技能。</span></p></div><div><b>03</b><p><strong>冲出包围</strong><span>按空格或手机冲刺按钮短暂无敌，冷却 3 秒。Esc / P 暂停。</span></p></div><div><b>04</b><p><strong>无尽挑战</strong><span>没有时间上限。每分钟怪潮增强；首位领主在 02:30 出现，此后约每 2 分 30 秒再临，存活越久挑战越强。</span></p></div></div><button id="help-done" class="primary-button wide">准备好了 <span>→</span></button></div></div>
+      </section>
+      <footer class="footer"><div class="keyboard-guide"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移动</span><i></i><kbd class="space-key">SPACE</kbd><span>冲刺</span><i></i><kbd>ESC</kbd><span>暂停</span></div><div class="mobile-guide">拖动屏幕移动 · 点击右下角冲刺</div><span class="footer-note">保持移动。惊喜总在下一次升级。</span></footer>
+    </main>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
