@@ -33,6 +33,12 @@
 
 将 `dist` 作为静态网站目录即可部署，所有资源均使用相对路径。
 
+## 版本号
+
+开始画面的版本为 `v0.0.N`，`N` 是 GitHub 仓库 `goodleap/wild-reaper` 当前提交可达的历史提交总数，首次提交为 `v0.0.1`。GitHub Pages 在每次 `main` 推送后拉取完整历史并运行 `npm run stamp-version`，直接更新部署产物，不产生额外的版本提交；仅修改文档的提交也计入。
+
+Sites 使用独立的源码仓库。每次同步发布前，先核对 GitHub `main` 的完整提交数，将即将提交的本次改动计入，再运行 `npm run stamp-version -- --commit-count N`，使 Sites 和 GitHub Pages 版本一致。请勿使用 Sites 自身的 Git 计数。版本仅增加最后一段，`v0.0.9` 之后是 `v0.0.10`。
+
 ## 验证
 
 运行 `npm run check` 检查语法，`npm test` 运行整局模拟，以及暂停升级、全屏雷击及冷却、死亡、无尽进阶、地形碰撞与怪物绕行、围攻周期、屏外出生与索敌、经验守恒、领主预警、新怪攻击与地图奖励检查。

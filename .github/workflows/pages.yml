@@ -3,9 +3,6 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: ["main"]
-    paths:
-      - "dist/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -26,6 +23,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Stamp version from complete commit history
+        run: node scripts/stamp-version.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site
