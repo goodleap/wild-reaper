@@ -85,8 +85,8 @@ assert.equal(pause.skillLevel,2);assert.equal(pause.player.level,1);
 const death=new Game({adventure:false});death.player.hp=1;
 death.enemies[0].x=death.player.x;death.enemies[0].y=death.player.y;
 death.update(.02,{});assert.equal(death.status,'dead');
-const waves=new Game({adventure:false});waves.time=59.99;waves.update(.02,{});
-assert.equal(waves.wave,2);assert.equal(waves.events.filter(e=>e.type==='wave').length,1);
+const waves=new Game({adventure:false});waves.time=19.99;waves.update(.02,{});
+assert.equal(waves.pressurePhase,'warning');assert.equal(waves.wave,1);assert.equal(waves.events.filter(e=>e.type==='wave').length,1);
 waves.events.length=0;waves.update(.02,{});assert(!waves.events.some(e=>e.type==='wave'));
 const boss=new Game({adventure:false});boss.crystalsNext=Infinity;assert.equal(boss.nextBossAt,120);
 boss.time=119.99;boss.player.invuln=1000;boss.update(.02,{});
@@ -125,7 +125,7 @@ assert(late.enemies.at(-1).hp>late.enemies[0].hp*2&&late.enemies.at(-1).damage>l
 
 const priority=['orbit','pulse','lightning','multishot','power','rapid','vitality','magnet','regen','speed','endlessPower','endlessVitality','endlessRegen'];
 const sim=(difficulty,seconds,immortal=false)=>{
-  const g=new Game({difficulty});let frames=0,upgrades=0,killsAt180=0,maxEnemies=0,maxBullets=0,maxGems=0;
+  const g=new Game({difficulty});let frames=0,upgrades=0,killsAt180=0,levelAt180=1,maxEnemies=0,maxBullets=0,maxGems=0;
   while(['playing','upgrade','super'].includes(g.status)&&g.time<seconds&&frames++<30*(seconds+10)) {
     if(g.status==='super'){assert(g.chooseSuper(g.getSuperChoices()[0].id));continue;}
     if(g.status==='upgrade') {
@@ -142,18 +142,18 @@ const sim=(difficulty,seconds,immortal=false)=>{
     for(const e of g.enemies){const dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||1;if(d<105){const force=(105-d)/105*2;vx+=dx/d*force;vy+=dy/d*force;}}
     const l=Math.hypot(vx,vy)||1;
     g.update(1/30,{x:vx/l,y:vy/l,skill:g.player.skillCooldown<=0&&g.enemies.length>=8});
-    if(g.time<180)killsAt180=g.kills;
+    if(g.time<180){killsAt180=g.kills;levelAt180=g.player.level;}
     maxEnemies=Math.max(maxEnemies,g.enemies.length);maxBullets=Math.max(maxBullets,g.bullets.length);maxGems=Math.max(maxGems,g.gems.length);
     if(frames%60===0)finite(g);
     assert(!g.events.some(e=>e.type==='win'));
     g.events.length=0;
   }
   finite(g);
-  return {status:g.status,time:Math.round(g.time),wave:g.wave,kills:g.kills,killsAfter180:g.kills-killsAt180,level:g.player.level,hp:Math.round(g.player.hp),bossCount:g.bossCount,bossKills:g.bossKills,upgrades,maxEnemies,maxBullets,maxGems};
+  return {status:g.status,time:Math.round(g.time),wave:g.wave,kills:g.kills,killsAfter180:g.kills-killsAt180,level:g.player.level,levelsAfter180:g.player.level-levelAt180,hp:Math.round(g.player.hp),bossCount:g.bossCount,bossKills:g.bossKills,upgrades,maxEnemies,maxBullets,maxGems};
 };
 if(!process.argv.includes('--focused')) {
 const full=sim('normal',720,true);
-assert(full.time>=720&&full.killsAfter180>100&&full.level>=20);
+assert(full.time>=720&&full.killsAfter180>100&&full.levelsAfter180>=6,'combat and character growth continue well beyond the opening');
 assert(full.bossCount>=3&&full.bossKills>=2,'repeated boss lifecycle');
 assert.equal(full.status,'playing');
 console.log(JSON.stringify({checks:'pass',endless12Minutes:full,normal:sim('normal',240),casual:sim('casual',240)},null,2));

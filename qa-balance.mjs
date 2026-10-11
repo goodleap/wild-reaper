@@ -74,7 +74,7 @@ assert.equal(progression.player.level,1);assert.equal(progression.player.xp,0,'c
 const rhythm=arena(),observed=[rhythm.pressurePhase];
 rhythm._spawnEnemy=()=>{};
 let pausedSiege=false;
-while(rhythm.time<110&&observed.length<5) {
+while(rhythm.time<110&&observed.length<6) {
   rhythm.update(.05);
   if(observed.at(-1)!==rhythm.pressurePhase)observed.push(rhythm.pressurePhase);
   if(rhythm.pressurePhase==='siege'&&!pausedSiege) {
@@ -84,7 +84,7 @@ while(rhythm.time<110&&observed.length<5) {
     rhythm.status='playing';pausedSiege=true;
   }
 }
-assert.deepEqual(observed,['steady','siege','relief','steady','siege'],'pressure rises, eases, and repeats');
+assert.deepEqual(observed,['steady','warning','siege','relief','steady','warning'],'pressure rises, eases, and repeats');
 assert(rhythm.events.some(e=>e.type==='siege')&&rhythm.events.some(e=>e.type==='relief'));
 assert(pausedSiege);
 

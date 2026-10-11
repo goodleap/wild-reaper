@@ -109,10 +109,10 @@ assert.equal(travel.nextBossAt,preserved.nextBossAt,'travel does not reset or ac
 
 const route=arena(),routeIds=[route.region.id],terrainSignatures=[];
 for(let i=0;i<3;i++) {
-  route.time=180+i*180;route.wave=1+Math.floor(route.time/60);openPortal(route);usePortal(route);
+  route.time=180+i*180;route.wave=4+i*4;route.waveDirector.count=route.wave;route.waveDirector.reset();const priorWave=route.wave;openPortal(route);usePortal(route);
   routeIds.push(route.region.id);assert.equal(route.regionIndex,i+1);
   terrainSignatures.push(JSON.stringify(route.terrain.query(200,-900,1100,900).map(o=>[o.type,o.x,o.y,o.r])));
-  assert.equal(route.time,180+i*180);assert.equal(route.wave,1+Math.floor(route.time/60),'regional travel retains endless difficulty progression');
+  assert.equal(route.time,180+i*180);assert.equal(route.wave,priorWave,'regional travel retains the real encounter count');
 }
 assert.deepEqual(routeIds,['forest','marsh','ruins','forest']);
 assert.equal(new Set(terrainSignatures).size,3,'each region transition builds a different seeded map');
@@ -217,7 +217,7 @@ const ordinary=monster(hunt,'slime',100,5.8);hunt._hurtEnemy(ordinary,ordinary.h
 
 const populations=[];
 for(const region of REGIONS) {
-  const g=arena();g.region=region;g.time=90;const counts={};const savedRandom=Math.random;
+  const g=arena();g.region=region;g.time=90;g._updatePressure=()=>{};const counts={};const savedRandom=Math.random;
   try {
     for(let i=0;i<240;i++) {
       g.enemies=[];g._spawn=0;Math.random=()=>((i+.5)/240);g.update(0);

@@ -1,5 +1,6 @@
 import { Terrain, groundOffset } from './terrain.js';
 import { RELICS } from './relics.js';
+import { OBJECTIVE_RULES, canStartObjective, majorFightActive } from './event-scheduling.js';
 
 const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -119,7 +120,7 @@ export class Settlements {
       else if(site.type==='occupied') {
         label=site.state==='active'?`剩余 ${site.remainingGuards} 名守卫`:site.state==='cleared'?'领取小屋宝藏':'挑战小屋守卫';
         description=site.state==='active'?'清除守卫后领取宝藏':'清理四名守卫，获得丰厚资源与补给';enabled=site.state!=='active';
-        if(site.state==='ready'&&(g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.companions?.camp||g.encounters?.active)){enabled=false;description='完成当前挑战后再清理小屋';}
+        if(site.state==='ready'&&!canStartObjective(g,{skipSite:site})){enabled=false;description='附近仍有战斗或首领即将出现，稍后再挑战小屋';}
       } else if(site.type==='castle') {
         label=site.explored||site.state==='spent'?'重返已探索古堡':'进入古堡迷宫';description=site.explored?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';
         if(g.enemies.some(e=>e.type==='boss'&&e.hp>0)){enabled=false;description='先击败当前区域首领';}
@@ -190,7 +191,7 @@ export class Settlements {
     return points;
   }
   _startGuards(site) {
-    const g=this.game;if(g.enemies.length+SETTLEMENT_RULES.guards>180||g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.companions?.camp||g.encounters?.active)return false;
+    const g=this.game;if(site.state!=='ready'||g.enemies.length+SETTLEMENT_RULES.guards>180||!canStartObjective(g,{skipSite:site}))return false;
     const points=this._guardPoints(site);if(points.length!==SETTLEMENT_RULES.guards)return false;
     site.state='active';site._remaining=new Set();site.guardIds=[];
     for(let i=0;i<points.length;i++) {
@@ -211,10 +212,10 @@ export class Settlements {
   }
   update(dt) {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return;
-    const p=this._foot();
+    const p=this._foot(),majorFight=majorFightActive(g);
     for(const site of this.sites)if(site.state==='active')for(const enemy of g.enemies) {
       if(enemy.hp<=0||enemy.settlementId!==site.id)continue;
-      const foot={x:enemy.x,y:enemy.y+groundOffset(enemy)},near=distance(p,site.door)<480&&distance(foot,site.door)<480;
+      const foot={x:enemy.x,y:enemy.y+groundOffset(enemy)},near=!majorFight&&distance(p,site.door)<OBJECTIVE_RULES.houseEngage&&distance(foot,site.door)<OBJECTIVE_RULES.houseEngage;
       enemy.guardActive=near;enemy.guardReturnTarget=!near&&distance(foot,enemy.settlementHome)>12?enemy.settlementHome:null;
     }
   }

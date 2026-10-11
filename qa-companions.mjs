@@ -267,14 +267,14 @@ advance(scheduled,.2);assert(scheduled.companions.camp,'the first optional rescu
 assert.equal(scheduled.enemies.filter(e=>e.rescueId).length,6);
 const blocker=arena({companions:true});monster(blocker,350,0,'boss');advance(blocker,40);
 assert.equal(blocker.companions.camp,null,'an active Boss prevents a new rescue camp');
-const imminent=arena({companions:true});imminent.nextBossAt=80;advance(imminent,40);
+const imminent=arena({companions:true});imminent.nextBossAt=55;advance(imminent,40);
 assert.equal(imminent.companions.camp,null,'rescue generation leaves time before the upcoming Boss');
 const eventBlock=arena({companions:true});eventBlock.encounters=new Encounters(eventBlock,{generation:false});
 const event=eventBlock.encounters.spawn('hunt',0,19.8);event.life=100;advance(eventBlock,40);
 assert.equal(eventBlock.companions.camp,null,'an active timed objective prevents another rescue objective');
-const campBlock=arena();campBlock.companions.spawn('warden',350,19.8);
+const campBlock=arena();campBlock.companions.spawn('warden',350,19.8);campBlock.player.x=150;
 campBlock.encounters=new Encounters(campBlock);campBlock.encounters.nextAt=0;advance(campBlock,.1);
-assert.equal(campBlock.encounters.active,null,'a rescue camp defers automatic timed encounters');
+assert.equal(campBlock.encounters.active,null,'a nearby engaged rescue camp defers automatic timed encounters');
 const hunt=arena();hunt.encounters=new Encounters(hunt,{generation:false});
 const huntEvent=hunt.encounters.spawn('hunt',0,19.8),rescueGuard=monster(hunt,100);
 rescueGuard.rescueId='qa-rescue';rescueGuard.eventRole='rescueGuard';rescueGuard.xp=0;

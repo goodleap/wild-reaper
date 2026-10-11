@@ -14,6 +14,7 @@ import { resetLocomotion, updateLocomotion } from './locomotion.js';
 import { SuperSkills, SUPER_SKILLS } from './super-skills.js';
 import { Dungeon } from './dungeon.js';
 import { Settlements } from './settlements.js';
+import { WaveDirector } from './wave-director.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
@@ -86,7 +87,7 @@ export class Game {
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.hero=getHero(hero);
     this.status = 'playing'; this.time = 0; this.runTime=0; this.kills = 0; this.wave = 1;
-    this.pressurePhase='steady';this.phaseEndsAt=24;
+    this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
     const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:this.hero.skillCooldown,facing:0};
@@ -119,6 +120,7 @@ export class Game {
     this.companions=new Companions(this,{generation:companions});
     this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);
     this.settlements??=new Settlements(this,{generation:settlements});
+    this.waveDirector=new WaveDirector(this);
     // A debug run gets a one-time testing budget; choices still use the
     // ordinary crystal thresholds and begin on the first gameplay update.
     if(this.debug)this.grantResources({gold:500,crystals:150},'debugStart');
@@ -175,8 +177,8 @@ export class Game {
     }
     return best;
   }
-  _spawnEnemy(type, radius) {
-    const p=this.player, t=this.time, a=rand(0,TAU);
+  _spawnEnemy(type, radius, angle) {
+    const p=this.player, t=this.time, a=Number.isFinite(angle)?angle:rand(0,TAU);
     const halfW=Math.max(390,this.viewWidth*.5+65),halfH=Math.max(290,this.viewHeight*.5+65);
     const edge=1/Math.max(Math.abs(Math.cos(a))/halfW,Math.abs(Math.sin(a))/halfH);
     const distance=radius || edge;
@@ -231,6 +233,7 @@ export class Game {
           else if(Math.random()<.08)this.dropGold(enemy.x+9,enemy.y,1);
         }
       }
+      this.waveDirector?.onEnemyKilled(enemy);
       this.dungeon.onEnemyKilled(enemy);
       this.settlements.onEnemyKilled(enemy);
       if(enemy.type==='boss') {
@@ -310,21 +313,7 @@ export class Game {
       e._navProgressX=e.x;e._navProgressY=e.y;e._navProgressTimer=0;
     }
   }
-  _updatePressure() {
-    let phase='steady',end=24;
-    if(this.time>=24) {
-      const elapsed=this.time-24,cycle=Math.floor(elapsed/36),local=elapsed%36,start=24+cycle*36;
-      phase=local<8?'siege':local<15?'relief':'steady';
-      end=start+(phase==='siege'?8:phase==='relief'?15:36);
-    }
-    if(phase!==this.pressurePhase) {
-      this.pressurePhase=phase;
-      if(phase==='siege'||phase==='relief')this._emit(phase);
-      // A previous phase's long spawn timer must not delay the next siege.
-      this._spawn=Math.min(this._spawn,.2);
-    }
-    this.phaseEndsAt=end;
-  }
+  _updatePressure(dt=0) { this.waveDirector.update(dt); }
   _hurtPlayer(amount) {
     const p=this.player;if(p.invuln>0||this.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
     amount=this.relics?.modifyIncomingDamage(amount)??amount;
@@ -492,7 +481,7 @@ export class Game {
     if(this._features.encounters)this.encounters=new Encounters(this);
     if(this._features.environment)this.environment=new Environment(this);
     this.companions.onRegionChange();
-    this.dungeon.resetRegion();this.settlements.resetRegion();
+    this.dungeon.resetRegion();this.settlements.resetRegion();this.waveDirector.reset();
     this._refreshStats();this._refreshWeapons();
     this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});
     return true;
@@ -509,9 +498,7 @@ export class Game {
     this.regionGrace=Math.max(0,this.regionGrace-dt);
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
     this.relics.update(dt);
-    if(!inDungeon)this._updatePressure();
-    const wave=1+Math.floor(this.time/60);
-    if(wave!==this.wave) { this.wave=wave; this._emit('wave'); }
+    if(!inDungeon)this._updatePressure(dt);
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=Math.max(0,p.skillCooldown-dt);
     this.environment?.update(dt);
     if(this.status==='dead')return;
@@ -529,9 +516,11 @@ export class Game {
     else this.dungeon.update(dt);
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
     if(!inDungeon)this._spawn-=dt;
-    if(!inDungeon&&this._spawn<=0&&this.regionGrace<=0) {
-      const pressure=this.pressurePhase==='siege'?1.85:this.pressurePhase==='relief'?.38:1;
-      const rate=Math.min(BALANCE.spawnMax,(BALANCE.spawnBase+this.time*BALANCE.spawnGrowth)*pressure)*(this.easy?.78:1);
+    if(!inDungeon&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
+      // The authored cohort owns assault pressure. Exploration is lighter,
+      // and a Boss gets space for its own readable attacks.
+      const bossActive=this.enemies.some(e=>e.type==='boss'&&e.hp>0);
+      const rate=Math.min(4.5,BALANCE.spawnBase+this.time*.008)*(this.easy?.78:1)*(bossActive?.38:1);
       this._spawn=1/rate;
       if(this.enemies.length<180) {
         const enemy=this._spawnEnemy(regionEnemyType(this,Math.random()));
@@ -838,9 +827,11 @@ export class Game {
       if(isBranchReady(this,weaponId)){this._branchOfferWeapon=weaponId;break;}
     }
     const ordinaryCount=this._branchOfferWeapon?1:3;
-    // Guarantee an attractive new weapon in early choices.
-    const chosen=[];
-    if(owned<3&&this.skillLevel<=3) {
+    // The first ordinary choice always changes the way the hero attacks,
+    // without adding extra modal interruptions or lowering later costs.
+    const opening=this.skillLevel===1&&owned===0&&!this._branchOfferWeapon;
+    const chosen=opening?pool.filter(u=>weaponIds.includes(u.id)):[];
+    if(!opening&&owned<3&&this.skillLevel<=3) {
       const newWeapons=pool.filter(u=>['orbit','pulse','lightning'].includes(u.id)&&!this.levels[u.id]);
       if(newWeapons.length) chosen.push(newWeapons[Math.floor(Math.random()*newWeapons.length)]);
     }
@@ -883,6 +874,11 @@ export class Game {
     }else {
       if(!(id in this.levels)||(LEVEL_CAPS[id]!==undefined&&this.levels[id]>=LEVEL_CAPS[id]))return false;
       this.levels[id]++;
+      if(['orbit','pulse','lightning'].includes(id)&&this.levels[id]===1) {
+        if(id==='pulse')this._pulse=.15;
+        if(id==='lightning')this._lightning=.15;
+        this._emit('weaponAcquired',{weaponId:id,name:choice.name});
+      }
     }
     this.crystals-=this.crystalsNext;this.skillLevel++;this.crystalsNext=crystalCost(this.skillLevel);
     if(this._branchOfferWeapon)this._branchOfferCursor=(BRANCH_WEAPONS.indexOf(this._branchOfferWeapon)+1)%BRANCH_WEAPONS.length;

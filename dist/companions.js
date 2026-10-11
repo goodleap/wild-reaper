@@ -1,5 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { resetLocomotion, updateLocomotion } from './locomotion.js';
+import { OBJECTIVE_RULES, canStartObjective, majorFightActive, objectivePointSafe } from './event-scheduling.js';
 
 const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -19,10 +20,7 @@ export class Companions {
   }
   _foot(entity=this.game.player) {return {x:entity.x,y:entity.y+groundOffset(entity,true)};}
   _canStart() {
-    const g=this.game;
-    if(g.regionGrace>0||g.enemies.some(e=>e.hp>0&&e.type==='boss')||g.nextBossAt-g.time<80||g.encounters?.active||g.settlements?.sites.some(site=>site.state==='active'))return false;
-    const chest=g.adventure?.treasure;
-    return !(chest?.state==='active'&&distance(chest,this._foot())<600);
+    return canStartObjective(this.game,{skipCamp:true});
   }
   _hazardFree(x,y,r=0) {
     const environment=this.game.environment;
@@ -32,7 +30,7 @@ export class Companions {
   }
   _point(x,y) {
     const g=this.game,p=this._foot();
-    const safe=q=>g.terrain.isFree(q.x,q.y,125)&&this._hazardFree(q.x,q.y,105)&&
+    const safe=q=>g.terrain.isFree(q.x,q.y,125)&&this._hazardFree(q.x,q.y,105)&&objectivePointSafe(g,q,125,{skipCamp:true})&&
       !g.adventure?.props.some(o=>distance(o,q)<135)&&
       (!g.adventure?.treasure||distance(g.adventure.treasure,q)>240)&&
       (!g.portal||distance(g.portal,q)>180);
@@ -162,7 +160,7 @@ export class Companions {
     const camp=this.camp,g=this.game;
     if(!camp||camp.id!==enemy.rescueId)return true;
     const p=this._foot(),foot={x:enemy.x,y:enemy.y+groundOffset(enemy)};
-    const active=distance(p,camp)<330&&distance(foot,camp)<250&&!g.enemies.some(e=>e.hp>0&&e.type==='boss');
+    const active=distance(p,camp)<OBJECTIVE_RULES.campEngage&&distance(foot,camp)<250&&!majorFightActive(g);
     enemy.guardActive=active;enemy.guardReturnTarget=null;
     if(!active) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;

@@ -16,7 +16,8 @@ assert.equal(ids[0],'miasma');assert.equal(offer.length,3);assert(offer.every(s=
 for(let i=0;i<5;i++)assert.deepEqual(locked.getSuperChoices().map(s=>s.id),ids);
 assert.equal(locked.superSkills.choose(ids[0]),false,'a reward cannot be claimed outside its modal');locked.status='super';assert.equal(locked.superSkills.choose('meteor'),false);assert.equal(locked.superSkills.choose('missing'),false);
 assert(locked.superSkills.choose('miasma'));assert.equal(locked.superSkills.choose('miasma'),false);assert.equal(locked.superSkills.owned.miasma,1);assert.equal(locked.superSkills.getUpgradeChoices()[0].id,'super:miasma');
-locked.status='playing';locked.crystalsNext=40;locked.crystals=40;locked.update(0);let card;
+locked.status='playing';locked.crystalsNext=40;locked.crystals=40;locked.update(0);assert(locked.chooseUpgrade('orbit'),'first purchase adds the opening secondary weapon');
+locked.crystals=locked.crystalsNext;locked.update(0);let card;
 for(let i=0;i<80;i++){locked._choices=null;card=locked.getUpgradeChoices().find(c=>c.id==='super:miasma');if(card)break;}
 assert(card);const oldCooldown=locked.superSkills.cooldowns.miasma;assert(locked.chooseUpgrade(card.id));assert.equal(locked.superSkills.owned.miasma,2);assert.equal(locked.crystals,0);assert.equal(locked.superSkills.cooldowns.miasma,oldCooldown,'reinforcement cannot instantly recast a cooling skill');
 locked.status='upgrade';assert(locked.superSkills.upgrade('super:miasma'));assert.equal(locked.superSkills.owned.miasma,3);assert.equal(locked.superSkills.upgrade('super:miasma'),false);assert(!locked.superSkills.getUpgradeChoices().some(c=>c.skillId==='miasma'));

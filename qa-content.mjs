@@ -120,7 +120,7 @@ assert(volley.enemyBullets.length>0&&volley.enemyBullets.length<=BALANCE.maxEnem
 advance(volley,.1);
 assert(volley.enemyBullets.length<=BALANCE.maxEnemyBullets);
 for(const [type,roll,cap] of [['boar',.92,BALANCE.boarCap],['spore',.98,BALANCE.sporeCap]]) {
-  const spawning=arena(),random=Math.random;spawning.time=70;
+  const spawning=arena(),random=Math.random;spawning.time=70;spawning._updatePressure=()=>{}; // Isolate ambient type caps from authored wave scheduling.
   try {
     Math.random=()=>roll;
     for(let i=0;i<16;i++) {spawning._spawn=0;spawning.update(.025);}

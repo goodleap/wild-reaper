@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { canStartObjective, objectivePointSafe } from './event-scheduling.js';
 
 const TAU=Math.PI*2;
 const TYPES=['treasure','hunt'];
@@ -15,16 +16,11 @@ export class Encounters {
     return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};
   }
   _canStart() {
-    const g=this.game;
-    if(g.companions?.camp||g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.nextBossAt-g.time<45||g.settlements?.sites.some(site=>site.state==='active'))return false;
-    const chest=g.adventure?.treasure;
-    // An ignored, unopened chest is not a permanent veto on other objectives.
-    if(chest?.state==='active'&&distance(chest,this._foot())<600)return false;
-    return true;
+    return canStartObjective(this.game,{skipEncounter:true});
   }
   _point(x,y) {
     const g=this.game,p=this._foot(),chest=g.adventure?.treasure;
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,42)&&g.settlements?.isSafePoint(candidate.x,candidate.y,90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
+    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,42)&&objectivePointSafe(g,candidate,210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
       !g.adventure?.props.some(o=>distance(o,candidate)<70)&&
       (!chest||distance(chest,candidate)>180);
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;
