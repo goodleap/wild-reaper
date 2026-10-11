@@ -5,6 +5,8 @@ const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
 // One small reusable mask keeps overlapping actor shadows at a fixed darkness.
 const actorShadowCanvas=document.createElement('canvas'),actorShadowCtx=actorShadowCanvas.getContext('2d');
 const arena = $('arena'), TAU = Math.PI * 2;
+// One world-space sunlight direction drives every beam and actor projection.
+const SUN_ANGLE=Math.atan2(325,840),SUN={x:-Math.sin(SUN_ANGLE),y:Math.cos(SUN_ANGLE)};
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const hash = (x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const timeLabel = (n)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
@@ -75,14 +77,23 @@ function mapLightPatches(camX,camY,viewWidth=width,viewHeight=height){
   }
   return patches;
 }
+function sunBeamGeometry(x,y,verticalSpan,nearWidth,farWidth){
+  return {x,y,endX:x+SUN.x/SUN.y*verticalSpan,endY:y+verticalSpan,nearWidth,farWidth};
+}
+function sunBeamPath(beam){
+  const {x,y,endX,endY,nearWidth,farWidth}=beam,nx=SUN.y,ny=-SUN.x;
+  ctx.beginPath();ctx.moveTo(x-nx*nearWidth,y-ny*nearWidth);ctx.lineTo(x+nx*nearWidth,y+ny*nearWidth);
+  ctx.lineTo(endX+nx*farWidth,endY+ny*farWidth);ctx.lineTo(endX-nx*farWidth,endY-ny*farWidth);ctx.closePath();
+}
 function drawMapLights(camX,camY){
   ctx.save();ctx.translate(width/2-camX,height/2-camY);
   for(const light of mapLightPatches(camX,camY)){
     const {x,y,spread,alpha}=light;
-    glow(x-100,y+150,330,'#c7d98a12');
-    const beam=ctx.createLinearGradient(x+165,y-520,x-160,y+320);
+    const shape=sunBeamGeometry(x+165+spread*.24,y-520,840,spread*.24,spread*.65);
+    glow(shape.x+(shape.endX-shape.x)*.8,shape.y+(shape.endY-shape.y)*.8,330,'#c7d98a12');
+    const beam=ctx.createLinearGradient(shape.x,shape.y,shape.endX,shape.endY);
     beam.addColorStop(0,'#e3ebaf00');beam.addColorStop(.23,`rgba(225,237,172,${alpha})`);beam.addColorStop(.8,`rgba(225,237,172,${alpha*.72})`);beam.addColorStop(1,'#e3ebaf00');
-    ctx.fillStyle=beam;ctx.beginPath();ctx.moveTo(x+165,y-520);ctx.lineTo(x+165+spread*.48,y-520);ctx.lineTo(x-150+spread,y+320);ctx.lineTo(x-150-spread*.3,y+320);ctx.closePath();ctx.fill();
+    ctx.fillStyle=beam;sunBeamPath(shape);ctx.fill();
   }
   ctx.restore();
 }
@@ -94,7 +105,7 @@ function background(camX,camY,intro){ctx.fillStyle='#2b4130';ctx.fillRect(0,0,wi
   // Clusters are decorative ground cover; the central fighting space stays readable.
   if(intro){tree(width*.93,height*.14,1.7,.7);tree(width*.99,height*.48,1.2,.3);tree(width*.85,height*.97,1.5,.5);fern(width*.78,height*.88,2,.4);fern(width*.97,height*.8,1.7,.3);stone(hX-100,hY+72,1.5,.7);stone(hX+95,hY-96,1.3,.4);}
   else{for(let tx=Math.floor(-offX/520)-1;tx<(width-offX)/520+1;tx++)for(let ty=Math.floor(-offY/520)-1;ty<(height-offY)/520+1;ty++){const n=hash(tx+31,ty+17),x=tx*520+offX+110,y=ty*520+offY+50;if(n>.62){ctx.globalAlpha=.57;tree(x,y,.65+n*.4,n);ctx.globalAlpha=1;}}}
-  if(intro){ctx.save();ctx.globalAlpha=.075;ctx.fillStyle='#dee8a0';ctx.beginPath();ctx.moveTo(width*.7,0);ctx.lineTo(width*.78,0);ctx.lineTo(width*.36,height);ctx.lineTo(width*.22,height);ctx.closePath();ctx.fill();ctx.restore();}
+  if(intro){const pad=Math.max(40,width*.08);ctx.save();ctx.globalAlpha=.075;ctx.fillStyle='#dee8a0';sunBeamPath(sunBeamGeometry(width*.74-SUN.x/SUN.y*pad,-pad,height+pad*2,width*.04,width*.07));ctx.fill();ctx.restore();}
   else drawMapLights(camX,camY);
 }
 function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,.6);ctx.rotate(t*.11);ctx.globalAlpha=alpha;ctx.strokeStyle='#c4e699';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.stroke();ctx.setLineDash([2,8]);ctx.beginPath();ctx.arc(0,0,r-10,0,TAU);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<8;i++){const a=i*TAU/8;ctx.save();ctx.rotate(a);ctx.translate(r,0);diamond(0,0,4,'#cced9e');line(-6,0,6,0,'#c4e699',1);ctx.restore();}ctx.restore();}
@@ -132,9 +143,9 @@ function drawActorShadows(actors,offsetX=0,offsetY=0){
     for(const actor of actors){
       if((actor.type==='bat')!==flying)continue;
       const {x,footY,scale,shape}=actor,length=shape.shadowLength*scale;
-      const cx=x-length*.17,cy=footY+length*.35,rx=shape.shadowWidth*scale,ry=length*.63;
+      const offset=length*.39,cx=x+SUN.x*offset,cy=footY+SUN.y*offset,rx=shape.shadowWidth*scale,ry=length*.63;
       // Sunlight falls from the upper right; all projections point down-left.
-      const rotation=.37;mask.moveTo(cx+rx*Math.cos(rotation),cy+rx*Math.sin(rotation));
+      const rotation=SUN_ANGLE;mask.moveTo(cx+rx*Math.cos(rotation),cy+rx*Math.sin(rotation));
       mask.ellipse(cx,cy,rx,ry,rotation,0,TAU);mask.closePath();
     }
     mask.fill('nonzero');
