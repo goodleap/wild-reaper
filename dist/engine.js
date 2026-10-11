@@ -1,5 +1,7 @@
 import { Terrain, groundOffset } from './terrain.js';
 import { Adventure } from './adventure.js';
+import { Encounters } from './encounters.js';
+import { initBoss, updateBloomBoss, resolveBloomBoss, clearBossAttacks } from './bosses.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -45,6 +47,11 @@ const UPGRADE_DEFS = [
   {id:'regen',name:'生生不息',desc:'每秒恢复 0.8 生命',kind:'生存强化',icon:'✚',color:'#a4dc9d'}
 ];
 const LEVEL_CAPS = {power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3};
+export const EVOLUTIONS=Object.freeze({
+  orbit:{name:'裂风环刃',desc:'每 3 秒向外扩张再收拢，扩大环刃的切割范围'},
+  pulse:{name:'双重回响',desc:'冲击波后在原位置追加一道范围更大的回波，造成 60% 伤害'},
+  lightning:{name:'雷暴链',desc:'最多追击 5 个目标，新增的两次跳跃造成 40% 伤害'}
+});
 const ENDLESS_UPGRADES = [
   {id:'endlessPower',name:'百炼锋芒',desc:'本局所有武器基础伤害增加 8%',kind:'无尽强化',icon:'✦',color:'#e6be73'},
   {id:'endlessVitality',name:'深根之心',desc:'本局最大生命增加 12，并恢复 24 生命',kind:'无尽强化',icon:'♥',color:'#e7a68b'},
@@ -52,7 +59,7 @@ const ENDLESS_UPGRADES = [
 ];
 
 export class Game {
-  constructor({difficulty='normal',terrain=new Terrain(),adventure=true}={}) {
+  constructor({difficulty='normal',terrain=new Terrain(),adventure=true,encounters=adventure}={}) {
     this.terrain=terrain;
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
@@ -69,13 +76,15 @@ export class Game {
     this.stats = {damage:1,fireRate:1,moveSpeed:1,magnet:BALANCE.magnet};
     this._id = 0; this._clock = 0; this._shot = .15; this._spawn = .4;
     this._pulse = 1; this._lightning = 1; this._choices = null;
+    this.evolutions={orbit:false,pulse:false,lightning:false};this._pulseEchoes=[];
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     this._moveEntity(this.player,0,0,true);
     for(let i=0;i<4;i++) this._spawnEnemy('slime', 330 + i * 24);
     this.adventure=adventure?new Adventure(this):null;
+    this.encounters=encounters?new Encounters(this):null;
   }
 
-  _emit(type) { if (this.events.length < 100) this.events.push({type}); }
+  _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
   _effect(x,y,type,life,r,color,text,extra={}) {
     if(this.effects.length > 200) this.effects.shift();
     this.effects.push({x,y,type,life,maxLife:life,r,color,text,...extra});
@@ -129,13 +138,14 @@ export class Game {
       enemy.x=p.x+Math.cos(a)*(distance+85*(i+1));enemy.y=p.y+Math.sin(a)*(distance+85*(i+1));
       this._moveEntity(enemy,0,0);
     }
+    if(type==='boss')initBoss(enemy);
     this.enemies.push(enemy);return enemy;
   }
-  _hurtEnemy(enemy,amount,knockback=0) {
+  _hurtEnemy(enemy,amount,knockback=0,origin=this.player) {
     if(enemy.hp<=0) return;
     enemy.hp -= amount; enemy.hit = .12;
     if(knockback && enemy.type!=='boss') {
-      const dx=enemy.x-this.player.x,dy=enemy.y-this.player.y,d=Math.hypot(dx,dy)||1;
+      const dx=enemy.x-origin.x,dy=enemy.y-origin.y,d=Math.hypot(dx,dy)||1;
       this._moveEntity(enemy,dx/d*knockback,dy/d*knockback);
       if(enemy.charge?.phase==='windup'){enemy.charge.startX=enemy.x;enemy.charge.startY=enemy.y+groundOffset(enemy);}
     }
@@ -144,9 +154,10 @@ export class Game {
     if(enemy.hp<=0) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
       this.kills++; this._emit('kill');
-      this.gems.push({x:enemy.x,y:enemy.y,r:enemy.type==='boss'?11:enemy.type==='brute'?7:5,value:enemy.xp});
-      if(enemy.type==='boss') { enemy.slam=null;this.bossDefeated=true; this.bossKills++; this._emit('bossKill'); this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482'); }
+      if(enemy.xp>0)this.gems.push({x:enemy.x,y:enemy.y,r:enemy.type==='boss'?11:enemy.type==='brute'?7:5,value:enemy.xp});
+      if(enemy.type==='boss') { enemy.slam=null;clearBossAttacks(enemy);this.bossDefeated=true; this.bossKills++; this._emit('bossKill'); this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482'); }
       this.adventure?.onEnemyKilled(enemy);
+      this.encounters?.onEnemyKilled(enemy);
       if(this.kills%24===0 && this.player.hp<this.player.maxHp) {
         this.player.hp=Math.min(this.player.maxHp,this.player.hp+7);
         this._effect(this.player.x,this.player.y-26,'heal',.8,0,'#b9e89c','+7'); this._emit('heal');
@@ -233,6 +244,7 @@ export class Game {
     if(p.hp<=0)this.status='dead';return true;
   }
   _updateBoss(e,dt) {
+    if(e.bossKind==='bloom')return updateBloomBoss(this,e,dt);
     e.slamCooldown=Math.max(0,(e.slamCooldown||0)-dt);
     e.slamRecovery=Math.max(0,(e.slamRecovery||0)-dt);
     if(e.slam){e.slam.life=Math.max(0,e.slam.life-dt);return true;}
@@ -332,6 +344,7 @@ export class Game {
     if(length>.01) p.facing=Math.atan2(iy,ix);
     this._moveEntity(p,ix*p.speed*dt,iy*p.speed*dt,true);
     this.adventure?.update(dt);
+    this.encounters?.update(dt);
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
     this._spawn-=dt;
     if(this._spawn<=0) {
@@ -355,6 +368,7 @@ export class Game {
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
+      if(this.encounters?.updateEnemy(e,dt))continue;
       if(e.guardActive===false) {
         e.charge=null;e.cast=null;e._chargeSegment=null;
         if(e.guardReturnTarget)this._moveEnemy(e,dt,e.guardReturnTarget);
@@ -380,7 +394,7 @@ export class Game {
     }
     if(input.skill && p.skillCooldown<=0) this._castStorm();
     for(const e of this._nearby(p.x,p.y,85)) {
-      if(e.hp>0 && e.guardActive!==false && !e.charge && !e._chargeSegment && !e.slam && !(e.slamRecovery>0) && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
+      if(e.hp>0 && e.eventRole!=='treasure' && e.guardActive!==false && !e.charge && !e._chargeSegment && !e.slam && !(e.slamRecovery>0) && !e.bloomAttack && !(e.bloomRecovery>0) && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
         this._hurtPlayer(e.damage);
         if(this.status==='dead')return;
       }
@@ -421,9 +435,10 @@ export class Game {
     this._updateWeapons(dt);
     // Every weapon can interrupt a windup with a killing blow on this frame.
     this._resolveBossSlams();
+    for(const e of this.enemies)if(e.type==='boss'&&e.bossKind==='bloom')resolveBloomBoss(this,e);
     this._resolveEnemyAttacks(dt);
     if(this.status==='dead')return;
-    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.type==='boss'||e.elite||e.guardianId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
+    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.type==='boss'||e.elite||e.guardianId||e.eventId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
     for(const gem of this.gems) {
       const dx=p.x-gem.x,dy=p.y-gem.y,d=Math.hypot(dx,dy);
       if(d<(this.adventure?.magnetRange(this.stats.magnet)??this.stats.magnet) || gem.attracted) {
@@ -446,13 +461,16 @@ export class Game {
   }
 
   _updateWeapons(dt) {
+    this._syncEvolutions();
     const p=this.player, power=this._damageMultiplier(), level=this.levels.orbit;
     this.orbitals=[];
     if(level) {
-      const count=2+Math.floor((level-1)/2), radius=70+level*4;
+      const count=2+Math.floor((level-1)/2),cycle=(this._clock-(this._orbitEvolutionStartedAt||0))%3;
+      const surge=this.evolutions.orbit&&cycle<.9?Math.sin(Math.PI*cycle/.9):0;
+      const radius=70+level*4+55*surge;
       for(let i=0;i<count;i++) {
         const a=this._clock*(2.15+level*.14)+i*TAU/count;
-        const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a};
+        const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a,evolved:this.evolutions.orbit,surge};
         this.orbitals.push(blade);
         for(const e of this._nearby(blade.x,blade.y,65)) if(e.hp>0&&e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)) {
           this._hurtEnemy(e,(24+level*6)*power,8);e.orbitHit=.42;
@@ -462,23 +480,44 @@ export class Game {
         }
       }
     }
+    // Echoes retain the original cast's position and damage. Their delay uses
+    // game time, so upgrades and paused frames cannot detonate them early.
+    for(const echo of this._pulseEchoes) {
+      echo.life-=dt;
+      if(echo.life<=0)this._castPulse(echo.x,echo.y,echo.r,echo.damage,12,true);
+    }
+    this._pulseEchoes=this._pulseEchoes.filter(e=>e.life>0);
     this._pulse-=dt;
     if(this.levels.pulse && this._pulse<=0) {
       const l=this.levels.pulse, radius=100+l*10;
       this._pulse=2.6;
-      this._effect(p.x,p.y,'ring',.48,radius,'#9de0b3');
-      for(const e of this.enemies) if(e.hp>0&&dist2(p,e)<sq(radius+e.r)) this._hurtEnemy(e,(40+l*10)*power,20);
-      for(const prop of this.adventure?.props||[])if(prop.hp>0&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(radius+prop.r))this.adventure.hitSupply(prop,(40+l*10)*power);
+      const damage=(40+l*10)*power;
+      this._castPulse(p.x,p.y,radius,damage,20);
+      if(this.evolutions.pulse)this._pulseEchoes.push({x:p.x,y:p.y,r:radius*1.2,damage:damage*.6,life:.35,maxLife:.35});
     }
     this._lightning-=dt;
     if(this.levels.lightning && this._lightning<=0) {
       const l=this.levels.lightning;this._lightning=2.8;
       let origin={x:p.x,y:p.y};const excluded=new Set();
-      for(let i=0;i<3;i++) {
+      for(let i=0;i<(this.evolutions.lightning?5:3);i++) {
         const e=this._nearest(origin.x,origin.y,i===0?360:190,excluded);if(!e)break;
-        excluded.add(e.id);this._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y});
-        this._hurtEnemy(e,(38+l*10)*power);origin=e;
+        excluded.add(e.id);this._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:this.evolutions.lightning,chainIndex:i});
+        this._hurtEnemy(e,(38+l*10)*power*(this.evolutions.lightning&&i>=3?.4:1));origin=e;
       }
+    }
+  }
+
+  _castPulse(x,y,radius,damage,knockback,echo=false) {
+    const origin={x,y};
+    this._effect(x,y,'ring',echo?.6:.48,radius,echo?'#c6ead5':'#9de0b3',undefined,{evolved:this.evolutions.pulse,echo});
+    for(const e of this.enemies)if(e.hp>0&&dist2(origin,e)<sq(radius+e.r))this._hurtEnemy(e,damage,knockback,origin);
+    for(const prop of this.adventure?.props||[])if(prop.hp>0&&sq(prop.x-x)+sq((prop.aimY??prop.y)-y)<sq(radius+prop.r))this.adventure.hitSupply(prop,damage);
+  }
+  _syncEvolutions(announce=false) {
+    for(const id of Object.keys(EVOLUTIONS))if(this.levels[id]>=5&&!this.evolutions[id]) {
+      this.evolutions[id]=true;
+      if(id==='orbit')this._orbitEvolutionStartedAt=this._clock;
+      if(announce)this._emit('evolution',{weaponId:id,name:EVOLUTIONS[id].name});
     }
   }
 
@@ -510,7 +549,11 @@ export class Game {
       if(level && u.id==='orbit') {desc=(level+1)%2===1?'增加一枚环刃，提升伤害与环绕范围':'提升环刃伤害与环绕范围';kind='武器强化';}
       if(level && u.id==='pulse') {desc='冲击波范围和伤害提升，释放间隔保持 2.6 秒';kind='武器强化';}
       if(level && u.id==='lightning') {desc='提升每道闪电伤害；固定追击 3 个目标';kind='武器强化';}
-      return {...u,desc,kind,level:level+1};
+      if(EVOLUTIONS[u.id]) {
+        if(level===4){desc=`进化为「${EVOLUTIONS[u.id].name}」：${EVOLUTIONS[u.id].desc}`;kind='武器进化';}
+        else desc+='；达到 5 级自动进化';
+      }
+      return {...u,desc,kind,level:level+1,evolutionName:EVOLUTIONS[u.id]?.name,evolves:level===4&&!!EVOLUTIONS[u.id]};
     });
     return this._choices;
   }
@@ -518,6 +561,7 @@ export class Game {
     if(this.status!=='upgrade' || !this.getUpgradeChoices().some(c=>c.id===id)) return false;
     const p=this.player;
     this.levels[id]++;
+    this._syncEvolutions(true);
     if(id==='vitality') {p.maxHp+=25;p.hp=Math.min(p.maxHp,p.hp+35);this._emit('heal');}
     if(id==='endlessVitality') {p.maxHp+=12;p.hp=Math.min(p.maxHp,p.hp+24);this._emit('heal');}
     this.stats.damage=this._damageMultiplier();this.stats.fireRate=1+this.levels.rapid*.15;
@@ -525,7 +569,8 @@ export class Game {
     p.speed=220*this.stats.moveSpeed;
     this.weapons=[{id:'arrow',name:'翠羽飞矢',level:1+this.levels.rapid+this.levels.multishot,icon:'➶'}];
     for(const id of ['orbit','pulse','lightning']) if(this.levels[id]) {
-      const u=UPGRADE_DEFS.find(u=>u.id===id);this.weapons.push({id,name:u.name,level:this.levels[id],icon:u.icon});
+      const u=UPGRADE_DEFS.find(u=>u.id===id),evolved=this.evolutions[id];
+      this.weapons.push({id,name:evolved?EVOLUTIONS[id].name:u.name,baseName:u.name,level:this.levels[id],icon:u.icon,evolved,evolutionName:EVOLUTIONS[id].name});
     }
     p.invuln=Math.max(p.invuln,1);this._choices=null;this.status='playing';
     if(p.xp>=p.xpNext) this._levelUp();

@@ -20,6 +20,12 @@ const finite = (g) => {
   assert(g.enemies.filter(e=>e.type==='spore').length<=BALANCE.sporeCap);
   if(g.adventure){assert(g.adventure.props.length<=18&&g.adventure.pickups.length<=24);assert(g.enemies.filter(e=>e.elite&&e.hp>0).length<=1);}
   assert(g.enemies.filter(e=>e.type==='boss'&&e.hp>0).length<=1,'only one living boss');
+  assert(g._pulseEchoes.length<=1,'delayed echoes stay bounded');
+  for(const echo of g._pulseEchoes)assert(Number.isFinite(echo.x)&&Number.isFinite(echo.y)&&Number.isFinite(echo.damage));
+  if(g.encounters?.active) {
+    const event=g.encounters.active;assert(event.life>0&&Number.isFinite(event.x)&&Number.isFinite(event.y));
+    assert(g.enemies.filter(e=>e.eventId).length<=1,'one optional encounter actor');
+  }
   assert(g.bullets.length<=60&&g.orbitals.length<=6&&g.effects.length<=201&&g.gems.length<=500);
   assert(['playing','upgrade','dead'].includes(g.status),'no terminal win state');
 };
@@ -86,6 +92,7 @@ const boss=new Game({adventure:false});assert.equal(boss.nextBossAt,120);
 boss.time=119.99;boss.player.invuln=1000;boss.update(.02,{});
 const firstBoss=boss.enemies.find(e=>e.type==='boss');
 assert(firstBoss&&boss.bossCount===1);assert(boss.nextBossAt>270);
+assert.equal(firstBoss.bossKind,'ancient');
 boss.time=boss.nextBossAt+.01;boss.update(.02,{});
 assert.equal(boss.bossCount,1,'overdue boss waits for current boss');
 boss._hurtEnemy(firstBoss,firstBoss.hp+1);
@@ -93,6 +100,7 @@ assert.equal(boss.bossKills,1);assert(boss.events.some(e=>e.type==='bossKill'));
 boss.update(.02,{});
 assert.equal(boss.bossCount,2);assert.equal(boss.enemies.filter(e=>e.type==='boss').length,1);
 const secondBoss=boss.enemies.find(e=>e.type==='boss');
+assert.equal(secondBoss.bossKind,'bloom','scheduled bosses alternate attack patterns');
 assert(secondBoss.hp>firstBoss.maxHp&&secondBoss.damage>firstBoss.damage,'successive bosses get stronger');
 assert.equal(boss.nextBossAt,boss.time+150);assert.equal(boss.status,'playing');
 const progression=new Game({adventure:false});progression.time=180;progression.bossDefeated=true;

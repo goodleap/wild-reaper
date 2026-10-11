@@ -30,6 +30,7 @@
         </div>
 
         <div id="boss-bar" class="boss-bar hidden"><div><span id="boss-name">荒野领主</span><span id="boss-hp">100%</span></div><div class="boss-track"><i id="boss-fill"></i></div></div>
+        <div id="encounter-status" class="encounter-status hidden" role="group" aria-label="林间事件"><span id="encounter-icon" class="encounter-icon" aria-hidden="true">◇</span><div><strong id="encounter-name">林间狩猎</strong><span id="encounter-goal">区域内击败怪物</span></div><span id="encounter-time">40秒</span></div>
         <div id="toast" class="toast" role="status"></div>
 
         <div class="intro" id="intro">
@@ -39,7 +40,7 @@
             <p class="intro-description">怪潮已至，魔法在手。<br>走位、收集、进化，成为森林最后的幸存者。</p>
             <div class="intro-tags"><span><svg viewBox="0 0 16 16"><path d="m9 1-6 8h5l-1 6 6-9H8Z"/></svg>自动攻击</span><span><svg viewBox="0 0 16 16"><path d="m8 1 6 7-6 7-6-7Z"/></svg>随机升级</span><span><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 2"/></svg>无尽生存</span></div>
             <div class="start-row"><button id="start-button" class="primary-button"><span>进入荒野</span><span class="button-arrow">↗</span></button><fieldset class="difficulty-control"><legend>挑战难度</legend><div class="difficulty-options"><label class="difficulty-option"><input id="difficulty-normal" type="radio" name="difficulty" value="normal" checked><span>标准试炼</span></label><label class="difficulty-option"><input id="difficulty-casual" type="radio" name="difficulty" value="casual"><span>轻松漫游</span></label></div></fieldset></div>
-            <div class="best-line"><span class="trophy">♜</span><span id="best-label">新的冒险，等你书写。</span><small id="game-version" class="game-version" aria-label="游戏版本">v0.0.12</small></div>
+            <div class="best-line"><span class="trophy">♜</span><span id="best-label">新的冒险，等你书写。</span><small id="game-version" class="game-version" aria-label="游戏版本">v0.0.13</small></div>
           </div>
           <div class="hero-caption"><span class="tiny-star">✦</span><span>林间旅人<small>THE WANDERER</small></span><span class="hero-line"></span></div>
           <div class="intro-bottom"><span><i class="live-dot"></i> 无需下载，即刻开战</span><span>探索你的生存流派 <span>↘</span></span></div>
@@ -59,11 +60,12 @@
         <div class="modal-layer hidden" id="end-overlay"><div class="dialog-panel end-panel" role="dialog" aria-modal="true" aria-labelledby="end-title"><div class="end-emblem" id="end-emblem">✦</div><div class="eyebrow centered" id="end-kicker">THE JOURNEY CONTINUES</div><h2 id="end-title">荒野记住了你。</h2><p id="end-description">每一次出发，都比上一次更强。</p><div class="end-stats"><div><strong id="end-time">00:00</strong><span>存活时间</span></div><div><strong id="end-kills">0</strong><span>击败怪物</span></div><div><strong id="end-level">1</strong><span>最终等级</span></div></div><button id="restart-button" class="primary-button wide">再次出发 <span>↗</span></button><button id="home-button" class="secondary-button wide">返回首页</button></div></div>
         <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list">
           <div><b>01</b><p><strong>移动与攻击</strong><span>WASD / 方向键移动，手机拖动屏幕。绕过大树、巨石与倒木；灵弹自动瞄准，可穿过障碍。</span></p></div>
-          <div><b>02</b><p><strong>收集与进化</strong><span>靠近绿色灵晶获取经验，升级三选一。连续升级逐次选择，剩余经验保留。药草、磁铁与狂暴即拾即用，无需选择。</span></p></div>
+          <div><b>02</b><p><strong>收集与进化</strong><span>靠近灵晶获取经验，升级三选一。环刃、冲击波、连锁闪电升至 5 级自动进化：扩圈环刃、原地回波、五目标雷暴链。</span></p></div>
           <div><b>03</b><p><strong>天雷与暂停</strong><span>空格 / 天雷按钮轰击全屏怪物，冷却 15 秒，领主也会受伤，伤害随强化提升。Esc / P 暂停。</span></p></div>
           <div><b>04</b><p><strong>识别危险</strong><span>野猪沿红金直线冲锋，侧移躲避，诱它撞障碍可使其眩晕。孢子怪发射慢速紫弹，可借树石掩护。</span></p></div>
-          <div><b>05</b><p><strong>探索与补给</strong><span>野外补给箱可打破。精英守卫看守的宝箱可选择绕路挑战，击败守卫后靠近领取。</span></p></div>
-          <div><b>06</b><p><strong>无尽挑战</strong><span>围攻与喘息交替，怪潮不断增强。首位领主在 02:00 出现，此后约每 2 分 30 秒再临；震地前跑出红色预警圈。</span></p></div>
+          <div><b>05</b><p><strong>探索与补给</strong><span>打破补给箱，或击败精英领取宝箱。药草、磁铁与狂暴即拾即用；增益倒计时显示在生命条下方或装备栏上方。</span></p></div>
+          <div><b>06</b><p><strong>林间事件</strong><span>限时击败逃跑的金色宝物精，或站在标记猎区内击败圈内 12 只怪物，可获得补给。事件可以绕过，超时没有惩罚。</span></p></div>
+          <div><b>07</b><p><strong>无尽领主</strong><span>02:00 起领主轮流来袭，此后约每 2 分 30 秒出现。树人震地前跑出红圈；孢冠领主扇射时绕至侧面，孢爆前离开紫圈。</span></p></div>
         </div><button id="help-done" class="primary-button wide">准备好了 <span>→</span></button></div></div>
       </section>
       <footer class="footer"><div class="keyboard-guide"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移动</span><i></i><kbd class="space-key">SPACE</kbd><span>天雷轰击</span><i></i><kbd>ESC</kbd><span>暂停</span></div><div class="mobile-guide">拖动屏幕移动 · 点击右下角释放天雷</div><span class="footer-note">保持移动。惊喜总在下一次升级。</span></footer>
