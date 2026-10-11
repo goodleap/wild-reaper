@@ -74,8 +74,9 @@ const ENDLESS_UPGRADES = [
 ];
 
 export class Game {
-  constructor({difficulty='normal',hero='traveler',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure}={}) {
+  constructor({difficulty='normal',hero='traveler',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false}={}) {
     this.terrain=terrain;
+    this.debug=debug===true;
     this.regionIndex=0;this.region=regionFor(0);this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements};this._interactHeld=false;
     this.difficulty = difficulty;
@@ -107,11 +108,14 @@ export class Game {
     this.adventure=adventure?new Adventure(this):null;
     this.encounters=encounters?new Encounters(this):null;
     this.combatStatus=new CombatStatus(this);
+    // Reserve the nearby debug entrance before environmental hazards choose
+    // their positions. The ordinary world keeps its original generation order.
+    if(this.debug&&settlements)this.settlements=new Settlements(this);
     this.environment=environment?new Environment(this):null;
     this.relics=new Relics(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
     this.companions=new Companions(this,{generation:companions});
     this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);
-    this.settlements=new Settlements(this,{generation:settlements});
+    this.settlements??=new Settlements(this,{generation:settlements});
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }

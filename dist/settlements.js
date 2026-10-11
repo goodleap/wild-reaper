@@ -1,4 +1,4 @@
-import { groundOffset } from './terrain.js';
+import { Terrain, groundOffset } from './terrain.js';
 import { RELICS } from './relics.js';
 
 const TAU=Math.PI*2;
@@ -37,9 +37,9 @@ export class Settlements {
     if(env.props?.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+12))return false;
     return !env.muds?.some(o=>((x-o.x)/(o.rx+r+12))**2+((y-o.y)/(o.ry+r+12))**2<1);
   }
-  _validSite(site) {
+  _validSite(site,{nearSpawn=false}={}) {
     const g=this.game,center=this._bodyCenter(site),clearance=site.width*.5+70;
-    if(distance(center,this._foot())<clearance+190)return false;
+    if(distance(center,this._foot())<clearance+(nearSpawn?40:190))return false;
     if(this.sites.some(s=>distance(center,this._bodyCenter(s))<clearance+s.width*.5+110))return false;
     if(g.adventure?.props.some(o=>distance(o,center)<clearance+35))return false;
     if(g.adventure?.treasure&&distance(g.adventure.treasure,center)<clearance+110)return false;
@@ -51,15 +51,26 @@ export class Settlements {
     for(let x=site.x-site.width*.5-24;x<=site.x+site.width*.5+24;x+=24)
       for(let y=site.y-site.depth-24;y<=site.y+82;y+=24)
         if(!g.terrain.isFree(x,y,23)||!this._hazardFree(x,y,23))return false;
-    return g.terrain.isFree(site.door.x,site.door.y,30)&&this._hazardFree(site.door.x,site.door.y,40);
+    if(!g.terrain.isFree(site.door.x,site.door.y,30)||!this._hazardFree(site.door.x,site.door.y,40))return false;
+    if(nearSpawn) {
+      // Debug placement reserves a direct, walkable approach without removing
+      // terrain or moving the player. Check the new foundation as well as the
+      // existing world, including the case where a door faces away from spawn.
+      const from=this._foot(),to=site.door,r=g.player.r+6;
+      if(g.terrain.firstBlocker(from.x,from.y,to.x,to.y,r)||new Terrain({obstacles:this._obstacles(site)}).firstBlocker(from.x,from.y,to.x,to.y,r))return false;
+      const steps=Math.ceil(distance(from,to)/20);
+      for(let i=0;i<=steps;i++)if(!this._hazardFree(from.x+(to.x-from.x)*i/steps,from.y+(to.y-from.y)*i/steps,r))return false;
+    }
+    return true;
   }
-  _createSite(def,index) {
+  _createSite(def,index,{nearSpawn=false}={}) {
     const region=this.game.region?.id||'forest',seed=this._hash(index+83,17),rotation=(this.game.regionIndex||0)===0?0:this._hash(71,23)*TAU;
-    for(let i=0;i<192;i++) {
-      const ring=Math.floor(i/32),angle=def.angle+rotation+(i%32)*TAU/32,radius=def.radius+ring*100;
-      const x=Math.round(Math.cos(angle)*radius),y=Math.round(Math.sin(angle)*radius);
+    const spawn=nearSpawn?this._foot():null;
+    for(let i=0;i<(nearSpawn?128:192);i++) {
+      const ring=Math.floor(i/32),angle=(nearSpawn?-Math.PI/2:def.angle+rotation)+(i%32)*TAU/32,radius=nearSpawn?190+ring*40:def.radius+ring*100;
+      const x=Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
       const site={...def,id:`site:${this.game.regionIndex||0}:${def.type}`,x,y,sortY:y,door:{x,y:y+30},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
-      if(!this._validSite(site))continue;
+      if(!this._validSite(site,{nearSpawn}))continue;
       if(site.type==='supply')site.name=region==='marsh'?'沼泽高脚屋':region==='ruins'?'遗迹石屋':'林间小屋';
       if(site.type==='merchant') {
         site.relicId=RELICS[Math.floor(this._hash(index+199,63)*RELICS.length)].id;
@@ -72,7 +83,12 @@ export class Settlements {
   resetRegion() {
     this.activeShop=null;this.sites=[];this.game.terrain.setStructures?.([]);
     if(!this.generation)return;
-    SITE_DEFS.forEach((def,index)=>{const site=this._createSite(def,index);if(site){this.sites.push(site);this._setStructures();}});
+    // Keep the ordinary generation order byte-for-byte equivalent. Only a
+    // debug run's initial region gives its existing castle first placement.
+    const castleIndex=SITE_DEFS.findIndex(def=>def.type==='castle');
+    const nearbyCastle=this.game.debug&&this.game.regionIndex===0?this._createSite(SITE_DEFS[castleIndex],castleIndex,{nearSpawn:true}):null;
+    if(nearbyCastle){this.sites.push(nearbyCastle);this._setStructures();}
+    SITE_DEFS.forEach((def,index)=>{if(nearbyCastle&&def.type==='castle')return;const site=this._createSite(def,index);if(site){this.sites.push(site);this._setStructures();}});
     // Starter monster angles are random and must not change site identities.
     // Resolve the rare overlap after placing the deterministic foundations.
     for(const enemy of this.game.enemies)if(enemy.hp>0)this.game._moveEntity?.(enemy,0,0);

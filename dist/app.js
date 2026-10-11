@@ -4,12 +4,19 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
 // One small reusable mask keeps overlapping actor shadows at a fixed darkness.
 const actorShadowCanvas=document.createElement('canvas'),actorShadowCtx=actorShadowCanvas.getContext('2d');
+// Sunlight is composed separately so a shadow removes light rather than
+// tinting an already illuminated patch of ground. Reuse the small buffer.
+const sunlightCanvas=document.createElement('canvas'),sunlightCtx=sunlightCanvas.getContext('2d');
+const decorativeShadowShapes=[];
 const arena = $('arena'), TAU = Math.PI * 2;
 // One world-space sunlight direction drives every beam and actor projection.
 const SUN_ANGLE=Math.atan2(325,840),SUN={x:-Math.sin(SUN_ANGLE),y:Math.cos(SUN_ANGLE)};
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const hash = (x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const timeLabel = (n)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
+function isDebugMode(search){const value=new URLSearchParams(search).get('debug');return value!==null&&['','1','true'].includes(value.toLowerCase());}
+const debugMode=isDebugMode(window.location?.search||'');
+if(debugMode){$('game-version').textContent+=' · DEBUG';$('game-version').setAttribute('aria-label','游戏版本，调试模式');}
 let width=1100,height=700,dpr=1,game=null,paused=false,helpOpen=false,runEnded=false;
 let clock=0,last=0,shake=0,toastTimer=0,toastPriority=0,toastUntil=0,upgradeLevel=0,lastLoadout='',hudTick=0;
 let keys=new Set(),skillRequested=false,touch=null,input={x:0,y:0,skill:false};
@@ -36,7 +43,7 @@ for(const difficulty of ['normal','casual']){const radio=$(`difficulty-${difficu
 
 
 function clearInput(){keys.clear();skillRequested=false;portalRequested=false;touch=null;input={x:0,y:0,skill:false};show('joystick',false);$('joystick-thumb').style.transform='';}
-function startGame(){pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';saveSetup();game=new Game({difficulty:selectedDifficulty});game.viewWidth=width;game.viewHeight=height;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify('击杀自动成长 · 拾取灵晶强化技能，金币可交易。');updateHUD();canvas.focus({preventScroll:true});}
+function startGame(){pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';saveSetup();game=new Game({difficulty:selectedDifficulty,debug:debugMode});game.viewWidth=width;game.viewHeight=height;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?'调试模式 · 城堡已移至出生点附近。':'击杀自动成长 · 拾取灵晶强化技能，金币可交易。');updateHUD();canvas.focus({preventScroll:true});}
 function home(){pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=null;paused=false;runEnded=false;clearInput();for(const id of ['hud','game-bottom','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','touch-skill','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('intro');arena.classList.remove('playing');arena.classList.remove('has-encounter');arena.classList.remove('has-relics');arena.classList.remove('near-portal');arena.classList.remove('has-companion');arena.classList.remove('has-rescue-power');arena.classList.remove('has-supers');arena.classList.remove('in-dungeon');$('terrain-code').textContent='01 / THE WHISPERING WOODS';$('terrain-name').textContent='低语之森';$('toast').classList.remove('visible');bestText();$('start-button').focus({preventScroll:true});}
 function pause(){if(!game||!['playing','relic','upgrade','super','shop'].includes(game.status)||runEnded)return;paused=true;clearInput();show('pause-overlay');$('resume-button').focus({preventScroll:true});}
 function focusGameDialog(){const id={relic:'relic-cards',upgrade:'upgrade-cards',super:'super-cards',shop:'shop-items'}[game?.status];if(id)$(id).querySelector('button:not(:disabled)')?.focus({preventScroll:true});else canvas.focus({preventScroll:true});}
@@ -213,12 +220,12 @@ document.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const dialog=[..
 function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,TAU);ctx.fill();}
 function line(x1,y1,x2,y2,color,w=1){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
 function diamond(x,y,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,y-r);ctx.lineTo(x+r*.66,y);ctx.lineTo(x,y+r);ctx.lineTo(x-r*.66,y);ctx.closePath();ctx.fill();}
-function glow(x,y,r,color){const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,color);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2);}
+function glow(x,y,r,color,target=ctx){const g=target.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,color);g.addColorStop(1,'transparent');target.fillStyle=g;target.fillRect(x-r,y-r,r*2,r*2);}
 function grass(x,y,s,seed){ctx.strokeStyle=['#5c765038','#67845744','#8b9c5f33'][Math.floor(seed*3)];ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x-4*s,y);ctx.quadraticCurveTo(x-6*s,y-5*s,x-9*s,y-7*s);ctx.moveTo(x,y);ctx.quadraticCurveTo(x-1*s,y-9*s,x+1*s,y-13*s);ctx.moveTo(x+4*s,y);ctx.quadraticCurveTo(x+5*s,y-6*s,x+9*s,y-7*s);ctx.stroke();}
-function stone(x,y,s,seed){ellipse(x,y+3*s,14*s,7*s,'#10241950');ctx.fillStyle=seed>.5?'#59634e':'#475744';ctx.beginPath();ctx.moveTo(x-12*s,y+2*s);ctx.lineTo(x-8*s,y-8*s);ctx.lineTo(x+4*s,y-11*s);ctx.lineTo(x+12*s,y-3*s);ctx.lineTo(x+10*s,y+5*s);ctx.closePath();ctx.fill();ctx.fillStyle='#8a927454';ctx.beginPath();ctx.moveTo(x-8*s,y-8*s);ctx.lineTo(x+4*s,y-11*s);ctx.lineTo(x+6*s,y-4*s);ctx.lineTo(x-6*s,y-1*s);ctx.closePath();ctx.fill();grass(x+8*s,y+7*s,.7*s,seed);}
+function stone(x,y,s,seed){decorativeShadowShapes.push({x,y:y+3*s,rx:14*s,ry:7*s});ellipse(x,y+3*s,14*s,7*s,'#10241950');ctx.fillStyle=seed>.5?'#59634e':'#475744';ctx.beginPath();ctx.moveTo(x-12*s,y+2*s);ctx.lineTo(x-8*s,y-8*s);ctx.lineTo(x+4*s,y-11*s);ctx.lineTo(x+12*s,y-3*s);ctx.lineTo(x+10*s,y+5*s);ctx.closePath();ctx.fill();ctx.fillStyle='#8a927454';ctx.beginPath();ctx.moveTo(x-8*s,y-8*s);ctx.lineTo(x+4*s,y-11*s);ctx.lineTo(x+6*s,y-4*s);ctx.lineTo(x-6*s,y-1*s);ctx.closePath();ctx.fill();grass(x+8*s,y+7*s,.7*s,seed);}
 function flower(x,y,s,seed){line(x,y,x+2*s,y-9*s,'#8b966255',1);ellipse(x+2*s,y-10*s,2.5*s,2*s,seed>.5?'#d5d8a37a':'#9eaca67a');ellipse(x+4*s,y-7*s,1.8*s,1.8*s,'#e0daa877');}
 function fern(x,y,s,seed){ctx.save();ctx.translate(x,y);ctx.rotate(seed*1.5-.75);for(let i=0;i<5;i++){const a=(i-2)*.36;ctx.save();ctx.rotate(a);line(0,0,0,-25*s,'#77996055',1.2);for(let k=0;k<5;k++){const yy=-5*s-k*4*s;ctx.fillStyle=k%2?'#537847aa':'#76935490';ctx.beginPath();ctx.ellipse(-3*s,yy,5*s,1.7*s,.5,0,TAU);ctx.ellipse(3*s,yy,5*s,1.7*s,-.5,0,TAU);ctx.fill();}ctx.restore();}ctx.restore();}
-function tree(x,y,s,seed){ctx.save();ctx.translate(x,y);ellipse(12*s,20*s,50*s,32*s,'#0a1c1440');line(0,6*s,-3*s,-35*s,'#4d5137',12*s);for(let i=0;i<7;i++){const a=i*2.4,rr=(18+(i%3)*7)*s,cx=Math.cos(a)*rr,cy=-20*s+Math.sin(a)*rr*.6;ellipse(cx,cy,29*s,23*s,['#284631','#304e33','#375438'][i%3]);ellipse(cx-5*s,cy-8*s,18*s,7*s,'#72835110');}for(let i=0;i<7;i++)ellipse((hash(seed+i)*60-30)*s,(-45+hash(i,seed)*40)*s,3*s,1.3*s,'#95a57228');ctx.restore();}
+function tree(x,y,s,seed){decorativeShadowShapes.push({x:x+12*s,y:y+20*s,rx:50*s,ry:32*s});ctx.save();ctx.translate(x,y);ellipse(12*s,20*s,50*s,32*s,'#0a1c1440');line(0,6*s,-3*s,-35*s,'#4d5137',12*s);for(let i=0;i<7;i++){const a=i*2.4,rr=(18+(i%3)*7)*s,cx=Math.cos(a)*rr,cy=-20*s+Math.sin(a)*rr*.6;ellipse(cx,cy,29*s,23*s,['#284631','#304e33','#375438'][i%3]);ellipse(cx-5*s,cy-8*s,18*s,7*s,'#72835110');}for(let i=0;i<7;i++)ellipse((hash(seed+i)*60-30)*s,(-45+hash(i,seed)*40)*s,3*s,1.3*s,'#95a57228');ctx.restore();}
 // Light patches are generated from map cells, never from the player or viewport center.
 function mapLightPatches(camX,camY,viewWidth=width,viewHeight=height){
   const spacing=1080,margin=850,patches=[];
@@ -234,32 +241,31 @@ function mapLightPatches(camX,camY,viewWidth=width,viewHeight=height){
 function sunBeamGeometry(x,y,verticalSpan,nearWidth,farWidth){
   return {x,y,endX:x+SUN.x/SUN.y*verticalSpan,endY:y+verticalSpan,nearWidth,farWidth};
 }
-function sunBeamPath(beam){
+function sunBeamPath(beam,target=ctx){
   const {x,y,endX,endY,nearWidth,farWidth}=beam,nx=SUN.y,ny=-SUN.x;
-  ctx.beginPath();ctx.moveTo(x-nx*nearWidth,y-ny*nearWidth);ctx.lineTo(x+nx*nearWidth,y+ny*nearWidth);
-  ctx.lineTo(endX+nx*farWidth,endY+ny*farWidth);ctx.lineTo(endX-nx*farWidth,endY-ny*farWidth);ctx.closePath();
+  target.beginPath();target.moveTo(x-nx*nearWidth,y-ny*nearWidth);target.lineTo(x+nx*nearWidth,y+ny*nearWidth);
+  target.lineTo(endX+nx*farWidth,endY+ny*farWidth);target.lineTo(endX-nx*farWidth,endY-ny*farWidth);target.closePath();
 }
-function drawMapLights(camX,camY){
-  ctx.save();ctx.translate(width/2-camX,height/2-camY);
+function drawMapLights(camX,camY,target=ctx){
+  target.save();target.translate(width/2-camX,height/2-camY);
   for(const light of mapLightPatches(camX,camY)){
     const {x,y,spread,alpha}=light;
     const shape=sunBeamGeometry(x+165+spread*.24,y-520,840,spread*.24,spread*.65);
-    glow(shape.x+(shape.endX-shape.x)*.8,shape.y+(shape.endY-shape.y)*.8,330,'#c7d98a12');
-    const beam=ctx.createLinearGradient(shape.x,shape.y,shape.endX,shape.endY);
+    glow(shape.x+(shape.endX-shape.x)*.8,shape.y+(shape.endY-shape.y)*.8,330,'#c7d98a12',target);
+    const beam=target.createLinearGradient(shape.x,shape.y,shape.endX,shape.endY);
     beam.addColorStop(0,'#e3ebaf00');beam.addColorStop(.23,`rgba(225,237,172,${alpha})`);beam.addColorStop(.8,`rgba(225,237,172,${alpha*.72})`);beam.addColorStop(1,'#e3ebaf00');
-    ctx.fillStyle=beam;sunBeamPath(shape);ctx.fill();
+    target.fillStyle=beam;sunBeamPath(shape,target);target.fill();
   }
-  ctx.restore();
+  target.restore();
 }
-function background(camX,camY,intro){if(!intro&&game?.dungeon?.active){drawDungeonBackground(camX,camY);return;}if(!intro&&game?.region?.id!=='forest'&&game?.region){drawRegionBackground(camX,camY);return;}ctx.fillStyle='#2b4130';ctx.fillRect(0,0,width,height);const hX=intro?(width<760?.62:.73)*width:width*.5,hY=intro?(width<760?.71:.52)*height:height*.5;if(intro)glow(hX,hY,width*.6,'#76995b30');
+function drawIntroLights(target){const pad=Math.max(40,width*.08);target.save();target.globalAlpha=.075;target.fillStyle='#dee8a0';sunBeamPath(sunBeamGeometry(width*.74-SUN.x/SUN.y*pad,-pad,height+pad*2,width*.04,width*.07),target);target.fill();target.restore();}
+function background(camX,camY,intro){decorativeShadowShapes.length=0;if(!intro&&game?.dungeon?.active){drawDungeonBackground(camX,camY);return;}if(!intro&&game?.region?.id!=='forest'&&game?.region){drawRegionBackground(camX,camY);return;}ctx.fillStyle='#2b4130';ctx.fillRect(0,0,width,height);const hX=intro?(width<760?.62:.73)*width:width*.5,hY=intro?(width<760?.71:.52)*height:height*.5;if(intro)glow(hX,hY,width*.6,'#76995b30');
   // A quiet patchwork of moss and pale leaves remains fixed in world space.
   const tile=140,offX=width/2-camX,offY=height/2-camY;
   const sx=Math.floor(-offX/tile)-1,sy=Math.floor(-offY/tile)-1,ex=Math.ceil((width-offX)/tile)+1,ey=Math.ceil((height-offY)/tile)+1;
   for(let tx=sx;tx<ex;tx++)for(let ty=sy;ty<ey;ty++){const seed=hash(tx,ty),x=tx*tile+offX,y=ty*tile+offY;ellipse(x+seed*90,y+hash(ty,tx)*100,55+seed*40,27+seed*26,'#112e1710');for(let i=0;i<6;i++){let ax=x+hash(tx*7+i,ty)*tile,ay=y+hash(ty*9+i,tx)*tile;grass(ax,ay,.6+hash(i+tx,ty)*.6,hash(tx,ty+i));}if(seed>.83)stone(x+55,y+45,.5+seed*.6,seed);else if(seed>.61)fern(x+30,y+80,.7,seed);if(seed<.4)for(let i=0;i<3;i++)flower(x+35+i*9,y+100+hash(i,tx)*10,.7,seed);for(let i=0;i<5;i++){ctx.fillStyle=i%2?'#89977425':'#142d233a';ctx.fillRect(x+hash(i+tx,ty+7)*140,y+hash(i+ty,tx+6)*140,2+i%2,1);}}
   // Clusters are decorative ground cover; the central fighting space stays readable.
   if(intro){tree(width*.93,height*.14,1.7,.7);tree(width*.99,height*.48,1.2,.3);tree(width*.85,height*.97,1.5,.5);fern(width*.78,height*.88,2,.4);fern(width*.97,height*.8,1.7,.3);stone(hX-100,hY+72,1.5,.7);stone(hX+95,hY-96,1.3,.4);}
-  if(intro){const pad=Math.max(40,width*.08);ctx.save();ctx.globalAlpha=.075;ctx.fillStyle='#dee8a0';sunBeamPath(sunBeamGeometry(width*.74-SUN.x/SUN.y*pad,-pad,height+pad*2,width*.04,width*.07));ctx.fill();ctx.restore();}
-  else drawMapLights(camX,camY);
 }
 function drawRegionBackground(camX,camY){
   const region=game.region,marsh=region.id==='marsh',colors=region.colors;ctx.fillStyle=colors.ground;ctx.fillRect(0,0,width,height);
@@ -276,7 +282,6 @@ function drawRegionBackground(camX,camY){
       for(let i=0;i<4;i++){const xx=x+hash(tx+i,72)*tile,yy=y+hash(ty+i,76)*tile;line(xx-2,yy,xx-6,yy-6,'#91916e3a',1);line(xx,yy,xx+4,yy-9,'#7d8a6544',1);ctx.fillStyle='#b4ac7a20';ctx.fillRect(xx+7,yy+5,3,2);}
     }
   }
-  drawMapLights(camX,camY);
 }
 function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,.6);ctx.rotate(t*.11);ctx.globalAlpha=alpha;ctx.strokeStyle='#c4e699';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.stroke();ctx.setLineDash([2,8]);ctx.beginPath();ctx.arc(0,0,r-10,0,TAU);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<8;i++){const a=i*TAU/8;ctx.save();ctx.rotate(a);ctx.translate(r,0);diamond(0,0,4,'#cced9e');line(-6,0,6,0,'#c4e699',1);ctx.restore();}ctx.restore();}
 const ACTOR_VISUALS={
@@ -303,29 +308,51 @@ function actorInView(actor,offsetX=0,offsetY=0){
   return cx+(shape.halfWidth+5)*scale>=0&&cx-(shape.halfWidth+shape.shadowLength*.45+5)*scale<=width
     &&cy-(shape.top+5)*scale<=height&&footY+offsetY+(shape.shadowLength+shape.shadowWidth*.4+5)*scale>=0;
 }
-function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[],adventureProps=[]){
+function drawActorShadowPaths(target,actors,flying){
+  for(const actor of actors){
+    if(typeof flying==='boolean'&&(actor.type==='bat')!==flying)continue;
+    const {x,footY,scale,shape}=actor,length=shape.shadowLength*scale;
+    const offset=length*.39,cx=x+SUN.x*offset,cy=footY+SUN.y*offset,rx=shape.shadowWidth*scale,ry=length*.63;
+    target.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));
+    target.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);target.closePath();
+  }
+}
+function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[],adventureProps=[],drawLight=null){
   if(width<=0||height<=0)return;
   const maskWidth=Math.max(1,Math.ceil(width*.5)),maskHeight=Math.max(1,Math.ceil(height*.5));
   if(actorShadowCanvas.width!==maskWidth||actorShadowCanvas.height!==maskHeight){actorShadowCanvas.width=maskWidth;actorShadowCanvas.height=maskHeight;}
-  const mask=actorShadowCtx;mask.setTransform(1,0,0,1,0,0);mask.clearRect(0,0,maskWidth,maskHeight);
-  mask.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);mask.translate(offsetX,offsetY);
-  mask.fillStyle='#10271d';mask.globalCompositeOperation='source-over';
-  // A single nonzero fill per group forms a union. Hundreds of overlapping
-  // shapes therefore stay as light as one shadow, including flying enemies.
-  for(const flying of [true,false]){
-    mask.globalAlpha=flying?.55:1;mask.beginPath();
-    for(const actor of actors){
-      if((actor.type==='bat')!==flying)continue;
-      const {x,footY,scale,shape}=actor,length=shape.shadowLength*scale;
-      const offset=length*.39,cx=x+SUN.x*offset,cy=footY+SUN.y*offset,rx=shape.shadowWidth*scale,ry=length*.63;
-      // Sunlight falls from the upper right; all projections point down-left.
-      const rotation=SUN_ANGLE;mask.moveTo(cx+rx*Math.cos(rotation),cy+rx*Math.sin(rotation));
-      mask.ellipse(cx,cy,rx,ry,rotation,0,TAU);mask.closePath();
+  const mask=actorShadowCtx;
+  const paintMask=opaque=>{
+    mask.setTransform(1,0,0,1,0,0);mask.clearRect(0,0,maskWidth,maskHeight);
+    mask.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);mask.translate(offsetX,offsetY);
+    mask.fillStyle='#10271d';mask.globalCompositeOperation='source-over';mask.globalAlpha=1;
+    if(opaque){
+      // Full coverage, including lighter flying shadows, excludes sunlight.
+      mask.beginPath();drawActorShadowPaths(mask,actors);drawTerrainShadowPaths(mask,terrain);drawAdventureShadowPaths(mask,adventureProps);mask.fill('nonzero');
+      // Decorative ground shadows have already been drawn in screen space.
+      mask.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);mask.beginPath();
+      for(const shape of decorativeShadowShapes){mask.moveTo(shape.x+shape.rx,shape.y);mask.ellipse(shape.x,shape.y,shape.rx,shape.ry,0,0,TAU);mask.closePath();}mask.fill('nonzero');
+    }else{
+      // One nonzero fill per group forms a union. Overlapping shadows do not
+      // accumulate darkness; bats retain their lighter ground projection.
+      for(const flying of [true,false]){
+        mask.globalAlpha=flying?.55:1;mask.beginPath();drawActorShadowPaths(mask,actors,flying);
+        if(!flying){drawTerrainShadowPaths(mask,terrain);drawAdventureShadowPaths(mask,adventureProps);}mask.fill('nonzero');
+      }
     }
-    if(!flying){drawTerrainShadowPaths(mask,terrain);drawAdventureShadowPaths(mask,adventureProps);}
-    mask.fill('nonzero');
+    mask.globalAlpha=1;
+  };
+  if(drawLight){
+    paintMask(true);
+    if(sunlightCanvas.width!==maskWidth||sunlightCanvas.height!==maskHeight){sunlightCanvas.width=maskWidth;sunlightCanvas.height=maskHeight;}
+    const light=sunlightCtx;light.setTransform(1,0,0,1,0,0);light.clearRect(0,0,maskWidth,maskHeight);
+    light.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);light.globalAlpha=1;light.globalCompositeOperation='source-over';drawLight(light);
+    // Composite matching pixel grids without a transformed destructive fill.
+    light.setTransform(1,0,0,1,0,0);light.globalAlpha=1;light.globalCompositeOperation='destination-out';light.drawImage(actorShadowCanvas,0,0);light.globalCompositeOperation='source-over';
+    ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(sunlightCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
   }
-  mask.globalAlpha=1;
+  paintMask(false);
   ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.globalAlpha=.3;ctx.globalCompositeOperation='source-over';
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.drawImage(actorShadowCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
@@ -960,7 +987,26 @@ function drawStorm(){
   ctx.beginPath();for(const impact of geometry.impacts){ctx.moveTo(impact.x+2.2,impact.y);ctx.ellipse(impact.x,impact.y,2.2,1.6,0,0,TAU);}
   ctx.fillStyle='#ffffff';ctx.globalAlpha=impactAlpha;ctx.fill();ctx.restore();
 }
-function ambient(intro){const count=intro?25:13;for(let i=0;i<count;i++){const x=(hash(i,9)*width+Math.sin(clock*.2+i)*25+width)%width,y=(hash(i,8)*height-clock*(3+hash(i,7)*5)%height+height)%height,alpha=(.15+Math.sin(clock*1.4+i)*.13);ctx.globalAlpha=alpha;glow(x,y,7,'#daed9daa');ellipse(x,y,1.5,1.5,'#f1f5b3');}ctx.globalAlpha=1;}
+// Each mote belongs to a map cell. Camera movement only changes its projection;
+// bounded drift never wraps at a screen edge or follows a resized viewport.
+function mapAmbientMotes(camX,camY,time=game?._clock??clock,viewWidth=width,viewHeight=height){
+  const spacing=240,margin=30,motes=[],t=reduced?0:time;
+  const left=Math.floor((camX-viewWidth/2-margin)/spacing),right=Math.floor((camX+viewWidth/2+margin)/spacing);
+  const top=Math.floor((camY-viewHeight/2-margin)/spacing),bottom=Math.floor((camY+viewHeight/2+margin)/spacing);
+  for(let gx=left;gx<=right;gx++)for(let gy=top;gy<=bottom;gy++){
+    if(hash(gx+19,gy+41)>.84)continue;
+    const anchorX=(gx+hash(gx+67,gy+23))*spacing,anchorY=(gy+hash(gx+31,gy+79))*spacing,phase=hash(gx+101,gy+53)*TAU;
+    const x=anchorX+Math.sin(t*.32+phase)*12,y=anchorY+Math.cos(t*.26+phase)*10;
+    if(Math.abs(x-camX)>viewWidth/2+9||Math.abs(y-camY)>viewHeight/2+9)continue;
+    motes.push({id:`${gx},${gy}`,x,y,anchorX,anchorY,alpha:reduced?.15:.15+Math.sin(t*1.4+phase)*.1});
+  }
+  return motes;
+}
+function ambient(intro,camX=0,camY=0){
+  const motes=intro?Array.from({length:25},(_,i)=>{const t=reduced?0:clock;return {x:(hash(i,9)*width+Math.sin(t*.2+i)*25+width)%width,y:(hash(i,8)*height-t*(3+hash(i,7)*5)%height+height)%height,alpha:reduced?.15:.15+Math.sin(t*1.4+i)*.13};}):mapAmbientMotes(camX,camY);
+  ctx.save();if(!intro)ctx.translate(width/2-camX,height/2-camY);
+  for(const mote of motes){ctx.globalAlpha=mote.alpha;glow(mote.x,mote.y,7,'#daed9daa');ellipse(mote.x,mote.y,1.5,1.5,'#f1f5b3');}ctx.restore();
+}
 // Houses, town NPCs and dungeon walls share the same ground depth order as actors.
 function drawTownNpc(actor){
   const e=actor.entity,angel=e.townKind==='angel',pose=humanoidPose({});ctx.save();ctx.translate(e.x,e.y);ctx.scale(actor.scale,actor.scale);ctx.lineJoin='round';ctx.lineCap='round';
@@ -1055,7 +1101,7 @@ function renderIntro(){
   const actors=surrounds.map(([dx,dy,type,r],id)=>actorVisual({x:x+dx,y:y+dy,r,type,id:id+1,hp:10,maxHp:10,hit:0}));
   actors.push(actorVisual({x,y,facing:0,heroId:'traveler'},true,s));
   const visible=actors.filter(actor=>actorInView(actor));
-  glow(x,y-15,135,'#b9d68116');drawActorShadows(visible);runeCircle(x,y+30*s,70*s,clock,.28);runeCircle(x,y+30*s,51*s,-clock,.12);
+  drawActorShadows(visible,0,0,[],[],target=>{drawIntroLights(target);glow(x,y-15,135,'#b9d68116',target);});runeCircle(x,y+30*s,70*s,clock,.28);runeCircle(x,y+30*s,51*s,-clock,.12);
   for(let i=0;i<7;i++){let a=i*2.4,rr=mobile?60:115,gx=x+Math.cos(a)*rr,gy=y+35+Math.sin(a)*rr*.45;diamond(gx,gy,4+(i%2),'#c0e79099');}
   drawActors(visible);
   ambient(true);
@@ -1065,7 +1111,7 @@ function renderGame(){const p=game.player,camX=p.x,camY=p.y;background(camX,camY
   const actors=game.enemies.map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally)actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type==='merchant'||site.type==='angel'&&site.state!=='spent'){const npc={x:site.x+(site.type==='merchant'?site.width*.33:0),y:site.y+(site.type==='merchant'?12:0)-19.8,isTownNpc:true,townKind:site.type,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:900001};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
   const terrain=terrainInView(camX,camY),adventureProps=adventureSceneProps(camX,camY);
   ctx.save();ctx.translate(offsetX,offsetY);drawMudGround();drawDungeonGround();ctx.restore();
-  drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps);ctx.save();ctx.translate(offsetX,offsetY);
+  drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active?null:target=>drawMapLights(camX-sx,camY-sy,target));ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(Math.abs(gem.x-p.x)>width/2+20||Math.abs(gem.y-p.y)>height/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   drawCoins();drawSuperFields();
   for(const e of game.effects)if(e.type==='ring')effects(e);drawRescueGround();
@@ -1078,7 +1124,7 @@ function renderGame(){const p=game.player,camX=p.x,camY=p.y;background(camX,camY
   drawStorm();
   ctx.restore();
   const exposure=stormExposure(game.storm);if(exposure>0){ctx.fillStyle=`rgba(177,219,255,${exposure})`;ctx.fillRect(0,0,width,height);}
-  if(!game.dungeon?.active)ambient(false);drawDungeonMap();
+  if(!game.dungeon?.active)ambient(false,camX-sx,camY-sy);drawDungeonMap();
   drawObjectivePointers();drawRegionTransition();
   if(p.hp/p.maxHp<.3){const danger=ctx.createRadialGradient(width/2,height/2,height*.2,width/2,height/2,Math.max(width,height)*.65);danger.addColorStop(0,'transparent');danger.addColorStop(1,'#ae392144');ctx.fillStyle=danger;ctx.fillRect(0,0,width,height);}
 }
