@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { Game } from './dist/engine.js';
+import { Game, xpCost } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 let seed=61851;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -65,7 +65,7 @@ dense.update(0,{skill:true});
 assert.equal(dense.storm.targets.length,180,'storm preserves every target beyond generic effect cap');
 assert.equal(dense.kills,180);assert(dense.effects.length<=201);
 const pause = new Game();
-pause.player.xp=120;pause.update(.02,{});
+pause.player.xp=xpCost(1)+xpCost(2)+5;pause.update(.02,{});
 assert.equal(pause.status,'upgrade');assert.equal(pause.getUpgradeChoices().length,3);
 assert.equal(pause.chooseUpgrade('invalid'),false);
 const frozen=pause.time;pause.update(.05,{x:1});assert.equal(pause.time,frozen);
@@ -78,10 +78,10 @@ death.update(.02,{});assert.equal(death.status,'dead');
 const waves=new Game();waves.time=59.99;waves.update(.02,{});
 assert.equal(waves.wave,2);assert.equal(waves.events.filter(e=>e.type==='wave').length,1);
 waves.events.length=0;waves.update(.02,{});assert(!waves.events.some(e=>e.type==='wave'));
-const boss=new Game();assert.equal(boss.nextBossAt,150);
-boss.time=149.99;boss.player.invuln=1000;boss.update(.02,{});
+const boss=new Game();assert.equal(boss.nextBossAt,120);
+boss.time=119.99;boss.player.invuln=1000;boss.update(.02,{});
 const firstBoss=boss.enemies.find(e=>e.type==='boss');
-assert(firstBoss&&boss.bossCount===1);assert(boss.nextBossAt>300);
+assert(firstBoss&&boss.bossCount===1);assert(boss.nextBossAt>270);
 boss.time=boss.nextBossAt+.01;boss.update(.02,{});
 assert.equal(boss.bossCount,1,'overdue boss waits for current boss');
 boss._hurtEnemy(firstBoss,firstBoss.hp+1);
@@ -95,7 +95,7 @@ const progression=new Game();progression.time=180;progression.bossDefeated=true;
 progression.player.invuln=100;progression.update(.03,{});
 assert(progression.time>180&&progression.status==='playing');
 const capped=new Game();
-Object.assign(capped.levels,{power:6,rapid:5,multishot:4,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});
+Object.assign(capped.levels,{power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});
 for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower','endlessRegen']) {
   capped.player.xp=capped.player.xpNext;capped.update(.02,{});
   const choices=capped.getUpgradeChoices();
@@ -106,7 +106,7 @@ for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower',
 assert.equal(capped.levels.endlessPower,2);assert.equal(capped.levels.endlessRegen,2);
 assert.equal(capped.player.maxHp,112);finite(capped);
 const late=new Game();late.time=720;late._spawnEnemy('slime');
-assert(late.enemies.at(-1).hp>late.enemies[0].hp*5&&late.enemies.at(-1).damage>late.enemies[0].damage);
+assert(late.enemies.at(-1).hp>late.enemies[0].hp*2&&late.enemies.at(-1).damage>late.enemies[0].damage);
 
 const priority=['orbit','pulse','lightning','multishot','power','rapid','vitality','magnet','regen','speed','endlessPower','endlessVitality','endlessRegen'];
 const sim=(difficulty,seconds,immortal=false)=>{
@@ -134,8 +134,11 @@ const sim=(difficulty,seconds,immortal=false)=>{
   finite(g);
   return {status:g.status,time:Math.round(g.time),wave:g.wave,kills:g.kills,killsAfter180:g.kills-killsAt180,level:g.player.level,hp:Math.round(g.player.hp),bossCount:g.bossCount,bossKills:g.bossKills,upgrades,maxEnemies,maxBullets,maxGems};
 };
+if(!process.argv.includes('--focused')) {
 const full=sim('normal',720,true);
-assert(full.time>=720&&full.killsAfter180>100&&full.level>=30);
+assert(full.time>=720&&full.killsAfter180>100&&full.level>=20);
 assert(full.bossCount>=3&&full.bossKills>=2,'repeated boss lifecycle');
 assert.equal(full.status,'playing');
 console.log(JSON.stringify({checks:'pass',endless12Minutes:full,normal:sim('normal',240),casual:sim('casual',240)},null,2));
+
+} else console.log('Focused engine checks pass');

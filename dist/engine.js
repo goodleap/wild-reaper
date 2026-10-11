@@ -5,19 +5,24 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const rand = (a, b) => a + Math.random() * (b - a);
 const sq = (v) => v * v;
 const dist2 = (a, b) => sq(a.x - b.x) + sq(a.y - b.y);
+export const BALANCE=Object.freeze({firstXp:40,xpBase:110,xpLinear:65,xpCurve:8,firstBossAt:120,bossInterval:150,arrowDamage:32,arrowInterval:.38,arrowRange:420,magnet:105,spawnBase:1.05,spawnGrowth:.018,spawnMax:10.5});
+export function xpCost(level) {
+  if(level<=1)return BALANCE.firstXp;
+  const n=level-2;return Math.round(BALANCE.xpBase+BALANCE.xpLinear*n+BALANCE.xpCurve*Math.pow(n,1.3));
+}
 const UPGRADE_DEFS = [
   {id:'power',name:'锋芒',desc:'所有武器伤害提升 25%',kind:'被动强化',icon:'✦',color:'#e6be73'},
-  {id:'rapid',name:'疾风连射',desc:'翠羽飞矢攻击速度提升 22%',kind:'武器强化',icon:'»',color:'#89d8ad'},
-  {id:'multishot',name:'分裂箭',desc:'每轮增加一支飞矢',kind:'武器强化',icon:'⋔',color:'#a7dab7'},
+  {id:'rapid',name:'疾风连射',desc:'翠羽飞矢攻击速度提升 15%',kind:'武器强化',icon:'»',color:'#89d8ad'},
+  {id:'multishot',name:'分裂箭',desc:'保留全伤主箭，每轮增加一支 60% 伤害的副箭',kind:'武器强化',icon:'⋔',color:'#a7dab7'},
   {id:'orbit',name:'环刃',desc:'召唤环绕身边的利刃，持续切割敌人',kind:'新武器',icon:'◈',color:'#f0d28a'},
   {id:'pulse',name:'大地回响',desc:'释放环形冲击波，击退并伤害周围敌人',kind:'新武器',icon:'◎',color:'#80d5bd'},
   {id:'lightning',name:'唤雷',desc:'闪电自动追击敌人，并在敌人之间跳跃',kind:'新武器',icon:'ϟ',color:'#b6bafa'},
-  {id:'speed',name:'轻盈步伐',desc:'移动速度提升 12%，更轻松穿过兽群',kind:'被动强化',icon:'↗',color:'#9acbcc'},
-  {id:'magnet',name:'林间引力',desc:'经验拾取范围增加 55%',kind:'被动强化',icon:'✧',color:'#a1cf98'},
+  {id:'speed',name:'轻盈步伐',desc:'移动速度提升 8%，更轻松穿过兽群',kind:'被动强化',icon:'↗',color:'#9acbcc'},
+  {id:'magnet',name:'林间引力',desc:'经验拾取范围增加 35%',kind:'被动强化',icon:'✧',color:'#a1cf98'},
   {id:'vitality',name:'古树之心',desc:'最大生命增加 25，并恢复 35 生命',kind:'生存强化',icon:'♥',color:'#e7a68b'},
   {id:'regen',name:'生生不息',desc:'每秒恢复 0.8 生命',kind:'生存强化',icon:'✚',color:'#a4dc9d'}
 ];
-const LEVEL_CAPS = {power:6,rapid:5,multishot:4,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3};
+const LEVEL_CAPS = {power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3};
 const ENDLESS_UPGRADES = [
   {id:'endlessPower',name:'百炼锋芒',desc:'本局所有武器基础伤害增加 8%',kind:'无尽强化',icon:'✦',color:'#e6be73'},
   {id:'endlessVitality',name:'深根之心',desc:'本局最大生命增加 12，并恢复 24 生命',kind:'无尽强化',icon:'♥',color:'#e7a68b'},
@@ -30,15 +35,16 @@ export class Game {
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.status = 'playing'; this.time = 0; this.kills = 0; this.wave = 1;
+    this.pressurePhase='steady';this.phaseEndsAt=24;
     this.viewWidth = 1100; this.viewHeight = 650;
-    this.player = {x:0,y:0,r:15,hp:this.easy?140:100,maxHp:this.easy?140:100,speed:220,level:1,xp:0,xpNext:14,invuln:0,skillCooldown:0,skillCooldownMax:15,facing:0};
+    this.player = {x:0,y:0,r:15,hp:this.easy?140:100,maxHp:this.easy?140:100,speed:220,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:15,facing:0};
     this.enemies = []; this.bullets = []; this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
     this.storm = null;
     this.bossSpawned = false; this.bossDefeated = false;
-    this.nextBossAt = 150; this.bossCount = 0; this.bossKills = 0;
+    this.nextBossAt = BALANCE.firstBossAt; this.bossCount = 0; this.bossKills = 0;
     this.levels = Object.fromEntries([...UPGRADE_DEFS,...ENDLESS_UPGRADES].map(u => [u.id, 0]));
     this.weapons = [{id:'arrow',name:'翠羽飞矢',level:1,icon:'➶'}];
-    this.stats = {damage:1,fireRate:1,moveSpeed:1,magnet:72};
+    this.stats = {damage:1,fireRate:1,moveSpeed:1,magnet:BALANCE.magnet};
     this._id = 0; this._clock = 0; this._shot = .15; this._spawn = .4;
     this._pulse = 1; this._lightning = 1; this._choices = null;
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
@@ -52,6 +58,11 @@ export class Game {
     this.effects.push({x,y,type,life,maxLife:life,r,color,text,...extra});
   }
   _damageMultiplier() { return 1 + this.levels.power * .25 + this.levels.endlessPower * .08; }
+  _inView(entity,margin=0) {
+    const dx=Math.max(0,Math.abs(entity.x-this.player.x)-this.viewWidth*.5-margin);
+    const dy=Math.max(0,Math.abs(entity.y-this.player.y)-this.viewHeight*.5-margin);
+    return dx*dx+dy*dy<=sq(entity.r||0);
+  }
   _castStorm() {
     const p=this.player, halfW=this.viewWidth*.5, halfH=this.viewHeight*.5;
     const targets=this.enemies.filter(e=>{
@@ -70,9 +81,9 @@ export class Game {
     }
     this._effect(p.x,p.y,'ring',.45,95,'#d4e7ff');
   }
-  _nearest(x,y,range=1000,exclude) {
+  _nearest(x,y,range=BALANCE.arrowRange,exclude) {
     let best=null, d=range*range;
-    for(const e of this.enemies) if(e.hp>0 && !exclude?.has(e.id)) {
+    for(const e of this.enemies) if(e.hp>0 && this._inView(e) && !exclude?.has(e.id)) {
       const n=sq(e.x-x)+sq(e.y-y); if(n<d) { d=n; best=e; }
     }
     return best;
@@ -82,14 +93,20 @@ export class Game {
     const halfW=Math.max(390,this.viewWidth*.5+65),halfH=Math.max(290,this.viewHeight*.5+65);
     const edge=1/Math.max(Math.abs(Math.cos(a))/halfW,Math.abs(Math.sin(a))/halfH);
     const distance=radius || edge;
-    const defs={slime:[16,23,58,9,4],beetle:[18,46,72,12,6],bat:[11,19,113,7,4],brute:[26,118,44,17,13],boss:[49,this.easy?1700:2300,49,22,160]};
+    const defs={slime:[16,26,85,9,4],beetle:[18,43,100,12,6],bat:[11,24,145,7,4],brute:[26,115,60,17,13],boss:[49,this.easy?1700:2300,49,22,160]};
     const [r,hp,speed,damage,xp]=defs[type];
     const lateMinutes=Math.max(0,t-150)/60, bossIndex=Math.max(1,this.bossCount);
     // Density and movement stay bounded; health and contact damage keep rising.
-    const health=hp*(type==='boss'?1+(bossIndex-1)*.65+sq(bossIndex-1)*.12:1+t*.003+Math.pow(lateMinutes,1.45)*.32);
+    const endurance=Math.max(0,t-300)/60;
+    const health=hp*(type==='boss'?1+(bossIndex-1)*.65+sq(bossIndex-1)*.12:1+Math.min(t,300)*.0018+endurance*.13+Math.pow(endurance,1.25)*.05);
     const danger=type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.18;
-    const enemy={id:++this._id,x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),orbitHit:0,attackCooldown:0};
-    this._moveEntity(enemy,0,0);this.enemies.push(enemy);
+    const enemy={id:++this._id,x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),orbitHit:0,attackCooldown:0,slamCooldown:0,slamRecovery:0,slam:null};
+    this._moveEntity(enemy,0,0);
+    if(!radius)for(let i=0;i<6&&this._inView(enemy);i++) {
+      enemy.x=p.x+Math.cos(a)*(distance+85*(i+1));enemy.y=p.y+Math.sin(a)*(distance+85*(i+1));
+      this._moveEntity(enemy,0,0);
+    }
+    this.enemies.push(enemy);
   }
   _hurtEnemy(enemy,amount,knockback=0) {
     if(enemy.hp<=0) return;
@@ -103,7 +120,7 @@ export class Game {
     if(enemy.hp<=0) {
       this.kills++; this._emit('kill');
       this.gems.push({x:enemy.x,y:enemy.y,r:enemy.type==='boss'?11:enemy.type==='brute'?7:5,value:enemy.xp});
-      if(enemy.type==='boss') { this.bossDefeated=true; this.bossKills++; this._emit('bossKill'); this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482'); }
+      if(enemy.type==='boss') { enemy.slam=null;this.bossDefeated=true; this.bossKills++; this._emit('bossKill'); this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482'); }
       if(this.kills%24===0 && this.player.hp<this.player.maxHp) {
         this.player.hp=Math.min(this.player.maxHp,this.player.hp+7);
         this._effect(this.player.x,this.player.y-26,'heal',.8,0,'#b9e89c','+7'); this._emit('heal');
@@ -168,12 +185,53 @@ export class Game {
       e._navProgressX=e.x;e._navProgressY=e.y;e._navProgressTimer=0;
     }
   }
+  _updatePressure() {
+    let phase='steady',end=24;
+    if(this.time>=24) {
+      const elapsed=this.time-24,cycle=Math.floor(elapsed/36),local=elapsed%36,start=24+cycle*36;
+      phase=local<8?'siege':local<15?'relief':'steady';
+      end=start+(phase==='siege'?8:phase==='relief'?15:36);
+    }
+    if(phase!==this.pressurePhase) {
+      this.pressurePhase=phase;
+      if(phase==='siege'||phase==='relief')this._emit(phase);
+      // A previous phase's long spawn timer must not delay the next siege.
+      this._spawn=Math.min(this._spawn,.2);
+    }
+    this.phaseEndsAt=end;
+  }
+  _hurtPlayer(amount) {
+    const p=this.player;if(p.invuln>0||this.status!=='playing')return false;
+    p.hp=Math.max(0,p.hp-amount);p.invuln=.8;this._emit('hurt');
+    this._effect(p.x,p.y,'ring',.3,42,'#e48d78');
+    if(p.hp<=0)this.status='dead';return true;
+  }
+  _updateBoss(e,dt) {
+    e.slamCooldown=Math.max(0,(e.slamCooldown||0)-dt);
+    e.slamRecovery=Math.max(0,(e.slamRecovery||0)-dt);
+    if(e.slam){e.slam.life=Math.max(0,e.slam.life-dt);return true;}
+    if(e.slamRecovery>0)return true;
+    const x=e.x,y=e.y+groundOffset(e),p=this.player;
+    if(e.slamCooldown<=0&&Math.hypot(x-p.x,y-p.y-groundOffset(p,true))<=165) {
+      e.slam={x,y,r:115,life:1,maxLife:1};e.slamCooldown=7;this._emit('bossWindup');return true;
+    }
+    return false;
+  }
+  _resolveBossSlams() {
+    for(const e of this.enemies)if(e.type==='boss'&&e.hp>0&&e.slam&&e.slam.life<=0) {
+      const slam=e.slam;e.slam=null;e.slamRecovery=.3;
+      this._effect(slam.x,slam.y,'bossSlam',.5,slam.r,'#edaa78');this._emit('bossSlam');
+      const p=this.player;
+      if(Math.hypot(p.x-slam.x,p.y+groundOffset(p,true)-slam.y)<slam.r+p.r)this._hurtPlayer(e.damage*1.3);
+    }
+  }
 
   update(dt,input={}) {
     if(this.status!=='playing') return;
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
     const p=this.player;
     this.time+=dt; this._clock+=dt;
+    this._updatePressure();
     const wave=1+Math.floor(this.time/60);
     if(wave!==this.wave) { this.wave=wave; this._emit('wave'); }
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=Math.max(0,p.skillCooldown-dt);
@@ -185,24 +243,25 @@ export class Game {
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
     this._spawn-=dt;
     if(this._spawn<=0) {
-      const rate=Math.min(10.5,1.05+this.time*.031)*(this.easy?.78:1);
+      const pressure=this.pressurePhase==='siege'?1.85:this.pressurePhase==='relief'?.38:1;
+      const rate=Math.min(BALANCE.spawnMax,(BALANCE.spawnBase+this.time*BALANCE.spawnGrowth)*pressure)*(this.easy?.78:1);
       this._spawn=1/rate;
       if(this.enemies.length<180) {
         const roll=Math.random(), t=this.time;
-        const late=Math.max(0,t-150)/60, bruteChance=Math.min(.25,.13+late*.008), batEdge=Math.min(.8,.35+late*.033);
+        const late=Math.max(0,t-150)/60, bruteChance=Math.min(.15,.07+late*.006), batEdge=Math.min(.8,.35+late*.033);
         const type=t>60&&roll<bruteChance?'brute':t>23&&roll<batEdge?'bat':t>12&&roll<Math.max(.65,batEdge+.1)?'beetle':'slime';
         this._spawnEnemy(type);
       }
     }
     if(this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
-      this.nextBossAt=this.time+150;
-      this._spawnEnemy('boss',Math.max(380,Math.min(this.viewWidth,this.viewHeight)*.5+80)); this._emit('boss');
+      this.nextBossAt=this.time+BALANCE.bossInterval;
+      this._spawnEnemy('boss'); this._emit('boss');
     }
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
-      this._moveEnemy(e,dt);
+      if(e.type!=='boss'||!this._updateBoss(e,dt))this._moveEnemy(e,dt);
     }
     this._rebuildGrid();
     // Soft separation keeps the horde readable while preserving dense swarms.
@@ -221,22 +280,22 @@ export class Game {
     }
     if(input.skill && p.skillCooldown<=0) this._castStorm();
     for(const e of this._nearby(p.x,p.y,85)) {
-      if(e.hp>0 && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
-        p.hp=Math.max(0,p.hp-e.damage);p.invuln=.72;this._emit('hurt');
-        this._effect(p.x,p.y,'ring',.3,42,'#e48d78');
-        if(p.hp<=0) {this.status='dead';return;}
+      if(e.hp>0 && !e.slam && !(e.slamRecovery>0) && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
+        this._hurtPlayer(e.damage);
+        if(this.status==='dead')return;
       }
     }
     this._shot-=dt;
     if(this._shot<=0) {
       const target=this._nearest(p.x,p.y);
       if(target) {
-        this._shot=.38/(1+this.levels.rapid*.22);
+        this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);
         const base=Math.atan2(target.y-p.y,target.x-p.x), count=1+this.levels.multishot;
+        this._volley=(this._volley||0)+1;
         for(let i=0;i<count;i++) {
-          // Wide fans at higher levels clear converging waves.
-          const angle=base+(i-(count-1)/2)*.145;
-          this.bullets.push({x:p.x,y:p.y,r:4,angle,color:'#c3e9a4',vx:Math.cos(angle)*640,vy:Math.sin(angle)*640,life:1.65,damage:25*this._damageMultiplier(),pierce:this.levels.multishot>=3?2:1,hitIds:new Set()});
+          // Preserve the centered main arrow; only added side arrows are weaker.
+          const angle=base+(i?Math.ceil(i/2)*.16*(i%2?1:-1)*(this._volley%2?1:-1):0);
+          this.bullets.push({x:p.x,y:p.y,r:4,angle,color:'#c3e9a4',vx:Math.cos(angle)*640,vy:Math.sin(angle)*640,life:.82,damage:BALANCE.arrowDamage*this._damageMultiplier()*(i?.6:1),pierce:1,hitIds:new Set()});
         }
         this._emit('shoot');
       } else this._shot=.06;
@@ -251,8 +310,11 @@ export class Game {
         }
       }
     }
-    this.bullets=this.bullets.filter(b=>b.life>0);
+    this.bullets=this.bullets.filter(b=>b.life>0&&this._inView(b,24));
     this._updateWeapons(dt);
+    // Every weapon can interrupt a windup with a killing blow on this frame.
+    this._resolveBossSlams();
+    if(this.status==='dead')return;
     this.enemies=this.enemies.filter(e=>e.hp>0 && (e.type==='boss'||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
     for(const gem of this.gems) {
       const dx=p.x-gem.x,dy=p.y-gem.y,d=Math.hypot(dx,dy);
@@ -279,49 +341,51 @@ export class Game {
     const p=this.player, power=this._damageMultiplier(), level=this.levels.orbit;
     this.orbitals=[];
     if(level) {
-      const count=level+1, radius=69+level*5;
+      const count=2+Math.floor((level-1)/2), radius=70+level*4;
       for(let i=0;i<count;i++) {
         const a=this._clock*(2.15+level*.14)+i*TAU/count;
         const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a};
         this.orbitals.push(blade);
         for(const e of this._nearby(blade.x,blade.y,65)) if(e.hp>0&&e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)) {
-          this._hurtEnemy(e,(18+level*6)*power,8);e.orbitHit=.34;
+          this._hurtEnemy(e,(24+level*6)*power,8);e.orbitHit=.42;
         }
       }
     }
     this._pulse-=dt;
     if(this.levels.pulse && this._pulse<=0) {
-      const l=this.levels.pulse, radius=105+l*15;
-      this._pulse=2.1-l*.14;
+      const l=this.levels.pulse, radius=100+l*10;
+      this._pulse=2.6;
       this._effect(p.x,p.y,'ring',.48,radius,'#9de0b3');
-      for(const e of this.enemies) if(e.hp>0&&dist2(p,e)<sq(radius+e.r)) this._hurtEnemy(e,(24+l*12)*power,28);
+      for(const e of this.enemies) if(e.hp>0&&dist2(p,e)<sq(radius+e.r)) this._hurtEnemy(e,(40+l*10)*power,20);
     }
     this._lightning-=dt;
     if(this.levels.lightning && this._lightning<=0) {
-      const l=this.levels.lightning;this._lightning=2.2-l*.15;
+      const l=this.levels.lightning;this._lightning=2.8;
       let origin={x:p.x,y:p.y};const excluded=new Set();
-      for(let i=0;i<l+2;i++) {
-        const e=this._nearest(origin.x,origin.y,i===0?620:230,excluded);if(!e)break;
+      for(let i=0;i<3;i++) {
+        const e=this._nearest(origin.x,origin.y,i===0?360:190,excluded);if(!e)break;
         excluded.add(e.id);this._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y});
-        this._hurtEnemy(e,(34+l*12)*power);origin=e;
+        this._hurtEnemy(e,(38+l*10)*power);origin=e;
       }
     }
   }
 
   _levelUp() {
     const p=this.player;
-    p.xp-=p.xpNext;p.level++;p.xpNext=Math.round(14+Math.pow(p.level,1.25)*5);
+    p.xp-=p.xpNext;p.level++;p.xpNext=xpCost(p.level);
     this.status='upgrade';this._choices=null;this._emit('level');
     this._effect(p.x,p.y,'ring',.8,100,'#eee0a3');
   }
   getUpgradeChoices() {
     if(this._choices) return this._choices;
-    const pool=UPGRADE_DEFS.filter(u=>this.levels[u.id]<LEVEL_CAPS[u.id]);
+    const weaponIds=['orbit','pulse','lightning'],owned=weaponIds.filter(id=>this.levels[id]>0).length;
+    const slots=this.player.level>=8?3:this.player.level>=5?2:1;
+    const pool=UPGRADE_DEFS.filter(u=>this.levels[u.id]<LEVEL_CAPS[u.id]&&(!weaponIds.includes(u.id)||this.levels[u.id]>0||owned<slots));
     // Keep all three choices available without ever adding more projectiles.
     if(pool.length<3) pool.push(...ENDLESS_UPGRADES);
     // Guarantee an attractive new weapon in early choices.
     const chosen=[];
-    if(this.player.level<=4) {
+    if(owned<slots&&(this.player.level===2||this.player.level===5||this.player.level===8)) {
       const newWeapons=pool.filter(u=>['orbit','pulse','lightning'].includes(u.id)&&!this.levels[u.id]);
       if(newWeapons.length) chosen.push(newWeapons[Math.floor(Math.random()*newWeapons.length)]);
     }
@@ -331,9 +395,9 @@ export class Game {
     this._choices=chosen.map(u=>{
       const level=this.levels[u.id]||0;
       let desc=u.desc, kind=u.kind;
-      if(level && u.id==='orbit') {desc='增加一枚环刃，提升伤害与环绕范围';kind='武器强化';}
-      if(level && u.id==='pulse') {desc='冲击波范围和伤害提升，冷却缩短';kind='武器强化';}
-      if(level && u.id==='lightning') {desc='增加一次闪电跳跃，伤害提升，冷却缩短';kind='武器强化';}
+      if(level && u.id==='orbit') {desc=(level+1)%2===1?'增加一枚环刃，提升伤害与环绕范围':'提升环刃伤害与环绕范围';kind='武器强化';}
+      if(level && u.id==='pulse') {desc='冲击波范围和伤害提升，释放间隔保持 2.6 秒';kind='武器强化';}
+      if(level && u.id==='lightning') {desc='提升每道闪电伤害；固定追击 3 个目标';kind='武器强化';}
       return {...u,desc,kind,level:level+1};
     });
     return this._choices;
@@ -344,8 +408,8 @@ export class Game {
     this.levels[id]++;
     if(id==='vitality') {p.maxHp+=25;p.hp=Math.min(p.maxHp,p.hp+35);this._emit('heal');}
     if(id==='endlessVitality') {p.maxHp+=12;p.hp=Math.min(p.maxHp,p.hp+24);this._emit('heal');}
-    this.stats.damage=this._damageMultiplier();this.stats.fireRate=1+this.levels.rapid*.22;
-    this.stats.moveSpeed=1+this.levels.speed*.12;this.stats.magnet=72*(1+this.levels.magnet*.55);
+    this.stats.damage=this._damageMultiplier();this.stats.fireRate=1+this.levels.rapid*.15;
+    this.stats.moveSpeed=1+this.levels.speed*.08;this.stats.magnet=BALANCE.magnet*(1+this.levels.magnet*.35);
     p.speed=220*this.stats.moveSpeed;
     this.weapons=[{id:'arrow',name:'翠羽飞矢',level:1+this.levels.rapid+this.levels.multishot,icon:'➶'}];
     for(const id of ['orbit','pulse','lightning']) if(this.levels[id]) {

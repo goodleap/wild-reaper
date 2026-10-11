@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node qa-engine.mjs && node qa-terrain.mjs",
+    "test": "node qa-engine.mjs && node qa-terrain.mjs && node qa-balance.mjs",
     "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/terrain.js"
   }
 }
