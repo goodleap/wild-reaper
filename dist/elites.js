@@ -17,7 +17,7 @@ export class Elites {
   constructor(game,{generation=true}={}) { this.game=game;this.generation=generation; }
 
   _eligible(enemy) {
-    return enemy.hp>0&&ELIGIBLE.has(enemy.type)&&!enemy.affix&&!enemy.elite&&!enemy.guardianId&&!enemy.eventId&&!enemy.eventRole&&!enemy.summoned;
+    return enemy.hp>0&&ELIGIBLE.has(enemy.type)&&!enemy.affix&&!enemy.elite&&!enemy.guardianId&&!enemy.rescueId&&!enemy.rescueGuard&&!enemy.eventId&&!enemy.eventRole&&!enemy.summoned;
   }
 
   maybePromote(enemy) {

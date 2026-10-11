@@ -16,7 +16,7 @@ export class Encounters {
   }
   _canStart() {
     const g=this.game;
-    if(g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.nextBossAt-g.time<45)return false;
+    if(g.companions?.camp||g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.nextBossAt-g.time<45)return false;
     const chest=g.adventure?.treasure;
     // An ignored, unopened chest is not a permanent veto on other objectives.
     if(chest?.state==='active'&&distance(chest,this._foot())<600)return false;
@@ -81,7 +81,7 @@ export class Encounters {
       if(enemy.eventId!==active.id||enemy.id!==active.enemyId||enemy.eventRole!=='treasure')return;
       active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);this._finish(true);return;
     }
-    if(enemy.type==='boss'||enemy.guardianId||enemy.elite||enemy.affix||enemy.summoned||enemy.eventRole||enemy._encounterCounted===active.id)return;
+    if(enemy.type==='boss'||enemy.guardianId||enemy.rescueId||enemy.elite||enemy.affix||enemy.summoned||enemy.eventRole||enemy._encounterCounted===active.id)return;
     if(distance(this._foot(),active)>active.r||distance(this._foot(enemy,false),active)>active.r)return;
     enemy._encounterCounted=active.id;active.progress++;
     if(active.progress>=active.goal)this._finish(true);

@@ -27,43 +27,41 @@ function offer(g,id) {
 }
 function shootOnce(g) {g._shot=0;g.update(0);g._shot=Infinity;}
 
-assert.deepEqual(HEROES.map(h=>h.id),['ranger','warden','stormcaller']);
-for(const [hero,initial,hp,speed,cooldown] of [
-  ['ranger','rapid',100,238,15],['warden','orbit',125,202,15],['stormcaller','lightning',85,220,12]
-]) {
+assert.deepEqual(HEROES.map(h=>h.id),['traveler'],'there is only one playable protagonist');
+for(const hero of ['traveler','ranger','warden','stormcaller','unknown']) {
   const g=arena({hero});
-  assert.equal(g.hero.id,hero);assert.equal(g.player.heroId,hero);
-  assert.equal(g.player.maxHp,hp);assert.equal(g.player.hp,hp);
-  assert.equal(Math.round(g.player.speed),speed);assert.equal(g.player.skillCooldownMax,cooldown);
-  assert.equal(g.levels[initial],1);assert.equal(g.player.xp,0);assert.equal(g.player.level,1);
-  assert.equal(g.status,'playing','a starting loadout does not require a free upgrade screen');
-  assert.equal(g.weapons[0].level,initial==='rapid'?2:1,'the arrow display agrees with its real starting upgrades');
-  if(initial!=='rapid')assert(g.weapons.some(w=>w.id===initial&&w.level===g.levels[initial]));
+  assert.equal(g.hero.id,'traveler');assert.equal(g.player.heroId,'traveler','obsolete saved selections cannot restore removed starting roles');
+  assert.equal(g.player.maxHp,100);assert.equal(g.player.hp,100);
+  assert.equal(g.player.speed,220);assert.equal(g.player.skillCooldownMax,15);
+  assert(Object.values(g.levels).every(level=>level===0),'the restored protagonist starts without a free weapon or passive upgrade');
+  assert.equal(g.player.xp,0);assert.equal(g.player.level,1);assert.equal(g.status,'playing');
+  assert.deepEqual(g.weapons.map(w=>[w.id,w.level]),[['arrow',1]],'automatic arrows remain available without a held weapon or side weapon');
   g.player.level=2;
   for(let i=0;i<16;i++) {
-    g._choices=null;const choices=g.getUpgradeChoices();
-    if(initial!=='rapid')assert(!choices.some(c=>['orbit','pulse','lightning'].includes(c.id)&&c.id!==initial),'a starting secondary weapon occupies the first slot');
-    else assert(choices.some(c=>['orbit','pulse','lightning'].includes(c.id)),'a ranger can fill its empty secondary slot at the first upgrade');
+    g._choices=null;assert(g.getUpgradeChoices().some(c=>['orbit','pulse','lightning'].includes(c.id)),'the first earned upgrade can fill the empty secondary slot');
+  }
+  g.levels.orbit=1;g.player.level=4;
+  for(let i=0;i<16;i++) {
+    g._choices=null;assert(!g.getUpgradeChoices().some(c=>['pulse','lightning'].includes(c.id)),'an acquired secondary occupies the first slot');
   }
   g.player.level=5;g._choices=null;
-  assert(g.getUpgradeChoices().some(c=>['orbit','pulse','lightning'].includes(c.id)&&!g.levels[c.id]),'the next slot unlocks normally at hero level five');
+  assert(g.getUpgradeChoices().some(c=>['pulse','lightning'].includes(c.id)),'the next slot unlocks normally at level five');
   const baseSpeed=g.player.speed;offer(g,'speed');assert(g.chooseUpgrade('speed'));
-  assert(Math.abs(g.player.speed/baseSpeed-1.08)<1e-10,'later movement upgrades preserve the hero movement trait');
-  const easy=arena({hero,difficulty:'casual'});assert.equal(easy.player.maxHp,Math.round(hp*1.4));
+  assert(Math.abs(g.player.speed/baseSpeed-1.08)<1e-10,'earned movement upgrades still change real movement speed');
+  assert.equal(arena({hero,difficulty:'casual'}).player.maxHp,140);
   const restarted=arena({hero:g.player.heroId});
-  assert.equal(restarted.player.heroId,hero);assert.equal(restarted.levels.speed,0);assert.equal(restarted.levels[initial],1,'a fresh run restores the selected starting loadout');
+  assert.equal(restarted.player.heroId,'traveler');assert(Object.values(restarted.levels).every(level=>level===0));
   assert.equal(restarted.player.xp,0);assert.equal(restarted.player.level,1);
 }
-assert.equal(arena({hero:'unknown'}).hero.id,'ranger','an obsolete saved hero selection has a valid fallback');
-const quick=arena(),regular=arena({hero:'warden'});
-for(const g of [quick,regular]) {g.levels.orbit=0;monster(g,'slime',200);shootOnce(g);}
+const quick=arena(),regular=arena();quick.levels.rapid=1;quick._refreshStats();
+for(const g of [quick,regular]) {monster(g,'slime',200);shootOnce(g);}
 assert(quick._shot===Infinity&&quick.bullets.length===1);
 quick._shot=0;regular._shot=0;quick.update(0);regular.update(0);
-assert(quick._shot<regular._shot,'the ranger starting rapid upgrade changes the actual firing interval');
+assert(quick._shot<regular._shot,'an earned rapid upgrade changes the actual firing interval');
 
 // Apply statuses through the real weapon paths instead of injecting status data.
 function bleedingTarget() {
-  const g=arena({hero:'warden'}),e=monster(g,'slime',74);
+  const g=arena(),e=monster(g,'slime',74);g.levels.orbit=1;
   g.update(0);assert(e.bleed,'an actual orbit collision applies bleed');
   return {g,e};
 }
@@ -108,13 +106,13 @@ assert.equal(shockTargets[2].hp,hpBeforeArrow[2],'a transfer never recursively j
 assert(shockTargets[1].shock,'raw transferred damage does not consume the receiver shock');
 const transferred=hpBeforeArrow[1]-shockTargets[1].hp;
 
-const orbitShock=arena({hero:'warden'}),marked=monster(orbitShock,'slime',74),receiver=monster(orbitShock,'slime',180);
+const orbitShock=arena(),marked=monster(orbitShock,'slime',74),receiver=monster(orbitShock,'slime',180);
 orbitShock.levels.orbit=0;orbitShock.update(0,{skill:true});const receiverHp=receiver.hp;
 orbitShock.levels.orbit=1;orbitShock.update(0);
 assert(!marked.shock&&marked.bleed,'an orbit hit both consumes shock and applies bleed');
 assert.equal(receiverHp-receiver.hp,transferred,'orbit also transfers shock once');
 
-const passiveLightning=arena({hero:'stormcaller'}),lightningTarget=monster(passiveLightning,'slime',150);
+const passiveLightning=arena(),lightningTarget=monster(passiveLightning,'slime',150);passiveLightning.levels.lightning=1;
 passiveLightning._lightning=0;passiveLightning.update(0);assert(lightningTarget.shock,'automatic lightning uses the same status path');
 passiveLightning.levels.lightning=0;advance(passiveLightning,2.6);assert(!lightningTarget.shock,'unused shock expires');
 
@@ -235,7 +233,7 @@ assert(!escaped.environment.props.includes(abandonedBomb));assert.equal(abandone
 
 // DOT and environmental kills run before due Boss attacks resolve.
 for(const kind of ['ancient','bloom']) {
-  const dot=arena({hero:'warden'});dot.bossCount=kind==='bloom'?2:1;
+  const dot=arena();dot.levels.orbit=1;dot.bossCount=kind==='bloom'?2:1;
   const boss=monster(dot,'boss',74);boss.bloomCooldown=0;boss.bloomNext='burst';dot.update(0);
   assert(boss.bleed);const warning=kind==='bloom'?boss.bloomAttack:boss.slam;assert(warning);
   dot.levels.orbit=0;boss.hp=1;boss.bleed.nextTick=.001;warning.life=.001;
@@ -297,4 +295,4 @@ assert.equal(readMud(),null,'a dynamic objective suppresses an occupied fixed mu
 stable.adventure.props=[];const restoredMud=readMud();assert(restoredMud);
 assert.equal(restoredMud.x,stableMud.x);assert.equal(restoredMud.y,stableMud.y,'removing the dynamic objective restores the same mud geometry');
 
-console.log('Hero and interaction mechanics: loadouts, slots, bleed/shock reactions, mud, delayed mushrooms, bounded world state and interrupted Boss attacks passed.');
+console.log('Protagonist and interaction mechanics: fixed starting state, earned slots, bleed/shock reactions, mud, delayed mushrooms, bounded world state and interrupted Boss attacks passed.');

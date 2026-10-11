@@ -137,7 +137,7 @@ for(const extras of [{type:'boss'},{type:'boar'},{elite:true},{guardianId:'guard
   assert.equal(g.elites.promote(e,'swift'),false,'special enemies and summons cannot receive a second elite identity');
 }
 
-const shield=arena({hero:'warden'}),shielded=monster(shield,'slime',74);
+const shield=arena(),shielded=monster(shield,'slime',74);shield.levels.orbit=1;
 assert(shield.elites.promote(shielded,'shield'));
 const shieldHp=shielded.hp,shieldStart=shielded.affix.shield;shield.update(0);
 assert.equal(shielded.hp,shieldHp);assert(shielded.affix.shield<shieldStart);
@@ -148,7 +148,7 @@ assert.equal(shielded.hp,shieldHp-38,'only lightning damage beyond the remaining
 assert(shielded.shock&&shielded.affix.shield===0);
 assert.equal(shield.effects.filter(e=>e.type==='shieldBreak').length,1);
 shield._hurtEnemy(shielded,20);assert.equal(shield.effects.filter(e=>e.type==='shieldBreak').length,1,'a broken shield produces one break effect');
-const absorbedDot=arena({hero:'warden'}),bleeder=monster(absorbedDot,'slime',74);absorbedDot.update(0);assert(bleeder.bleed);
+const absorbedDot=arena(),bleeder=monster(absorbedDot,'slime',74);absorbedDot.levels.orbit=1;absorbedDot.update(0);assert(bleeder.bleed);
 absorbedDot.levels.orbit=0;assert(absorbedDot.elites.promote(bleeder,'shield'));
 const hpBeforeDot=bleeder.hp,shieldBeforeDot=bleeder.affix.shield;bleeder.bleed.nextTick=.001;absorbedDot.update(.025);
 assert.equal(bleeder.hp,hpBeforeDot);assert(bleeder.affix.shield<shieldBeforeDot,'existing DOT also passes through the common shield damage path');
@@ -200,7 +200,7 @@ const unseen=arena(),hiddenCaster=summoner(unseen,750);hiddenCaster.affix.phase=
 unseen.update(.025);assert(!unseen.enemies.some(e=>e.summoned),'an unseen summoner cannot create offscreen pressure');
 
 for(const source of ['storm','bleed']) {
-  const g=arena({hero:source==='bleed'?'warden':'ranger'}),e=summoner(g,source==='bleed'?74:250,0);
+  const g=arena(),e=summoner(g,source==='bleed'?74:250,0);if(source==='bleed')g.levels.orbit=1;
   if(source==='bleed') {g.update(0);assert(e.bleed);g.levels.orbit=0;e.bleed.nextTick=.001;}
   e.hp=1;e.affix.phase='windup';e.affix.life=.001;g.update(.025,source==='storm'?{skill:true}:{});
   assert(e.hp<=0);assert(!g.enemies.some(child=>child.summoned),`a same-frame ${source} kill cancels a ready summon`);

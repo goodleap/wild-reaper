@@ -5,7 +5,7 @@ export const RELICS=Object.freeze([
   Object.freeze({id:'bloodstone',name:'赤心',icon:'◆',color:'#eaa08f',desc:'生命低于 40% 时，所有武器伤害提升 25%'}),
   Object.freeze({id:'herbalEcho',name:'春芽符',icon:'✿',color:'#b9dda5',desc:'拾取药草并实际恢复生命时，释放一道范围 125、基础伤害 60 的冲击波'}),
   Object.freeze({id:'leafWard',name:'铁叶护符',icon:'⬡',color:'#d2dbae',desc:'立即获得护罩，抵消下一次受击的至多 12 点伤害；消耗后 20 秒恢复一层'}),
-  Object.freeze({id:'swiftFeather',name:'风羽',icon:'↗',color:'#a9d9de',desc:'移动速度额外提升 8%，可与角色特性和轻盈步伐共同生效'}),
+  Object.freeze({id:'swiftFeather',name:'风羽',icon:'↗',color:'#a9d9de',desc:'移动速度额外提升 8%，可与轻盈步伐共同生效'}),
   Object.freeze({id:'deepRoot',name:'深根',icon:'♧',color:'#dac395',desc:'药草的治疗量提升 40%，从 25 点增加至 35 点；满血时仍保留药草'})
 ]);
 
