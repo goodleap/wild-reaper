@@ -29,6 +29,11 @@ export class Adventure {
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<g.viewHeight*.5+margin;}
   _free(x,y,r=36){return this.game.terrain.isFree(x,y,r);}
+  _environmentFree(x,y,r=0){
+    const environment=this.game.environment;if(!environment)return true;
+    if(environment.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8))return false;
+    return !environment.muds.some(m=>((x-m.x)/(m.rx+r+8))**2+((y-m.y)/(m.ry+r+8))**2<=1);
+  }
   _safePoint(x,y,r=28){
     if(this._free(x,y,r))return {x,y};
     for(let radius=24;radius<=144;radius+=24)for(let i=0;i<12;i++){
@@ -45,7 +50,7 @@ export class Adventure {
     if(this._consumed.has(id))return null;
     const x=starter?220:tx*CELL+145+hash(tx+131,ty+197)*225,y=starter?160:ty*CELL+145+hash(tx+199,ty+83)*225;
     const point=this._safePoint(x,y,38);
-    if(!point||Math.hypot(point.x,point.y)<145)return null;
+    if(!point||Math.hypot(point.x,point.y)<145||!this._environmentFree(point.x,point.y,18))return null;
     return {id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:42,maxHp:42,hit:0,seed,drop:starter?'herb':TYPES[Math.floor(hash(tx+233,ty+271)*TYPES.length)]};
   }
   _refreshSupplies(initial=false){
@@ -114,10 +119,10 @@ export class Adventure {
       const start=hash(this._treasureCount+1,Math.floor(g.time))*TAU;
       for(let i=0;i<24;i++){
         const a=start+i*TAU/24,r=420+(i%3)*50,candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
-        if(this._free(candidate.x,candidate.y,90)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}
+        if(this._free(candidate.x,candidate.y,90)&&this._environmentFree(candidate.x,candidate.y,40)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}
       }
     }
-    if(!point)return null;
+    if(!point||!this._environmentFree(point.x,point.y,40))return null;
     this._treasureCount++;
     this.treasure={id:`treasure:${++this._id}`,...point,r:27,sortY:point.y,state:'locked',guardianId:null,life:180,maxLife:180,openedLife:0};
     this._nextTreasureAt=g.time+90;g._emit('treasure');

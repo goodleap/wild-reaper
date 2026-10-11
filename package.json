@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "stamp-version": "node scripts/stamp-version.mjs",
-    "test": "node qa-engine.mjs && node qa-terrain.mjs && node qa-balance.mjs && node qa-content.mjs && node qa-expansion.mjs",
-    "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/terrain.js && node --check dist/adventure.js && node --check dist/encounters.js && node --check dist/bosses.js && node --check scripts/stamp-version.mjs"
+    "test": "node qa-engine.mjs && node qa-terrain.mjs && node qa-balance.mjs && node qa-content.mjs && node qa-expansion.mjs && node qa-roles.mjs",
+    "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/terrain.js && node --check dist/adventure.js && node --check dist/encounters.js && node --check dist/bosses.js && node --check dist/heroes.js && node --check dist/combat-status.js && node --check dist/environment.js && node --check scripts/stamp-version.mjs"
   }
 }

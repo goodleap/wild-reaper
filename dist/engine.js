@@ -2,6 +2,10 @@ import { Terrain, groundOffset } from './terrain.js';
 import { Adventure } from './adventure.js';
 import { Encounters } from './encounters.js';
 import { initBoss, updateBloomBoss, resolveBloomBoss, clearBossAttacks } from './bosses.js';
+import { HEROES, getHero } from './heroes.js';
+import { CombatStatus } from './combat-status.js';
+import { Environment } from './environment.js';
+export { HEROES };
 
 const TAU = Math.PI * 2;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -38,9 +42,9 @@ const UPGRADE_DEFS = [
   {id:'power',name:'锋芒',desc:'所有武器伤害提升 25%',kind:'被动强化',icon:'✦',color:'#e6be73'},
   {id:'rapid',name:'疾风连射',desc:'翠羽飞矢攻击速度提升 15%',kind:'武器强化',icon:'»',color:'#89d8ad'},
   {id:'multishot',name:'分裂箭',desc:'保留全伤主箭，每轮增加一支 60% 伤害的副箭',kind:'武器强化',icon:'⋔',color:'#a7dab7'},
-  {id:'orbit',name:'环刃',desc:'召唤环绕身边的利刃，持续切割敌人',kind:'新武器',icon:'◈',color:'#f0d28a'},
-  {id:'pulse',name:'大地回响',desc:'释放环形冲击波，击退并伤害周围敌人',kind:'新武器',icon:'◎',color:'#80d5bd'},
-  {id:'lightning',name:'唤雷',desc:'闪电自动追击敌人，并在敌人之间跳跃',kind:'新武器',icon:'ϟ',color:'#b6bafa'},
+  {id:'orbit',name:'环刃',desc:'环绕利刃附加流血，可由大地回响引爆',kind:'新武器',icon:'◈',color:'#f0d28a'},
+  {id:'pulse',name:'大地回响',desc:'环形冲击波击退敌人；消耗流血时伤害增加 25%',kind:'新武器',icon:'◎',color:'#80d5bd'},
+  {id:'lightning',name:'唤雷',desc:'连锁闪电附加 2.5 秒感电，飞矢或环刃命中可向附近敌人传导',kind:'新武器',icon:'ϟ',color:'#b6bafa'},
   {id:'speed',name:'轻盈步伐',desc:'移动速度提升 8%，更轻松穿过兽群',kind:'被动强化',icon:'↗',color:'#9acbcc'},
   {id:'magnet',name:'林间引力',desc:'经验拾取范围增加 35%',kind:'被动强化',icon:'✧',color:'#a1cf98'},
   {id:'vitality',name:'古树之心',desc:'最大生命增加 25，并恢复 35 生命',kind:'生存强化',icon:'♥',color:'#e7a68b'},
@@ -59,29 +63,35 @@ const ENDLESS_UPGRADES = [
 ];
 
 export class Game {
-  constructor({difficulty='normal',terrain=new Terrain(),adventure=true,encounters=adventure}={}) {
+  constructor({difficulty='normal',hero='ranger',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure}={}) {
     this.terrain=terrain;
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
+    this.hero=getHero(hero);
     this.status = 'playing'; this.time = 0; this.kills = 0; this.wave = 1;
     this.pressurePhase='steady';this.phaseEndsAt=24;
     this.viewWidth = 1100; this.viewHeight = 650;
-    this.player = {x:0,y:0,r:15,hp:this.easy?140:100,maxHp:this.easy?140:100,speed:220,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:15,facing:0};
+    const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
+    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:this.hero.skillCooldown,facing:0};
     this.enemies = []; this.bullets = []; this.enemyBullets=[];this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
     this.storm = null;
     this.bossSpawned = false; this.bossDefeated = false;
     this.nextBossAt = BALANCE.firstBossAt; this.bossCount = 0; this.bossKills = 0;
     this.levels = Object.fromEntries([...UPGRADE_DEFS,...ENDLESS_UPGRADES].map(u => [u.id, 0]));
+    this.levels[this.hero.initialUpgrade]=1;
     this.weapons = [{id:'arrow',name:'翠羽飞矢',level:1,icon:'➶'}];
     this.stats = {damage:1,fireRate:1,moveSpeed:1,magnet:BALANCE.magnet};
     this._id = 0; this._clock = 0; this._shot = .15; this._spawn = .4;
     this._pulse = 1; this._lightning = 1; this._choices = null;
     this.evolutions={orbit:false,pulse:false,lightning:false};this._pulseEchoes=[];
+    this._refreshStats();this._refreshWeapons();
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     this._moveEntity(this.player,0,0,true);
     for(let i=0;i<4;i++) this._spawnEnemy('slime', 330 + i * 24);
     this.adventure=adventure?new Adventure(this):null;
     this.encounters=encounters?new Encounters(this):null;
+    this.combatStatus=new CombatStatus(this);
+    this.environment=environment?new Environment(this):null;
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -108,9 +118,10 @@ export class Game {
     this.storm={x:p.x,y:p.y,viewWidth:this.viewWidth,viewHeight:this.viewHeight,life:.65,maxLife:.65,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
     this._emit('skill');
     for(const e of targets) {
-      this._hurtEnemy(e,160*this._damageMultiplier());
+      this._hitEnemy(e,160*this._damageMultiplier(),0,p,'storm');
       this._effect(e.x,e.y,'thunder',.6,e.r,'#d4e7ff');
     }
+    this.environment?.hitAllVisible('storm');
     this._effect(p.x,p.y,'ring',.45,95,'#d4e7ff');
   }
   _nearest(x,y,range=BALANCE.arrowRange,exclude) {
@@ -140,6 +151,9 @@ export class Game {
     }
     if(type==='boss')initBoss(enemy);
     this.enemies.push(enemy);return enemy;
+  }
+  _hitEnemy(enemy,amount,knockback=0,origin=this.player,source='arrow') {
+    return this.combatStatus.hit(enemy,amount,knockback,origin,source);
   }
   _hurtEnemy(enemy,amount,knockback=0,origin=this.player) {
     if(enemy.hp<=0) return;
@@ -214,7 +228,7 @@ export class Game {
       }
     }
     const wobble=!detouring&&e.type==='bat'?Math.sin(this._clock*5+e.phase)*.52:0;
-    const speed=e.speed*(e.type==='boss'?1+Math.max(0,Math.sin(this._clock*.85))*1.15:1);
+    const speed=e.speed*(e.type==='boss'?1+Math.max(0,Math.sin(this._clock*.85))*1.15:1)*(this.environment?.movementMultiplier(e)||1);
     this._moveEntity(e,(nx-ny*wobble)*speed*dt,(ny+nx*wobble)*speed*dt);
     e._navProgressTimer=(e._navProgressTimer||0)+dt;
     if(e._navProgressTimer>.9) {
@@ -274,7 +288,8 @@ export class Game {
       }
       if(charge.phase==='stunned') {if(charge.life<=0)e.charge=null;return true;}
       const x=e.x,y=e.y+groundOffset(e);
-      const movement=this._moveEntity(e,charge.dx*320*dt,charge.dy*320*dt);
+      const speed=320*(this.environment?.movementMultiplier(e)||1);
+      const movement=this._moveEntity(e,charge.dx*speed*dt,charge.dy*speed*dt);
       e._chargeSegment={x,y,x2:e.x,y2:e.y+groundOffset(e)};
       if(movement.blocked) {
         charge.phase='stunned';charge.life=charge.maxLife=1.2;this._emit('boarStun');
@@ -338,11 +353,14 @@ export class Game {
     const wave=1+Math.floor(this.time/60);
     if(wave!==this.wave) { this.wave=wave; this._emit('wave'); }
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=Math.max(0,p.skillCooldown-dt);
+    this.environment?.update(dt);
+    if(this.status==='dead')return;
     if(this.storm) { this.storm.life-=dt; if(this.storm.life<=0) this.storm=null; }
     let ix=Number.isFinite(input.x)?input.x:0,iy=Number.isFinite(input.y)?input.y:0;
     const length=Math.hypot(ix,iy); if(length>1) { ix/=length; iy/=length; }
     if(length>.01) p.facing=Math.atan2(iy,ix);
-    this._moveEntity(p,ix*p.speed*dt,iy*p.speed*dt,true);
+    const movement=this.environment?.movementMultiplier(p,true)||1;
+    this._moveEntity(p,ix*p.speed*movement*dt,iy*p.speed*movement*dt,true);
     this.adventure?.update(dt);
     this.encounters?.update(dt);
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
@@ -417,11 +435,13 @@ export class Game {
       } else this._shot=.06;
     }
     for(const b of this.bullets) {
+      const oldX=b.x,oldY=b.y;
       b.life-=dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
+      this.environment?.hitSegment(oldX,oldY,b.x,b.y,b.r,'arrow');
       for(const e of this._nearby(b.x,b.y,64)) {
         if(e.hp<=0 || b.hitIds.has(e.id)) continue;
         if(dist2(b,e)<sq(b.r+e.r+3)) {
-          b.hitIds.add(e.id);this._hurtEnemy(e,b.damage,4);this._emit('hit');
+          b.hitIds.add(e.id);this._hitEnemy(e,b.damage,4,p,'arrow');this._emit('hit');
           if(--b.pierce<=0) {b.life=-1;break;}
         }
       }
@@ -433,6 +453,7 @@ export class Game {
     }
     this.bullets=this.bullets.filter(b=>b.life>0&&this._inView(b,24));
     this._updateWeapons(dt);
+    this.combatStatus.update(dt);
     // Every weapon can interrupt a windup with a killing blow on this frame.
     this._resolveBossSlams();
     for(const e of this.enemies)if(e.type==='boss'&&e.bossKind==='bloom')resolveBloomBoss(this,e);
@@ -472,8 +493,9 @@ export class Game {
         const a=this._clock*(2.15+level*.14)+i*TAU/count;
         const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a,evolved:this.evolutions.orbit,surge};
         this.orbitals.push(blade);
+        this.environment?.hitAt(blade.x,blade.y,blade.r,'orbit');
         for(const e of this._nearby(blade.x,blade.y,65)) if(e.hp>0&&e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)) {
-          this._hurtEnemy(e,(24+level*6)*power,8);e.orbitHit=.42;
+          this._hitEnemy(e,(24+level*6)*power,8,p,'orbit');e.orbitHit=.42;
         }
         for(const prop of this.adventure?.props||[])if(prop.hp>0&&(prop._orbitNext||0)<=this.time&&sq(prop.x-blade.x)+sq((prop.aimY??prop.y)-blade.y)<sq(prop.r+blade.r)) {
           this.adventure.hitSupply(prop,(24+level*6)*power);prop._orbitNext=this.time+.42;
@@ -502,7 +524,8 @@ export class Game {
       for(let i=0;i<(this.evolutions.lightning?5:3);i++) {
         const e=this._nearest(origin.x,origin.y,i===0?360:190,excluded);if(!e)break;
         excluded.add(e.id);this._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:this.evolutions.lightning,chainIndex:i});
-        this._hurtEnemy(e,(38+l*10)*power*(this.evolutions.lightning&&i>=3?.4:1));origin=e;
+        this._hitEnemy(e,(38+l*10)*power*(this.evolutions.lightning&&i>=3?.4:1),0,origin,'lightning');
+        this.environment?.hitAt(e.x,e.y,e.r,'lightning');origin=e;
       }
     }
   }
@@ -510,7 +533,9 @@ export class Game {
   _castPulse(x,y,radius,damage,knockback,echo=false) {
     const origin={x,y};
     this._effect(x,y,'ring',echo?.6:.48,radius,echo?'#c6ead5':'#9de0b3',undefined,{evolved:this.evolutions.pulse,echo});
-    for(const e of this.enemies)if(e.hp>0&&dist2(origin,e)<sq(radius+e.r))this._hurtEnemy(e,damage,knockback,origin);
+    const source=echo?'echo':'pulse';
+    for(const e of this.enemies)if(e.hp>0&&dist2(origin,e)<sq(radius+e.r))this._hitEnemy(e,damage,knockback,origin,source);
+    this.environment?.hitAt(x,y,radius,source);
     for(const prop of this.adventure?.props||[])if(prop.hp>0&&sq(prop.x-x)+sq((prop.aimY??prop.y)-y)<sq(radius+prop.r))this.adventure.hitSupply(prop,damage);
   }
   _syncEvolutions(announce=false) {
@@ -518,6 +543,19 @@ export class Game {
       this.evolutions[id]=true;
       if(id==='orbit')this._orbitEvolutionStartedAt=this._clock;
       if(announce)this._emit('evolution',{weaponId:id,name:EVOLUTIONS[id].name});
+    }
+  }
+  _refreshStats() {
+    this.stats.damage=this._damageMultiplier();this.stats.fireRate=1+this.levels.rapid*.15;
+    this.stats.moveSpeed=this.hero.baseSpeed/220*(1+this.levels.speed*.08);
+    this.stats.magnet=BALANCE.magnet*(1+this.levels.magnet*.35);
+    this.player.speed=220*this.stats.moveSpeed;
+  }
+  _refreshWeapons() {
+    this.weapons=[{id:'arrow',name:'翠羽飞矢',level:1+this.levels.rapid+this.levels.multishot,icon:'➶'}];
+    for(const id of ['orbit','pulse','lightning'])if(this.levels[id]) {
+      const u=UPGRADE_DEFS.find(u=>u.id===id),evolved=this.evolutions[id];
+      this.weapons.push({id,name:evolved?EVOLUTIONS[id].name:u.name,baseName:u.name,level:this.levels[id],icon:u.icon,evolved,evolutionName:EVOLUTIONS[id].name});
     }
   }
 
@@ -564,14 +602,7 @@ export class Game {
     this._syncEvolutions(true);
     if(id==='vitality') {p.maxHp+=25;p.hp=Math.min(p.maxHp,p.hp+35);this._emit('heal');}
     if(id==='endlessVitality') {p.maxHp+=12;p.hp=Math.min(p.maxHp,p.hp+24);this._emit('heal');}
-    this.stats.damage=this._damageMultiplier();this.stats.fireRate=1+this.levels.rapid*.15;
-    this.stats.moveSpeed=1+this.levels.speed*.08;this.stats.magnet=BALANCE.magnet*(1+this.levels.magnet*.35);
-    p.speed=220*this.stats.moveSpeed;
-    this.weapons=[{id:'arrow',name:'翠羽飞矢',level:1+this.levels.rapid+this.levels.multishot,icon:'➶'}];
-    for(const id of ['orbit','pulse','lightning']) if(this.levels[id]) {
-      const u=UPGRADE_DEFS.find(u=>u.id===id),evolved=this.evolutions[id];
-      this.weapons.push({id,name:evolved?EVOLUTIONS[id].name:u.name,baseName:u.name,level:this.levels[id],icon:u.icon,evolved,evolutionName:EVOLUTIONS[id].name});
-    }
+    this._refreshStats();this._refreshWeapons();
     p.invuln=Math.max(p.invuln,1);this._choices=null;this.status='playing';
     if(p.xp>=p.xpNext) this._levelUp();
     return true;

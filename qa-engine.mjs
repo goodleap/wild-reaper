@@ -60,7 +60,7 @@ bossSkill.update(0,{skill:true});assert.equal(bossSkill.events.filter(e=>e.type=
 for(let i=0;i<2;i++)bossSkill.update(.05,{});
 bossSkill.update(0,{skill:true});assert.equal(bossSkill.events.filter(e=>e.type==='skill').length,2);
 const empty=skillArena();empty.update(.02,{x:1,y:0,skill:true});
-assert.equal(empty.player.x,4.4,'cast has no movement boost');assert.equal(empty.player.invuln,0);
+assert.equal(empty.player.x,empty.player.speed*.02,'cast has no movement boost');assert.equal(empty.player.invuln,0);
 assert.equal(empty.player.skillCooldown,15);assert.equal(empty.storm.targets.length,0);
 assert.equal(empty.storm.x,empty.player.x,'empty storm stores the cast position');
 const skillFrozen={time:empty.time,life:empty.storm.life,cooldown:empty.player.skillCooldown};
