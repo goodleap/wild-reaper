@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { Game, xpCost } from './dist/engine.js';
+import { Game, xpCost, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 let seed=61851;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 const finite = (g) => {
-  for (const thing of [g.player,...g.enemies,...g.bullets,...g.gems,...g.effects,...g.orbitals])
+  for (const thing of [g.player,...g.enemies,...g.bullets,...g.enemyBullets,...g.gems,...g.effects,...g.orbitals])
     assert(Number.isFinite(thing.x)&&Number.isFinite(thing.y),'non-finite coordinates');
   for(const e of g.enemies) assert(Number.isFinite(e.hp)&&Number.isFinite(e.maxHp)&&Number.isFinite(e.damage));
   assert(g.player.hp>=0&&g.player.hp<=g.player.maxHp);
@@ -15,12 +15,16 @@ const finite = (g) => {
   for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r),`${e.type} feet stay outside terrain`);
   assert(g.terrain.cacheSize<=g.terrain.cacheLimit,'terrain cache stays bounded');
   assert(g.enemies.length<=181,'enemy count stays bounded');
+  assert(g.enemyBullets.length<=BALANCE.maxEnemyBullets,'enemy projectile count stays bounded');
+  assert(g.enemies.filter(e=>e.type==='boar').length<=BALANCE.boarCap);
+  assert(g.enemies.filter(e=>e.type==='spore').length<=BALANCE.sporeCap);
+  if(g.adventure){assert(g.adventure.props.length<=18&&g.adventure.pickups.length<=24);assert(g.enemies.filter(e=>e.elite&&e.hp>0).length<=1);}
   assert(g.enemies.filter(e=>e.type==='boss'&&e.hp>0).length<=1,'only one living boss');
   assert(g.bullets.length<=60&&g.orbitals.length<=6&&g.effects.length<=201&&g.gems.length<=500);
   assert(['playing','upgrade','dead'].includes(g.status),'no terminal win state');
 };
 // Isolate active skill behavior from passive shots, spawns and movement.
-const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]})});g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;return g;};
+const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false});g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;return g;};
 const target=(g,x,y,{type='slime',hp=100,r=10}={})=>{
   g._spawnEnemy(type);const e=g.enemies.at(-1);Object.assign(e,{x,y,r,hp,maxHp:hp,speed:0});return e;
 };
@@ -64,7 +68,7 @@ for(let i=0;i<180;i++)target(dense,-180+(i%18)*20,-135+Math.floor(i/18)*28);
 dense.update(0,{skill:true});
 assert.equal(dense.storm.targets.length,180,'storm preserves every target beyond generic effect cap');
 assert.equal(dense.kills,180);assert(dense.effects.length<=201);
-const pause = new Game();
+const pause = new Game({adventure:false});
 pause.player.xp=xpCost(1)+xpCost(2)+5;pause.update(.02,{});
 assert.equal(pause.status,'upgrade');assert.equal(pause.getUpgradeChoices().length,3);
 assert.equal(pause.chooseUpgrade('invalid'),false);
@@ -72,13 +76,13 @@ const frozen=pause.time;pause.update(.05,{x:1});assert.equal(pause.time,frozen);
 assert(pause.chooseUpgrade(pause.getUpgradeChoices()[0].id));
 assert.equal(pause.status,'upgrade','carry-over experience must create another level');
 assert.equal(pause.player.level,3);
-const death=new Game();death.player.hp=1;
+const death=new Game({adventure:false});death.player.hp=1;
 death.enemies[0].x=death.player.x;death.enemies[0].y=death.player.y;
 death.update(.02,{});assert.equal(death.status,'dead');
-const waves=new Game();waves.time=59.99;waves.update(.02,{});
+const waves=new Game({adventure:false});waves.time=59.99;waves.update(.02,{});
 assert.equal(waves.wave,2);assert.equal(waves.events.filter(e=>e.type==='wave').length,1);
 waves.events.length=0;waves.update(.02,{});assert(!waves.events.some(e=>e.type==='wave'));
-const boss=new Game();assert.equal(boss.nextBossAt,120);
+const boss=new Game({adventure:false});assert.equal(boss.nextBossAt,120);
 boss.time=119.99;boss.player.invuln=1000;boss.update(.02,{});
 const firstBoss=boss.enemies.find(e=>e.type==='boss');
 assert(firstBoss&&boss.bossCount===1);assert(boss.nextBossAt>270);
@@ -91,10 +95,10 @@ assert.equal(boss.bossCount,2);assert.equal(boss.enemies.filter(e=>e.type==='bos
 const secondBoss=boss.enemies.find(e=>e.type==='boss');
 assert(secondBoss.hp>firstBoss.maxHp&&secondBoss.damage>firstBoss.damage,'successive bosses get stronger');
 assert.equal(boss.nextBossAt,boss.time+150);assert.equal(boss.status,'playing');
-const progression=new Game();progression.time=180;progression.bossDefeated=true;
+const progression=new Game({adventure:false});progression.time=180;progression.bossDefeated=true;
 progression.player.invuln=100;progression.update(.03,{});
 assert(progression.time>180&&progression.status==='playing');
-const capped=new Game();
+const capped=new Game({adventure:false});
 Object.assign(capped.levels,{power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});
 for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower','endlessRegen']) {
   capped.player.xp=capped.player.xpNext;capped.update(.02,{});
@@ -105,7 +109,7 @@ for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower',
 }
 assert.equal(capped.levels.endlessPower,2);assert.equal(capped.levels.endlessRegen,2);
 assert.equal(capped.player.maxHp,112);finite(capped);
-const late=new Game();late.time=720;late._spawnEnemy('slime');
+const late=new Game({adventure:false});late.time=720;late._spawnEnemy('slime');
 assert(late.enemies.at(-1).hp>late.enemies[0].hp*2&&late.enemies.at(-1).damage>late.enemies[0].damage);
 
 const priority=['orbit','pulse','lightning','multishot','power','rapid','vitality','magnet','regen','speed','endlessPower','endlessVitality','endlessRegen'];

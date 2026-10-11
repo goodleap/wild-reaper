@@ -7,7 +7,7 @@ let seed=819263;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 const emptyTerrain=()=>new Terrain({obstacles:[]});
 function arena({terrain=emptyTerrain(),width=1100,height=650}={}) {
-  const g=new Game({terrain});
+  const g=new Game({terrain,adventure:false});
   g.enemies=[];g.gems=[];g.events=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;
   g.viewWidth=width;g.viewHeight=height;
@@ -98,7 +98,7 @@ assert(crowd.enemies.length<=181,'ordinary enemies plus the Boss stay within the
 assert.equal(crowd.enemies.filter(e=>e.type==='boss').length,1);
 
 // First Boss arrives at two minutes; later arrivals are spaced and never overlap.
-const scheduled=new Game({terrain:emptyTerrain()});
+const scheduled=new Game({terrain:emptyTerrain(),adventure:false});
 scheduled.enemies=[];scheduled._spawn=Infinity;scheduled._shot=Infinity;
 scheduled.time=119.9;scheduled.update(.05);
 assert(!scheduled.enemies.some(e=>e.type==='boss'),'the first Boss does not arrive early');

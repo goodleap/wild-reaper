@@ -4,7 +4,7 @@ const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.
 
 export function groundOffset(entity,isPlayer=false) {
   if(isPlayer) return 19.8;
-  const offsets={slime:[14,16],bat:[20,11],beetle:[18,18],brute:[23,26],boss:[41,49]};
+  const offsets={slime:[14,16],bat:[20,11],beetle:[18,18],brute:[23,26],boar:[20,22],spore:[18,20],boss:[41,49]};
   const [offset,radius]=offsets[entity.type]||[0,entity.r||1];
   return offset*(entity.r/radius);
 }

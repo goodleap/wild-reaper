@@ -45,6 +45,11 @@
           <div class="intro-bottom"><span><i class="live-dot"></i> 无需下载，即刻开战</span><span>探索你的生存流派 <span>↘</span></span></div>
         </div>
 
+        <div id="buff-status" class="buff-status hidden" role="group" aria-label="临时增益">
+          <span id="fury-buff" class="buff-badge fury-buff hidden"><span class="buff-icon" aria-hidden="true">ϟ</span><span>狂暴</span><span class="buff-time"><span id="fury-time">0</span>秒</span></span>
+          <span id="magnet-buff" class="buff-badge magnet-buff hidden"><span class="buff-icon" aria-hidden="true">⊂</span><span>磁力</span><span class="buff-time"><span id="magnet-time">0</span>秒</span></span>
+        </div>
+
         <div class="game-bottom hidden" id="game-bottom"><div class="loadout" id="loadout"></div><button class="skill-box" id="skill-button" aria-label="释放天雷轰击" title="天雷轰击 · 空格 · 冷却 15 秒"><span class="skill-key">SPACE</span><span id="skill-label">天雷轰击 · 就绪</span><div class="skill-track"><i id="skill-fill"></i></div></button></div>
         <div id="joystick" class="joystick hidden"><div id="joystick-thumb"></div></div>
         <button class="touch-skill hidden" id="touch-skill" aria-label="释放天雷轰击"><span id="skill-symbol">ϟ</span><small id="touch-skill-label">天雷</small></button>
@@ -52,7 +57,14 @@
         <div class="modal-layer hidden" id="upgrade-overlay"><div class="upgrade-panel" role="dialog" aria-modal="true" aria-labelledby="upgrade-title"><div class="eyebrow centered">✦ &nbsp; LEVEL UP</div><h2 id="upgrade-title">荒野的馈赠</h2><p id="upgrade-description">选择一项强化，让下一波怪潮记住你。</p><div id="upgrade-cards" class="upgrade-cards"></div><span class="modal-footnote" id="upgrade-note">时间已暂停 · 选择后继续冒险</span></div></div>
         <div class="modal-layer hidden" id="pause-overlay"><div class="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="eyebrow centered">TAKE A BREATH</div><h2 id="pause-title">在此，稍作停留。</h2><p>荒野会等你。准备好了就继续。</p><button class="primary-button wide" id="resume-button">继续冒险 <span>→</span></button><button class="secondary-button wide" id="quit-button">结束本局，返回首页</button></div></div>
         <div class="modal-layer hidden" id="end-overlay"><div class="dialog-panel end-panel" role="dialog" aria-modal="true" aria-labelledby="end-title"><div class="end-emblem" id="end-emblem">✦</div><div class="eyebrow centered" id="end-kicker">THE JOURNEY CONTINUES</div><h2 id="end-title">荒野记住了你。</h2><p id="end-description">每一次出发，都比上一次更强。</p><div class="end-stats"><div><strong id="end-time">00:00</strong><span>存活时间</span></div><div><strong id="end-kills">0</strong><span>击败怪物</span></div><div><strong id="end-level">1</strong><span>最终等级</span></div></div><button id="restart-button" class="primary-button wide">再次出发 <span>↗</span></button><button id="home-button" class="secondary-button wide">返回首页</button></div></div>
-        <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list"><div><b>01</b><p><strong>保持移动</strong><span>WASD / 方向键移动；手机拖动屏幕。大树、巨石与倒木会挡路，需要绕行。灵弹自动瞄准，可穿过障碍。</span></p></div><div><b>02</b><p><strong>收集与进化</strong><span>靠近绿色灵晶可拾取经验，升级时三选一。连续升级会逐次选择，剩余经验保留。</span></p></div><div><b>03</b><p><strong>天雷轰击</strong><span>按空格或点击天雷按钮，雷击屏幕内全部怪物，冷却 15 秒。伤害随强化提升，领主也会受到伤害。Esc / P 暂停。</span></p></div><div><b>04</b><p><strong>无尽挑战</strong><span>没有时间上限。短暂围攻后会有喘息期，怪潮逐渐增强。首位领主在 02:00 出现，此后约每 2 分 30 秒再临；震地前会出现红圈，及时跑出范围。</span></p></div></div><button id="help-done" class="primary-button wide">准备好了 <span>→</span></button></div></div>
+        <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list">
+          <div><b>01</b><p><strong>移动与攻击</strong><span>WASD / 方向键移动，手机拖动屏幕。绕过大树、巨石与倒木；灵弹自动瞄准，可穿过障碍。</span></p></div>
+          <div><b>02</b><p><strong>收集与进化</strong><span>靠近绿色灵晶获取经验，升级三选一。连续升级逐次选择，剩余经验保留。药草、磁铁与狂暴即拾即用，无需选择。</span></p></div>
+          <div><b>03</b><p><strong>天雷与暂停</strong><span>空格 / 天雷按钮轰击全屏怪物，冷却 15 秒，领主也会受伤，伤害随强化提升。Esc / P 暂停。</span></p></div>
+          <div><b>04</b><p><strong>识别危险</strong><span>野猪沿红金直线冲锋，侧移躲避，诱它撞障碍可使其眩晕。孢子怪发射慢速紫弹，可借树石掩护。</span></p></div>
+          <div><b>05</b><p><strong>探索与补给</strong><span>野外补给箱可打破。精英守卫看守的宝箱可选择绕路挑战，击败守卫后靠近领取。</span></p></div>
+          <div><b>06</b><p><strong>无尽挑战</strong><span>围攻与喘息交替，怪潮不断增强。首位领主在 02:00 出现，此后约每 2 分 30 秒再临；震地前跑出红色预警圈。</span></p></div>
+        </div><button id="help-done" class="primary-button wide">准备好了 <span>→</span></button></div></div>
       </section>
       <footer class="footer"><div class="keyboard-guide"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移动</span><i></i><kbd class="space-key">SPACE</kbd><span>天雷轰击</span><i></i><kbd>ESC</kbd><span>暂停</span></div><div class="mobile-guide">拖动屏幕移动 · 点击右下角释放天雷</div><span class="footer-note">保持移动。惊喜总在下一次升级。</span></footer>
     </main>
