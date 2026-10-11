@@ -99,12 +99,12 @@ function background(camX,camY,intro){ctx.fillStyle='#2b4130';ctx.fillRect(0,0,wi
 }
 function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,.6);ctx.rotate(t*.11);ctx.globalAlpha=alpha;ctx.strokeStyle='#c4e699';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.stroke();ctx.setLineDash([2,8]);ctx.beginPath();ctx.arc(0,0,r-10,0,TAU);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<8;i++){const a=i*TAU/8;ctx.save();ctx.rotate(a);ctx.translate(r,0);diamond(0,0,4,'#cced9e');line(-6,0,6,0,'#c4e699',1);ctx.restore();}ctx.restore();}
 const ACTOR_VISUALS={
-  player:{radius:15,foot:18,halfWidth:29,top:35,shadowWidth:16,shadowLength:36},
-  slime:{radius:16,foot:14,halfWidth:22,top:20,shadowWidth:15,shadowLength:25},
-  bat:{radius:11,foot:20,halfWidth:31,top:27,shadowWidth:20,shadowLength:24},
-  beetle:{radius:18,foot:18,halfWidth:25,top:22,shadowWidth:15,shadowLength:27},
-  brute:{radius:26,foot:23,halfWidth:33,top:32,shadowWidth:25,shadowLength:40},
-  boss:{radius:49,foot:41,halfWidth:60,top:68,shadowWidth:43,shadowLength:66}
+  player:{radius:15,foot:18,halfWidth:29,top:35,shadowWidth:14,shadowLength:24},
+  slime:{radius:16,foot:14,halfWidth:22,top:20,shadowWidth:14,shadowLength:17},
+  bat:{radius:11,foot:20,halfWidth:31,top:27,shadowWidth:18,shadowLength:16},
+  beetle:{radius:18,foot:18,halfWidth:25,top:22,shadowWidth:14,shadowLength:18},
+  brute:{radius:26,foot:23,halfWidth:33,top:32,shadowWidth:23,shadowLength:27},
+  boss:{radius:49,foot:41,halfWidth:60,top:68,shadowWidth:39,shadowLength:44}
 };
 function actorVisual(entity,isPlayer=false,scaleOverride){
   const type=isPlayer?'player':entity.type,shape=ACTOR_VISUALS[type]||ACTOR_VISUALS.slime;
