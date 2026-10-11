@@ -33,7 +33,7 @@ export class Regions {
   constructor(game){this.game=game;this._lastBossId=null;}
   _safePoint(enemy) {
     const g=this.game,center={x:enemy.x,y:enemy.y+groundOffset(enemy)},p=g.player;
-    const safe=(x,y)=>g.terrain.isFree(x,y,36)&&
+    const safe=(x,y)=>g.terrain.isFree(x,y,36)&&g.environment?.isHazardFree?.(x,y,45)!==false&&
       !g.environment?.props.some(o=>Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+45)&&
       !g.adventure?.props.some(o=>Math.hypot(o.x-x,o.y-y)<65)&&
       (!g.adventure?.treasure||Math.hypot(g.adventure.treasure.x-x,g.adventure.treasure.y-y)>100);

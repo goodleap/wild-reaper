@@ -34,6 +34,7 @@ export class Adventure {
   _free(x,y,r=36){return this.game.terrain.isFree(x,y,r);}
   _environmentFree(x,y,r=0){
     const environment=this.game.environment;if(!environment)return true;
+    if(environment.isHazardFree?.(x,y,r)===false)return false;
     if(environment.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8))return false;
     return !environment.muds.some(m=>((x-m.x)/(m.rx+r+8))**2+((y-m.y)/(m.ry+r+8))**2<=1);
   }

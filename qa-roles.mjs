@@ -46,6 +46,7 @@ for(const hero of ['traveler','ranger','warden','stormcaller','unknown']) {
   }
   g.player.level=5;g._choices=null;
   assert(g.getUpgradeChoices().some(c=>['pulse','lightning'].includes(c.id)),'the next slot unlocks normally at level five');
+  g.branches.arrow='pierce'; // Movement-only fixture has already resolved its new level-five branch.
   const baseSpeed=g.player.speed;offer(g,'speed');assert(g.chooseUpgrade('speed'));
   assert(Math.abs(g.player.speed/baseSpeed-1.08)<1e-10,'earned movement upgrades still change real movement speed');
   assert.equal(arena({hero,difficulty:'casual'}).player.maxHp,140);
@@ -88,7 +89,7 @@ assert(Math.abs((markedHp-rupture.e.hp)/(cleanHp-clean.hp)-1.25)<1e-10,'pulse de
 assert(!rupture.e.bleed);const rupturedHp=rupture.e.hp;advance(rupture.g,.6);
 assert.equal(rupture.e.hp,rupturedHp,'consumed bleed does not continue ticking');
 
-const echoed=arena();echoed.levels.pulse=5;echoed._pulse=0;
+const echoed=arena();echoed.levels.pulse=5;echoed.branches.pulse='echoes';echoed._pulse=0;
 const echoTarget=monster(echoed,'slime',185);echoed.update(0);
 assert.equal(echoTarget.hp,10000,'the target is outside the first pulse');
 echoed.player.x=111;echoed.levels.orbit=1;echoed.update(0);assert(echoTarget.bleed);
@@ -181,7 +182,7 @@ for(const source of ['arrow','orbit','pulse','echo','lightning','storm']) {
   if(source==='orbit') {g.levels.orbit=1;g.update(0);}
   if(source==='pulse') {g.levels.pulse=1;g._pulse=0;g.update(0);}
   if(source==='echo') {
-    g.levels.pulse=5;g._pulse=0;g.update(0);
+    g.levels.pulse=5;g.branches.pulse='echoes';g._pulse=0;g.update(0);
     assert.equal(prop.state,'idle','the outer mushroom is beyond the first pulse');advance(g,.36);
   }
   if(source==='lightning') {monster(g,'slime',100);g.levels.lightning=1;g._lightning=0;g.update(0);}

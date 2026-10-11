@@ -25,6 +25,7 @@ export class Companions {
   }
   _hazardFree(x,y,r=0) {
     const environment=this.game.environment;
+    if(environment?.isHazardFree?.(x,y,r)===false)return false;
     return !environment?.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8);
   }
   _point(x,y) {

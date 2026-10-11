@@ -107,6 +107,7 @@ const progression=new Game({adventure:false});progression.time=180;progression.b
 progression.player.invuln=100;progression.update(.03,{});
 assert(progression.time>180&&progression.status==='playing');
 const capped=new Game({adventure:false});
+Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
 Object.assign(capped.levels,{power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});
 for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower','endlessRegen']) {
   capped.player.xp=capped.player.xpNext;capped.update(.02,{});

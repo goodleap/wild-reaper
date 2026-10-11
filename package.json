@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "stamp-version": "node scripts/stamp-version.mjs",
-    "test": "node qa-engine.mjs && node qa-terrain.mjs && node qa-balance.mjs && node qa-content.mjs && node qa-expansion.mjs && node qa-roles.mjs && node qa-portals.mjs && node qa-relics.mjs && node qa-companions.mjs",
-    "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/terrain.js && node --check dist/adventure.js && node --check dist/encounters.js && node --check dist/bosses.js && node --check dist/heroes.js && node --check dist/combat-status.js && node --check dist/environment.js && node --check dist/regions.js && node --check dist/elites.js && node --check dist/relics.js && node --check scripts/stamp-version.mjs && node --check dist/companions.js"
+    "test": "node qa-engine.mjs && node qa-terrain.mjs && node qa-balance.mjs && node qa-content.mjs && node qa-expansion.mjs && node qa-roles.mjs && node qa-portals.mjs && node qa-relics.mjs && node qa-companions.mjs && node qa-branches.mjs && node qa-mechanisms.mjs",
+    "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/terrain.js && node --check dist/adventure.js && node --check dist/encounters.js && node --check dist/bosses.js && node --check dist/heroes.js && node --check dist/combat-status.js && node --check dist/environment.js && node --check dist/regions.js && node --check dist/elites.js && node --check dist/relics.js && node --check scripts/stamp-version.mjs && node --check dist/companions.js && node --check dist/regional-mechanisms.js && node --check dist/weapon-branches.js"
   }
 }

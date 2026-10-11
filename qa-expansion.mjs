@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { Game, BALANCE, EVOLUTIONS } from './dist/engine.js';
+import { Game, BALANCE, EVOLUTIONS, WEAPON_BRANCHES } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Adventure } from './dist/adventure.js';
 import { Encounters } from './dist/encounters.js';
@@ -25,27 +25,30 @@ function monster(g,type,x,y=0) {
 const foot=(entity,isPlayer=false)=>({x:entity.x,y:entity.y+groundOffset(entity,isPlayer)});
 const xpTotal=g=>g.player.xp+g.gems.reduce((sum,gem)=>sum+gem.value,0);
 
-// The fifth ordinary weapon choice performs the evolution itself.
+// The fifth slot uses the current upgrade: orbit evolves directly, while
+// pulse/lightning require an explicit branch without another choice screen.
 for(const id of Object.keys(EVOLUTIONS)) {
-  const g=arena();g.player.level=8;g.player.xp=17;g.levels[id]=4;g.status='upgrade';
+  const g=arena();g.player.level=8;g.player.xp=17;g.levels[id]=4;g.branches.arrow='pierce';g.status='upgrade';
+  const chosenId=id==='pulse'?'branch:pulse:echoes':id==='lightning'?'branch:lightning:chain':id;
+  const expectedName=WEAPON_BRANCHES[id]?.find(b=>b.id===chosenId)?.name||EVOLUTIONS[id].name;
   let choices;
   for(let i=0;i<100;i++) {
     g._choices=null;choices=g.getUpgradeChoices();
-    if(choices.some(c=>c.id===id))break;
+    if(choices.some(c=>c.id===chosenId))break;
   }
-  const choice=choices.find(c=>c.id===id);
-  assert(choice?.evolves&&choice.evolutionName===EVOLUTIONS[id].name,'the final level advertises the resulting weapon');
-  assert(g.chooseUpgrade(id));
+  const choice=choices.find(c=>c.id===chosenId);
+  assert(choice?.evolves&&choice.evolutionName===expectedName,'the final level advertises the resulting weapon');
+  assert(g.chooseUpgrade(chosenId));
   assert.equal(g.levels[id],5);assert.equal(g.evolutions[id],true);
   assert.equal(g.status,'playing','evolution does not add another selection screen');
   assert.equal(g.player.xp,17,'evolution does not charge additional experience');
   assert.equal(g.player.level,8,'evolution does not create a bonus hero level');
   const weapon=g.weapons.find(w=>w.id===id);
-  assert(weapon.evolved&&weapon.name===EVOLUTIONS[id].name,'the displayed weapon name and state update together');
+  assert(weapon.evolved&&weapon.name===expectedName,'the displayed weapon name and state update together');
   g._syncEvolutions(true);g._syncEvolutions(true);advance(g,.1);
   assert.equal(g.events.filter(e=>e.type==='evolution'&&e.weaponId===id).length,1,'an evolution announces only once');
   g._choices=null;
-  assert(!g.getUpgradeChoices().some(c=>c.id===id),'a completed weapon cannot be offered a sixth level');
+  assert(!g.getUpgradeChoices().some(c=>c.id===id||c.weaponId===id),'a completed weapon cannot be offered a sixth level');
 }
 
 const orbit=arena();orbit.levels.orbit=5;orbit.update(0);
@@ -61,7 +64,7 @@ assert.equal(orbit.orbitals.length,bladeCount,'expansion does not increase the b
 advance(orbit,.5);
 assert(Math.hypot(orbit.orbitals[0].x,orbit.orbitals[0].y)<expandedRadius-40,'the blades return to their normal orbit');
 
-const echo=arena();echo.levels.pulse=5;echo._pulse=0;
+const echo=arena();echo.levels.pulse=5;echo.branches.pulse='echoes';echo._pulse=0;
 const echoTarget=monster(echo,'slime',185,0);echo.update(0);
 assert.equal(echoTarget.hp,10000,'an enemy in the outer ring is outside the first pulse');
 assert.equal(echo._pulseEchoes.length,1);
@@ -80,7 +83,7 @@ const echoEffects=echo.effects.filter(e=>e.echo);
 assert.equal(echoEffects.length,1);assert.equal(echoEffects[0].x,pendingEcho.x);assert.equal(echoEffects[0].y,pendingEcho.y);
 const afterEcho=echoTarget.hp;advance(echo,.5);assert.equal(echoTarget.hp,afterEcho,'one cast cannot repeat its echo');
 
-const deadEcho=arena();deadEcho.levels.pulse=5;deadEcho._pulse=0;
+const deadEcho=arena();deadEcho.levels.pulse=5;deadEcho.branches.pulse='echoes';deadEcho._pulse=0;
 const untouched=monster(deadEcho,'slime',185,0);deadEcho.update(0);
 deadEcho.player.x=480;deadEcho.player.hp=1;
 monster(deadEcho,'slime',480,0).damage=5;
@@ -88,7 +91,7 @@ deadEcho.update(.05);assert.equal(deadEcho.status,'dead');advance(deadEcho,1);
 assert.equal(untouched.hp,10000,'a pending echo cannot deal delayed damage after death');
 assert(!deadEcho.effects.some(e=>e.echo));
 
-const chain=arena();chain.levels.lightning=5;chain._lightning=0;
+const chain=arena();chain.levels.lightning=5;chain.branches.lightning='chain';chain._lightning=0;
 const chainTargets=[60,140,220,300,380,460].map(x=>monster(chain,'slime',x));chain.update(0);
 const chainDamage=chainTargets.map(e=>10000-e.hp);
 assert.equal(chainDamage.filter(d=>d>0).length,5,'an evolved chain hits at most five different enemies');
@@ -99,7 +102,7 @@ assert.equal(chainDamage[5],0);
 const links=chain.effects.filter(e=>e.type==='lightning');
 assert.equal(new Set(links.map(e=>`${e.x2},${e.y2}`)).size,5,'the chain never revisits an earlier target');
 for(const [width,height,axis] of [[390,690,'x'],[1100,300,'y']]) {
-  const edge=arena({width,height});edge.levels.lightning=5;edge._lightning=0;
+  const edge=arena({width,height});edge.levels.lightning=5;edge.branches.lightning='chain';edge._lightning=0;
   const visible=monster(edge,'slime',axis==='x'?160:0,axis==='y'?110:0);
   const hidden=monster(edge,'slime',axis==='x'?230:0,axis==='y'?185:0);
   edge.update(0);
@@ -269,4 +272,4 @@ for(const occupied of [56,58,59,60]) {
   if(added.length)assert(added.length%2===1,'a limited fan keeps its center and symmetric pairs');
 }
 
-console.log('Expansion mechanics: automatic evolutions, delayed/visible attacks, optional events, bounded rewards and alternating telegraphed Bosses passed.');
+console.log('Expansion mechanics: selected evolutions, delayed/visible attacks, optional events, bounded rewards and alternating telegraphed Bosses passed.');

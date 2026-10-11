@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { RegionalMechanisms } from './regional-mechanisms.js';
 
 const CELL=520,TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -28,6 +29,7 @@ export class Environment {
     this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();
     if(generation)this._refresh(true);
+    this.mechanisms=new RegionalMechanisms(this,{generation});
   }
   _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};}
@@ -49,14 +51,14 @@ export class Environment {
     }
     return null;
   }
-  _mushroomsAt(tx,ty){
+  _mushroomsAt(tx,ty,{ignoreObjectives=false}={}){
     const seed=this._hash(tx+683,ty+727),chance=this.region==='marsh'?.61:this.region==='ruins'?.48:.57;if(seed>chance)return [];
     const point=this._point(tx,ty,751,35);if(!point)return [];
     const make=(point,index)=>{
       const id=`mushroom:${tx},${ty}:${index}`;
       // Objectives may suppress a location, but can never move its stable ID
       // to another point after a crate breaks or a treasure disappears.
-      return this._consumed.has(id)||!this._objectiveClear(point.x,point.y,ENVIRONMENT_BALANCE.blastRadius)?null:{id,type:'mushroom',...point,r:17,aimY:point.y-13,sortY:point.y,seed:this._hash(tx+797+index,ty+809),state:'idle',fuse:0,maxFuse:ENVIRONMENT_BALANCE.mushroomFuse,blastRadius:ENVIRONMENT_BALANCE.blastRadius};
+      return this._consumed.has(id)||(!ignoreObjectives&&!this._objectiveClear(point.x,point.y,ENVIRONMENT_BALANCE.blastRadius))?null:{id,type:'mushroom',...point,r:17,aimY:point.y-13,sortY:point.y,seed:this._hash(tx+797+index,ty+809),state:'idle',fuse:0,maxFuse:ENVIRONMENT_BALANCE.mushroomFuse,blastRadius:ENVIRONMENT_BALANCE.blastRadius};
     };
     const result=[],first=make(point,0);if(first)result.push(first);
     // Occasional pairs show the delayed chain reaction without filling paths.
@@ -90,8 +92,11 @@ export class Environment {
   }
   movementMultiplier(entity,isPlayer=false){
     const point=this._foot(entity,isPlayer);
-    return this.muds.some(m=>((point.x-m.x)/m.rx)**2+((point.y-m.y)/m.ry)**2<=1)?ENVIRONMENT_BALANCE.mudMultiplier:1;
+    const mud=this.muds.some(m=>((point.x-m.x)/m.rx)**2+((point.y-m.y)/m.ry)**2<=1)?ENVIRONMENT_BALANCE.mudMultiplier:1;
+    return Math.min(mud,this.mechanisms.movementMultiplier(entity,isPlayer));
   }
+  isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r);}
+  nearestDestructible(range=280){return this.mechanisms.nearestDestructible(range);}
   _arm(prop,source){
     if(this.game.status!=='playing'||prop.state==='armed'||prop.state==='spent')return false;
     prop.id??=`mushroom:fixture:${++this._fixtureId}`;
@@ -102,17 +107,17 @@ export class Environment {
   hitAt(x,y,r=0,source='arrow'){
     if(!WEAPON_SOURCES.has(source)||![x,y,r].every(Number.isFinite)||r<0)return 0;
     let count=0;for(const prop of this.props)if(Math.hypot(prop.x-x,(prop.aimY??prop.y-13)-y)<=r+(prop.r||17)&&this._arm(prop,source))count++;
-    return count;
+    return count+this.mechanisms.hitAt(x,y,r,source);
   }
   hitSegment(x1,y1,x2,y2,r=0,source='arrow'){
     if(!WEAPON_SOURCES.has(source)||![x1,y1,x2,y2,r].every(Number.isFinite)||r<0)return 0;
     let count=0;for(const prop of this.props)if(segmentDistance(prop.x,prop.aimY??prop.y-13,x1,y1,x2,y2)<=r+(prop.r||17)&&this._arm(prop,source))count++;
-    return count;
+    return count+this.mechanisms.hitSegment(x1,y1,x2,y2,r,source);
   }
   hitAllVisible(source='storm'){
     if(!WEAPON_SOURCES.has(source))return 0;
     let count=0;for(const prop of this.props)if(this._visible(prop.x,prop.aimY??prop.y-13,prop.r||17)&&this._arm(prop,source))count++;
-    return count;
+    return count+this.mechanisms.hitAllVisible(source);
   }
   _explode(prop){
     const g=this.game,r=prop.blastRadius||ENVIRONMENT_BALANCE.blastRadius;
@@ -140,5 +145,6 @@ export class Environment {
     this.props=this.props.filter(o=>o.state!=='spent');
     if(g.status!=='playing')return;
     if(this.generation){this._refreshClock-=dt;if(this._refreshClock<=0){this._refreshClock=.5;this._refresh();}}
+    this.mechanisms.update(dt);
   }
 }

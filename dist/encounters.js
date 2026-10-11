@@ -24,7 +24,7 @@ export class Encounters {
   }
   _point(x,y) {
     const g=this.game,p=this._foot(),chest=g.adventure?.treasure;
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,42)&&
+    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,42)&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
       !g.adventure?.props.some(o=>distance(o,candidate)<70)&&
       (!chest||distance(chest,candidate)>180);
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;
