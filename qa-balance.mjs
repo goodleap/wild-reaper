@@ -55,21 +55,20 @@ for(const [width,height] of [[1100,650],[390,690]]) {
   assert(aiming.bullets.length>0,'visible threats are still targeted');
 }
 
-// A bulk XP pickup may fund several choices; every point must be retained.
+// A bulk crystal pickup may fund several choices; every point must be retained.
 const progression=arena(),budget=1200;
-let spent=progression.player.xpNext,choices=0;
-progression.player.xp=budget;progression.update(0);
+let spent=0,choices=0;
+progression.addCrystals(budget);progression.update(0);
 assert.equal(progression.status,'upgrade');
 while(progression.status==='upgrade'&&choices++<40) {
-  const before=progression.player.xp,nextCost=progression.player.xpNext;
+  const before=progression.crystals,nextCost=progression.crystalsNext;
   assert(progression.chooseUpgrade(progression.getUpgradeChoices()[0].id));
-  if(progression.status==='upgrade') {
-    assert.equal(progression.player.xp,before-nextCost,'only the next earned level is charged');spent+=nextCost;
-  } else assert.equal(progression.player.xp,before,'unspent XP survives the final choice');
+  assert.equal(progression.crystals,before-nextCost,'each confirmed skill upgrade spends exactly its crystal cost');spent+=nextCost;
 }
-assert(choices>1&&choices<40,'a bulk pickup grants all earned levels and then returns to combat');
-assert.equal(progression.player.xp,budget-spent,'XP is conserved across consecutive upgrade choices');
-assert(progression.player.xp>=0&&progression.player.xp<progression.player.xpNext);
+assert(choices>1&&choices<40,'a bulk pickup grants all earned skill choices and then returns to combat');
+assert.equal(progression.crystals,budget-spent,'crystals are conserved across consecutive choices');
+assert(progression.crystals>=0&&progression.crystals<progression.crystalsNext);
+assert.equal(progression.player.level,1);assert.equal(progression.player.xp,0,'crystal collection cannot manufacture character XP');
 
 // Observe complete transitions rather than reproducing the phase arithmetic.
 const rhythm=arena(),observed=[rhythm.pressurePhase];
@@ -109,7 +108,8 @@ assert(Math.abs(scheduled.nextBossAt-scheduled.time-150)<.051,'subsequent Boss s
 assert(Math.abs(first.x-scheduled.player.x)-first.r>=scheduled.viewWidth/2||Math.abs(first.y-scheduled.player.y)-first.r>=scheduled.viewHeight/2,'the Boss also enters from outside the visible area');
 scheduled.time=scheduled.nextBossAt+.1;scheduled.update(0);
 assert.equal(scheduled.bossCount,1,'an overdue Boss waits until the current one dies');
-scheduled._hurtEnemy(first,first.hp+1);scheduled.update(0);
+scheduled._hurtEnemy(first,first.hp+1);scheduled.crystalsNext=Infinity;scheduled.update(0);assert.equal(scheduled.bossCount,1,'pending portal reward holds the overdue next Boss');
+scheduled.player.x=scheduled.portal.x;scheduled.player.y=scheduled.portal.y-groundOffset(scheduled.player,true);assert(scheduled.enterPortal());assert(scheduled.chooseSuper(scheduled.getSuperChoices()[0].id));advance(scheduled,2.025);
 assert.equal(scheduled.bossCount,2);
 assert.equal(scheduled.enemies.filter(e=>e.type==='boss'&&e.hp>0).length,1);
 

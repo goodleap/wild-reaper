@@ -9,7 +9,7 @@ Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
-  g._spawn=Infinity;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;
+  g._spawn=Infinity;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   g._updatePressure=()=>{};
   return g;
 }
@@ -20,11 +20,11 @@ function monster(g,x=200,y=0,type='slime') {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
 function select(g,weapon,branch) {
-  if(weapon==='arrow')g.player.level=Math.max(5,g.player.level);
+  if(weapon==='arrow')g.levels.rapid=3;
   else g.levels[weapon]=4;
   const id=`branch:${weapon}:${branch}`;
   for(let i=0;i<6;i++) {
-    g.status='upgrade';g._choices=null;
+    g.crystalsNext=40;g.crystals=40;g.status='upgrade';g._choices=null;
     const choices=g.getUpgradeChoices();
     if(choices.some(c=>c.id===id)){assert(g.chooseUpgrade(id));return;}
     const other=choices.find(c=>!c.weaponId);assert(other);assert(g.chooseUpgrade(other.id));
@@ -38,15 +38,15 @@ assert.deepEqual(Object.keys(WEAPON_BRANCHES).sort(),['arrow','lightning','pulse
 assert.deepEqual(WEAPON_BRANCHES.arrow.map(b=>b.branch),['pierce','ricochet']);
 assert.deepEqual(WEAPON_BRANCHES.pulse.map(b=>b.branch),['echoes','control']);
 assert.deepEqual(WEAPON_BRANCHES.lightning.map(b=>b.branch),['chain','focus']);
-const early=arena();early.player.level=4;early.status='upgrade';
-assert(!early.getUpgradeChoices().some(c=>c.weaponId==='arrow'),'arrow branches cannot appear before the fifth hero level');
+const early=arena();early.player.level=40;early.status='upgrade';
+assert(!early.getUpgradeChoices().some(c=>c.weaponId==='arrow'),'high character level alone cannot unlock an untrained arrow branch');
 for(const weapon of ['pulse','lightning']) {
   const g=arena();g.levels[weapon]=4;g.update(0);
   assert.equal(g.evolutions[weapon],false,'level four no longer silently evolves');
   g.levels[weapon]=5;g.update(0);
   assert.equal(g.evolutions[weapon],false,'an unselected fixture cannot invent a branch at level five');
 }
-const offer=arena();offer.player.level=5;offer.status='upgrade';offer.player.xp=17;
+const offer=arena();offer.levels.rapid=3;offer.crystalsNext=40;offer.crystals=40;offer.status='upgrade';offer.player.xp=17;
 const choices=offer.getUpgradeChoices(),ids=choices.map(c=>c.id);
 assert.equal(choices.length,3);assert.equal(new Set(ids).size,3);
 assert.equal(choices.filter(c=>c.weaponId==='arrow').length,2);
@@ -59,16 +59,16 @@ for(const invalid of ['branch:arrow:fake','branch:pulse:control','arrow','']) {
   assert.equal(offer.status,'upgrade');assert.deepEqual(offer.getUpgradeChoices().map(c=>c.id),ids);
 }
 assert(offer.chooseUpgrade('branch:arrow:pierce'));assert.equal(offer.branches.arrow,'pierce');
-assert.equal(offer.player.level,5);assert.equal(offer.player.xp,17,'branch selection uses the current upgrade without another XP charge');
+assert.equal(offer.player.level,1);assert.equal(offer.player.xp,17,'branch selection uses the current upgrade without another XP charge');
 assert.equal(offer.status,'playing');assert.equal(offer.chooseUpgrade('branch:arrow:ricochet'),false);
 offer.status='upgrade';offer._choices=null;
 assert(!offer.getUpgradeChoices().some(c=>c.weaponId==='arrow'),'a chosen branch excludes both arrow branch cards for this run');
 assert.equal(offer.chooseUpgrade('branch:arrow:ricochet'),false);assert.equal(offer.branches.arrow,'pierce');
 
-const deferred=arena();deferred.player.level=8;deferred.levels.pulse=4;deferred.levels.lightning=4;
+const deferred=arena();deferred.levels.rapid=3;deferred.levels.pulse=4;deferred.levels.lightning=4;
 const seen=[];
 for(let i=0;i<3;i++) {
-  deferred.status='upgrade';deferred._choices=null;const cards=deferred.getUpgradeChoices();
+  deferred.crystalsNext=40;deferred.crystals=40;deferred.status='upgrade';deferred._choices=null;const cards=deferred.getUpgradeChoices();
   const branches=cards.filter(c=>c.weaponId);assert.equal(branches.length,2);assert.equal(branches[0].weaponId,branches[1].weaponId);
   seen.push(branches[0].weaponId);const ordinary=cards.find(c=>!c.weaponId);assert(ordinary);
   assert(deferred.chooseUpgrade(ordinary.id));assert(Object.values(deferred.branches).every(b=>b===null));
@@ -166,7 +166,7 @@ for(const branch of ['chain','focus']) {
 const travel=arena();select(travel,'arrow','ricochet');select(travel,'pulse','control');select(travel,'lightning','focus');
 const beforeTravel=structuredClone(travel.branches),travelBoss=monster(travel,280,0,'boss');travel._hurtEnemy(travelBoss,travelBoss.hp+1);
 travel.player.x=travel.portal.x;travel.player.y=travel.portal.y-groundOffset(travel.player,true);
-assert(travel.enterPortal());assert(travel.chooseRelic(travel.getRelicChoices()[0].id));
+assert(travel.enterPortal());assert(travel.chooseSuper(travel.getSuperChoices()[0].id));
 assert.deepEqual(travel.branches,beforeTravel,'travel preserves all mutually exclusive branch choices');
 assert.equal(travel._pulseEchoes.length,0);assert.equal(travel.bullets.length,0);
 assert(Object.values(arena().branches).every(b=>b===null),'a new run resets branch choices');

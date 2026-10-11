@@ -33,7 +33,7 @@ export class Regions {
   constructor(game){this.game=game;this._lastBossId=null;}
   _safePoint(enemy) {
     const g=this.game,center={x:enemy.x,y:enemy.y+groundOffset(enemy)},p=g.player;
-    const safe=(x,y)=>g.terrain.isFree(x,y,36)&&g.environment?.isHazardFree?.(x,y,45)!==false&&
+    const safe=(x,y)=>g.terrain.isFree(x,y,36)&&g.settlements?.isSafePoint(x,y,45)!==false&&g.environment?.isHazardFree?.(x,y,45)!==false&&
       !g.environment?.props.some(o=>Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+45)&&
       !g.adventure?.props.some(o=>Math.hypot(o.x-x,o.y-y)<65)&&
       (!g.adventure?.treasure||Math.hypot(g.adventure.treasure.x-x,g.adventure.treasure.y-y)>100);
@@ -48,11 +48,11 @@ export class Regions {
     return {x:p.x,y:p.y+groundOffset(p,true)};
   }
   openPortal(enemy) {
-    if(enemy.type!=='boss'||enemy.hp>0||enemy.id===this._lastBossId)return null;
+    if(enemy.type!=='boss'||enemy.dungeonBoss||enemy.dungeonId||enemy.hp>0||enemy.id===this._lastBossId)return null;
     this._lastBossId=enemy.id;
     const g=this.game,nextRegionIndex=g.regionIndex+1,nextRegion=regionFor(nextRegionIndex);
     g.portal={id:`portal:${enemy.id}`,...this._safePoint(enemy),r:32,interactRadius:70,nextRegion,nextRegionIndex};
-    g.relics.offer();
+    g.superSkills.offer('region',g.region.id);
     g._emit('portalOpened',{nextRegionId:nextRegion.id,name:nextRegion.name});
     return g.portal;
   }

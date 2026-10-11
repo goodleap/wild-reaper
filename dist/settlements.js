@@ -1,0 +1,202 @@
+import { groundOffset } from './terrain.js';
+import { RELICS } from './relics.js';
+
+const TAU=Math.PI*2;
+const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const WARD=18;
+export const SETTLEMENT_RULES=Object.freeze({maxSites:5,interactRadius:82,angelHealing:.35,ward:WARD,guards:4});
+const SITE_DEFS=Object.freeze([
+  {type:'merchant',name:'旅人商铺',width:144,depth:72,radius:410,angle:.12},
+  {type:'supply',name:'林间小屋',width:138,depth:68,radius:610,angle:2.2},
+  {type:'angel',name:'天使圣坛',width:70,depth:36,radius:750,angle:4.2},
+  {type:'occupied',name:'被占据的小屋',width:152,depth:76,radius:970,angle:3.1},
+  {type:'castle',name:'古堡入口',width:240,depth:90,radius:1180,angle:5.65}
+]);
+
+export class Settlements {
+  constructor(game,{generation=true}={}) {
+    this.game=game;this.generation=!!generation;this.sites=[];this.activeShop=null;
+    this.resetRegion();
+  }
+  _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
+  _hash(x,y=0){return hash(x+(this.game.regionIndex||0)*137,y+(this.game.regionIndex||0)*281);}
+  _bodyCenter(site){return {x:site.x,y:site.y-site.depth*.5};}
+  _obstacles(site) {
+    if(site.type==='angel')return [];
+    // Overlapping horizontal capsules fill a rounded rectangular foundation.
+    // The decorative roof never enlarges these foot-based collision bounds.
+    const rows=Math.ceil(site.depth/32),r=18,halfLength=site.width*.5-r,result=[];
+    for(let i=0;i<rows;i++)result.push({id:`${site.id}:wall:${i}`,type:'log',x:site.x,y:site.y-r-i*(site.depth-r*2)/(rows-1),r,halfLength,angle:0,structureId:site.id,structureType:site.type,variant:'building-wall'});
+    return result;
+  }
+  _setStructures(){this.game.terrain.setStructures?.(this.sites.flatMap(site=>this._obstacles(site)));}
+  _hazardFree(x,y,r=22) {
+    const env=this.game.environment;if(!env)return true;
+    if(env.isHazardFree?.(x,y,r)===false)return false;
+    if(env.props?.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+12))return false;
+    return !env.muds?.some(o=>((x-o.x)/(o.rx+r+12))**2+((y-o.y)/(o.ry+r+12))**2<1);
+  }
+  _validSite(site) {
+    const g=this.game,center=this._bodyCenter(site),clearance=site.width*.5+70;
+    if(distance(center,this._foot())<clearance+190)return false;
+    if(this.sites.some(s=>distance(center,this._bodyCenter(s))<clearance+s.width*.5+110))return false;
+    if(g.adventure?.props.some(o=>distance(o,center)<clearance+35))return false;
+    if(g.adventure?.treasure&&distance(g.adventure.treasure,center)<clearance+110)return false;
+    if(g.companions?.camp&&distance(g.companions.camp,center)<clearance+170)return false;
+    if(g.portal&&distance(g.portal,center)<clearance+90)return false;
+    if(g.encounters?.active&&Number.isFinite(g.encounters.active.x)&&distance(g.encounters.active,center)<clearance+160)return false;
+    // Check the actual broad footprint and its front approach instead of
+    // demanding a huge empty circle, which is unsuitable for forest terrain.
+    for(let x=site.x-site.width*.5-24;x<=site.x+site.width*.5+24;x+=24)
+      for(let y=site.y-site.depth-24;y<=site.y+82;y+=24)
+        if(!g.terrain.isFree(x,y,23)||!this._hazardFree(x,y,23))return false;
+    return g.terrain.isFree(site.door.x,site.door.y,30)&&this._hazardFree(site.door.x,site.door.y,40);
+  }
+  _createSite(def,index) {
+    const region=this.game.region?.id||'forest',seed=this._hash(index+83,17),rotation=(this.game.regionIndex||0)===0?0:this._hash(71,23)*TAU;
+    for(let i=0;i<192;i++) {
+      const ring=Math.floor(i/32),angle=def.angle+rotation+(i%32)*TAU/32,radius=def.radius+ring*100;
+      const x=Math.round(Math.cos(angle)*radius),y=Math.round(Math.sin(angle)*radius);
+      const site={...def,id:`site:${this.game.regionIndex||0}:${def.type}`,x,y,sortY:y,door:{x,y:y+30},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
+      if(!this._validSite(site))continue;
+      if(site.type==='supply')site.name=region==='marsh'?'沼泽高脚屋':region==='ruins'?'遗迹石屋':'林间小屋';
+      if(site.type==='merchant') {
+        site.relicId=RELICS[Math.floor(this._hash(index+199,63)*RELICS.length)].id;
+        site.stock={heal:1,magnet:1,fury:1,shield:1,relic:1};
+      }
+      return site;
+    }
+    return null;
+  }
+  resetRegion() {
+    this.activeShop=null;this.sites=[];this.game.terrain.setStructures?.([]);
+    if(!this.generation)return;
+    SITE_DEFS.forEach((def,index)=>{const site=this._createSite(def,index);if(site){this.sites.push(site);this._setStructures();}});
+    // Starter monster angles are random and must not change site identities.
+    // Resolve the rare overlap after placing the deterministic foundations.
+    for(const enemy of this.game.enemies)if(enemy.hp>0)this.game._moveEntity?.(enemy,0,0);
+  }
+  isSafePoint(x,y,r=0) {
+    // Purely consult the existing region list: no generation or recursive
+    // calls into hazard/objective placement are allowed from this predicate.
+    if(this.game.dungeon?.active)return true;
+    return this.sites.every(site=>{
+      const center=this._bodyCenter(site);
+      return Math.hypot(center.x-x,center.y-y)>site.width*.5+r+70;
+    });
+  }
+  getInteraction() {
+    const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return null;
+    const p=this._foot();let nearest=null,best=Infinity;
+    for(const site of this.sites) {
+      const d=distance(p,site.door);if(d>site.interactRadius||d>=best)continue;
+      if(site.state==='spent'&&site.type!=='castle')continue;
+      let label='',description='',enabled=true;
+      if(site.type==='merchant'){label='与商人交易';description='本局金币购买补给与遗物';}
+      else if(site.type==='angel'){
+        label='接受天使祝福';description='恢复 35% 生命；满血时获得护盾';
+        if(g.player.hp>=g.player.maxHp&&(g.relics?.wardAmount||0)>=WARD){enabled=false;description='生命与护盾已充盈，祝福仍会保留';}
+      }
+      else if(site.type==='supply'){label='搜寻小屋';description='少量金币、灵晶与药草';}
+      else if(site.type==='occupied') {
+        label=site.state==='active'?`剩余 ${site.remainingGuards} 名守卫`:site.state==='cleared'?'领取小屋宝藏':'挑战小屋守卫';
+        description=site.state==='active'?'清除守卫后领取宝藏':'清理四名守卫，获得丰厚资源与补给';enabled=site.state!=='active';
+        if(site.state==='ready'&&(g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.companions?.camp||g.encounters?.active)){enabled=false;description='完成当前挑战后再清理小屋';}
+      } else if(site.type==='castle') {
+        label=site.explored||site.state==='spent'?'重返已探索古堡':'进入古堡迷宫';description=site.explored?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';
+        if(g.enemies.some(e=>e.type==='boss'&&e.hp>0)){enabled=false;description='先击败当前区域首领';}
+      }
+      nearest={id:site.id,siteId:site.id,type:site.type,label,description,x:site.door.x,y:site.door.y,enabled};best=d;
+    }
+    return nearest;
+  }
+  interact(id) {
+    const current=this.getInteraction();if(!current||current.id!==id||!current.enabled)return false;
+    const site=this.sites.find(s=>s.id===id),g=this.game;
+    if(site.type==='castle')return !!g.dungeon?.enter(site);
+    if(site.type==='merchant'){this.activeShop=site;g.status='shop';g._emit('shopOpen',{name:site.name});return true;}
+    if(site.type==='angel') {
+      const p=g.player,heal=Math.min(p.maxHp-p.hp,p.maxHp*SETTLEMENT_RULES.angelHealing);
+      if(heal>0){p.hp+=heal;g._effect(p.x,p.y-28,'heal',.8,0,'#e8efbf',`+${Math.ceil(heal)}`);}
+      else if(!g.relics?.grantWard(WARD))return false;
+      site.state='spent';g._effect(site.x,site.y,'ring',.8,72,'#eee5b5');g._emit('angelBlessing',{healed:heal});return true;
+    }
+    if(site.type==='occupied'&&site.state==='ready')return this._startGuards(site);
+    if(site.type==='supply'||(site.type==='occupied'&&site.state==='cleared')) {
+      site.state='spent';const occupied=site.type==='occupied';
+      g.grantResources?.(occupied?{gold:24,crystals:40}:{gold:4,crystals:12},occupied?'occupiedHouse':'supplyHouse');
+      g.adventure?.dropPickup('herb',site.door.x-23,site.door.y+8);
+      if(occupied)g.adventure?.dropPickup('fury',site.door.x+23,site.door.y+8);
+      g._effect(site.door.x,site.door.y,'ring',.7,70,'#edd38d');g._emit('houseOpened',{name:site.name,occupied});return true;
+    }
+    return false;
+  }
+  getShopItems() {
+    const g=this.game,site=this.activeShop;if(!site||g.status!=='shop')return [];
+    const relic=RELICS.find(r=>r.id===site.relicId),ward=g.relics?.wardAmount??g.relics?.wardValue??0;
+    const items=[
+      {id:'heal',name:'旅人药剂',desc:'立即恢复 35 点生命',icon:'✚',color:'#b9dda5',price:12,usable:g.player.hp<g.player.maxHp,reason:'生命已满'},
+      {id:'magnet',name:'磁引符',desc:'拾取范围扩大，持续 8 秒',icon:'◉',color:'#a8dcec',price:8,usable:!!g.adventure&&g.adventure.magnetTime<8,reason:'效果已生效'},
+      {id:'fury',name:'狂暴药剂',desc:'伤害与射速提升，持续 8 秒',icon:'✦',color:'#efb46b',price:8,usable:!!g.adventure&&g.adventure.furyTime<8,reason:'效果已生效'},
+      {id:'shield',name:'守护符',desc:'抵消下一次受击的至多 18 点伤害',icon:'⬡',color:'#d2dbae',price:16,usable:!!g.relics&&ward<WARD,reason:'护盾已充盈'}
+    ];
+    if(relic)items.push({id:'relic',name:relic.name,desc:relic.desc,icon:relic.icon,color:relic.color,price:60,usable:!!g.relics&&!g.relics.has(relic.id),reason:'已拥有该遗物',relicId:relic.id,rarity:'遗物'});
+    return items.map(item=>{const stock=site.stock[item.id]||0,reason=!stock?'已售罄':!item.usable?item.reason:g.gold<item.price?'金币不足':'';return {...item,stock,available:!reason,reason};});
+  }
+  buy(id) {
+    const g=this.game,site=this.activeShop,item=this.getShopItems().find(i=>i.id===id);
+    if(!site||!item?.available||!Number.isFinite(g.gold)||g.gold<item.price)return false;
+    if(id==='heal'){
+      const healed=Math.min(35,g.player.maxHp-g.player.hp);if(!(healed>0))return false;
+      g.player.hp+=healed;g._effect(g.player.x,g.player.y-28,'heal',.8,0,'#b9dda5',`+${Math.ceil(healed)}`);
+    } else if(id==='magnet'){g.adventure.magnetTime=8;for(const gem of g.gems)if(Math.hypot(gem.x-g.player.x,gem.y-g.player.y)<480)gem.attracted=true;}
+    else if(id==='fury')g.adventure.furyTime=8;
+    else if(id==='shield'){if(!g.relics.grantWard(WARD))return false;}
+    else if(id==='relic'){if(!g.relics.acquire(item.relicId))return false;}
+    else return false;
+    // Stock and payment commit together, after all rejection checks.
+    site.stock[id]--;g.gold-=item.price;g._emit('shopBought',{itemId:id,name:item.name,price:item.price});return true;
+  }
+  closeShop() {
+    if(this.game.status!=='shop'||!this.activeShop)return false;
+    this.activeShop=null;this.game.status='playing';this.game._emit('shopClose');return true;
+  }
+  _guardPoints(site) {
+    const points=[];
+    for(let i=0;i<24&&points.length<SETTLEMENT_RULES.guards;i++) {
+      const a=.15+(i%12)*Math.PI/12,radius=90+Math.floor(i/12)*55,x=site.x+Math.cos(a)*radius,y=site.y+Math.sin(a)*radius+35;
+      if(this.game.terrain.isFree(x,y,34)&&this._hazardFree(x,y,30)&&points.every(p=>Math.hypot(x-p.x,y-p.y)>58))points.push({x,y});
+    }
+    return points;
+  }
+  _startGuards(site) {
+    const g=this.game;if(g.enemies.length+SETTLEMENT_RULES.guards>180||g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.companions?.camp||g.encounters?.active)return false;
+    const points=this._guardPoints(site);if(points.length!==SETTLEMENT_RULES.guards)return false;
+    site.state='active';site._remaining=new Set();site.guardIds=[];
+    for(let i=0;i<points.length;i++) {
+      const enemy=g._spawnEnemy(i===0?'brute':'beetle',1);enemy.settlementId=site.id;enemy.guardianId=site.id;enemy.eventRole='settlementGuard';enemy.xp=i===0?8:4;
+      enemy.hp*=i===0?1.6:1.25;enemy.maxHp=enemy.hp;enemy.guardActive=true;enemy.settlementHome={...points[i]};
+      enemy.x=points[i].x;enemy.y=points[i].y-groundOffset(enemy);g._moveEntity(enemy,0,0);
+      site.guardIds.push(enemy.id);site._remaining.add(enemy.id);
+    }
+    site.remainingGuards=site._remaining.size;g._emit('houseGuard',{name:site.name});return true;
+  }
+  onEnemyKilled(enemy) {
+    if(enemy.hp>0||!enemy.settlementId)return false;
+    const site=this.sites.find(s=>s.id===enemy.settlementId);
+    if(!site||site.state!=='active'||!site._remaining?.delete(enemy.id))return false;
+    site.remainingGuards=site._remaining.size;
+    if(!site.remainingGuards){site.state='cleared';this.game._emit('houseCleared',{name:site.name});this.game._effect(site.door.x,site.door.y,'ring',.75,75,'#f2d28d');}
+    return true;
+  }
+  update(dt) {
+    const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return;
+    const p=this._foot();
+    for(const site of this.sites)if(site.state==='active')for(const enemy of g.enemies) {
+      if(enemy.hp<=0||enemy.settlementId!==site.id)continue;
+      const foot={x:enemy.x,y:enemy.y+groundOffset(enemy)},near=distance(p,site.door)<480&&distance(foot,site.door)<480;
+      enemy.guardActive=near;enemy.guardReturnTarget=!near&&distance(foot,enemy.settlementHome)>12?enemy.settlementHome:null;
+    }
+  }
+}

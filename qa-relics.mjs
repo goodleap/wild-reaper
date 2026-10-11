@@ -8,7 +8,7 @@ let seed=108473;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena({owned=[],...options}={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
-  g.enemies=[];g.gems=[];g.events=[];g.effects=[];g._spawn=Infinity;g._shot=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;
+  g.enemies=[];g.gems=[];g.events=[];g.effects=[];g._spawn=Infinity;g._shot=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   g.relics.owned.push(...owned);if(owned.includes('leafWard'))g.relics.shieldReady=true;
   if(g.elites)g.elites.generation=false;g._refreshStats();return g;
 }
@@ -19,7 +19,7 @@ function herb(g) {
   g.adventure??=new Adventure(g,{generation:false});
   return g.adventure.dropPickup('herb',g.player.x,g.player.y+groundOffset(g.player,true));
 }
-const xpTotal=g=>g.player.xp+g.gems.reduce((sum,gem)=>sum+gem.value,0);
+const xpTotal=g=>g.player.xp;
 
 assert.equal(RELICS.length,6);assert.equal(new Set(RELICS.map(r=>r.id)).size,6);
 const collection=arena();assert.deepEqual(collection.getRelicChoices(),[],'ordinary play does not spontaneously offer relic choices');
@@ -35,11 +35,8 @@ for(let i=0;i<6;i++) {
   collection.status='playing';assert.equal(collection.relics.owned.length,i+1);assert.equal(collection.player.xp,0);
 }
 collection.player.hp=10;collection.relics.offer();
-const fullBoss=collection._spawnEnemy('boss',1);fullBoss.x=250;fullBoss.y=0;collection._hurtEnemy(fullBoss,fullBoss.hp+1);
-assert(collection.portal);collection.player.x=collection.portal.x;collection.player.y=collection.portal.y-groundOffset(collection.player,true);
-assert(collection.enterPortal());
-assert.notEqual(collection.status,'relic','a complete collection never leaves an empty reward panel');
-assert.equal(collection.regionIndex,1);assert.equal(collection.player.hp,30,'the complete-collection reward heals once');
+assert(collection.relics.completeCollectionReward(),'the legacy full-collection recovery remains independently usable');
+assert.equal(collection.player.hp,30,'the complete-collection reward heals once');
 assert.equal(collection.relics.completeCollectionReward(),false);assert.equal(collection.player.hp,30);
 assert.equal(collection.relics.owned.length,6);
 
@@ -52,7 +49,7 @@ for(const e of stormVictims)storm.relics.onEnemyKilled(e,'storm');
 assert.equal(storm.player.skillCooldown,refundCooldown,'repeat kill notifications cannot refund again');
 storm.levels.lightning=1;storm._lightning=0;for(let i=0;i<3;i++)monster(storm,140+i*65,0,1);
 storm.update(0);assert.equal(storm.player.skillCooldown,refundCooldown,'another lightning attack shares the same rolling budget');
-storm.time=1.01;storm._lightning=0;for(let i=0;i<3;i++)monster(storm,140+i*65,0,1);
+storm._clock=1.01;storm._lightning=0;for(let i=0;i<3;i++)monster(storm,140+i*65,0,1);
 storm.update(0);assert(Math.abs(storm.player.skillCooldown-(refundCooldown-.9))<1e-9,'fresh lightning kills refund again after the rolling window');
 assert(storm.relics._thunderKills.length<=4,'the refund history stays bounded');
 

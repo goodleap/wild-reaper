@@ -10,7 +10,7 @@ Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
-  g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;
+  g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   // Pressure phases would otherwise shorten the suppressed wave timer.
   g._updatePressure=()=>{};
   return g;
@@ -22,7 +22,7 @@ function monster(g,x=200,y=0,type='slime') {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
 const foot=(e,isPlayer=false)=>({x:e.x,y:e.y+groundOffset(e,isPlayer)});
-const xpTotal=g=>g.player.xp+g.gems.reduce((n,gem)=>n+gem.value,0);
+const xpTotal=g=>g.player.xp;
 function guards(g,camp=g.companions.camp) {return g.enemies.filter(e=>camp.guardIds.includes(e.id));}
 function clearCamp(g,camp=g.companions.camp) {for(const e of guards(g,camp))g._hurtEnemy(e,e.hp+1);}
 function atCamp(g,camp=g.companions.camp) {g.player.x=camp.x;g.player.y=camp.y-groundOffset(g.player,true);}
@@ -35,7 +35,7 @@ function rescue(g,kind='stormcaller',x=350,y=19.8) {
 function travel(g) {
   const boss=monster(g,300,0,'boss');g._hurtEnemy(boss,boss.hp+1);
   g.player.x=g.portal.x;g.player.y=g.portal.y-groundOffset(g.player,true);
-  assert(g.enterPortal());if(g.status==='relic')assert(g.chooseRelic(g.getRelicChoices()[0].id));
+  assert(g.enterPortal());if(g.status==='super')assert(g.chooseSuper(g.getSuperChoices()[0].id));
 }
 
 assert.deepEqual(HEROES.map(h=>h.id),['traveler']);
@@ -50,7 +50,7 @@ const access=arena(),camp=access.companions.spawn('stormcaller',350,19.8);
 assert(camp);assert.equal(camp.state,'trapped');assert.equal(guards(access).length,6);
 assert.equal(access.companions.spawn('warden',700,19.8),null,'only one rescue camp can exist');
 for(const guard of guards(access)) {
-  assert.equal(guard.rescueId,camp.id);assert.equal(guard.eventRole,'rescueGuard');assert.equal(guard.xp,0);
+  assert.equal(guard.rescueId,camp.id);assert.equal(guard.eventRole,'rescueGuard');assert.equal(guard.xp,2);
   assert(access.terrain.isFree(guard.x,guard.y+groundOffset(guard),guard.r),'each guard spawns outside terrain');
 }
 atCamp(access);access.update(0);assert.equal(access.companions.active,null,'walking into a surrounded camp is not a rescue');
@@ -114,7 +114,7 @@ const hpBeforeContact=combat.player.hp;combat.update(0);
 assert(combat.player.hp<hpBeforeContact,'a nearby camp guard uses ordinary contact damage');
 combat.player.x=150;combat.player.y=0;combat.update(0,{skill:true});
 assert.equal(combatCamp.state,'ready','the player active lightning can defeat the actual camp defenders');
-assert.equal(xpTotal(combat),0);assert.equal(combat.rescuePower,0,'guard XP and remote rescue reward remain separate from real combat kills');
+assert.equal(xpTotal(combat),12);assert.equal(combat.rescuePower,0,'guard kill XP is separate from the approach-only rescue benefit');
 atCamp(combat);combat.update(0);assert.equal(combat.rescuePower,1);
 const distant=arena();distant.viewWidth=390;distant.viewHeight=320;
 const distantCamp=distant.companions.spawn('warden',350,19.8);distant.player.x=-700;distant.update(.025);
@@ -130,7 +130,10 @@ mage._attack=0;thunder.companions.resolve();
 assert.equal(strikes.filter(e=>e.hp<10000).length,5,'advanced allied lightning strikes at most five visible enemies');
 assert(strikes.filter(e=>e.hp<10000).every(e=>10000-e.hp>=100),'allied lightning is stronger than the opening passive lightning');
 assert.equal(hidden.hp,10000,'allied lightning never damages a hidden target');
-assert(strikes.every(e=>!e.shock&&!e.bleed),'allied attacks do not borrow player status upgrades');
+assert(strikes.filter(e=>e.hp<10000).every(e=>e.shock),'allied lightning shares the protagonist passive shock mechanism');assert(strikes.every(e=>!e.bleed));
+const allyLinks=thunder.effects.filter(e=>e.type==='lightning'&&e.ally);assert.equal(allyLinks.length,5);
+assert.equal(allyLinks[0].x,mage.x);for(let i=1;i<allyLinks.length;i++){assert.equal(allyLinks[i].x,allyLinks[i-1].x2);assert.equal(allyLinks[i].y,allyLinks[i-1].y2);}
+assert(!thunder.effects.some(e=>e.type==='companionLightning'),'the ally uses the same chain effect as the protagonist, with no separate sky-lightning effect');
 const afterLightning=strikes.map(e=>e.hp);thunder.companions.resolve();
 assert.deepEqual(strikes.map(e=>e.hp),afterLightning,'lightning respects its cooldown');
 assert(thunder.effects.length<=201,'one allied cast retains the common effect budget');
@@ -288,5 +291,5 @@ for(let i=0;i<12;i++) {
   assert.equal(helper._echoes.length,0);assert(cycling.enemies.length<=180);assert(cycling.effects.length<=201);
   advance(cycling,45.1);
 }
-assert.equal(cycling.rescuePower,12);assert.equal(xpTotal(cycling),0);assert.equal(cycling.player.level,1);
+assert.equal(cycling.rescuePower,12);assert.equal(xpTotal(cycling),144);assert.equal(cycling.player.level,1);
 console.log('Companion mechanics: fixed protagonist, real guard combat/rescue, bounded temporary service, permanent run growth, lightning/quake damage, single rewards, interrupted Boss attacks, collision following, portal continuity, objective scheduling and long-run bounds passed.');

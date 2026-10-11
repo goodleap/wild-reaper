@@ -10,7 +10,7 @@ Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(region='forest',generation=false) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false});
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
-  g._spawn=Infinity;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;
+  g._spawn=Infinity;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   g._updatePressure=()=>{};g.region=REGIONS.find(r=>r.id===region);g.regionIndex=REGIONS.indexOf(g.region);
   g.environment=new Environment(g,{generation});return g;
 }
@@ -23,7 +23,7 @@ function fixture(g,type,x=0,y=19.8,extras={}) {
 function monster(g,x=150,y=0,type='slime') {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
-const xpTotal=g=>g.player.xp+g.gems.reduce((n,gem)=>n+gem.value,0);
+const xpTotal=g=>g.player.xp;
 const mechanism=g=>g.environment.mechanisms;
 
 const vines=arena(),vine=fixture(vines,'vine');vines.update(0);
@@ -162,7 +162,7 @@ const portalBoss=monster(safety,260,-21.2,'boss');safety._hurtEnemy(portalBoss,p
 assert(safety.portal);assert(safety.environment.isHazardFree(safety.portal.x,safety.portal.y,45),'portal placement avoids existing hazardous ground');
 const oldEnvironment=safety.environment,oldMechanisms=mechanism(safety),oldHp=safety.player.hp;
 safety._features.environment=true;safety.player.x=safety.portal.x;safety.player.y=safety.portal.y-groundOffset(safety.player,true);
-assert(safety.enterPortal());assert(safety.chooseRelic(safety.getRelicChoices()[0].id));
+assert(safety.enterPortal());assert(safety.chooseSuper(safety.getSuperChoices()[0].id));
 assert.notEqual(safety.environment,oldEnvironment);assert.notEqual(mechanism(safety),oldMechanisms);
 assert(!mechanism(safety).props.some(p=>p.id.startsWith('qa-')),'travel discards old mechanism state and pending attacks');
 assert.equal(safety.player.hp,oldHp);advance(safety,.1);assert.equal(safety.player.hp,oldHp,'the fresh protected landing cannot inherit old gas damage');

@@ -10,9 +10,9 @@ export class CombatStatus {
 
   hit(enemy,amount,knockback=0,origin=this.game.player,source='arrow') {
     const game=this.game,rules=STATUS_RULES;
-    if(game.status!=='playing'||enemy.hp<=0||!Number.isFinite(amount)||amount<=0)return 0;
+    if(game.status!=='playing'||enemy.hp<=0||!Number.isFinite(amount)||amount<=0||game.dungeon?.canDamage(enemy,origin)===false)return 0;
     const x=enemy.x,y=enemy.y;
-    const burst=(source==='pulse'||source==='echo')&&enemy.bleed?.life>0;
+    const burst=['pulse','echo','companionPulse','companionEcho'].includes(source)&&enemy.bleed?.life>0;
     const shock=(source==='arrow'||source==='orbit')&&enemy.shock?.life>0?enemy.shock:null;
     // Consume before dealing damage: killing blows still discharge exactly
     // once, and death hooks cannot reuse a mark that has already reacted.
@@ -34,23 +34,23 @@ export class CombatStatus {
       // lifetime, not the tick phase, so contact cannot postpone all damage.
       const nextTick=enemy.bleed?.life>0?enemy.bleed.nextTick:rules.bleedInterval;
       enemy.bleed={life:rules.bleedDuration,maxLife:rules.bleedDuration,nextTick,damage:rules.bleedDamage*game._damageMultiplier()};
-    }else if(dealt>0&&(source==='lightning'||source==='storm')) {
-      enemy.shock={life:rules.shockDuration,maxLife:rules.shockDuration,damage:rules.conductionDamage*game._damageMultiplier()};
+    }else if(dealt>0&&(source==='lightning'||source==='storm'||source==='companionLightning')) {
+      enemy.shock={life:rules.shockDuration,maxLife:rules.shockDuration,damage:source==='companionLightning'?Math.max(rules.conductionDamage,amount*.12):rules.conductionDamage*game._damageMultiplier()};
     }
     return dealt;
   }
 
   _conduct(source,x,y,damage) {
-    const game=this.game;
+    const game=this.game,origin={x,y,type:source.type,r:source.r};
     let target=null,nearest=STATUS_RULES.conductionRange**2;
     for(const enemy of game.enemies) {
-      if(enemy===source||enemy.id===source.id||enemy.hp<=0||!game._inView(enemy))continue;
+      if(enemy===source||enemy.id===source.id||enemy.hp<=0||!game._inView(enemy)||game.dungeon?.canDamage(enemy,origin)===false)continue;
       const distance=(enemy.x-x)**2+(enemy.y-y)**2;
       if(distance<=nearest) { target=enemy;nearest=distance; }
     }
     if(!target)return;
     game._effect(x,y,'conduction',.26,0,'#c4e8ff',undefined,{x2:target.x,y2:target.y});
-    game._hurtEnemy(target,damage,0,{x,y},'conduction');
+    game._hurtEnemy(target,damage,0,origin,'conduction');
     if(target.hp<=0) { target.bleed=null;target.shock=null; }
   }
 

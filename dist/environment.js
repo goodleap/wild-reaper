@@ -37,6 +37,7 @@ export class Environment {
   _terrainClear(x,y,r){return Math.hypot(x,y)>=ENVIRONMENT_BALANCE.safeRadius+r&&this.game.terrain.isFree(x,y,r);}
   _objectiveClear(x,y,r){
     const adventure=this.game.adventure;
+    if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
     if(adventure?.props.some(o=>distance(o,{x,y})<r+(o.r||18)+8))return false;
     if(adventure?.treasure&&distance(adventure.treasure,{x,y})<r+(adventure.treasure.r||27)+15)return false;
     return true;

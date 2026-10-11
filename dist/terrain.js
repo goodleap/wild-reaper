@@ -42,8 +42,15 @@ export class Terrain {
     this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
     this.cacheLimit=Math.max(16,Math.min(512,cacheLimit));this._cache=new Map();
     this._fixed=obstacles===undefined?null:obstacles.map((o,i)=>obstacle(o,i));
+    this._structures=[];
   }
   get cacheSize(){return this._cache.size;}
+  // Region-owned buildings form a small separate layer. Replacing it never
+  // mutates the procedural cache or a dungeon's fixed wall geometry.
+  setStructures(obstacles=[]) {
+    this._structures=obstacles.slice(0,48).map((o,i)=>obstacle({...o,id:o.id??`structure:${i}`},i));
+    return this._structures;
+  }
   _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _cell(tx,ty) {
     const key=`${tx},${ty}`;
@@ -71,8 +78,8 @@ export class Terrain {
   }
   query(minX,minY,maxX,maxY) {
     const intersects=o=>o.bounds.maxX>=minX&&o.bounds.minX<=maxX&&o.bounds.maxY>=minY&&o.bounds.minY<=maxY;
-    if(this._fixed)return this._fixed.filter(intersects);
-    const result=[];
+    if(this._fixed)return [...this._fixed.filter(intersects),...this._structures.filter(intersects)];
+    const result=this._structures.filter(intersects);
     // A neighboring cell can own a long prop that crosses a query edge.
     for(let tx=Math.floor((minX-110)/CELL);tx<=Math.floor((maxX+110)/CELL);tx++)
       for(let ty=Math.floor((minY-110)/CELL);ty<=Math.floor((maxY+110)/CELL);ty++)

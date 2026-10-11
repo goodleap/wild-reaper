@@ -22,11 +22,30 @@ export class Relics {
     this.game=game;
     this.owned=[];this.pending=false;this.choices=[];
     this.shieldReady=false;this.shieldCooldown=0;
+    this.wardAmount=0;
     // Four timestamps bound both the rolling one-second allowance and memory.
     this._thunderKills=[];
   }
 
   has(id) { return this.owned.includes(id); }
+
+  acquire(id) {
+    const relic=RELICS.find(item=>item.id===id);
+    if(!relic||this.has(id)||!['playing','shop','relic'].includes(this.game.status))return false;
+    this.owned.push(id);
+    if(id==='leafWard'){this.shieldReady=true;this.shieldCooldown=0;}
+    this.game._refreshStats?.();
+    this.game._emit('relicChosen',{relicId:id,name:relic.name});
+    return true;
+  }
+
+  grantWard(amount) {
+    if(!Number.isFinite(amount)||amount<=0||this.game.status==='dead')return false;
+    const ward=Math.min(40,amount);if(this.wardAmount>=ward)return false;
+    this.wardAmount=ward;
+    const p=this.game.player;this.game._effect(p.x,p.y,'ring',.5,34,'#f1e3b7');
+    return true;
+  }
 
   offer() {
     if(this.pending)return false;
@@ -49,11 +68,8 @@ export class Relics {
   choose(id) {
     if(this.game.status!=='relic'||!this.pending||this.has(id)||!this.choices.some(relic=>relic.id===id))return false;
     // Commit the award before any effect or transition hook can be invoked.
-    this.owned.push(id);this.pending=false;this.choices=[];
-    if(id==='leafWard') { this.shieldReady=true;this.shieldCooldown=0; }
-    this.game._refreshStats?.();
-    const relic=RELICS.find(item=>item.id===id);
-    this.game._emit('relicChosen',{relicId:id,name:relic.name});
+    if(!this.acquire(id))return false;
+    this.pending=false;this.choices=[];
     return true;
   }
 
@@ -87,7 +103,12 @@ export class Relics {
   modifyIncomingDamage(amount) {
     // The caller performs the invulnerability guard first and still starts
     // its normal invulnerability window when the shield absorbs all damage.
-    if(this.game.status!=='playing'||!Number.isFinite(amount)||amount<=0||!this.has('leafWard')||!this.shieldReady)return amount;
+    if(this.game.status!=='playing'||!Number.isFinite(amount)||amount<=0)return amount;
+    if(this.wardAmount>0){
+      amount=Math.max(0,amount-this.wardAmount);this.wardAmount=0;
+      this.game._effect(this.game.player.x,this.game.player.y,'ring',.35,34,'#f1e3b7');
+    }
+    if(amount<=0||!this.has('leafWard')||!this.shieldReady)return amount;
     this.shieldReady=false;this.shieldCooldown=RELIC_RULES.shieldRecharge;
     const p=this.game.player;
     this.game._effect(p.x,p.y,'ring',.35,31,'#d2dbae');
@@ -114,7 +135,7 @@ export class Relics {
     // an individual kill can never refund cooldown twice.
     enemy._relicThunderAwarded=true;
     if(!(p.skillCooldown>0))return 0;
-    const now=g.time;
+    const now=g._clock;
     this._thunderKills=this._thunderKills.filter(time=>now-time<RELIC_RULES.thunderWindow-1e-9);
     if(this._thunderKills.length>=RELIC_RULES.thunderLimit)return 0;
     const reduction=Math.min(RELIC_RULES.thunderReduction,p.skillCooldown);

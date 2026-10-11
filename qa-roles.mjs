@@ -10,7 +10,7 @@ Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
-  g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;
+  g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   return g;
 }
 function advance(g,seconds,input={}) {
@@ -19,9 +19,9 @@ function advance(g,seconds,input={}) {
 function monster(g,type,x,y=0) {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
-const xpTotal=g=>g.player.xp+g.gems.reduce((sum,gem)=>sum+gem.value,0);
+const xpTotal=g=>g.player.xp;
 function offer(g,id) {
-  g.status='upgrade';
+  g.crystalsNext=40;g.crystals=40;g.status='upgrade';
   for(let i=0;i<100;i++) {g._choices=null;if(g.getUpgradeChoices().some(c=>c.id===id))return;}
   assert.fail(`expected an eligible ${id} upgrade`);
 }
@@ -36,17 +36,12 @@ for(const hero of ['traveler','ranger','warden','stormcaller','unknown']) {
   assert(Object.values(g.levels).every(level=>level===0),'the restored protagonist starts without a free weapon or passive upgrade');
   assert.equal(g.player.xp,0);assert.equal(g.player.level,1);assert.equal(g.status,'playing');
   assert.deepEqual(g.weapons.map(w=>[w.id,w.level]),[['arrow',1]],'automatic arrows remain available without a held weapon or side weapon');
-  g.player.level=2;
-  for(let i=0;i<16;i++) {
-    g._choices=null;assert(g.getUpgradeChoices().some(c=>['orbit','pulse','lightning'].includes(c.id)),'the first earned upgrade can fill the empty secondary slot');
+  // Character level never gates access to any of the three secondary skills.
+  for(const id of ['orbit','pulse','lightning']) {
+    offer(g,id);assert(g.chooseUpgrade(id));assert.equal(g.levels[id],1);
+    assert.equal(g.player.level,1,'all skills can be acquired while still character level one');
   }
-  g.levels.orbit=1;g.player.level=4;
-  for(let i=0;i<16;i++) {
-    g._choices=null;assert(!g.getUpgradeChoices().some(c=>['pulse','lightning'].includes(c.id)),'an acquired secondary occupies the first slot');
-  }
-  g.player.level=5;g._choices=null;
-  assert(g.getUpgradeChoices().some(c=>['pulse','lightning'].includes(c.id)),'the next slot unlocks normally at level five');
-  g.branches.arrow='pierce'; // Movement-only fixture has already resolved its new level-five branch.
+  g.branches.arrow='pierce'; // Movement-only fixture has already resolved its arrow branch.
   const baseSpeed=g.player.speed;offer(g,'speed');assert(g.chooseUpgrade('speed'));
   assert(Math.abs(g.player.speed/baseSpeed-1.08)<1e-10,'earned movement upgrades still change real movement speed');
   assert.equal(arena({hero,difficulty:'casual'}).player.maxHp,140);
@@ -296,4 +291,4 @@ assert.equal(readMud(),null,'a dynamic objective suppresses an occupied fixed mu
 stable.adventure.props=[];const restoredMud=readMud();assert(restoredMud);
 assert.equal(restoredMud.x,stableMud.x);assert.equal(restoredMud.y,stableMud.y,'removing the dynamic objective restores the same mud geometry');
 
-console.log('Protagonist and interaction mechanics: fixed starting state, earned slots, bleed/shock reactions, mud, delayed mushrooms, bounded world state and interrupted Boss attacks passed.');
+console.log('Protagonist and interaction mechanics: fixed starting state, open skill slots, bleed/shock reactions, mud, delayed mushrooms, bounded world state and interrupted Boss attacks passed.');

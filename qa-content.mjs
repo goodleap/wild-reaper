@@ -10,7 +10,7 @@ const openGround=()=>new Terrain({obstacles:[]});
 function arena({terrain=openGround(),adventure=false}={}) {
   const g=new Game({terrain,adventure});
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
-  g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;
+  g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   return g;
 }
 function advance(g,seconds,input={}) {
@@ -146,17 +146,17 @@ assert.equal(healing.g.player.hp,60,'a herb gives its normal healing amount when
 healing.a.update(0);assert.equal(healing.g.player.hp,60,'the same herb cannot heal twice');
 
 const attraction=expedition();
-attraction.g.player.xpNext=Infinity;attraction.g.player.xp=11;
+attraction.g.player.xpNext=Infinity;attraction.g.crystalsNext=Infinity;attraction.g.player.xp=11;attraction.g.crystals=11;
 attraction.g.gems=[{x:220,y:0,r:5,value:7},{x:-270,y:20,r:5,value:9},{x:850,y:0,r:5,value:13}];
-const xpBudget=11+attraction.g.gems.reduce((sum,gem)=>sum+gem.value,0);
+const crystalBudget=11+attraction.g.gems.reduce((sum,gem)=>sum+gem.value,0);
 collect(attraction.g,attraction.a,'magnet');
 assert.equal(attraction.g.player.xp,11,'the magnet does not manufacture experience on activation');
 assert(attraction.g.gems.slice(0,2).every(gem=>gem.attracted));
 assert(!attraction.g.gems[2].attracted,'the magnet does not pull the entire infinite map');
 assert(attraction.a.magnetRange(attraction.g.stats.magnet)>attraction.g.stats.magnet);
 advance(attraction.g,2);
-assert(attraction.g.player.xp>11,'existing nearby drops actually arrive');
-assert.equal(attraction.g.player.xp+attraction.g.gems.reduce((sum,gem)=>sum+gem.value,0),xpBudget,'magnet collection conserves total experience');
+assert(attraction.g.crystals>11,'existing nearby crystal drops actually arrive');assert.equal(attraction.g.player.xp,11,'pickup never awards character XP a second time');
+assert.equal(attraction.g.crystals+attraction.g.gems.reduce((sum,gem)=>sum+gem.value,0),crystalBudget,'magnet collection conserves total crystals');
 for(let i=0;i<5;i++)collect(attraction.g,attraction.a,'magnet');
 assert(attraction.a.magnetTime<=attraction.a.buffDuration,'repeated magnets cannot accumulate unlimited duration');
 advance(attraction.g,attraction.a.buffDuration+.05);
@@ -195,18 +195,18 @@ treasureRun.a.onEnemyKilled({id:guardian.id+100,guardianId:chest.id,hp:0});
 assert.equal(chest.state,'active','another monster death cannot unlock the chest');
 treasureRun.a.onEnemyKilled(guardian);
 assert.equal(chest.state,'active','a living guardian cannot be reported as defeated');
-const xpBeforeGuard=treasureRun.g.gems.reduce((sum,g)=>sum+g.value,0);
+const beforeGuard={xp:treasureRun.g.player.xp,crystals:treasureRun.g.gems.reduce((sum,g)=>sum+g.value,0)};
 treasureRun.g._hurtEnemy(guardian,guardian.hp+1);
 assert.equal(chest.state,'unlocked','killing the associated elite unlocks its chest');
-assert.equal(treasureRun.g.gems.reduce((sum,g)=>sum+g.value,0),xpBeforeGuard,'the chest guardian does not also award a large XP burst');
+assert.equal(treasureRun.g.player.xp,beforeGuard.xp+30,'the guardian awards automatic kill XP');assert.equal(treasureRun.g.gems.reduce((sum,g)=>sum+g.value,0),beforeGuard.crystals+30,'guardian crystals remain a distinct pickup reward');
 treasureRun.g.player.x=chest.x+120;treasureRun.a.update(0);
 assert.equal(chest.state,'unlocked');assert.equal(treasureRun.a.pickups.length,0,'an unlocked chest must still be approached to claim its reward');
 treasureRun.g.player.x=chest.x;treasureRun.a.update(0);
 assert.equal(chest.state,'opened');assert.equal(treasureRun.a.pickups.length,3);
-const rewards=treasureRun.a.pickups.map(p=>p.id);
+assert.equal(treasureRun.g.gold,18);assert.equal(treasureRun.g.crystals,35);const rewards=treasureRun.a.pickups.map(p=>p.id);
 treasureRun.a.update(0);treasureRun.a.onEnemyKilled(guardian);treasureRun.a.update(0);
 assert.deepEqual(treasureRun.a.pickups.map(p=>p.id),rewards,'an opened chest cannot produce another set of rewards');
-assert.equal(treasureRun.g.events.filter(e=>e.type==='treasureOpened').length,1);
+assert.equal(treasureRun.g.events.filter(e=>e.type==='treasureOpened').length,1);assert.equal(treasureRun.g.gold,18);assert.equal(treasureRun.g.crystals,35);
 
 const abandoned=expedition(),abandonedChest=abandoned.a.spawnTreasure(140,19.8);
 abandoned.a.update(0);assert.equal(abandonedChest.state,'active');

@@ -4,8 +4,8 @@ const TAU=Math.PI*2;
 const TYPES=['treasure','hunt'];
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 
-// Optional, short objectives share the ordinary enemy population and drop the
-// existing supplies. They neither create experience nor interrupt play.
+// Optional objectives have distinct resource identities: chase for gold, hunt
+// for skill crystals. Rewards are detached before payment to prevent repeats.
 export class Encounters {
   constructor(game,{generation=true}={}) {
     this.game=game;this.generation=generation;this.active=null;
@@ -16,7 +16,7 @@ export class Encounters {
   }
   _canStart() {
     const g=this.game;
-    if(g.companions?.camp||g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.nextBossAt-g.time<45)return false;
+    if(g.companions?.camp||g.enemies.some(e=>e.type==='boss'&&e.hp>0)||g.nextBossAt-g.time<45||g.settlements?.sites.some(site=>site.state==='active'))return false;
     const chest=g.adventure?.treasure;
     // An ignored, unopened chest is not a permanent veto on other objectives.
     if(chest?.state==='active'&&distance(chest,this._foot())<600)return false;
@@ -24,7 +24,7 @@ export class Encounters {
   }
   _point(x,y) {
     const g=this.game,p=this._foot(),chest=g.adventure?.treasure;
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,42)&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
+    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,42)&&g.settlements?.isSafePoint(candidate.x,candidate.y,90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
       !g.adventure?.props.some(o=>distance(o,candidate)<70)&&
       (!chest||distance(chest,candidate)>180);
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;
@@ -47,7 +47,7 @@ export class Encounters {
       const enemy=g._spawnEnemy('beetle',1);if(!enemy)return null;
       enemy.eventRole='treasure';enemy.eventId=active.id;
       enemy.r=18;enemy.hp=enemy.maxHp=160*(1+Math.min(g.time,600)*.001);
-      enemy.speed=(g.easy?106:118);enemy.damage=0;enemy.xp=0;
+      enemy.speed=(g.easy?106:118);enemy.damage=0;enemy.xp=16;
       enemy.x=point.x;enemy.y=point.y-groundOffset(enemy);
       enemy._escapeAngle=Math.random()*TAU;
       g._moveEntity(enemy,0,0);active.enemyId=enemy.id;
@@ -65,10 +65,9 @@ export class Encounters {
     this.active=null;this.nextAt=g.time+95;
     g.enemies=g.enemies.filter(e=>e.eventId!==active.id);
     if(success) {
-      for(const [i,type] of ['magnet','fury','herb'].entries()) {
-        const a=-Math.PI/2+i*TAU/3;
-        g.adventure?.dropPickup(type,active.x+Math.cos(a)*28,active.y+Math.sin(a)*28);
-      }
+      const chase=active.type==='treasure';
+      g.grantResources(chase?{gold:24,crystals:8}:{gold:6,crystals:40},chase?'宝物精':'限时狩猎');
+      g.adventure?.dropPickup(chase?'magnet':'fury',active.x,active.y);
       g._effect(active.x,active.y,'ring',.8,90,'#f3d28c');
       g._emit('encounterComplete');
     }else g._emit('encounterExpired');

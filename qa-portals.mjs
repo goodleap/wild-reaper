@@ -11,7 +11,7 @@ function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;
-  g.player.xpNext=Infinity;if(g.elites)g.elites.generation=false;
+  g.player.xpNext=Infinity;g.crystalsNext=Infinity;if(g.elites)g.elites.generation=false;
   return g;
 }
 function advance(g,seconds,input={}) {
@@ -20,7 +20,7 @@ function advance(g,seconds,input={}) {
 function monster(g,type,x=200,y=0) {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
-const xpTotal=g=>g.player.xp+g.gems.reduce((sum,gem)=>sum+gem.value,0);
+const xpTotal=g=>g.player.xp;
 function openPortal(g) {
   const boss=monster(g,'boss',280,-21.2);g._hurtEnemy(boss,boss.hp+1);
   assert(g.portal,'a defeated Boss opens a portal');return boss;
@@ -28,15 +28,15 @@ function openPortal(g) {
 function standAtPortal(g) {g.player.x=g.portal.x;g.player.y=g.portal.y-groundOffset(g.player,true);}
 function usePortal(g) {
   standAtPortal(g);g.update(0);g.update(0,{interact:true});
-  if(g.status==='relic')assert(g.chooseRelic(g.getRelicChoices()[0].id));
+  if(g.status==='super')assert(g.chooseSuper(g.getSuperChoices()[0].id));
 }
 
 assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins']);
 const access=arena(),firstBoss=openPortal(access),portalId=access.portal.id;
-const firstOffer=access.relics.getChoices().map(c=>c.id);
+const firstOffer=access.superSkills.getChoices().map(c=>c.id);
 access._hurtEnemy(firstBoss,100);
 assert.equal(access.portal.id,portalId,'repeated death processing cannot create another portal');
-assert.deepEqual(access.relics.getChoices().map(c=>c.id),firstOffer,'the same Boss reward cannot reroll its relic offer');
+assert.deepEqual(access.superSkills.getChoices().map(c=>c.id),firstOffer,'the same Boss reward cannot reroll its super skill offer');
 assert.equal(access.enterPortal(),false,'a portal cannot be entered from far away');
 standAtPortal(access);access.update(0);
 assert.equal(access.regionIndex,0);assert.equal(access.status,'playing','walking into a portal never enters automatically');
@@ -47,16 +47,16 @@ for(const state of ['paused','upgrade','dead']) {
 access.status='playing';const blockingBoss=monster(access,'boss',450,0);
 assert.equal(access.enterPortal(),false,'an active Boss prevents leaving its encounter');
 access.enemies=access.enemies.filter(e=>e!==blockingBoss);access.update(0);access.update(0,{interact:true});
-assert.equal(access.status,'relic','explicit interaction opens the pending low-frequency reward');
-const choices=access.getRelicChoices(),choiceIds=choices.map(c=>c.id);
+assert.equal(access.status,'super','explicit interaction opens the pending low-frequency reward');
+const choices=access.getSuperChoices(),choiceIds=choices.map(c=>c.id);
 assert.equal(choices.length,3);assert.equal(new Set(choiceIds).size,3);
-for(let i=0;i<8;i++)assert.deepEqual(access.getRelicChoices().map(c=>c.id),choiceIds,'reopening a reward cannot reroll the offered relics');
+for(let i=0;i<8;i++)assert.deepEqual(access.getSuperChoices().map(c=>c.id),choiceIds,'reopening a reward cannot reroll the offered super skills');
 const frozen={time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y};
 advance(access,2,{x:1,skill:true});
-assert.deepEqual({time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y},frozen,'the relic choice freezes combat, movement and timers');
-assert.equal(access.chooseRelic('invalid-relic'),false);assert.equal(access.status,'relic');
-assert(access.chooseRelic(choiceIds[0]));assert.equal(access.region.id,'marsh');
-assert.equal(access.chooseRelic(choiceIds[0]),false,'a repeated choice cannot duplicate a relic or advance another map');
+assert.deepEqual({time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y},frozen,'the super skill choice freezes combat, movement and timers');
+assert.equal(access.chooseSuper('invalid-relic'),false);assert.equal(access.status,'super');
+assert(access.chooseSuper(choiceIds[0]));assert.equal(access.region.id,'marsh');
+assert.equal(access.chooseSuper(choiceIds[0]),false,'a repeated choice cannot duplicate a super skill or advance another map');
 assert.equal(access.regionIndex,1);assert.equal(access.portal,null);
 
 const travel=arena({hero:'warden',adventure:true,encounters:true,environment:true});
@@ -85,10 +85,10 @@ const preserved={
   skillCooldown:travel.player.skillCooldown,nextBossAt:travel.nextBossAt,shieldCooldown:travel.relics.shieldCooldown,
   fury:travel.adventure.furyTime,magnet:travel.adventure.magnetTime,kills:travel.kills,bossKills:travel.bossKills
 };
-assert(travel.enterPortal());assert.equal(travel.status,'relic');advance(travel,2,{x:1,skill:true});
-assert.equal(oldEnemy.cast.life,.001,'old enemy attacks remain frozen throughout the relic choice');
+assert(travel.enterPortal());assert.equal(travel.status,'super');advance(travel,2,{x:1,skill:true});
+assert.equal(oldEnemy.cast.life,.001,'old enemy attacks remain frozen throughout the super skill choice');
 assert.equal(oldEnvironment.props.find(p=>p.id==='old-environment-prop').fuse,.01,'old environmental fuses also freeze throughout the choice');
-assert(travel.chooseRelic(travel.getRelicChoices()[0].id));
+assert(travel.chooseSuper(travel.getSuperChoices()[0].id));
 assert.deepEqual({
   hero:travel.player.heroId,hp:travel.player.hp,maxHp:travel.player.maxHp,xp:travel.player.xp,level:travel.player.level,xpNext:travel.player.xpNext,
   levels:travel.levels,evolutions:travel.evolutions,time:travel.time,clock:travel._clock,wave:travel.wave,
@@ -117,11 +117,13 @@ for(let i=0;i<3;i++) {
 assert.deepEqual(routeIds,['forest','marsh','ruins','forest']);
 assert.equal(new Set(terrainSignatures).size,3,'each region transition builds a different seeded map');
 
-const xpChoice=arena();xpChoice.player.xpNext=40;xpChoice.player.xp=41;openPortal(xpChoice);standAtPortal(xpChoice);
-assert(xpChoice.enterPortal());assert(xpChoice.chooseRelic(xpChoice.getRelicChoices()[0].id));
-assert.equal(xpChoice.player.xp,41,'the region transition itself never consumes earned XP');xpChoice.update(0);
-assert.equal(xpChoice.status,'upgrade','earned XP still opens its normal choice after the relic transition');
-assert.equal(xpChoice.player.level,2);assert.equal(xpChoice.player.xp,1,'the separate relic reward never loses or duplicates XP');
+const xpChoice=arena();openPortal(xpChoice);standAtPortal(xpChoice);
+xpChoice.crystalsNext=40;xpChoice.crystals=41;const savedXp=xpChoice.player.xp;
+assert(xpChoice.enterPortal());assert(xpChoice.chooseSuper(xpChoice.getSuperChoices()[0].id));
+assert.equal(xpChoice.crystals,41,'the region transition itself never consumes earned crystals');
+assert.equal(xpChoice.status,'upgrade','banked crystals open their normal choice after the super reward transition');
+assert.equal(xpChoice.player.level,1);assert.equal(xpChoice.player.xp,savedXp,'the separate super reward never loses or duplicates XP');
+assert(xpChoice.chooseUpgrade(xpChoice.getUpgradeChoices()[0].id));assert.equal(xpChoice.crystals,1);
 
 const mixed=arena();
 for(const [i,id] of ['shield','swift','summoner'].entries())assert(mixed.elites.promote(monster(mixed,'slime',150+i*80),id));

@@ -11,7 +11,10 @@ import { Relics, RELICS } from './relics.js';
 import { Companions, COMPANIONS } from './companions.js';
 import { WEAPON_BRANCHES, BRANCH_WEAPONS, branchDefinition, isBranchReady } from './weapon-branches.js';
 import { resetLocomotion, updateLocomotion } from './locomotion.js';
-export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES };
+import { SuperSkills, SUPER_SKILLS } from './super-skills.js';
+import { Dungeon } from './dungeon.js';
+import { Settlements } from './settlements.js';
+export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -44,6 +47,8 @@ export function xpCost(level) {
   if(level<=1)return BALANCE.firstXp;
   const n=level-2;return Math.round(BALANCE.xpBase+BALANCE.xpLinear*n+BALANCE.xpCurve*Math.pow(n,1.3));
 }
+// Crystals retain the measured skill-choice pacing independently of kill XP.
+export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 const UPGRADE_DEFS = [
   {id:'power',name:'锋芒',desc:'所有武器伤害提升 25%',kind:'被动强化',icon:'✦',color:'#e6be73'},
   {id:'rapid',name:'疾风连射',desc:'翠羽飞矢攻击速度提升 15%',kind:'武器强化',icon:'»',color:'#89d8ad'},
@@ -52,7 +57,7 @@ const UPGRADE_DEFS = [
   {id:'pulse',name:'大地回响',desc:'环形冲击波击退敌人；消耗流血时伤害增加 25%',kind:'新武器',icon:'◎',color:'#80d5bd'},
   {id:'lightning',name:'唤雷',desc:'连锁闪电附加 2.5 秒感电，飞矢或环刃命中可向附近敌人传导',kind:'新武器',icon:'ϟ',color:'#b6bafa'},
   {id:'speed',name:'轻盈步伐',desc:'移动速度提升 8%，更轻松穿过兽群',kind:'被动强化',icon:'↗',color:'#9acbcc'},
-  {id:'magnet',name:'林间引力',desc:'经验拾取范围增加 35%',kind:'被动强化',icon:'✧',color:'#a1cf98'},
+  {id:'magnet',name:'林间引力',desc:'灵晶和金币拾取范围增加 35%',kind:'被动强化',icon:'✧',color:'#a1cf98'},
   {id:'vitality',name:'古树之心',desc:'最大生命增加 25，并恢复 35 生命',kind:'生存强化',icon:'♥',color:'#e7a68b'},
   {id:'regen',name:'生生不息',desc:'每秒恢复 0.8 生命',kind:'生存强化',icon:'✚',color:'#a4dc9d'}
 ];
@@ -69,19 +74,20 @@ const ENDLESS_UPGRADES = [
 ];
 
 export class Game {
-  constructor({difficulty='normal',hero='traveler',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure}={}) {
+  constructor({difficulty='normal',hero='traveler',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure}={}) {
     this.terrain=terrain;
     this.regionIndex=0;this.region=regionFor(0);this.portal=null;this.regionGrace=0;this.regionTransition=null;
-    this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites};this._interactHeld=false;
+    this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements};this._interactHeld=false;
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.hero=getHero(hero);
-    this.status = 'playing'; this.time = 0; this.kills = 0; this.wave = 1;
+    this.status = 'playing'; this.time = 0; this.runTime=0; this.kills = 0; this.wave = 1;
     this.pressurePhase='steady';this.phaseEndsAt=24;
     this.viewWidth = 1100; this.viewHeight = 650;
     const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
+    this.skillLevel=1;this.crystals=0;this.crystalsNext=crystalCost(1);this.gold=0;this.coins=[];
     this.enemies = []; this.bullets = []; this.enemyBullets=[];this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
     this.storm = null;
     this.bossSpawned = false; this.bossDefeated = false;
@@ -104,6 +110,8 @@ export class Game {
     this.environment=environment?new Environment(this):null;
     this.relics=new Relics(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
     this.companions=new Companions(this,{generation:companions});
+    this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);
+    this.settlements=new Settlements(this,{generation:settlements});
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -111,7 +119,7 @@ export class Game {
     if(this.effects.length > 200) this.effects.shift();
     this.effects.push({x,y,type,life,maxLife:life,r,color,text,...extra});
   }
-  _damageMultiplier() { return (1 + this.levels.power * .25 + this.levels.endlessPower * .08 + this.rescuePower * .08)*(this.adventure?.damageMultiplier()||1)*(this.relics?.damageMultiplier()||1); }
+  _damageMultiplier() { return (1 + this.levels.power * .25 + this.levels.endlessPower * .08 + this.rescuePower * .08 + (this.player.level-1)*.01)*(this.adventure?.damageMultiplier()||1)*(this.relics?.damageMultiplier()||1); }
   _inView(entity,margin=0) {
     const dx=Math.max(0,Math.abs(entity.x-this.player.x)-this.viewWidth*.5-margin);
     const dy=Math.max(0,Math.abs(entity.y-this.player.y)-this.viewHeight*.5-margin);
@@ -120,7 +128,7 @@ export class Game {
   _castStorm() {
     const p=this.player, halfW=this.viewWidth*.5, halfH=this.viewHeight*.5;
     const targets=this.enemies.filter(e=>{
-      if(e.hp<=0) return false;
+      if(e.hp<=0||(e.dungeonId&&!this.dungeon.canDamage(e,p))) return false;
       const dx=Math.max(0,Math.abs(e.x-p.x)-halfW), dy=Math.max(0,Math.abs(e.y-p.y)-halfH);
       return dx*dx+dy*dy<=e.r*e.r;
     });
@@ -136,9 +144,10 @@ export class Game {
     this.environment?.hitAllVisible('storm');
     this._effect(p.x,p.y,'ring',.45,95,'#d4e7ff');
   }
-  _nearest(x,y,range=BALANCE.arrowRange,exclude) {
+  _nearest(x,y,range=BALANCE.arrowRange,exclude,originEntity=null) {
+    const origin=originEntity||{x,y,groundY:y+groundOffset(this.player,true)};
     let best=null, d=range*range;
-    for(const e of this.enemies) if(e.hp>0 && this._inView(e) && !exclude?.has(e.id)) {
+    for(const e of this.enemies) if(e.hp>0 && this._inView(e) && !exclude?.has(e.id)&&(!e.dungeonId||this.dungeon.canDamage(e,origin))) {
       const n=sq(e.x-x)+sq(e.y-y); if(n<d) { d=n; best=e; }
     }
     return best;
@@ -169,6 +178,7 @@ export class Game {
   }
   _hurtEnemy(enemy,amount,knockback=0,origin=this.player,source='raw') {
     if(enemy.hp<=0||!Number.isFinite(amount)||amount<=0)return 0;
+    if(enemy.dungeonId&&!this.dungeon.canDamage(enemy,origin))return 0;
     amount=this.elites?.beforeDamage(enemy,amount)??amount;
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
@@ -183,8 +193,26 @@ export class Game {
     if(enemy.hp<=0) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
       this.kills++; this._emit('kill');
-      if(enemy.xp>0)this.gems.push({x:enemy.x,y:enemy.y,r:enemy.type==='boss'?11:enemy.type==='brute'?7:5,value:enemy.xp});
-      if(enemy.type==='boss') { enemy.slam=null;clearBossAttacks(enemy);this.bossDefeated=true; this.bossKills++; this._emit('bossKill'); this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482');this.regions.openPortal(enemy); }
+      // Kill XP is automatic. Loot is a separate skill/currency resource and
+      // never opens a modal in the middle of an attack's target loop.
+      if(enemy.xp>0&&!enemy.summoned) {
+        this.addExperience(enemy.xp);
+        if(enemy.type!=='boss') {
+          this.dropCrystals(enemy.x,enemy.y,enemy.xp);
+          if(enemy.affix)this.dropGold(enemy.x+9,enemy.y,3);
+          else if(Math.random()<.08)this.dropGold(enemy.x+9,enemy.y,1);
+        }
+      }
+      this.dungeon.onEnemyKilled(enemy);
+      this.settlements.onEnemyKilled(enemy);
+      if(enemy.type==='boss') {
+        enemy.slam=null;clearBossAttacks(enemy);
+        this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482');
+        if(!enemy.dungeonBoss&&!enemy.dungeonId) {
+          this.bossDefeated=true;this.bossKills++;this._emit('bossKill');
+          this.grantResources({gold:30,crystals:45},'regionalBoss');this.regions.openPortal(enemy);
+        }
+      }
       this.adventure?.onEnemyKilled(enemy);
       this.encounters?.onEnemyKilled(enemy);
       this.companions?.onEnemyKilled(enemy);
@@ -363,20 +391,50 @@ export class Game {
     this.enemyBullets=this.enemyBullets.filter(b=>b.life>0);
   }
 
-  canEnterPortal() { return this.regions.canEnter(); }
+  canEnterPortal() { return !this.dungeon.active&&this.regions.canEnter(); }
+  getInteraction() {
+    if(this.status!=='playing')return null;
+    if(this.dungeon.active)return this.dungeon.getInteraction();
+    const candidates=[];
+    const settlement=this.settlements.getInteraction();if(settlement)candidates.push(settlement);
+    if(this.canEnterPortal())candidates.push({id:this.portal.id,type:'portal',label:'选择超级技能 · 前往'+this.portal.nextRegion.name,description:'击败区域首领的专属奖励',x:this.portal.x,y:this.portal.y,enabled:true});
+    const p=this.player,footY=p.y+groundOffset(p,true);
+    return candidates.sort((a,b)=>Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
+  }
+  interact(id) {
+    const interaction=this.getInteraction();
+    if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
+    if(this.dungeon.active)return this.dungeon.interact(interaction.id);
+    return interaction.type==='portal'?this.enterPortal():this.settlements.interact(interaction.id);
+  }
   enterPortal() {
     if(!this.canEnterPortal())return false;
-    if(this.relics.pending) {
-      const choices=this.relics.getChoices();
-      if(choices.length) {this.status='relic';this._emit('relicChoice');return true;}
-      if(!this.relics.completeCollectionReward())return false;
-    }
-    this._switchRegion();return true;
+    if(!this.superSkills.pending)this.superSkills.offer('region',this.region.id);
+    if(this.superSkills.pending?.source!=='region'||!this.superSkills.getChoices().length)return false;
+    this.status='super';this._emit('superChoice',{source:'region',regionId:this.region.id});return true;
+  }
+  getSuperChoices() {return this.superSkills.getChoices();}
+  chooseSuper(id) {
+    if(this.status!=='super')return false;
+    const pending=this.superSkills.pending;
+    if(!pending)return false;
+    if(pending.source==='region'&&(!this.portal||this.portal.nextRegionIndex!==this.regionIndex+1||pending.regionId!==this.region.id))return false;
+    if(pending.source==='castle'&&(!this.dungeon.active?.bossDefeated||!this.dungeon.active.rewardPending||this.dungeon.active.rewardClaimed))return false;
+    if(!this.superSkills.choose(id))return false;
+    if(pending.source==='region')this._switchRegion();
+    else {this.dungeon.completeReward();if(this.status==='super')this.status='playing';}
+    this._trySkillUpgrade();return true;
+  }
+  getShopItems(){return this.settlements.getShopItems();}
+  buyShopItem(id){return this.status==='shop'&&this.settlements.buy(id);}
+  closeShop(){
+    if(this.status!=='shop')return false;
+    const result=this.settlements.closeShop();this._trySkillUpgrade();return result!==false;
   }
   getRelicChoices() { return this.relics.getChoices(); }
   chooseRelic(id) {
-    if(this.status!=='relic'||!this.portal||!this.relics.choose(id))return false;
-    this._switchRegion();return true;
+    if(this.status!=='relic'||!this.relics.choose(id))return false;
+    this.status='playing';this._trySkillUpgrade();return true;
   }
   _switchRegion() {
     const portal=this.portal;if(!portal)return false;
@@ -385,9 +443,10 @@ export class Game {
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;
     this.status='playing';this.regionGrace=2;
     this.regionTransition={life:.7,maxLife:.7,name:this.region.name,from,to:this.region.id};
-    this.enemies=[];this.bullets=[];this.enemyBullets=[];this.gems=[];this.effects=[];this.orbitals=[];this.storm=null;
+    this.enemies=[];this.bullets=[];this.enemyBullets=[];this.gems=[];this.coins=[];this.effects=[];this.orbitals=[];this.storm=null;
     this._pulseEchoes=[];this._grid.clear();this._choices=null;
-    this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply');
+    this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply'||e.type==='superChosen');
+    this.superSkills.clearScene();
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     // The continuous clock, boss schedule and active-skill cooldown survive.
     // Only the old scene is discarded, without invoking kill/reward hooks.
@@ -402,6 +461,7 @@ export class Game {
     if(this._features.encounters)this.encounters=new Encounters(this);
     if(this._features.environment)this.environment=new Environment(this);
     this.companions.onRegionChange();
+    this.dungeon.resetRegion();this.settlements.resetRegion();
     this._refreshStats();this._refreshWeapons();
     this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});
     return true;
@@ -410,14 +470,15 @@ export class Game {
   update(dt,input={}) {
     if(this.status!=='playing') return;
     const interact=!!input.interact,pressed=interact&&!this._interactHeld;this._interactHeld=interact;
-    if(pressed&&this.enterPortal())return;
+    if(pressed&&this.interact())return;
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
     const p=this.player;
-    this.time+=dt; this._clock+=dt;
+    const inDungeon=!!this.dungeon.active;
+    if(!inDungeon)this.time+=dt;this.runTime+=dt;this._clock+=dt;
     this.regionGrace=Math.max(0,this.regionGrace-dt);
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
     this.relics.update(dt);
-    this._updatePressure();
+    if(!inDungeon)this._updatePressure();
     const wave=1+Math.floor(this.time/60);
     if(wave!==this.wave) { this.wave=wave; this._emit('wave'); }
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=Math.max(0,p.skillCooldown-dt);
@@ -433,10 +494,11 @@ export class Game {
     updateLocomotion(p,oldX,oldY,dt);
     this.adventure?.update(dt);
     this.companions.update(dt);
-    this.encounters?.update(dt);
+    if(!inDungeon){this.encounters?.update(dt);this.settlements.update(dt);}
+    else this.dungeon.update(dt);
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
-    this._spawn-=dt;
-    if(this._spawn<=0&&this.regionGrace<=0) {
+    if(!inDungeon)this._spawn-=dt;
+    if(!inDungeon&&this._spawn<=0&&this.regionGrace<=0) {
       const pressure=this.pressurePhase==='siege'?1.85:this.pressurePhase==='relief'?.38:1;
       const rate=Math.min(BALANCE.spawnMax,(BALANCE.spawnBase+this.time*BALANCE.spawnGrowth)*pressure)*(this.easy?.78:1);
       this._spawn=1/rate;
@@ -445,7 +507,7 @@ export class Game {
         this.elites.maybePromote(enemy);
       }
     }
-    if(this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
+    if(!inDungeon&&!this.portal&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');
@@ -453,6 +515,7 @@ export class Game {
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
+      if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(this.companions.updateEnemy(e,dt))continue;
       if(this.elites.updateEnemy(e,dt))continue;
       if(this.encounters?.updateEnemy(e,dt))continue;
@@ -510,6 +573,7 @@ export class Game {
     for(const b of this.bullets)this._updateArrow(b,dt);
     this.bullets=this.bullets.filter(b=>b.life>0&&this._inView(b,24));
     this._updateWeapons(dt);
+    this.superSkills.update(dt);
     this.combatStatus.update(dt);
     this.companions.resolve();
     this.elites.resolve();
@@ -518,26 +582,13 @@ export class Game {
     for(const e of this.enemies)if(e.type==='boss'&&e.bossKind==='bloom')resolveBloomBoss(this,e);
     this._resolveEnemyAttacks(dt);
     if(this.status==='dead')return;
-    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.type==='boss'||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
-    for(const gem of this.gems) {
-      const dx=p.x-gem.x,dy=p.y-gem.y,d=Math.hypot(dx,dy);
-      if(d<(this.adventure?.magnetRange(this.stats.magnet)??this.stats.magnet) || gem.attracted) {
-        gem.attracted=true;
-        const pull=Math.min(d,(340+Math.max(0,150-d)*5)*dt);
-        if(d>0) {gem.x+=dx/d*pull;gem.y+=dy/d*pull;}
-      }
-      if(d<22) {p.xp+=gem.value;gem.value=0;}
-    }
-    this.gems=this.gems.filter(g=>g.value>0);
-    // Merge the oldest drops if a stationary run accumulates a large field.
-    while(this.gems.length>500) {
-      const g=this.gems.shift();let nearest=null,bd=Infinity;
-      for(const n of this.gems) {const d=dist2(g,n);if(d<bd){bd=d;nearest=n;}}
-      if(nearest) {nearest.value+=g.value;nearest.r=Math.min(9,nearest.r+.2);}
-    }
+    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.type==='boss'||e.dungeonId||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
+    this._collectDrops(this.gems,dt,'crystals');
+    this._collectDrops(this.coins,dt,'gold');
+    this.gems=this.gems.filter(g=>g.value>0);this.coins=this.coins.filter(c=>c.value>0);
     for(const e of this.effects) {e.life-=dt;if(e.type==='damage'||e.type==='heal')e.y-=dt*26;}
     this.effects=this.effects.filter(e=>e.life>0);
-    if(p.xp>=p.xpNext) this._levelUp();
+    this._trySkillUpgrade();
   }
 
   _updateArrow(b,dt) {
@@ -549,7 +600,12 @@ export class Game {
     // order of the enemy array cannot choose which target takes full damage.
     for(let segment=0;segment<3;segment++) {
       const x=b.x,y=b.y,dx=b.vx*remaining,dy=b.vy*remaining;
-      let impact=null,first=Infinity,isSupply=false;
+      let impact=null,first=Infinity,isSupply=false,wallHit=Infinity;
+      // Project the flying arrow to the same ground plane as feet/walls.
+      // Its body-space render position and enemy hit circles stay unchanged.
+      const groundY=y+groundOffset(this.player,true);
+      if(this.dungeon.active)for(const wall of this.terrain.query(Math.min(x,x+dx)-b.r,Math.min(groundY,groundY+dy)-b.r,Math.max(x,x+dx)+b.r,Math.max(groundY,groundY+dy)+b.r))wallHit=Math.min(wallHit,obstacleImpact(wall,x,groundY,dx,dy,b.r));
+      first=wallHit;
       const nearby=this._nearby(x+dx*.5,y+dy*.5,Math.hypot(dx,dy)*.5+64);
       for(const e of nearby)if(e.hp>0&&!b.hitIds.has(e.id)) {
         const t=circleImpact(x,y,dx,dy,e.x,e.y,b.r+e.r+3);
@@ -559,12 +615,12 @@ export class Game {
         const t=circleImpact(x,y,dx,dy,prop.x,prop.aimY??prop.y,b.r+prop.r);
         if(t<first){first=t;impact=prop;isSupply=true;}
       }
-      const fraction=impact?first:1;
+      const fraction=Number.isFinite(first)?first:1;
       b.x=x+dx*fraction;b.y=y+dy*fraction;
       this.environment?.hitSegment(x,y,b.x,b.y,b.r,'arrow');
-      if(!impact)break;
+      if(!impact){if(Number.isFinite(wallHit))b.life=0;break;}
       if(isSupply) {this.adventure.hitSupply(impact,b.damage);b.life=0;break;}
-      b.hitIds.add(impact.id);this._hitEnemy(impact,b.damage,4,this.player,'arrow');this._emit('hit');
+      b.hitIds.add(impact.id);this._hitEnemy(impact,b.damage,4,{x,y,groundY},'arrow');this._emit('hit');
       if(--b.pierce<=0||b.hitIds.size>=3) {b.life=0;break;}
       remaining*=1-first;
       if(b.branch==='pierce'||b.branch==='ricochet')b.damage*=.65;
@@ -581,7 +637,7 @@ export class Game {
   }
 
   _branchMovementMultiplier(enemy) {
-    return enemy.type!=='boss'&&!enemy.isCompanion&&(enemy.branchSlowUntil||0)>this._clock ? .65 : 1;
+    return (enemy.type!=='boss'&&!enemy.isCompanion&&(enemy.branchSlowUntil||0)>this._clock ? .65 : 1)*(this.superSkills?.movementMultiplier(enemy)??1);
   }
 
   _updateWeapons(dt) {
@@ -623,10 +679,10 @@ export class Game {
     this._lightning-=dt;
     if(this.levels.lightning && this._lightning<=0) {
       const l=this.levels.lightning;this._lightning=2.8;
-      let origin={x:p.x,y:p.y};const excluded=new Set();
+      let origin=p;const excluded=new Set();
       if(this.evolutions.lightning&&this.branches.lightning==='focus') {
         let target=null;
-        for(const e of this.enemies)if(e.hp>0&&this._inView(e)&&dist2(e,p)<=360*360) {
+        for(const e of this.enemies)if(e.hp>0&&this._inView(e)&&dist2(e,p)<=360*360&&(!e.dungeonId||this.dungeon.canDamage(e,p))) {
           if(!target||(e.type==='boss'&&target.type!=='boss')||((e.type==='boss')===(target.type==='boss')&&(e.hp>target.hp||(e.hp===target.hp&&dist2(e,p)<dist2(target,p)))))target=e;
         }
         if(target) {
@@ -635,7 +691,7 @@ export class Game {
           this.environment?.hitAt(target.x,target.y,target.r,'lightning');
         }
       }else for(let i=0;i<(this.evolutions.lightning&&this.branches.lightning==='chain'?5:3);i++) {
-        const e=this._nearest(origin.x,origin.y,i===0?360:190,excluded);if(!e)break;
+        const e=this._nearest(origin.x,origin.y,i===0?360:190,excluded,origin);if(!e)break;
         excluded.add(e.id);this._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:this.evolutions.lightning,branch:this.branches.lightning,chainIndex:i});
         this._hitEnemy(e,(38+l*10)*power*(i>=3?.4:1),0,origin,'lightning');
         this.environment?.hitAt(e.x,e.y,e.r,'lightning');origin=e;
@@ -644,7 +700,7 @@ export class Game {
   }
 
   _castPulse(x,y,radius,damage,knockback,echo=false,control=false) {
-    const origin={x,y};
+    const origin={x,y,groundY:y+groundOffset(this.player,true)};
     this._effect(x,y,'ring',control?.65:echo?.6:.48,radius,control?'#9fe5cf':echo?'#c6ead5':'#9de0b3',undefined,{evolved:this.evolutions.pulse,echo,control,branch:this.branches.pulse});
     const source=echo?'echo':'pulse';
     for(const e of this.enemies)if(e.hp>0&&dist2(origin,e)<sq(radius+e.r)) {
@@ -680,17 +736,67 @@ export class Game {
     }
   }
 
+  addExperience(amount) {
+    if(!Number.isFinite(amount)||amount<=0)return false;
+    this.player.xp+=Math.floor(amount);this._levelUp();return true;
+  }
   _levelUp() {
+    const p=this.player;let gained=0;
+    while(p.xp>=p.xpNext) {
+      p.xp-=p.xpNext;p.level++;p.xpNext=xpCost(p.level);p.maxHp+=2;p.hp=Math.min(p.maxHp,p.hp+2);gained++;
+    }
+    if(!gained)return false;
+    this._refreshStats();this._emit('level',{level:p.level,gained});
+    this._effect(p.x,p.y,'ring',.6,75,'#eee0a3');return true;
+  }
+  addCrystals(amount) {
+    if(!Number.isFinite(amount)||amount<=0)return false;
+    this.crystals+=Math.floor(amount);return true;
+  }
+  addGold(amount) {
+    if(!Number.isFinite(amount)||amount<=0)return false;
+    this.gold+=Math.floor(amount);return true;
+  }
+  grantResources({gold=0,crystals=0}={},source='reward') {
+    const addedGold=this.addGold(gold),addedCrystals=this.addCrystals(crystals);
+    if(addedGold||addedCrystals)this._emit('resources',{source,gold:addedGold?Math.floor(gold):0,crystals:addedCrystals?Math.floor(crystals):0});
+    return addedGold||addedCrystals;
+  }
+  _dropResource(list,x,y,value,r) {
+    if(!Number.isFinite(value)||value<=0||!Number.isFinite(x)||!Number.isFinite(y))return null;
+    const drop={x,y,r,value:Math.floor(value)};list.push(drop);
+    // Bounded loot, conserved value. Merge oldest with its nearest neighbour
+    // without moving it toward the player or creating extra reward value.
+    const cap=list===this.coins?120:500;
+    while(list.length>cap) {
+      const first=list.shift();let nearest=null,best=Infinity;
+      for(const other of list){const d=dist2(first,other);if(d<best){best=d;nearest=other;}}
+      if(nearest){nearest.value+=first.value;nearest.r=Math.min(9,nearest.r+.2);}
+    }
+    return drop;
+  }
+  dropCrystals(x,y,value){return this._dropResource(this.gems,x,y,value,value>=60?9:value>=13?7:5);}
+  dropGold(x,y,value){return this._dropResource(this.coins,x,y,value,6);}
+  _collectDrops(drops,dt,kind) {
     const p=this.player;
-    p.xp-=p.xpNext;p.level++;p.xpNext=xpCost(p.level);
-    this.status='upgrade';this._choices=null;this._emit('level');
-    this._effect(p.x,p.y,'ring',.8,100,'#eee0a3');
+    for(const drop of drops) {
+      const dx=p.x-drop.x,dy=p.y-drop.y,d=Math.hypot(dx,dy);
+      if(d<(this.adventure?.magnetRange(this.stats.magnet)??this.stats.magnet)||drop.attracted) {
+        drop.attracted=true;const pull=Math.min(d,(340+Math.max(0,150-d)*5)*dt);
+        if(d>0){drop.x+=dx/d*pull;drop.y+=dy/d*pull;}
+      }
+      if(d<22){if(kind==='gold')this.addGold(drop.value);else this.addCrystals(drop.value);drop.value=0;}
+    }
+  }
+  _trySkillUpgrade() {
+    if(this.status!=='playing'||this.crystals<this.crystalsNext)return false;
+    this.status='upgrade';this._choices=null;this._emit('skillUpgrade',{skillLevel:this.skillLevel});return true;
   }
   getUpgradeChoices() {
     if(this._choices) return this._choices;
     const weaponIds=['orbit','pulse','lightning'],owned=weaponIds.filter(id=>this.levels[id]>0).length;
-    const slots=this.player.level>=8?3:this.player.level>=5?2:1;
-    const pool=UPGRADE_DEFS.filter(u=>this.levels[u.id]<LEVEL_CAPS[u.id]&&(!['pulse','lightning'].includes(u.id)||this.levels[u.id]<4)&&(!weaponIds.includes(u.id)||this.levels[u.id]>0||owned<slots));
+    const pool=UPGRADE_DEFS.filter(u=>this.levels[u.id]<LEVEL_CAPS[u.id]&&(!['pulse','lightning'].includes(u.id)||this.levels[u.id]<4));
+    pool.push(...this.superSkills.getUpgradeChoices());
     // Keep all three choices available without ever adding more projectiles.
     if(pool.length<3) pool.push(...ENDLESS_UPGRADES);
     // Offer one complete, mutually exclusive pair. Deferring it advances the
@@ -703,14 +809,16 @@ export class Game {
     const ordinaryCount=this._branchOfferWeapon?1:3;
     // Guarantee an attractive new weapon in early choices.
     const chosen=[];
-    if(owned<slots&&(this.player.level===2||this.player.level===5||this.player.level===8)) {
+    if(owned<3&&this.skillLevel<=3) {
       const newWeapons=pool.filter(u=>['orbit','pulse','lightning'].includes(u.id)&&!this.levels[u.id]);
       if(newWeapons.length) chosen.push(newWeapons[Math.floor(Math.random()*newWeapons.length)]);
     }
     while(chosen.length<ordinaryCount && chosen.length<pool.length) {
-      const u=pool[Math.floor(Math.random()*pool.length)];if(!chosen.includes(u))chosen.push(u);
+      const remaining=pool.filter(u=>!chosen.includes(u));
+      chosen.push(remaining[Math.min(remaining.length-1,Math.floor(Math.random()*remaining.length))]);
     }
     this._choices=chosen.map(u=>{
+      if(u.id.startsWith('super:'))return {...u};
       const level=this.levels[u.id]||0;
       let desc=u.desc, kind=u.kind;
       if(level && u.id==='orbit') {desc=(level+1)%2===1?'增加一枚环刃，提升伤害与环绕范围':'提升环刃伤害与环绕范围';kind='武器强化';}
@@ -729,7 +837,7 @@ export class Game {
     return this._choices;
   }
   chooseUpgrade(id) {
-    if(this.status!=='upgrade')return false;
+    if(this.status!=='upgrade'||this.crystals<this.crystalsNext)return false;
     const choice=this.getUpgradeChoices().find(c=>c.id===id);
     if(!choice)return false;
     const p=this.player;
@@ -739,10 +847,13 @@ export class Game {
       this.branches[choice.weaponId]=choice.branch;
       if(choice.weaponId==='arrow')this._emit('evolution',{weaponId:'arrow',branch:choice.branch,name:definition.name});
       else this.levels[choice.weaponId]=5;
+    }else if(id.startsWith('super:')) {
+      if(!this.superSkills.upgrade(id))return false;
     }else {
       if(!(id in this.levels)||(LEVEL_CAPS[id]!==undefined&&this.levels[id]>=LEVEL_CAPS[id]))return false;
       this.levels[id]++;
     }
+    this.crystals-=this.crystalsNext;this.skillLevel++;this.crystalsNext=crystalCost(this.skillLevel);
     if(this._branchOfferWeapon)this._branchOfferCursor=(BRANCH_WEAPONS.indexOf(this._branchOfferWeapon)+1)%BRANCH_WEAPONS.length;
     this._branchOfferWeapon=null;
     this._syncEvolutions(true);
@@ -750,7 +861,7 @@ export class Game {
     if(id==='endlessVitality') {p.maxHp+=12;p.hp=Math.min(p.maxHp,p.hp+24);this._emit('heal');}
     this._refreshStats();this._refreshWeapons();
     p.invuln=Math.max(p.invuln,1);this._choices=null;this.status='playing';
-    if(p.xp>=p.xpNext) this._levelUp();
+    this._trySkillUpgrade();
     return true;
   }
 }

@@ -11,7 +11,7 @@ function arena({terrain=new Terrain({obstacles:[]}),width=1100,height=650}={}) {
   const g=new Game({terrain,adventure:false,encounters:false});
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;
-  g.viewWidth=width;g.viewHeight=height;g.player.xpNext=Infinity;
+  g.viewWidth=width;g.viewHeight=height;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   return g;
 }
 function advance(g,seconds,input={}) {
@@ -23,12 +23,12 @@ function monster(g,type,x,y=0) {
   return e;
 }
 const foot=(entity,isPlayer=false)=>({x:entity.x,y:entity.y+groundOffset(entity,isPlayer)});
-const xpTotal=g=>g.player.xp+g.gems.reduce((sum,gem)=>sum+gem.value,0);
+const xpTotal=g=>g.player.xp;
 
 // The fifth slot uses the current upgrade: orbit evolves directly, while
 // pulse/lightning require an explicit branch without another choice screen.
 for(const id of Object.keys(EVOLUTIONS)) {
-  const g=arena();g.player.level=8;g.player.xp=17;g.levels[id]=4;g.branches.arrow='pierce';g.status='upgrade';
+  const g=arena();g.player.level=8;g.player.xp=17;g.levels[id]=4;g.branches.arrow='pierce';g.crystalsNext=40;g.crystals=40;g.status='upgrade';
   const chosenId=id==='pulse'?'branch:pulse:echoes':id==='lightning'?'branch:lightning:chain':id;
   const expectedName=WEAPON_BRANCHES[id]?.find(b=>b.id===chosenId)?.name||EVOLUTIONS[id].name;
   let choices;
@@ -143,12 +143,12 @@ let expectedXp=xpTotal(successfulHunt.g);
 for(let i=0;i<goal.goal;i++) {
   const e=monster(successfulHunt.g,'slime',120,5.8);expectedXp+=e.xp;successfulHunt.g._hurtEnemy(e,e.hp+1);
 }
-assert.equal(successfulHunt.c.active,null);assert.equal(successfulHunt.a.pickups.length,3);
+assert.equal(successfulHunt.c.active,null);assert.deepEqual(successfulHunt.a.pickups.map(p=>p.type),['fury']);assert.equal(successfulHunt.g.gold,6);assert.equal(successfulHunt.g.crystals,40);
 assert.equal(xpTotal(successfulHunt.g),expectedXp,'hunt rewards add no experience beyond ordinary kill drops');
 const huntRewardIds=successfulHunt.a.pickups.map(p=>p.id);
 successfulHunt.c._finish(true);successfulHunt.c.onEnemyKilled(successfulHunt.g.enemies.at(-1));
 assert.deepEqual(successfulHunt.a.pickups.map(p=>p.id),huntRewardIds,'hunt rewards are paid once');
-assert.equal(successfulHunt.g.events.filter(e=>e.type==='encounterComplete').length,1);
+assert.equal(successfulHunt.g.events.filter(e=>e.type==='encounterComplete').length,1);assert.equal(successfulHunt.g.gold,6);assert.equal(successfulHunt.g.crystals,40);
 
 const chaseTerrain=new Terrain({obstacles:[{id:'chase-tree',type:'tree',x:180,y:19.8,r:28}]});
 const chase=expedition({terrain:chaseTerrain}),chaseEvent=chase.c.spawn('treasure',100,19.8);
@@ -162,9 +162,9 @@ const frozenRunner={x:runner.x,y:runner.y,life:chaseEvent.life};
 chase.g.status='upgrade';advance(chase.g,1);
 assert.deepEqual({x:runner.x,y:runner.y,life:chaseEvent.life},frozenRunner,'a chase and its timeout freeze during an upgrade');
 chase.g.status='playing';const chaseXp=xpTotal(chase.g);chase.g._hurtEnemy(runner,runner.hp+1);
-assert.equal(chase.c.active,null);assert.equal(chase.a.pickups.length,3);assert.equal(xpTotal(chase.g),chaseXp,'the treasure enemy awards supplies instead of an XP burst');
+assert.equal(chase.c.active,null);assert.deepEqual(chase.a.pickups.map(p=>p.type),['magnet']);assert.equal(xpTotal(chase.g),chaseXp+16,'the treasure enemy awards automatic kill XP');assert.equal(chase.g.gold,24);assert.equal(chase.g.crystals,8);
 const chaseRewards=chase.a.pickups.map(p=>p.id);chase.c.onEnemyKilled(runner);chase.c.update(0);
-assert.deepEqual(chase.a.pickups.map(p=>p.id),chaseRewards,'duplicate death notifications cannot duplicate treasure rewards');
+assert.deepEqual(chase.a.pickups.map(p=>p.id),chaseRewards,'duplicate death notifications cannot duplicate treasure rewards');assert.equal(chase.g.gold,24);assert.equal(chase.g.crystals,8);
 
 for(const exit of ['timeout','distance','missing']) {
   const run=expedition(),active=run.c.spawn('treasure',100,19.8),before={kills:run.g.kills,xp:xpTotal(run.g)};
@@ -192,6 +192,7 @@ for(let round=1;round<=4;round++) {
   assert.equal(schedule.enemies.filter(e=>e.type==='boss'&&e.hp>0).length,1,'a due round cannot overlap a living Boss');
   assert.equal(schedule.bossCount,round);
   schedule._hurtEnemy(boss,boss.hp+1);schedule.enemies=[];
+  schedule.player.x=schedule.portal.x;schedule.player.y=schedule.portal.y-groundOffset(schedule.player,true);assert(schedule.enterPortal());assert(schedule.chooseSuper(schedule.getSuperChoices()[0].id));schedule.regionGrace=0;
 }
 assert.deepEqual(kinds,['ancient','bloom','ancient','bloom'],'even rounds introduce the new lord without replacing the first fight');
 

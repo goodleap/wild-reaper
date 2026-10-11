@@ -23,5 +23,5 @@ export function branchDefinition(weaponId,id) {
   return WEAPON_BRANCHES[weaponId]?.find(def=>def.branch===id)||null;
 }
 export function isBranchReady(game,weaponId) {
-  return !game.branches[weaponId]&&(weaponId==='arrow'?game.player.level>=5:game.levels[weaponId]>=4);
+  return !game.branches[weaponId]&&(weaponId==='arrow'?1+game.levels.rapid+game.levels.multishot>=4:game.levels[weaponId]>=4);
 }

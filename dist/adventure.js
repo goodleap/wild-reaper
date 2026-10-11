@@ -33,6 +33,7 @@ export class Adventure {
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<g.viewHeight*.5+margin;}
   _free(x,y,r=36){return this.game.terrain.isFree(x,y,r);}
   _environmentFree(x,y,r=0){
+    if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
     const environment=this.game.environment;if(!environment)return true;
     if(environment.isHazardFree?.(x,y,r)===false)return false;
     if(environment.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8))return false;
@@ -143,7 +144,7 @@ export class Adventure {
     const enemy=g._spawnEnemy(type,1);
     if(!enemy)return;
     enemy.elite=true;enemy.guardianId=t.id;enemy.guardActive=true;enemy.guardReturnTarget=null;
-    enemy.r*=1.2;enemy.hp*=3;enemy.maxHp=enemy.hp;enemy.damage*=1.1;enemy.speed*=1.1;enemy.xp=0;
+    enemy.r*=1.2;enemy.hp*=3;enemy.maxHp=enemy.hp;enemy.damage*=1.1;enemy.speed*=1.1;enemy.xp=30;
     enemy.x=point.x;enemy.y=point.y-groundOffset(enemy);g._moveEntity(enemy,0,0);
     t.guardianId=enemy.id;t.state='active';t.anchorX=enemy.x;t.anchorY=enemy.y+groundOffset(enemy);
     g._emit('treasureGuard');g._effect(enemy.x,enemy.y,'ring',.7,55,'#dfb572');
@@ -163,6 +164,7 @@ export class Adventure {
   _openTreasure(){
     const t=this.treasure;if(!t||t.state!=='unlocked')return;
     t.state='opened';t.openedLife=2;t.life=2;
+    this.game.grantResources({gold:18,crystals:35},'守卫宝箱');
     for(let i=0;i<TYPES.length;i++){
       const a=-Math.PI/2+i*TAU/TYPES.length;
       this.dropPickup(TYPES[i],t.x+Math.cos(a)*28,t.y+Math.sin(a)*28);

@@ -41,6 +41,7 @@ export class RegionalMechanisms {
   }
   _objectiveClear(prop){
     const g=this.game,r=prop.r;
+    if(g.settlements?.isSafePoint(prop.x,prop.y,r)===false)return false;
     if(g.adventure?.props.some(o=>distance(o,prop)<r+(o.r||18)+20))return false;
     if(g.adventure?.treasure&&distance(g.adventure.treasure,prop)<r+70)return false;
     if(g.companions?.camp&&distance(g.companions.camp,prop)<r+135)return false;

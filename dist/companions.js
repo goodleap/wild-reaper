@@ -20,12 +20,13 @@ export class Companions {
   _foot(entity=this.game.player) {return {x:entity.x,y:entity.y+groundOffset(entity,true)};}
   _canStart() {
     const g=this.game;
-    if(g.regionGrace>0||g.enemies.some(e=>e.hp>0&&e.type==='boss')||g.nextBossAt-g.time<80||g.encounters?.active)return false;
+    if(g.regionGrace>0||g.enemies.some(e=>e.hp>0&&e.type==='boss')||g.nextBossAt-g.time<80||g.encounters?.active||g.settlements?.sites.some(site=>site.state==='active'))return false;
     const chest=g.adventure?.treasure;
     return !(chest?.state==='active'&&distance(chest,this._foot())<600);
   }
   _hazardFree(x,y,r=0) {
     const environment=this.game.environment;
+    if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
     if(environment?.isHazardFree?.(x,y,r)===false)return false;
     return !environment?.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8);
   }
@@ -51,7 +52,7 @@ export class Companions {
     const camp={id:`rescue:${++g._id}`,kind,name:def.name,...point,r:24,state:'trapped',guardIds:[],guardTotal:RESCUE_RULES.guards,remainingGuards:RESCUE_RULES.guards,life:RESCUE_RULES.campDuration,maxLife:RESCUE_RULES.campDuration,_remaining:new Set()};
     for(let i=0;i<RESCUE_RULES.guards;i++) {
       const angle=-Math.PI/2+i*TAU/RESCUE_RULES.guards,enemy=g._spawnEnemy(i%3===0?'beetle':'slime',1);
-      enemy.rescueId=camp.id;enemy.eventRole='rescueGuard';enemy.xp=0;
+      enemy.rescueId=camp.id;enemy.eventRole='rescueGuard';enemy.xp=2;
       enemy.hp*=1.25;enemy.maxHp=enemy.hp;enemy.guardActive=false;
       enemy.rescueHome={x:point.x+Math.cos(angle)*92,y:point.y+Math.sin(angle)*92};
       enemy.x=enemy.rescueHome.x;enemy.y=enemy.rescueHome.y-groundOffset(enemy);
@@ -186,21 +187,22 @@ export class Companions {
     if(this.generation&&!this.camp&&!this.active&&g.time>=this.nextAt&&this._canStart()&&!this.spawn())this.nextAt=g.time+6;
   }
   _castLightning(active) {
-    const g=this.game,targets=g.enemies.filter(e=>e.hp>0&&g._inView(e)&&distance(active,e)<430)
-      .sort((a,b)=>distance(active,a)-distance(active,b)).slice(0,5);
-    if(!targets.length)return false;
+    const g=this.game,excluded=new Set();let origin=active,hits=0;
     const damage=105*(1+Math.floor(g.time/60)*.12);
-    for(const [i,enemy] of targets.entries()) {
-      g._effect(active.x,active.y-12,'companionLightning',.5,enemy.r,'#d5d0fb',undefined,{x2:enemy.x,y2:enemy.y,seed:enemy.id,chainIndex:i});
-      g._hurtEnemy(enemy,damage,0,active,'companionLightning');
+    for(let i=0;i<5;i++) {
+      const enemy=g._nearest(origin.x,origin.y,i?190:430,excluded,origin);if(!enemy)break;
+      excluded.add(enemy.id);hits++;
+      g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:enemy.x,y2:enemy.y,evolved:true,branch:'chain',chainIndex:i,ally:true});
+      g._hitEnemy(enemy,damage,0,origin,'companionLightning');origin=enemy;
     }
+    if(!hits)return false;
     active._attack=3.8;return true;
   }
   _quake(x,y,r,damage,echo,seed) {
     const g=this.game;
-    g._effect(x,y,'companionQuake',.65,r,'#e8c58e',undefined,{echo,seed});
+    g._effect(x,y,'ring',echo?.6:.48,r,echo?'#c6ead5':'#9de0b3',undefined,{evolved:true,echo,branch:'echoes',ally:true,seed});
     for(const enemy of g.enemies)if(enemy.hp>0&&g._inView(enemy)&&Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r)
-      g._hurtEnemy(enemy,damage,echo?14:30,{x,y},'companionQuake');
+      g._hitEnemy(enemy,damage,echo?14:30,{x,y,groundY:y+groundOffset(g.player,true)},echo?'companionEcho':'companionPulse');
   }
   _castQuake(active) {
     const g=this.game,foot=this._foot(active);

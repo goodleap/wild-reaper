@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { Game, xpCost, BALANCE } from './dist/engine.js';
+import { Game, xpCost, crystalCost, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 let seed=61851;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -30,7 +30,7 @@ const finite = (g) => {
   assert(['playing','upgrade','dead'].includes(g.status),'no terminal win state');
 };
 // Isolate active skill behavior from passive shots, spawns and movement.
-const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false});g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;return g;};
+const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false});g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;};
 const target=(g,x,y,{type='slime',hp=100,r=10}={})=>{
   g._spawnEnemy(type);const e=g.enemies.at(-1);Object.assign(e,{x,y,r,hp,maxHp:hp,speed:0});return e;
 };
@@ -68,27 +68,27 @@ empty.status='upgrade';empty.update(.05,{skill:true});
 assert.deepEqual({time:empty.time,life:empty.storm.life,cooldown:empty.player.skillCooldown},skillFrozen,'paused upgrades freeze storm and cooldown');
 const save=skillArena();save.player.hp=1;target(save,0,0);
 save.update(.02,{skill:true});assert.equal(save.status,'playing');assert.equal(save.player.hp,1);
-assert.equal(save.kills,1);assert.equal(save.player.xp,4,'contact threat dies first, with normal XP pickup');
+assert.equal(save.kills,1);assert.equal(save.player.xp,4,'contact threat dies first, with immediate kill XP');
 const dense=skillArena();
 for(let i=0;i<180;i++)target(dense,-180+(i%18)*20,-135+Math.floor(i/18)*28);
 dense.update(0,{skill:true});
 assert.equal(dense.storm.targets.length,180,'storm preserves every target beyond generic effect cap');
 assert.equal(dense.kills,180);assert(dense.effects.length<=201);
 const pause = new Game({adventure:false});
-pause.player.xp=xpCost(1)+xpCost(2)+5;pause.update(.02,{});
+pause.crystals=crystalCost(1)+crystalCost(2)+5;pause.update(.02,{});
 assert.equal(pause.status,'upgrade');assert.equal(pause.getUpgradeChoices().length,3);
 assert.equal(pause.chooseUpgrade('invalid'),false);
 const frozen=pause.time;pause.update(.05,{x:1});assert.equal(pause.time,frozen);
 assert(pause.chooseUpgrade(pause.getUpgradeChoices()[0].id));
-assert.equal(pause.status,'upgrade','carry-over experience must create another level');
-assert.equal(pause.player.level,3);
+assert.equal(pause.status,'upgrade','carry-over crystals must create another skill choice');
+assert.equal(pause.skillLevel,2);assert.equal(pause.player.level,1);
 const death=new Game({adventure:false});death.player.hp=1;
 death.enemies[0].x=death.player.x;death.enemies[0].y=death.player.y;
 death.update(.02,{});assert.equal(death.status,'dead');
 const waves=new Game({adventure:false});waves.time=59.99;waves.update(.02,{});
 assert.equal(waves.wave,2);assert.equal(waves.events.filter(e=>e.type==='wave').length,1);
 waves.events.length=0;waves.update(.02,{});assert(!waves.events.some(e=>e.type==='wave'));
-const boss=new Game({adventure:false});assert.equal(boss.nextBossAt,120);
+const boss=new Game({adventure:false});boss.crystalsNext=Infinity;assert.equal(boss.nextBossAt,120);
 boss.time=119.99;boss.player.invuln=1000;boss.update(.02,{});
 const firstBoss=boss.enemies.find(e=>e.type==='boss');
 assert(firstBoss&&boss.bossCount===1);assert(boss.nextBossAt>270);
@@ -97,12 +97,14 @@ boss.time=boss.nextBossAt+.01;boss.update(.02,{});
 assert.equal(boss.bossCount,1,'overdue boss waits for current boss');
 boss._hurtEnemy(firstBoss,firstBoss.hp+1);
 assert.equal(boss.bossKills,1);assert(boss.events.some(e=>e.type==='bossKill'));
-boss.update(.02,{});
+boss.update(.02,{});assert.equal(boss.bossCount,1,'a pending region reward holds the next Boss');
+boss.player.x=boss.portal.x;boss.player.y=boss.portal.y-groundOffset(boss.player,true);assert(boss.enterPortal());assert(boss.chooseSuper(boss.getSuperChoices()[0].id));
+for(let i=0;i<101;i++)boss.update(.02,{});
 assert.equal(boss.bossCount,2);assert.equal(boss.enemies.filter(e=>e.type==='boss').length,1);
 const secondBoss=boss.enemies.find(e=>e.type==='boss');
 assert.equal(secondBoss.bossKind,'bloom','scheduled bosses alternate attack patterns');
 assert(secondBoss.hp>firstBoss.maxHp&&secondBoss.damage>firstBoss.damage,'successive bosses get stronger');
-assert.equal(boss.nextBossAt,boss.time+150);assert.equal(boss.status,'playing');
+assert(Math.abs(boss.nextBossAt-boss.time-150)<.03);assert.equal(boss.status,'playing');
 const progression=new Game({adventure:false});progression.time=180;progression.bossDefeated=true;
 progression.player.invuln=100;progression.update(.03,{});
 assert(progression.time>180&&progression.status==='playing');
@@ -110,7 +112,7 @@ const capped=new Game({adventure:false});
 Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
 Object.assign(capped.levels,{power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});
 for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower','endlessRegen']) {
-  capped.player.xp=capped.player.xpNext;capped.update(.02,{});
+  capped.crystals=capped.crystalsNext;capped.update(.02,{});
   const choices=capped.getUpgradeChoices();
   assert.equal(choices.length,3);assert.equal(new Set(choices.map(c=>c.id)).size,3);
   assert(choices.every(c=>c.kind==='无尽强化'));
@@ -124,7 +126,8 @@ assert(late.enemies.at(-1).hp>late.enemies[0].hp*2&&late.enemies.at(-1).damage>l
 const priority=['orbit','pulse','lightning','multishot','power','rapid','vitality','magnet','regen','speed','endlessPower','endlessVitality','endlessRegen'];
 const sim=(difficulty,seconds,immortal=false)=>{
   const g=new Game({difficulty});let frames=0,upgrades=0,killsAt180=0,maxEnemies=0,maxBullets=0,maxGems=0;
-  while(['playing','upgrade'].includes(g.status)&&g.time<seconds&&frames++<30*(seconds+10)) {
+  while(['playing','upgrade','super'].includes(g.status)&&g.time<seconds&&frames++<30*(seconds+10)) {
+    if(g.status==='super'){assert(g.chooseSuper(g.getSuperChoices()[0].id));continue;}
     if(g.status==='upgrade') {
       const choices=g.getUpgradeChoices();assert.equal(choices.length,3);
       const score=c=>priority.indexOf(c.id)+(g.levels[c.id]||0)*2;
@@ -133,6 +136,7 @@ const sim=(difficulty,seconds,immortal=false)=>{
     if(immortal)g.player.invuln=.3;
     const p=g.player;let target=null,distance=Infinity;
     for(const gem of g.gems){const d=Math.hypot(gem.x-p.x,gem.y-p.y);if(d<distance){distance=d;target=gem;}}
+    if(g.portal){target=g.portal;distance=Math.hypot(target.x-p.x,target.y-p.y);if(g.canEnterPortal()){assert(g.enterPortal());continue;}}
     let vx=target?(target.x-p.x)/(distance||1):Math.cos(g.time*.7)*.2;
     let vy=target?(target.y-p.y)/(distance||1):Math.sin(g.time*.7)*.2;
     for(const e of g.enemies){const dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||1;if(d<105){const force=(105-d)/105*2;vx+=dx/d*force;vy+=dy/d*force;}}
