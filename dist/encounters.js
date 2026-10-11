@@ -9,7 +9,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export class Encounters {
   constructor(game,{generation=true}={}) {
     this.game=game;this.generation=generation;this.active=null;
-    this.nextAt=70;this._id=0;this._nextType=Math.random()<.5?'treasure':'hunt';
+    this.nextAt=game.time+70;this._id=0;this._nextType=Math.random()<.5?'treasure':'hunt';
   }
   _foot(entity=this.game.player,isPlayer=true) {
     return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};
@@ -81,7 +81,7 @@ export class Encounters {
       if(enemy.eventId!==active.id||enemy.id!==active.enemyId||enemy.eventRole!=='treasure')return;
       active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);this._finish(true);return;
     }
-    if(enemy.type==='boss'||enemy.guardianId||enemy.elite||enemy.eventRole||enemy._encounterCounted===active.id)return;
+    if(enemy.type==='boss'||enemy.guardianId||enemy.elite||enemy.affix||enemy.summoned||enemy.eventRole||enemy._encounterCounted===active.id)return;
     if(distance(this._foot(),active)>active.r||distance(this._foot(enemy,false),active)>active.r)return;
     enemy._encounterCounted=active.id;active.progress++;
     if(active.progress>=active.goal)this._finish(true);

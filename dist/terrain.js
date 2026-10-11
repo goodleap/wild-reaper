@@ -37,21 +37,33 @@ function obstacle(spec,index=0) {
 }
 
 export class Terrain {
-  constructor({obstacles,cacheLimit=192}={}) {
+  constructor({obstacles,cacheLimit=192,region='forest',seed=0}={}) {
+    this.region=['forest','marsh','ruins'].includes(region)?region:'forest';
+    this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
     this.cacheLimit=Math.max(16,Math.min(512,cacheLimit));this._cache=new Map();
     this._fixed=obstacles===undefined?null:obstacles.map((o,i)=>obstacle(o,i));
   }
   get cacheSize(){return this._cache.size;}
+  _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _cell(tx,ty) {
     const key=`${tx},${ty}`;
     if(this._cache.has(key)){const value=this._cache.get(key);this._cache.delete(key);this._cache.set(key,value);return value;}
-    const items=[],n=hash(tx+31,ty+17);
-    if(n>.62){const scale=.65+n*.4;items.push(obstacle({id:`tree:${key}`,type:'tree',x:tx*CELL+110,y:ty*CELL+50,r:24*scale,scale,seed:n}));}
+    const items=[],n=this._hash(tx+31,ty+17),marsh=this.region==='marsh',ruins=this.region==='ruins';
+    if(n>.62){
+      const scale=.65+n*.4;
+      const visual=ruins?{region:this.region,variant:'pillar'}:marsh?{region:this.region,variant:'dead-tree'}:{};
+      items.push(obstacle({id:`${ruins?'pillar':'tree'}:${key}`,type:ruins?'rock':'tree',x:tx*CELL+110,y:ty*CELL+50,r:24*scale,scale,seed:n,...visual}));
+    }
     // One extra prop lives in the roomy opposite quarter of every cell.
     // Adjacent props retain a wide passage even for the largest enemy.
-    const x=tx*CELL+240+hash(tx+71,ty+13)*90,y=ty*CELL+245+hash(tx+19,ty+81)*85,seed=hash(tx+41,ty+63);
-    if(seed>.49)items.push(obstacle({id:`log:${key}`,type:'log',x,y,r:14+hash(tx+29,ty+47)*4,halfLength:48+seed*18,angle:hash(tx+83,ty+23)*TAU,scale:1,seed}));
-    else{const r=31+seed*24;items.push(obstacle({id:`rock:${key}`,type:'rock',x,y,r,scale:r/36,seed}));}
+    const x=tx*CELL+240+this._hash(tx+71,ty+13)*90,y=ty*CELL+245+this._hash(tx+19,ty+81)*85,seed=this._hash(tx+41,ty+63);
+    if(seed>.49){
+      const visual=ruins?{region:this.region,variant:'wall'}:marsh?{region:this.region,variant:'sunken-log'}:{};
+      items.push(obstacle({id:`log:${key}`,type:'log',x,y,r:14+this._hash(tx+29,ty+47)*4,halfLength:48+seed*18,angle:this._hash(tx+83,ty+23)*TAU,scale:1,seed,...visual}));
+    }else{
+      const r=31+seed*24,visual=ruins?{region:this.region,variant:'slab'}:marsh?{region:this.region,variant:'moss-rock'}:{};
+      items.push(obstacle({id:`rock:${key}`,type:'rock',x,y,r,scale:r/36,seed,...visual}));
+    }
     const clear=items.filter(o=>{const q=this.closestPoint(o,0,0);return Math.hypot(q.x,q.y)>190+o.r;});
     this._cache.set(key,clear);
     while(this._cache.size>this.cacheLimit)this._cache.delete(this._cache.keys().next().value);

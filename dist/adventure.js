@@ -17,12 +17,15 @@ class ConsumedSupplies {
 export class Adventure {
   constructor(game,{generation=true}={}) {
     this.game=game;this.generation=generation;
+    this.region=['forest','marsh','ruins'].includes(game.region?.id)?game.region.id:'forest';
+    this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
     this.props=[];this.pickups=[];this.treasure=null;
     this.furyTime=0;this.magnetTime=0;this.buffDuration=8;
-    this._id=0;this._treasureCount=0;this._nextTreasureAt=50;
+    this._id=0;this._treasureCount=0;this._nextTreasureAt=(game.time||0)+50;
     this._supplyClock=0;this._consumed=new ConsumedSupplies();
     if(generation)this._refreshSupplies(true);
   }
+  _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   damageMultiplier(){return this.furyTime>0?1.35:1;}
   fireRateMultiplier(){return this.furyTime>0?1.2:1;}
   magnetRange(base=this.game.stats.magnet){return this.magnetTime>0?Math.max(base,320):base;}
@@ -43,15 +46,15 @@ export class Adventure {
     return null;
   }
   _supplyAt(tx,ty){
-    const seed=hash(tx+313,ty+167);
-    const starter=tx===0&&ty===0;
+    const seed=this._hash(tx+313,ty+167);
+    const starter=tx===0&&ty===0&&this.region==='forest'&&this.seed===0;
     if(!starter&&seed>.42)return null;
     const id=`supply:${tx},${ty}`;
     if(this._consumed.has(id))return null;
-    const x=starter?220:tx*CELL+145+hash(tx+131,ty+197)*225,y=starter?160:ty*CELL+145+hash(tx+199,ty+83)*225;
+    const x=starter?220:tx*CELL+145+this._hash(tx+131,ty+197)*225,y=starter?160:ty*CELL+145+this._hash(tx+199,ty+83)*225;
     const point=this._safePoint(x,y,38);
     if(!point||Math.hypot(point.x,point.y)<145||!this._environmentFree(point.x,point.y,18))return null;
-    return {id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:42,maxHp:42,hit:0,seed,drop:starter?'herb':TYPES[Math.floor(hash(tx+233,ty+271)*TYPES.length)]};
+    return {id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:42,maxHp:42,hit:0,seed,drop:starter?'herb':TYPES[Math.floor(this._hash(tx+233,ty+271)*TYPES.length)]};
   }
   _refreshSupplies(initial=false){
     const g=this.game,p=this._foot(),halfW=Math.min(900,g.viewWidth*.5)+240,halfH=Math.min(650,g.viewHeight*.5)+240;
@@ -99,8 +102,10 @@ export class Adventure {
     const g=this.game,p=g.player;
     if(pickup.type==='herb'){
       if(p.hp>=p.maxHp)return false;
-      const healed=Math.min(25,p.maxHp-p.hp);p.hp+=healed;
+      const healing=g.relics?.modifyHerbHealing(25)??25;
+      const healed=Math.min(Math.max(0,Number.isFinite(healing)?healing:25),p.maxHp-p.hp);p.hp+=healed;
       g._effect(p.x,p.y-28,'heal',.8,0,'#b9e89c',`+${Math.ceil(healed)}`);
+      if(healed>0)g.relics?.onHerb(healed);
     }else if(pickup.type==='magnet'){
       this.magnetTime=Math.max(this.magnetTime,pickup.duration);
       for(const gem of g.gems)if(Math.hypot(gem.x-p.x,gem.y-p.y)<480)gem.attracted=true;
@@ -116,7 +121,7 @@ export class Adventure {
     const g=this.game,p=this._foot();let point=null;
     if(Number.isFinite(x)&&Number.isFinite(y))point=this._safePoint(x,y,90);
     else{
-      const start=hash(this._treasureCount+1,Math.floor(g.time))*TAU;
+      const start=this._hash(this._treasureCount+1,Math.floor(g.time))*TAU;
       for(let i=0;i<24;i++){
         const a=start+i*TAU/24,r=420+(i%3)*50,candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
         if(this._free(candidate.x,candidate.y,90)&&this._environmentFree(candidate.x,candidate.y,40)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}

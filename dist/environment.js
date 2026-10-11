@@ -24,9 +24,12 @@ function segmentDistance(x,y,x1,y1,x2,y2){
 export class Environment {
   constructor(game,{generation=true}={}){
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
+    this.region=['forest','marsh','ruins'].includes(game.region?.id)?game.region.id:'forest';
+    this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();
     if(generation)this._refresh(true);
   }
+  _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<=g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<=g.viewHeight*.5+margin;}
   _terrainClear(x,y,r){return Math.hypot(x,y)>=ENVIRONMENT_BALANCE.safeRadius+r&&this.game.terrain.isFree(x,y,r);}
@@ -40,32 +43,32 @@ export class Environment {
     // Every retry depends only on the owning cell. No random walk or growing
     // world cache is needed, and obstacle checks preserve open walking routes.
     for(let i=0;i<7;i++){
-      const x=tx*CELL+80+hash(tx+seed+i*17,ty+419)*360;
-      const y=ty*CELL+80+hash(tx+503,ty+seed+i*29)*360;
+      const x=tx*CELL+80+this._hash(tx+seed+i*17,ty+419)*360;
+      const y=ty*CELL+80+this._hash(tx+503,ty+seed+i*29)*360;
       if(this._terrainClear(x,y,r))return {x,y};
     }
     return null;
   }
   _mushroomsAt(tx,ty){
-    const seed=hash(tx+683,ty+727);if(seed>.57)return [];
+    const seed=this._hash(tx+683,ty+727),chance=this.region==='marsh'?.61:this.region==='ruins'?.48:.57;if(seed>chance)return [];
     const point=this._point(tx,ty,751,35);if(!point)return [];
     const make=(point,index)=>{
       const id=`mushroom:${tx},${ty}:${index}`;
       // Objectives may suppress a location, but can never move its stable ID
       // to another point after a crate breaks or a treasure disappears.
-      return this._consumed.has(id)||!this._objectiveClear(point.x,point.y,ENVIRONMENT_BALANCE.blastRadius)?null:{id,type:'mushroom',...point,r:17,aimY:point.y-13,sortY:point.y,seed:hash(tx+797+index,ty+809),state:'idle',fuse:0,maxFuse:ENVIRONMENT_BALANCE.mushroomFuse,blastRadius:ENVIRONMENT_BALANCE.blastRadius};
+      return this._consumed.has(id)||!this._objectiveClear(point.x,point.y,ENVIRONMENT_BALANCE.blastRadius)?null:{id,type:'mushroom',...point,r:17,aimY:point.y-13,sortY:point.y,seed:this._hash(tx+797+index,ty+809),state:'idle',fuse:0,maxFuse:ENVIRONMENT_BALANCE.mushroomFuse,blastRadius:ENVIRONMENT_BALANCE.blastRadius};
     };
     const result=[],first=make(point,0);if(first)result.push(first);
     // Occasional pairs show the delayed chain reaction without filling paths.
     if(seed<.14){
-      const angle=hash(tx+853,ty+877)*TAU,next={x:point.x+Math.cos(angle)*88,y:point.y+Math.sin(angle)*88};
+      const angle=this._hash(tx+853,ty+877)*TAU,next={x:point.x+Math.cos(angle)*88,y:point.y+Math.sin(angle)*88};
       if(this._terrainClear(next.x,next.y,35)){const second=make(next,1);if(second)result.push(second);}
     }
     return result;
   }
   _mudAt(tx,ty){
-    const seed=hash(tx+911,ty+947);if(seed>.36)return null;
-    const rx=68+hash(tx+971,ty+977)*18,ry=38+hash(tx+991,ty+997)*12;
+    const seed=this._hash(tx+911,ty+947),chance=this.region==='marsh'?.52:this.region==='ruins'?.16:.36;if(seed>chance)return null;
+    const rx=68+this._hash(tx+971,ty+977)*18,ry=38+this._hash(tx+991,ty+997)*12;
     const point=this._point(tx,ty,1013,rx+8);
     return point&&this._objectiveClear(point.x,point.y,rx+8)?{id:`mud:${tx},${ty}`,type:'mud',...point,rx,ry,seed}:null;
   }
@@ -118,7 +121,7 @@ export class Environment {
     const damage=90*(1+Math.min(Math.max(g.time,0),600)/1200);
     // Raw damage avoids recursively creating bleeding, shock, or new attacks.
     // Snapshotting also survives treasure/event kill handlers replacing arrays.
-    for(const enemy of [...g.enemies])if(enemy.hp>0&&distance(this._foot(enemy,false),prop)<=r+enemy.r)g._hurtEnemy(enemy,damage);
+    for(const enemy of [...g.enemies])if(enemy.hp>0&&distance(this._foot(enemy,false),prop)<=r+enemy.r)g._hurtEnemy(enemy,damage,0,g.player,'mushroom');
     if(distance(this._foot(),prop)<=r+g.player.r)g._hurtPlayer(12);
     if(g.status!=='playing')return;
     for(const next of this.props)if(next!==prop&&distance(next,prop)<=r+(next.r||17))this._arm(next,'chain');

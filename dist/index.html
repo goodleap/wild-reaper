@@ -21,7 +21,7 @@
       <section class="arena" id="arena" aria-label="荒野回响游戏区域">
         <canvas id="game-canvas" aria-label="使用 WASD 或方向键移动，空格释放天雷轰击；手机拖动屏幕移动"></canvas>
         <div class="vignette"></div>
-        <div class="terrain-label"><span>01 / THE WHISPERING WOODS</span><span>低语之森</span></div>
+        <div class="terrain-label"><span id="terrain-code">01 / THE WHISPERING WOODS</span><span id="terrain-name">低语之森</span></div>
 
         <div id="hud" class="hud hidden">
           <div class="vitals"><div class="vitals-label"><span class="hp-heart">♥</span><span id="hp-label">100 / 100</span><span id="level-label">LV. 1</span></div><div class="health-track"><i id="health-fill"></i></div><div class="xp-track"><i id="xp-fill"></i></div></div>
@@ -45,7 +45,7 @@
               <label class="hero-option"><input id="hero-stormcaller" type="radio" name="hero" value="stormcaller"><span class="hero-card"><span class="hero-card-title"><i><svg viewBox="0 0 36 40" aria-hidden="true"><path d="m12 24-5 14h23l-6-14Z" fill="#8a7faa"/><path d="m7 17 9-14 4-3 9 17Z" fill="#a291c8"/><ellipse cx="18" cy="18" rx="14" ry="3" fill="#80729f"/><path d="M10 20h16v9H10Z" fill="#444561"/><path d="M13 24h3m4 0h3" stroke="#e3eafd" stroke-width="2"/><path d="M33 16v23" stroke="#c1bed4" stroke-width="2"/><path d="m33 10-3 5 3 5 3-5Z" fill="#bbdff4"/></svg></i><b>唤雷者</b></span><small>连锁唤雷</small><em>天雷冷却 12 秒</em></span></label>
             </div><p id="hero-details" class="hero-details"><span id="hero-loadout">翠羽飞矢 · 疾风连射 Lv.1</span><span id="hero-tradeoff">初始没有副武器</span></p></fieldset>
             <div class="start-row"><button id="start-button" class="primary-button"><span>进入荒野</span><span class="button-arrow">↗</span></button><fieldset class="difficulty-control"><legend>挑战难度</legend><div class="difficulty-options"><label class="difficulty-option"><input id="difficulty-normal" type="radio" name="difficulty" value="normal" checked><span>标准试炼</span></label><label class="difficulty-option"><input id="difficulty-casual" type="radio" name="difficulty" value="casual"><span>轻松漫游</span></label></div></fieldset></div>
-            <div class="best-line"><span class="trophy">♜</span><span id="best-label">新的冒险，等你书写。</span><small id="game-version" class="game-version" aria-label="游戏版本">v0.0.14</small></div>
+            <div class="best-line"><span class="trophy">♜</span><span id="best-label">新的冒险，等你书写。</span><small id="game-version" class="game-version" aria-label="游戏版本">v0.0.15</small></div>
           </div>
           <div class="hero-caption"><span class="tiny-star">✦</span><span><span id="hero-preview-name">游侠</span><small id="hero-preview-tagline">疾步穿林 · 灵巧远袭</small></span><span class="hero-line"></span></div>
           <div class="intro-bottom"><span><i class="live-dot"></i> 无需下载，即刻开战</span><span>探索你的生存流派 <span>↘</span></span></div>
@@ -56,11 +56,13 @@
           <span id="magnet-buff" class="buff-badge magnet-buff hidden"><span class="buff-icon" aria-hidden="true">⊂</span><span>磁力</span><span class="buff-time"><span id="magnet-time">0</span>秒</span></span>
         </div>
 
-        <div class="game-bottom hidden" id="game-bottom"><div class="loadout" id="loadout"></div><button class="skill-box" id="skill-button" aria-label="释放天雷轰击" title="天雷轰击 · 空格 · 冷却 15 秒"><span class="skill-key">SPACE</span><span id="skill-label">天雷轰击 · 就绪</span><div class="skill-track"><i id="skill-fill"></i></div></button></div>
+        <div id="portal-action" class="portal-action hidden"><button id="portal-button" type="button"><span id="portal-button-label">进入下一片荒野</span><kbd>E</kbd><span aria-hidden="true">↗</span></button><small>离开后，未拾取物品会消失</small></div>
+        <div class="game-bottom hidden" id="game-bottom"><div class="equipment-stack"><div class="loadout" id="loadout"></div><div id="relic-loadout" class="relic-loadout hidden" aria-label="已获得遗物"></div></div><button class="skill-box" id="skill-button" aria-label="释放天雷轰击" title="天雷轰击 · 空格 · 冷却 15 秒"><span class="skill-key">SPACE</span><span id="skill-label">天雷轰击 · 就绪</span><div class="skill-track"><i id="skill-fill"></i></div></button></div>
         <div id="joystick" class="joystick hidden"><div id="joystick-thumb"></div></div>
         <button class="touch-skill hidden" id="touch-skill" aria-label="释放天雷轰击"><span id="skill-symbol">ϟ</span><small id="touch-skill-label">天雷</small></button>
 
         <div class="modal-layer hidden" id="upgrade-overlay"><div class="upgrade-panel" role="dialog" aria-modal="true" aria-labelledby="upgrade-title"><div class="eyebrow centered">✦ &nbsp; LEVEL UP</div><h2 id="upgrade-title">荒野的馈赠</h2><p id="upgrade-description">选择一项强化，让下一波怪潮记住你。</p><div id="upgrade-cards" class="upgrade-cards"></div><span class="modal-footnote" id="upgrade-note">时间已暂停 · 选择后继续冒险</span></div></div>
+        <div class="modal-layer hidden" id="relic-overlay"><div class="upgrade-panel relic-panel" role="dialog" aria-modal="true" aria-labelledby="relic-title"><div class="eyebrow centered">✦ &nbsp; RELIC DISCOVERED</div><h2 id="relic-title">领主留下的珍藏</h2><p id="relic-description">选择一件遗物，继续深入荒野。</p><div id="relic-cards" class="upgrade-cards relic-cards"></div><span class="modal-footnote">时间已暂停 · 遗物整局生效 · 选择后前往下一区域</span><button id="relic-pause" class="secondary-button relic-pause" type="button">暂停 / 返回</button></div></div>
         <div class="modal-layer hidden" id="pause-overlay"><div class="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="eyebrow centered">TAKE A BREATH</div><h2 id="pause-title">在此，稍作停留。</h2><p>荒野会等你。准备好了就继续。</p><button class="primary-button wide" id="resume-button">继续冒险 <span>→</span></button><button class="secondary-button wide" id="quit-button">结束本局，返回首页</button></div></div>
         <div class="modal-layer hidden" id="end-overlay"><div class="dialog-panel end-panel" role="dialog" aria-modal="true" aria-labelledby="end-title"><div class="end-emblem" id="end-emblem">✦</div><div class="eyebrow centered" id="end-kicker">THE JOURNEY CONTINUES</div><h2 id="end-title">荒野记住了你。</h2><p id="end-description">每一次出发，都比上一次更强。</p><div class="end-stats"><div><strong id="end-time">00:00</strong><span>存活时间</span></div><div><strong id="end-kills">0</strong><span>击败怪物</span></div><div><strong id="end-level">1</strong><span>最终等级</span></div></div><button id="restart-button" class="primary-button wide">再次出发 <span>↗</span></button><button id="home-button" class="secondary-button wide">返回首页</button></div></div>
         <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list">
@@ -72,7 +74,9 @@
           <div><b>06</b><p><strong>林间事件</strong><span>限时击败逃跑的金色宝物精，或站在标记猎区内击败圈内 12 只怪物，可获得补给。事件可以绕过，超时没有惩罚。</span></p></div>
           <div><b>07</b><p><strong>战斗联动</strong><span>环刃施加流血，冲击波消耗流血增加 25% 本次伤害；雷电施加感电，下一次箭击或环刃命中向邻近敌人传导一次。</span></p></div>
           <div><b>08</b><p><strong>利用环境</strong><span>泥地让你和怪物一起减速。攻击橙色爆炸蘑菇会触发 0.9 秒预警，范围内敌我均受伤；及时离开橙圈。</span></p></div>
-          <div><b>09</b><p><strong>无尽领主</strong><span>02:00 起领主轮流来袭，此后约每 2 分 30 秒出现。树人震地前跑出红圈；孢冠领主扇射时绕至侧面，孢爆前离开紫圈。</span></p></div>
+          <div><b>09</b><p><strong>传送门与遗物</strong><span>击败领主后出现传送门，可先拾取战利品。靠近后按 E 或点击进入按钮；离开会清除地面物品。选择遗物后前往沼泽、遗迹，循环深入；遗物整局生效。</span></p></div>
+          <div><b>10</b><p><strong>词缀精英</strong><span>护盾精英需先破盾；迅捷精英蓄力后加速追击；召唤精英会唤来小怪。它们带有词缀标记，与宝箱守卫不同。</span></p></div>
+          <div><b>11</b><p><strong>无尽领主</strong><span>02:00 起领主轮流来袭，此后约每 2 分 30 秒出现。树人震地前跑出红圈；孢冠领主扇射时绕至侧面，孢爆前离开紫圈。</span></p></div>
         </div><button id="help-done" class="primary-button wide">准备好了 <span>→</span></button></div></div>
       </section>
       <footer class="footer"><div class="keyboard-guide"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移动</span><i></i><kbd class="space-key">SPACE</kbd><span>天雷轰击</span><i></i><kbd>ESC</kbd><span>暂停</span></div><div class="mobile-guide">拖动屏幕移动 · 点击右下角释放天雷</div><span class="footer-note">保持移动。惊喜总在下一次升级。</span></footer>

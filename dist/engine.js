@@ -5,7 +5,10 @@ import { initBoss, updateBloomBoss, resolveBloomBoss, clearBossAttacks } from '.
 import { HEROES, getHero } from './heroes.js';
 import { CombatStatus } from './combat-status.js';
 import { Environment } from './environment.js';
-export { HEROES };
+import { REGIONS, Regions, regionFor, regionEnemyType } from './regions.js';
+import { Elites } from './elites.js';
+import { Relics, RELICS } from './relics.js';
+export { HEROES, REGIONS, RELICS };
 
 const TAU = Math.PI * 2;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -63,8 +66,10 @@ const ENDLESS_UPGRADES = [
 ];
 
 export class Game {
-  constructor({difficulty='normal',hero='ranger',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure}={}) {
+  constructor({difficulty='normal',hero='ranger',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure,elites=adventure}={}) {
     this.terrain=terrain;
+    this.regionIndex=0;this.region=regionFor(0);this.portal=null;this.regionGrace=0;this.regionTransition=null;
+    this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites};this._interactHeld=false;
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.hero=getHero(hero);
@@ -92,6 +97,7 @@ export class Game {
     this.encounters=encounters?new Encounters(this):null;
     this.combatStatus=new CombatStatus(this);
     this.environment=environment?new Environment(this):null;
+    this.relics=new Relics(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -99,7 +105,7 @@ export class Game {
     if(this.effects.length > 200) this.effects.shift();
     this.effects.push({x,y,type,life,maxLife:life,r,color,text,...extra});
   }
-  _damageMultiplier() { return (1 + this.levels.power * .25 + this.levels.endlessPower * .08)*(this.adventure?.damageMultiplier()||1); }
+  _damageMultiplier() { return (1 + this.levels.power * .25 + this.levels.endlessPower * .08)*(this.adventure?.damageMultiplier()||1)*(this.relics?.damageMultiplier()||1); }
   _inView(entity,margin=0) {
     const dx=Math.max(0,Math.abs(entity.x-this.player.x)-this.viewWidth*.5-margin);
     const dy=Math.max(0,Math.abs(entity.y-this.player.y)-this.viewHeight*.5-margin);
@@ -155,8 +161,11 @@ export class Game {
   _hitEnemy(enemy,amount,knockback=0,origin=this.player,source='arrow') {
     return this.combatStatus.hit(enemy,amount,knockback,origin,source);
   }
-  _hurtEnemy(enemy,amount,knockback=0,origin=this.player) {
-    if(enemy.hp<=0) return;
+  _hurtEnemy(enemy,amount,knockback=0,origin=this.player,source='raw') {
+    if(enemy.hp<=0||!Number.isFinite(amount)||amount<=0)return 0;
+    amount=this.elites?.beforeDamage(enemy,amount)??amount;
+    if(amount<=0)return 0;
+    const actual=Math.min(enemy.hp,amount);
     enemy.hp -= amount; enemy.hit = .12;
     if(knockback && enemy.type!=='boss') {
       const dx=enemy.x-origin.x,dy=enemy.y-origin.y,d=Math.hypot(dx,dy)||1;
@@ -169,14 +178,16 @@ export class Game {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
       this.kills++; this._emit('kill');
       if(enemy.xp>0)this.gems.push({x:enemy.x,y:enemy.y,r:enemy.type==='boss'?11:enemy.type==='brute'?7:5,value:enemy.xp});
-      if(enemy.type==='boss') { enemy.slam=null;clearBossAttacks(enemy);this.bossDefeated=true; this.bossKills++; this._emit('bossKill'); this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482'); }
+      if(enemy.type==='boss') { enemy.slam=null;clearBossAttacks(enemy);this.bossDefeated=true; this.bossKills++; this._emit('bossKill'); this._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482');this.regions.openPortal(enemy); }
       this.adventure?.onEnemyKilled(enemy);
       this.encounters?.onEnemyKilled(enemy);
+      this.relics?.onEnemyKilled(enemy,source);
       if(this.kills%24===0 && this.player.hp<this.player.maxHp) {
         this.player.hp=Math.min(this.player.maxHp,this.player.hp+7);
         this._effect(this.player.x,this.player.y-26,'heal',.8,0,'#b9e89c','+7'); this._emit('heal');
       }
     }
+    return actual;
   }
   _rebuildGrid() {
     this._grid.clear();
@@ -228,7 +239,7 @@ export class Game {
       }
     }
     const wobble=!detouring&&e.type==='bat'?Math.sin(this._clock*5+e.phase)*.52:0;
-    const speed=e.speed*(e.type==='boss'?1+Math.max(0,Math.sin(this._clock*.85))*1.15:1)*(this.environment?.movementMultiplier(e)||1);
+    const speed=e.speed*(e.type==='boss'?1+Math.max(0,Math.sin(this._clock*.85))*1.15:1)*(this.environment?.movementMultiplier(e)||1)*(this.elites?.movementMultiplier(e)||1);
     this._moveEntity(e,(nx-ny*wobble)*speed*dt,(ny+nx*wobble)*speed*dt);
     e._navProgressTimer=(e._navProgressTimer||0)+dt;
     if(e._navProgressTimer>.9) {
@@ -252,7 +263,8 @@ export class Game {
     this.phaseEndsAt=end;
   }
   _hurtPlayer(amount) {
-    const p=this.player;if(p.invuln>0||this.status!=='playing')return false;
+    const p=this.player;if(p.invuln>0||this.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
+    amount=this.relics?.modifyIncomingDamage(amount)??amount;
     p.hp=Math.max(0,p.hp-amount);p.invuln=.8;this._emit('hurt');
     this._effect(p.x,p.y,'ring',.3,42,'#e48d78');
     if(p.hp<=0)this.status='dead';return true;
@@ -344,11 +356,58 @@ export class Game {
     this.enemyBullets=this.enemyBullets.filter(b=>b.life>0);
   }
 
+  canEnterPortal() { return this.regions.canEnter(); }
+  enterPortal() {
+    if(!this.canEnterPortal())return false;
+    if(this.relics.pending) {
+      const choices=this.relics.getChoices();
+      if(choices.length) {this.status='relic';this._emit('relicChoice');return true;}
+      if(!this.relics.completeCollectionReward())return false;
+    }
+    this._switchRegion();return true;
+  }
+  getRelicChoices() { return this.relics.getChoices(); }
+  chooseRelic(id) {
+    if(this.status!=='relic'||!this.portal||!this.relics.choose(id))return false;
+    this._switchRegion();return true;
+  }
+  _switchRegion() {
+    const portal=this.portal;if(!portal)return false;
+    const from=this.region.id,p=this.player;
+    const furyTime=this.adventure?.furyTime||0,magnetTime=this.adventure?.magnetTime||0;
+    this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;
+    this.status='playing';this.regionGrace=2;
+    this.regionTransition={life:.7,maxLife:.7,name:this.region.name,from,to:this.region.id};
+    this.enemies=[];this.bullets=[];this.enemyBullets=[];this.gems=[];this.effects=[];this.orbitals=[];this.storm=null;
+    this._pulseEchoes=[];this._grid.clear();this._choices=null;
+    this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply');
+    this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
+    // The continuous clock, boss schedule and active-skill cooldown survive.
+    // Only the old scene is discarded, without invoking kill/reward hooks.
+    this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex});
+    p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);
+    this._moveEntity(p,0,0,true);
+    this.environment=null;this.adventure=null;this.encounters=null;
+    if(this._features.adventure) {
+      this.adventure=new Adventure(this);this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;
+    }
+    if(this._features.encounters)this.encounters=new Encounters(this);
+    if(this._features.environment)this.environment=new Environment(this);
+    this._refreshStats();this._refreshWeapons();
+    this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});
+    return true;
+  }
+
   update(dt,input={}) {
     if(this.status!=='playing') return;
+    const interact=!!input.interact,pressed=interact&&!this._interactHeld;this._interactHeld=interact;
+    if(pressed&&this.enterPortal())return;
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
     const p=this.player;
     this.time+=dt; this._clock+=dt;
+    this.regionGrace=Math.max(0,this.regionGrace-dt);
+    if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
+    this.relics.update(dt);
     this._updatePressure();
     const wave=1+Math.floor(this.time/60);
     if(wave!==this.wave) { this.wave=wave; this._emit('wave'); }
@@ -365,20 +424,16 @@ export class Game {
     this.encounters?.update(dt);
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
     this._spawn-=dt;
-    if(this._spawn<=0) {
+    if(this._spawn<=0&&this.regionGrace<=0) {
       const pressure=this.pressurePhase==='siege'?1.85:this.pressurePhase==='relief'?.38:1;
       const rate=Math.min(BALANCE.spawnMax,(BALANCE.spawnBase+this.time*BALANCE.spawnGrowth)*pressure)*(this.easy?.78:1);
       this._spawn=1/rate;
       if(this.enemies.length<180) {
-        const roll=Math.random(), t=this.time;
-        const late=Math.max(0,t-150)/60, bruteChance=Math.min(.15,.07+late*.006), batEdge=Math.min(.8,.35+late*.033);
-        let type=t>60&&roll<bruteChance?'brute':t>23&&roll<batEdge?'bat':t>12&&roll<Math.max(.65,batEdge+.1)?'beetle':'slime';
-        if(t>=30&&roll>.89&&roll<=.95&&this.enemies.filter(e=>e.type==='boar'&&e.hp>0).length<BALANCE.boarCap)type='boar';
-        else if(t>=45&&roll>.95&&this.enemies.filter(e=>e.type==='spore'&&e.hp>0).length<BALANCE.sporeCap)type='spore';
-        this._spawnEnemy(type);
+        const enemy=this._spawnEnemy(regionEnemyType(this,Math.random()));
+        this.elites.maybePromote(enemy);
       }
     }
-    if(this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
+    if(this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');
@@ -386,6 +441,7 @@ export class Game {
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
+      if(this.elites.updateEnemy(e,dt))continue;
       if(this.encounters?.updateEnemy(e,dt))continue;
       if(e.guardActive===false) {
         e.charge=null;e.cast=null;e._chargeSegment=null;
@@ -454,6 +510,7 @@ export class Game {
     this.bullets=this.bullets.filter(b=>b.life>0&&this._inView(b,24));
     this._updateWeapons(dt);
     this.combatStatus.update(dt);
+    this.elites.resolve();
     // Every weapon can interrupt a windup with a killing blow on this frame.
     this._resolveBossSlams();
     for(const e of this.enemies)if(e.type==='boss'&&e.bossKind==='bloom')resolveBloomBoss(this,e);
@@ -547,7 +604,7 @@ export class Game {
   }
   _refreshStats() {
     this.stats.damage=this._damageMultiplier();this.stats.fireRate=1+this.levels.rapid*.15;
-    this.stats.moveSpeed=this.hero.baseSpeed/220*(1+this.levels.speed*.08);
+    this.stats.moveSpeed=this.hero.baseSpeed/220*(1+this.levels.speed*.08)*(this.relics?.movementMultiplier()||1);
     this.stats.magnet=BALANCE.magnet*(1+this.levels.magnet*.35);
     this.player.speed=220*this.stats.moveSpeed;
   }

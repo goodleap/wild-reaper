@@ -19,23 +19,25 @@ export class CombatStatus {
     if(burst)enemy.bleed=null;
     if(shock)enemy.shock=null;
     const damage=amount*(burst?1+rules.pulseBonus:1);
-    game._hurtEnemy(enemy,damage,knockback,origin);
+    const dealt=game._hurtEnemy(enemy,damage,knockback,origin,source);
     if(burst)game._effect(x,y,'bleedBurst',.32,enemy.r+6,'#e8a486');
     if(shock)this._conduct(enemy,x,y,shock.damage);
 
     if(enemy.hp<=0) {
       enemy.bleed=null;enemy.shock=null;
-      return damage;
+      return dealt;
     }
-    if(source==='orbit') {
+    // A fully absorbed strike can spend an existing reaction, but cannot
+    // plant a fresh status through an intact elite shield.
+    if(dealt>0&&source==='orbit') {
       // Repeated blade hits are faster than the tick interval. Refresh the
       // lifetime, not the tick phase, so contact cannot postpone all damage.
       const nextTick=enemy.bleed?.life>0?enemy.bleed.nextTick:rules.bleedInterval;
       enemy.bleed={life:rules.bleedDuration,maxLife:rules.bleedDuration,nextTick,damage:rules.bleedDamage*game._damageMultiplier()};
-    }else if(source==='lightning'||source==='storm') {
+    }else if(dealt>0&&(source==='lightning'||source==='storm')) {
       enemy.shock={life:rules.shockDuration,maxLife:rules.shockDuration,damage:rules.conductionDamage*game._damageMultiplier()};
     }
-    return damage;
+    return dealt;
   }
 
   _conduct(source,x,y,damage) {
@@ -48,7 +50,7 @@ export class CombatStatus {
     }
     if(!target)return;
     game._effect(x,y,'conduction',.26,0,'#c4e8ff',undefined,{x2:target.x,y2:target.y});
-    game._hurtEnemy(target,damage,0,{x,y});
+    game._hurtEnemy(target,damage,0,{x,y},'conduction');
     if(target.hp<=0) { target.bleed=null;target.shock=null; }
   }
 
@@ -64,7 +66,7 @@ export class CombatStatus {
         bleed.nextTick-=elapsed;
         while(bleed.nextTick<=1e-9&&enemy.hp>0) {
           bleed.nextTick+=rules.bleedInterval;
-          game._hurtEnemy(enemy,bleed.damage);
+          game._hurtEnemy(enemy,bleed.damage,0,game.player,'bleed');
         }
         if(bleed.life<=0||enemy.hp<=0)enemy.bleed=null;
       }
