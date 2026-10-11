@@ -250,7 +250,8 @@ const ACTOR_VISUALS={
   spore:{radius:20,foot:18,halfWidth:27,top:34,shadowWidth:18,shadowLength:21},
   boss:{radius:49,foot:41,halfWidth:60,top:68,shadowWidth:39,shadowLength:44}
 };
-const HERO_VISUALS={traveler:ACTOR_VISUALS.player,warden:{...ACTOR_VISUALS.player,halfWidth:30,shadowWidth:16,shadowLength:25},stormcaller:{...ACTOR_VISUALS.player,halfWidth:31,top:48,shadowWidth:12,shadowLength:24}};
+// All three humanoids share the traveler's body envelope and grounded shadow.
+const HERO_VISUALS={traveler:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:ACTOR_VISUALS.player};
 function actorVisual(entity,isPlayer=false,scaleOverride){
   const type=isPlayer?'player':entity.type,shape=isPlayer?(HERO_VISUALS[entity.heroId||'traveler']||HERO_VISUALS.traveler):(ACTOR_VISUALS[type]||ACTOR_VISUALS.slime);
   const scale=scaleOverride??(isPlayer?1.1:entity.r/shape.radius);
@@ -290,8 +291,8 @@ function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[],adventureProps=[
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.drawImage(actorShadowCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
 }
-function drawActor(actor,moving=false){const e=actor.entity;if(e.isCompanion||e.isCaptive)drawCompanion(actor);else if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,moving,e.invuln||0);else{drawEliteAura(e);enemy(e,clock);drawStatusMarks(e);drawEliteMark(e);if(game?.companions?.camp?.guardIds.includes(e.id)){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e9c894';ctx.fillText('围困者',e.x,e.y-actor.shape.top*actor.scale-16);ctx.restore();}}}
-function drawActors(actors,moving=false){for(const actor of sortActors(actors))drawActor(actor,moving);}
+function drawActor(actor){const e=actor.entity;if(e.isCompanion||e.isCaptive)drawCompanion(actor);else if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,e.invuln||0,e);else{drawEliteAura(e);enemy(e,clock);drawStatusMarks(e);drawEliteMark(e);if(game?.companions?.camp?.guardIds.includes(e.id)){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e9c894';ctx.fillText('围困者',e.x,e.y-actor.shape.top*actor.scale-16);ctx.restore();}}}
+function drawActors(actors){for(const actor of sortActors(actors))drawActor(actor);}
 // Solid terrain shares one world-space source with movement collision. The
 // old decorative trees are retained only on the title screen.
 function terrainInView(camX,camY){
@@ -303,9 +304,9 @@ function sceneDrawList(actors,props,adventureProps=[]){
   for(const prop of adventureProps)items.push({kind:'adventure',sortY:prop.sortY??prop.y,prop});
   return items.sort((a,b)=>a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:String(a.prop.id).localeCompare(String(b.prop.id))):({terrain:0,adventure:1,actor:2}[a.kind]-{terrain:0,adventure:1,actor:2}[b.kind])));
 }
-function drawScene(actors,props,mainPlayer,moving,adventureProps=[]){
+function drawScene(actors,props,mainPlayer,adventureProps=[]){
   for(const item of sceneDrawList(actors,props,adventureProps)){
-    if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else drawActor(item.actor,moving);
+    if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else drawActor(item.actor);
   }
 }
 function terrainCapsulePath(target,halfLength,radius){
@@ -644,8 +645,8 @@ function drawRescueGround(){
 function drawCompanion(actor){
   const e=actor.entity,captive=e.isCaptive,storm=e.heroId==='stormcaller',color=storm?'#c6c3ed':'#d9c28c';
   if(!captive){ctx.save();ctx.strokeStyle=color;ctx.lineWidth=1.3;ctx.globalAlpha=.55;ctx.beginPath();ctx.ellipse(e.x,actor.footY,20,10,0,0,TAU);ctx.stroke();ctx.restore();}
-  ctx.save();ctx.translate(actor.x,actor.y);ctx.scale(actor.scale,actor.scale);const bob=e.moving?Math.sin(clock*17)*1.2:Math.sin(clock*2)*.5;ctx.translate(0,bob);ctx.scale(Math.cos(e.facing||0)<-.1?-1:1,1);ctx.lineCap='round';ctx.lineJoin='round';
-  if(storm)drawStormcaller(clock,e.moving);else drawWarden(clock,e.moving);
+  ctx.save();ctx.translate(actor.x,actor.y);ctx.scale(actor.scale,actor.scale);ctx.scale(Math.cos(e.facing||0)<-.1?-1:1,1);ctx.lineCap='round';ctx.lineJoin='round';
+  const pose=humanoidPose(e);if(storm)drawStormcaller(pose);else drawWarden(pose);
   if(captive&&e.state==='trapped'){
     // A low thorn restraint leaves the companion's face and class silhouette clear.
     for(const side of [-1,1]){line(side*24,-3,side*22,20,'#4c5139',4);line(side*24,-1,side*30,-7,'#8f8353',1.5);line(side*22,10,side*29,6,'#8f8353',1.5);}
@@ -680,29 +681,49 @@ function drawCompanionLightning(){
   }
   ctx.restore();
 }
-function player(x,y,t,scale=1,facing=0,moving=false,invuln=0){ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(invuln>0&&Math.floor(t*18)%2===0)ctx.globalAlpha=.65;const b=moving?Math.sin(t*17)*1.3:Math.sin(t*2)*.65;ctx.translate(0,b);const flip=Math.cos(facing)<-.1?-1:1;ctx.scale(flip,1);
-  // The original soft cream hood and green cloak return; both hands stay empty.
-  ctx.strokeStyle='#253c2a';ctx.lineWidth=1.6;ctx.fillStyle='#567b49';ctx.beginPath();ctx.moveTo(-10,-4);ctx.quadraticCurveTo(-17,6,-16,15);ctx.quadraticCurveTo(0,21,15,14);ctx.lineTo(9,-7);ctx.closePath();ctx.fill();ctx.stroke();
-  ellipse(-6+(moving?Math.sin(t*17)*2:0),15,4.2,3.6,'#383e2b');ellipse(6-(moving?Math.sin(t*17)*2:0),15,4.2,3.6,'#383e2b');ctx.fillStyle='#adc19a';ctx.beginPath();ctx.moveTo(-7,-6);ctx.lineTo(8,-6);ctx.lineTo(10,12);ctx.quadraticCurveTo(0,16,-9,11);ctx.closePath();ctx.fill();ctx.fillStyle='#e4dfb8';ctx.beginPath();ctx.moveTo(-14,-8);ctx.quadraticCurveTo(-17,-26,0,-32);ctx.quadraticCurveTo(17,-28,16,-8);ctx.quadraticCurveTo(10,1,-12,-2);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#32452f';ctx.beginPath();ctx.ellipse(2,-12,10,9,0,0,TAU);ctx.fill();ellipse(-2,-12,1.5,2,'#ecf6c8');ellipse(6,-12,1.5,2,'#ecf6c8');ctx.strokeStyle='#b5ab82';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-13,-11);ctx.quadraticCurveTo(-7,-27,3,-28);ctx.stroke();
-  ctx.fillStyle='#70964f';ctx.beginPath();ctx.moveTo(-12,-2);ctx.lineTo(11,-3);ctx.lineTo(9,3);ctx.lineTo(-11,4);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(-8,1);ctx.quadraticCurveTo(-18,4,-24,1+Math.sin(t*3)*2);ctx.lineTo(-21,8);ctx.quadraticCurveTo(-13,9,-8,5);ctx.fill();ellipse(17,3,3,3,'#d8d1a7');line(-6,8,8,8,'#788a5b',2);diamond(1,8,2.2,'#e2c276');ctx.restore();}
-function heroBoots(t,moving,width=4.2){
-  ellipse(-6+(moving?Math.sin(t*17)*1.5:0),15,width,3.6,'#373c2d');ellipse(6-(moving?Math.sin(t*17)*1.5:0),15,width,3.6,'#373c2d');
+// Phase advances in the simulation from distance actually travelled, including
+// collision and terrain slowing. Feet stay on their ground anchor while the
+// torso rises slightly; no clock-driven stepping when waiting or blocked.
+function humanoidPose(entity={},intro=false,t=0){
+  const moving=!!entity.moving&&entity.walkSpeed>.1,phase=Number.isFinite(entity.walkPhase)?entity.walkPhase:0;
+  const strength=moving?clamp(entity.walkSpeed/220,.2,1.15):0,step=Math.sin(phase)*strength;
+  const motion=reduced?.65:1;
+  return {step:step*motion,leftLift:Math.max(0,step)*3.2*motion,rightLift:Math.max(0,-step)*3.2*motion,
+    bodyY:reduced?0:moving?-Math.abs(step)*1.15:intro?Math.sin(t*2)*.65:0,
+    arm:reduced?0:step*1.8,cloth:reduced?0:moving?step*1.7:intro?Math.sin(t*3)*2:0};
 }
-function drawWarden(t,moving){
-  // Broad timber pauldrons and a compact shield retain the shared foot anchor.
-  heroBoots(t,moving,5.6);ctx.fillStyle='#425d3d';ctx.strokeStyle='#2d422d';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(-14,-7);ctx.lineTo(14,-7);ctx.lineTo(18,13);ctx.quadraticCurveTo(0,18,-18,13);ctx.closePath();ctx.fill();ctx.stroke();
-  for(const side of [-1,1]){ellipse(side*15,-2,10,7,'#a48c5c');ellipse(side*16,-5,8,4,'#bcab79');line(side*18,2,side*20,10,'#6d7450',5);}
-  ctx.fillStyle='#927d52';ctx.beginPath();ctx.moveTo(-11,-7);ctx.lineTo(11,-7);ctx.lineTo(13,11);ctx.quadraticCurveTo(0,17,-13,11);ctx.closePath();ctx.fill();ctx.stroke();for(const xx of [-7,0,7])line(xx,-4,xx,11,'#bfab74',2);line(-12,7,12,7,'#596747',3);diamond(0,7,3.2,'#dbc785');
-  ellipse(0,-14,12,12,'#3d5139');ctx.fillStyle='#a29464';ctx.beginPath();ctx.moveTo(-15,-15);ctx.lineTo(-12,-27);ctx.quadraticCurveTo(0,-32,12,-27);ctx.lineTo(15,-15);ctx.quadraticCurveTo(0,-22,-15,-15);ctx.fill();ctx.stroke();ellipse(-5,-13,1.7,2.2,'#efe8b4');ellipse(5,-13,1.7,2.2,'#efe8b4');line(0,-29,0,-19,'#d2c387',3);line(-10,-7,10,-7,'#7b8b58',4);
-  ctx.fillStyle='#8a794e';ctx.beginPath();ctx.moveTo(-27,-1);ctx.lineTo(-14,-4);ctx.lineTo(-12,10);ctx.quadraticCurveTo(-17,17,-21,18);ctx.quadraticCurveTo(-28,10,-27,-1);ctx.fill();ctx.stroke();line(-21,0,-20,12,'#d3bd7c',2);line(-25,5,-16,4,'#b4c17e',2);ellipse(21,10,3,3,'#b5aa7c');
+function heroBoots(pose){
+  // Short trouser legs and exposed boots make each alternating foot readable.
+  for(const side of [-1,1]){
+    const lift=side<0?pose.leftLift:pose.rightLift,x=side*6-side*pose.step*1.6;
+    line(side*5.5,9+pose.bodyY,x,14-lift,'#526044',4.6);
+    ellipse(x,14.8-lift,4.2,3.2,'#383e2b');
+    line(x-2,14.2-lift,x+1.8,14.2-lift,'#737857',.8);
+  }
 }
-function drawStormcaller(t,moving){
-  // Long narrow robe and pointed hat read as a different class, even in silhouette.
-  heroBoots(t,moving,3.7);ctx.strokeStyle='#3f425c';ctx.lineWidth=1.6;ctx.fillStyle='#706794';ctx.beginPath();ctx.moveTo(-8,-6);ctx.lineTo(8,-6);ctx.lineTo(14,15);ctx.quadraticCurveTo(0,21,-14,15);ctx.closePath();ctx.fill();ctx.stroke();
-  ctx.fillStyle='#a5a8cd';ctx.beginPath();ctx.moveTo(-3,-5);ctx.lineTo(3,-5);ctx.lineTo(5,16);ctx.lineTo(-5,16);ctx.closePath();ctx.fill();line(-11,13,11,13,'#b5b8d2',1.5);diamond(0,6,2.6,'#d3dcf1');
-  ellipse(0,-13,10,12,'#3d445d');ellipse(-4,-13,1.5,2,'#e3ebff');ellipse(4,-13,1.5,2,'#e3ebff');
-  ctx.fillStyle='#7468a1';ctx.beginPath();ctx.moveTo(-15,-20);ctx.lineTo(-5,-30);ctx.lineTo(3,-46);ctx.lineTo(8,-32);ctx.lineTo(16,-20);ctx.closePath();ctx.fill();ctx.stroke();ellipse(0,-20,20,4,'#8a7bb4');line(-9,-25,11,-25,'#b3b0d0',2);diamond(3,-34,2.8,'#d2daf3');
-  line(18,-27,18,16,'#8e91b1',2.4);line(11,-1,17,2,'#8e86b1',5);ellipse(17,3,3,3,'#c1bdcf');diamond(18,-29,5.5,'#b7dffa');line(15,-30,19,-27,'#e9f5ff',1.1);if(!reduced){const a=t*1.4;ellipse(18+Math.cos(a)*8,-29+Math.sin(a)*6,1.3,1.3,'#c6e7ff');}
+function player(x,y,t,scale=1,facing=0,invuln=0,entity={}){
+  const pose=humanoidPose(entity,!game,t);ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(invuln>0&&Math.floor(t*18)%2===0)ctx.globalAlpha=.65;ctx.scale(Math.cos(facing)<-.1?-1:1,1);ctx.lineCap='round';ctx.lineJoin='round';
+  // Original cream hood, green cloak and empty hands, with exposed walking feet.
+  ctx.save();ctx.translate(0,pose.bodyY);ctx.strokeStyle='#253c2a';ctx.lineWidth=1.6;ctx.fillStyle='#567b49';ctx.beginPath();ctx.moveTo(-10,-4);ctx.quadraticCurveTo(-17,6,-16,13);ctx.quadraticCurveTo(0,18,15,12);ctx.lineTo(9,-7);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+  heroBoots(pose);ctx.translate(0,pose.bodyY);ctx.strokeStyle='#253c2a';ctx.lineWidth=1.6;ctx.fillStyle='#adc19a';ctx.beginPath();ctx.moveTo(-7,-6);ctx.lineTo(8,-6);ctx.lineTo(10,10);ctx.quadraticCurveTo(0,14,-9,10);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#e4dfb8';ctx.beginPath();ctx.moveTo(-14,-8);ctx.quadraticCurveTo(-17,-26,0,-32);ctx.quadraticCurveTo(17,-28,16,-8);ctx.quadraticCurveTo(10,1,-12,-2);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#32452f';ctx.beginPath();ctx.ellipse(2,-12,10,9,0,0,TAU);ctx.fill();ellipse(-2,-12,1.5,2,'#ecf6c8');ellipse(6,-12,1.5,2,'#ecf6c8');ctx.strokeStyle='#b5ab82';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-13,-11);ctx.quadraticCurveTo(-7,-27,3,-28);ctx.stroke();
+  ctx.fillStyle='#70964f';ctx.beginPath();ctx.moveTo(-12,-2);ctx.lineTo(11,-3);ctx.lineTo(9,3);ctx.lineTo(-11,4);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(-8,1);ctx.quadraticCurveTo(-18,4,-24,1+pose.cloth);ctx.lineTo(-21,8);ctx.quadraticCurveTo(-13,9,-8,5);ctx.fill();ellipse(17,3+pose.arm,3,3,'#d8d1a7');line(-6,8,8,8,'#788a5b',2);diamond(1,8,2.2,'#e2c276');ctx.restore();
+}
+function drawWarden(pose){
+  heroBoots(pose);ctx.save();ctx.translate(0,pose.bodyY);ctx.strokeStyle='#2d422d';ctx.lineWidth=1.6;ctx.fillStyle='#425d3d';ctx.beginPath();ctx.moveTo(-10,-7);ctx.lineTo(10,-7);ctx.lineTo(13,10);ctx.quadraticCurveTo(0,15,-13,10);ctx.closePath();ctx.fill();ctx.stroke();
+  // Light shoulder armor keeps the same body width as the traveler.
+  for(const side of [-1,1]){const swing=side*pose.arm;ellipse(side*12,-2,5.8,5.2,'#a48c5c');ellipse(side*12,-4,5.5,3,'#bcab79');line(side*14,1,side*16,7+swing,'#6d7450',4);}
+  ctx.fillStyle='#927d52';ctx.beginPath();ctx.moveTo(-8,-7);ctx.lineTo(8,-7);ctx.lineTo(10,9);ctx.quadraticCurveTo(0,13,-10,9);ctx.closePath();ctx.fill();ctx.stroke();for(const xx of [-5,0,5])line(xx,-4,xx,8,'#bfab74',1.6);line(-9,6,9,6,'#596747',2.6);diamond(0,6,2.6,'#dbc785');
+  ellipse(0,-14,11,11,'#3d5139');ctx.fillStyle='#a29464';ctx.beginPath();ctx.moveTo(-14,-15);ctx.lineTo(-11,-26);ctx.quadraticCurveTo(0,-31,11,-26);ctx.lineTo(14,-15);ctx.quadraticCurveTo(0,-21,-14,-15);ctx.fill();ctx.stroke();ellipse(-4,-13,1.6,2,'#efe8b4');ellipse(4,-13,1.6,2,'#efe8b4');line(0,-28,0,-19,'#d2c387',2.5);line(-9,-7,9,-7,'#7b8b58',3);
+  ctx.save();ctx.translate(0,-pose.arm);ctx.fillStyle='#8a794e';ctx.beginPath();ctx.moveTo(-23,-1);ctx.lineTo(-14,-3);ctx.lineTo(-12,8);ctx.quadraticCurveTo(-15,13,-18,14);ctx.quadraticCurveTo(-24,8,-23,-1);ctx.fill();ctx.stroke();line(-18,0,-18,10,'#d3bd7c',1.6);line(-22,4,-14,4,'#b4c17e',1.6);ctx.restore();ellipse(17,8+pose.arm,3,3,'#b5aa7c');ctx.restore();
+}
+function drawStormcaller(pose){
+  heroBoots(pose);ctx.save();ctx.translate(0,pose.bodyY);ctx.strokeStyle='#3f425c';ctx.lineWidth=1.6;ctx.fillStyle='#706794';ctx.beginPath();ctx.moveTo(-9,-6);ctx.lineTo(9,-6);ctx.lineTo(13,10);ctx.quadraticCurveTo(0,15,-13,10);ctx.closePath();ctx.fill();ctx.stroke();
+  // A shorter robe exposes both boots; the low pointed hat retains the identity.
+  ctx.fillStyle='#a5a8cd';ctx.beginPath();ctx.moveTo(-3,-5);ctx.lineTo(3,-5);ctx.lineTo(4,10);ctx.lineTo(-4,10);ctx.closePath();ctx.fill();line(-10,10,10,10,'#b5b8d2',1.4);diamond(0,5,2.6,'#d3dcf1');
+  line(-10,-1,-15,5-pose.arm,'#8e86b1',4.5);ellipse(-15,6-pose.arm,2.8,2.8,'#c1bdcf');ellipse(0,-13,10.5,11,'#3d445d');ellipse(-4,-13,1.5,2,'#e3ebff');ellipse(4,-13,1.5,2,'#e3ebff');
+  ctx.fillStyle='#7468a1';ctx.beginPath();ctx.moveTo(-14,-20);ctx.lineTo(-7,-26);ctx.lineTo(2,-33);ctx.lineTo(8,-28);ctx.lineTo(14,-20);ctx.closePath();ctx.fill();ctx.stroke();ellipse(0,-20,17,3.6,'#8a7bb4');line(-8,-23,10,-23,'#b3b0d0',1.7);diamond(2,-28,2.2,'#d2daf3');
+  ctx.save();ctx.translate(0,pose.arm);line(20,-26,20,14,'#8e91b1',2.4);line(11,-1,18,2,'#8e86b1',4.5);ellipse(18,3,3,3,'#c1bdcf');diamond(20,-28,4.4,'#b7dffa');line(17.5,-29,21,-26.5,'#e9f5ff',1.1);ctx.restore();ctx.restore();
 }
 function movingLeg(t,id,side){return Math.sin(t*12+(id||0)+side)*1.6;}
 function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(ACTOR_VISUALS[type]?.radius||16);ctx.scale(s,s);const bob=Math.sin(t*(type==='bat'?14:5)+(e.id||0))*(type==='bat'?3:1.5);ctx.translate(0,bob);const hit=e.hit>0;
@@ -940,7 +961,7 @@ function renderGame(){const p=game.player,camX=p.x,camY=p.y;background(camX,camY
   for(const gem of game.gems){if(Math.abs(gem.x-p.x)>width/2+20||Math.abs(gem.y-p.y)>height/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   for(const e of game.effects)if(e.type==='ring')effects(e);drawCompanionGroundEffects();drawRescueGround();
   drawEncounterGround();drawAdventurePickups();drawEnemyTelegraphs();drawEnvironmentWarnings();drawRegionMechanisms();drawEliteGroundEffects();drawBossGroundEffects();
-  drawScene(actors,terrain,p,Math.hypot(input.x,input.y)>.1,adventureProps);
+  drawScene(actors,terrain,p,adventureProps);
   drawEnemyBullets();
   for(const b of game.bullets){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);const pierce=b.branch==='pierce',bounce=b.branch==='ricochet';line(pierce?-32:-18,0,0,0,pierce?'#a6e5c746':bounce?'#e3d29342':'#c2eda83b',pierce?4:5);line(pierce?-20:-9,0,5,0,b.color,2.8);if(pierce)line(-12,-2,-2,-2,'#e4fff280',1);ctx.fillStyle=bounce?'#fff3ce':'#f6f6cf';ctx.beginPath();ctx.moveTo(7,0);ctx.lineTo(-1,-3.5);ctx.lineTo(-1,3.5);ctx.closePath();ctx.fill();ctx.restore();}
   for(const b of game.orbitals){if(b.evolved){ellipse(b.x,b.y,14,14,'#e5d69713');if(b.surge>0)line(b.x-Math.cos(b.angle)*14,b.y-Math.sin(b.angle)*14,b.x,b.y,'#f0dca677',2);}blade(b.x,b.y,b.angle+clock,b.evolved?1.12:1,b.evolved);}

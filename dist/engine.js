@@ -10,6 +10,7 @@ import { Elites } from './elites.js';
 import { Relics, RELICS } from './relics.js';
 import { Companions, COMPANIONS } from './companions.js';
 import { WEAPON_BRANCHES, BRANCH_WEAPONS, branchDefinition, isBranchReady } from './weapon-branches.js';
+import { resetLocomotion, updateLocomotion } from './locomotion.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES };
 
 const TAU = Math.PI * 2;
@@ -80,6 +81,7 @@ export class Game {
     this.viewWidth = 1100; this.viewHeight = 650;
     const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:this.hero.skillCooldown,facing:0};
+    resetLocomotion(this.player);
     this.enemies = []; this.bullets = []; this.enemyBullets=[];this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
     this.storm = null;
     this.bossSpawned = false; this.bossDefeated = false;
@@ -392,6 +394,7 @@ export class Game {
     this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex});
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);
     this._moveEntity(p,0,0,true);
+    resetLocomotion(p);
     this.environment=null;this.adventure=null;this.encounters=null;
     if(this._features.adventure) {
       this.adventure=new Adventure(this);this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;
@@ -425,7 +428,9 @@ export class Game {
     const length=Math.hypot(ix,iy); if(length>1) { ix/=length; iy/=length; }
     if(length>.01) p.facing=Math.atan2(iy,ix);
     const movement=this.environment?.movementMultiplier(p,true)||1;
+    const oldX=p.x,oldY=p.y;
     this._moveEntity(p,ix*p.speed*movement*dt,iy*p.speed*movement*dt,true);
+    updateLocomotion(p,oldX,oldY,dt);
     this.adventure?.update(dt);
     this.companions.update(dt);
     this.encounters?.update(dt);

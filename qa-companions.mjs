@@ -204,6 +204,38 @@ assert(Math.hypot(restingAlly.x-settled.x,restingAlly.y-settled.y)<.01,'the ally
 assert(Math.hypot(restingAlly.x-resting.player.x,restingAlly.y-resting.player.y)<80);
 assert.equal(restingAlly.moving,false);
 
+// Feet follow actual displacement, including analogue input and collisions.
+// Equal distance at different speeds produces the same stride progress.
+const fullStride=arena(),halfStride=arena();
+advance(fullStride,.1,{x:1});advance(halfStride,.2,{x:.5});
+assert(Math.abs(fullStride.player.x-halfStride.player.x)<1e-8);
+assert(Math.abs(fullStride.player.walkPhase-halfStride.player.walkPhase)<1e-8,'walk cadence follows distance rather than elapsed time');
+assert(fullStride.player.walkSpeed>halfStride.player.walkSpeed);
+const phaseAfterWalking=fullStride.player.walkPhase;
+advance(fullStride,.3);
+assert.equal(fullStride.player.moving,false);assert.equal(fullStride.player.walkSpeed,0);
+assert.equal(fullStride.player.walkPhase,phaseAfterWalking,'stationary feet do not keep walking');
+const againstWall=arena();
+againstWall.terrain=new Terrain({obstacles:[{id:'stride-wall',type:'rock',x:45,y:19.8,r:30}]});
+advance(againstWall,.3,{x:1});const wallPhase=againstWall.player.walkPhase,wallX=againstWall.player.x;
+advance(againstWall,.3,{x:1});
+assert(Math.abs(againstWall.player.x-wallX)<1e-6);
+assert.equal(againstWall.player.walkPhase,wallPhase,'holding movement into a wall does not animate walking in place');
+assert.equal(againstWall.player.moving,false);assert.equal(againstWall.player.walkSpeed,0);
+
+// Once settled, facing changes and small player adjustments must not make the
+// companion shuffle from one trailing slot to another.
+const idlePhase=restingAlly.walkPhase;
+for(let i=0;i<16;i++){
+  resting.player.x=i%2?3:0;resting.player.facing=i*Math.PI/2;
+  advance(resting,.1);
+}
+assert(Math.hypot(restingAlly.x-settled.x,restingAlly.y-settled.y)<.01,'small idle adjustments do not cause companion drift');
+assert.equal(restingAlly.walkPhase,idlePhase);
+advance(resting,1,{x:1});
+assert(Math.hypot(restingAlly.x-settled.x,restingAlly.y-settled.y)>40,'the companion resumes following when the player walks away');
+assert(restingAlly.moving&&restingAlly.walkSpeed>0);assert.notEqual(restingAlly.walkPhase,idlePhase);
+
 const pendingTravel=arena(),lostCamp=pendingTravel.companions.spawn('stormcaller',350,19.8);
 const beforeTravelKills=pendingTravel.kills;travel(pendingTravel);
 assert.equal(pendingTravel.regionIndex,1);assert.equal(pendingTravel.companions.camp,null);assert.equal(pendingTravel.companions.active,null);
@@ -221,6 +253,10 @@ assert.equal(follower._echoes.length,0,'old-map ground impacts are discarded ins
 assert.equal(followingTravel.rescuePower,1);assert.equal(followingTravel.companions.rescuedCount,1);
 assert(followingTravel.terrain.isFree(follower.x,follower.y+groundOffset(follower,true),follower.r));
 assert(Math.hypot(follower.x-followingTravel.player.x,follower.y-followingTravel.player.y)<150,'the ally lands safely beside the player');
+for(const entity of [followingTravel.player,follower]){
+  assert.equal(entity.moving,false);assert.equal(entity.walkSpeed,0);
+  assert.equal(entity.walkPhase,0,'portal relocation is not counted as a walking stride');
+}
 
 // Generation is infrequent and does not compete with major authored fights.
 const scheduled=arena({companions:true});advance(scheduled,34.9);assert.equal(scheduled.companions.camp,null);

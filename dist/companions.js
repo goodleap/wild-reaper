@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { resetLocomotion, updateLocomotion } from './locomotion.js';
 
 const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -86,11 +87,18 @@ export class Companions {
     // Detach the reward-bearing camp before any effect/notification can reenter.
     this.camp=null;
     this.active={id:++g._id,kind:camp.kind,name:camp.name,heroId:camp.kind,x:camp.x,y:camp.y-groundOffset(g.player,true),r:15,isCompanion:true,remaining:RESCUE_RULES.companionDuration,maxDuration:RESCUE_RULES.companionDuration,facing:g.player.facing,moving:false,speed:250,_attack:.8,_echoes:[],_stuckFor:0};
+    this._resetFollowing(this.active);
     this.rescuedCount++;g.rescuePower++;g._refreshStats();
     this.nextAt=g.time+RESCUE_RULES.companionDuration+RESCUE_RULES.interval;
     g._emit('companionJoined',{name:camp.name,kind:camp.kind,bonusLevel:g.rescuePower,bonusPercent:8,duration:RESCUE_RULES.companionDuration});
     g._effect(camp.x,camp.y,'ring',.8,85,definition(camp.kind).color);
     return true;
+  }
+  _resetFollowing(active) {
+    active._navTimer=0;active._navObstacle=null;active._navSide=0;
+    active._navProgressTimer=0;active._navProgressX=undefined;active._navProgressY=undefined;
+    active._stuckFor=0;active._following=false;active._followSpeed=0;active._followTarget=null;
+    resetLocomotion(active);
   }
   _safeReturn(active) {
     const g=this.game,p=this._foot();
@@ -98,36 +106,47 @@ export class Companions {
       const angle=g.player.facing+Math.PI+i*TAU/16,x=p.x+Math.cos(angle)*radius,y=p.y+Math.sin(angle)*radius;
       if(!g.terrain.isFree(x,y,active.r+3)||!this._hazardFree(x,y,active.r))continue;
       if(g.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.y+groundOffset(e)-y)<e.r+active.r+12))continue;
-      active.x=x;active.y=y-groundOffset(active,true);active._navTimer=0;active._navObstacle=null;active._navSide=0;
-      active._navProgressTimer=0;active._navProgressX=undefined;active._navProgressY=undefined;active._stuckFor=0;
+      active.x=x;active.y=y-groundOffset(active,true);this._resetFollowing(active);
       return true;
     }
     return false;
   }
   _follow(active,dt) {
     const g=this.game,p=this._foot(),angle=g.player.facing+Math.PI;
-    let target=null;
+    let target=active._followTarget;
     // A stationary player's preferred trailing spot can fall inside a tree or
-    // its steering clearance. Pick a nearby clear slot instead of circling it.
-    for(const radius of [54,78]) {
-      for(const turn of [0,.6,-.6,1.2,-1.2,Math.PI]) {
-        const x=p.x+Math.cos(angle+turn)*radius,y=p.y+Math.sin(angle+turn)*radius;
-        if(g.terrain.isFree(x,y,active.r+10)){target={x,y};break;}
+    // its steering clearance. Pick a clear slot and retain it while the player
+    // rests, including turns made against a wall that do not actually travel.
+    if(!target||Math.hypot(p.x-target.playerX,p.y-target.playerY)>=4) {
+      target=null;
+      for(const radius of [54,78]) {
+        for(const turn of [0,.6,-.6,1.2,-1.2,Math.PI]) {
+          const x=p.x+Math.cos(angle+turn)*radius,y=p.y+Math.sin(angle+turn)*radius;
+          if(g.terrain.isFree(x,y,active.r+10)){target={x,y};break;}
+        }
+        if(target)break;
       }
-      if(target)break;
+      target??={...p};target.playerX=p.x;target.playerY=p.y;active._followTarget=target;
     }
-    target??=p;
     const foot=this._foot(active),d=distance(foot,target),oldX=active.x,oldY=active.y;
-    active.moving=false;
-    if(d>8&&dt>0) {
-      active.speed=Math.max(250,g.player.speed*1.18)*Math.min(1,d/35);
+    // The wide restart threshold keeps a settled ally from chasing every tiny
+    // correction. Arrival slows naturally without changing the collision path.
+    if(active._following&&d<=12)active._following=false;
+    else if(!active._following&&d>=30)active._following=true;
+    if(active._following&&dt>0) {
+      const desiredSpeed=Math.min(Math.max(250,g.player.speed*1.18),Math.max(40,(d-12)*7));
+      const acceleration=1000*dt;
+      active._followSpeed=Math.max(active._followSpeed-acceleration,Math.min(active._followSpeed+acceleration,desiredSpeed));
+      active.speed=active._followSpeed;
       g._moveEnemy(active,dt,target);
       const moved=Math.hypot(active.x-oldX,active.y-oldY);
-      active.moving=moved>.05;
-      if(active.moving)active.facing=Math.atan2(active.y-oldY,active.x-oldX);
+      if(moved>.001)active.facing=Math.atan2(active.y-oldY,active.x-oldX);
       active._stuckFor=moved<.3&&d>100?active._stuckFor+dt:0;
-    }else active._stuckFor=0;
-    if(distance(this._foot(active),p)>550||(active._stuckFor>3&&!g._inView(active))) {
+    }else {active._stuckFor=0;active._followSpeed=0;}
+    updateLocomotion(active,oldX,oldY,dt);
+    // Recovery is reserved for an unseen stranded ally; visible followers walk
+    // around scenery instead of snapping back across the screen.
+    if((distance(this._foot(active),p)>550||active._stuckFor>3)&&!g._inView(active,40)) {
       if(this._safeReturn(active))g._effect(active.x,active.y+groundOffset(active,true),'ring',.35,26,definition(active.kind).color);
     }
   }
@@ -209,8 +228,7 @@ export class Companions {
     active._echoes=[];
     // The freshly generated spawn clearing always contains the player's feet.
     // SafeReturn adds separation where possible; the fallback cannot land in a wall.
-    active.x=this.game.player.x;active.y=this.game.player.y;active._navTimer=0;active._navObstacle=null;active._navSide=0;
-    active._stuckFor=0;active._navProgressTimer=0;active._navProgressX=undefined;active._navProgressY=undefined;
+    active.x=this.game.player.x;active.y=this.game.player.y;this._resetFollowing(active);
     this._safeReturn(active);
   }
 }
