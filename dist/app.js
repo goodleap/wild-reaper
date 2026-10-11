@@ -2,6 +2,8 @@ import { Game } from './engine.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
+// One small reusable mask keeps overlapping actor shadows at a fixed darkness.
+const actorShadowCanvas=document.createElement('canvas'),actorShadowCtx=actorShadowCanvas.getContext('2d');
 const arena = $('arena'), TAU = Math.PI * 2;
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const hash = (x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -96,12 +98,59 @@ function background(camX,camY,intro){ctx.fillStyle='#2b4130';ctx.fillRect(0,0,wi
   else drawMapLights(camX,camY);
 }
 function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,.6);ctx.rotate(t*.11);ctx.globalAlpha=alpha;ctx.strokeStyle='#c4e699';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.stroke();ctx.setLineDash([2,8]);ctx.beginPath();ctx.arc(0,0,r-10,0,TAU);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<8;i++){const a=i*TAU/8;ctx.save();ctx.rotate(a);ctx.translate(r,0);diamond(0,0,4,'#cced9e');line(-6,0,6,0,'#c4e699',1);ctx.restore();}ctx.restore();}
-function player(x,y,t,scale=1,facing=0,moving=false,invuln=0){ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(invuln>0&&Math.floor(t*18)%2===0)ctx.globalAlpha=.65;const b=moving?Math.sin(t*17)*1.3:Math.sin(t*2)*.65;ellipse(0,15,17,7,'#11231c77');ctx.translate(0,b);const flip=Math.cos(facing)<-.1?-1:1;ctx.scale(flip,1);
+const ACTOR_VISUALS={
+  player:{radius:15,foot:18,halfWidth:29,top:35,shadowWidth:16,shadowLength:36},
+  slime:{radius:16,foot:14,halfWidth:22,top:20,shadowWidth:15,shadowLength:25},
+  bat:{radius:11,foot:20,halfWidth:31,top:27,shadowWidth:20,shadowLength:24},
+  beetle:{radius:18,foot:18,halfWidth:25,top:22,shadowWidth:15,shadowLength:27},
+  brute:{radius:26,foot:23,halfWidth:33,top:32,shadowWidth:25,shadowLength:40},
+  boss:{radius:49,foot:41,halfWidth:60,top:68,shadowWidth:43,shadowLength:66}
+};
+function actorVisual(entity,isPlayer=false,scaleOverride){
+  const type=isPlayer?'player':entity.type,shape=ACTOR_VISUALS[type]||ACTOR_VISUALS.slime;
+  const scale=scaleOverride??(isPlayer?1.1:entity.r/shape.radius);
+  return {x:entity.x,y:entity.y,type,scale,footY:entity.y+shape.foot*scale,orderId:isPlayer?-1:(entity.id||0),entity,isPlayer,shape};
+}
+function sortActors(actors){return actors.sort((a,b)=>a.footY-b.footY||a.orderId-b.orderId||a.x-b.x||a.type.localeCompare(b.type));}
+function actorInView(actor,offsetX=0,offsetY=0){
+  const {x,y,scale,footY,shape}=actor,cx=x+offsetX,cy=y+offsetY;
+  // Include the entire projected shadow, not just the actor's collision radius.
+  return cx+(shape.halfWidth+5)*scale>=0&&cx-(shape.halfWidth+shape.shadowLength*.45+5)*scale<=width
+    &&cy-(shape.top+5)*scale<=height&&footY+offsetY+(shape.shadowLength+shape.shadowWidth*.4+5)*scale>=0;
+}
+function drawActorShadows(actors,offsetX=0,offsetY=0){
+  if(width<=0||height<=0)return;
+  const maskWidth=Math.max(1,Math.ceil(width*.5)),maskHeight=Math.max(1,Math.ceil(height*.5));
+  if(actorShadowCanvas.width!==maskWidth||actorShadowCanvas.height!==maskHeight){actorShadowCanvas.width=maskWidth;actorShadowCanvas.height=maskHeight;}
+  const mask=actorShadowCtx;mask.setTransform(1,0,0,1,0,0);mask.clearRect(0,0,maskWidth,maskHeight);
+  mask.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);mask.translate(offsetX,offsetY);
+  mask.fillStyle='#10271d';mask.globalCompositeOperation='source-over';
+  // A single nonzero fill per group forms a union. Hundreds of overlapping
+  // shapes therefore stay as light as one shadow, including flying enemies.
+  for(const flying of [true,false]){
+    mask.globalAlpha=flying?.55:1;mask.beginPath();
+    for(const actor of actors){
+      if((actor.type==='bat')!==flying)continue;
+      const {x,footY,scale,shape}=actor,length=shape.shadowLength*scale;
+      const cx=x-length*.17,cy=footY+length*.35,rx=shape.shadowWidth*scale,ry=length*.63;
+      // Sunlight falls from the upper right; all projections point down-left.
+      const rotation=.37;mask.moveTo(cx+rx*Math.cos(rotation),cy+rx*Math.sin(rotation));
+      mask.ellipse(cx,cy,rx,ry,rotation,0,TAU);mask.closePath();
+    }
+    mask.fill('nonzero');
+  }
+  mask.globalAlpha=1;
+  ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.globalAlpha=.3;ctx.globalCompositeOperation='source-over';
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(actorShadowCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
+}
+function drawActors(actors,moving=false){for(const actor of sortActors(actors)){const e=actor.entity;if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,moving,e.invuln||0);else enemy(e,clock);}}
+function player(x,y,t,scale=1,facing=0,moving=false,invuln=0){ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(invuln>0&&Math.floor(t*18)%2===0)ctx.globalAlpha=.65;const b=moving?Math.sin(t*17)*1.3:Math.sin(t*2)*.65;ctx.translate(0,b);const flip=Math.cos(facing)<-.1?-1:1;ctx.scale(flip,1);
   // Cloak, boots, soft hood and the little lantern make a readable silhouette.
   ctx.strokeStyle='#253c2a';ctx.lineWidth=1.6;ctx.fillStyle='#567b49';ctx.beginPath();ctx.moveTo(-10,-4);ctx.quadraticCurveTo(-17,6,-16,15);ctx.quadraticCurveTo(0,21,15,14);ctx.lineTo(9,-7);ctx.closePath();ctx.fill();ctx.stroke();
   ellipse(-6+(moving?Math.sin(t*17)*2:0),15,4.2,3.6,'#383e2b');ellipse(6-(moving?Math.sin(t*17)*2:0),15,4.2,3.6,'#383e2b');ctx.fillStyle='#adc19a';ctx.beginPath();ctx.moveTo(-7,-6);ctx.lineTo(8,-6);ctx.lineTo(10,12);ctx.quadraticCurveTo(0,16,-9,11);ctx.closePath();ctx.fill();ctx.fillStyle='#e4dfb8';ctx.beginPath();ctx.moveTo(-14,-8);ctx.quadraticCurveTo(-17,-26,0,-32);ctx.quadraticCurveTo(17,-28,16,-8);ctx.quadraticCurveTo(10,1,-12,-2);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#32452f';ctx.beginPath();ctx.ellipse(2,-12,10,9,0,0,TAU);ctx.fill();ellipse(-2,-12,1.5,2,'#ecf6c8');ellipse(6,-12,1.5,2,'#ecf6c8');ctx.strokeStyle='#b5ab82';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-13,-11);ctx.quadraticCurveTo(-7,-27,3,-28);ctx.stroke();
   ctx.fillStyle='#70964f';ctx.beginPath();ctx.moveTo(-12,-2);ctx.lineTo(11,-3);ctx.lineTo(9,3);ctx.lineTo(-11,4);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(-8,1);ctx.quadraticCurveTo(-18,4,-24,1+Math.sin(t*3)*2);ctx.lineTo(-21,8);ctx.quadraticCurveTo(-13,9,-8,5);ctx.fill();line(17,-14,17,15,'#776346',2.8);ellipse(17,-16,4,5,'#d0dc9f');glow(17,-16,12,'#cceea34a');ellipse(17,3,3,3,'#d8d1a7');line(-6,8,8,8,'#788a5b',2);diamond(1,8,2.2,'#e2c276');ctx.restore();}
-function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(type==='boss'?49:type==='brute'?26:type==='bat'?11:type==='beetle'?18:16);ctx.scale(s,s);const bob=Math.sin(t*(type==='bat'?14:5)+(e.id||0))*(type==='bat'?3:1.5);ellipse(0,type==='boss'?33:12,type==='boss'?47:type==='brute'?28:16,type==='boss'?15:7,'#10231955');ctx.translate(0,bob);const hit=e.hit>0;
+function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(ACTOR_VISUALS[type]?.radius||16);ctx.scale(s,s);const bob=Math.sin(t*(type==='bat'?14:5)+(e.id||0))*(type==='bat'?3:1.5);ctx.translate(0,bob);const hit=e.hit>0;
   if(type==='slime'){ctx.fillStyle=hit?'#e6f3ba':'#8baf61';ctx.strokeStyle='#425b3a';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-17,9);ctx.bezierCurveTo(-21,-3,-10,-16,0,-17);ctx.bezierCurveTo(12,-17,20,-3,17,10);ctx.quadraticCurveTo(3,16,-17,9);ctx.fill();ctx.stroke();ellipse(-5,-8,6,3,hit?'#fff7d5':'#c4d98980');ellipse(-5,0,2,3,'#354933');ellipse(5,0,2,3,'#354933');line(-2,6,2,6,'#466041',1.1);ellipse(10,6,3,1.5,'#dce59066');}
   else if(type==='bat'){const wing=Math.sin(t*18+(e.id||0))*7;ctx.fillStyle=hit?'#f5e6d9':'#a8a5b6';ctx.strokeStyle='#525567';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-5,-3);ctx.lineTo(-28,-13+wing);ctx.lineTo(-22,5+wing*.2);ctx.lineTo(-13,3);ctx.lineTo(-5,9);ctx.lineTo(5,9);ctx.lineTo(13,3);ctx.lineTo(22,5+wing*.2);ctx.lineTo(28,-13+wing);ctx.lineTo(5,-3);ctx.closePath();ctx.fill();ctx.stroke();ellipse(0,0,8,11,hit?'#e9e4e4':'#6e7180');ctx.fillStyle='#6e7180';ctx.beginPath();ctx.moveTo(-7,-6);ctx.lineTo(-6,-15);ctx.lineTo(-1,-8);ctx.lineTo(5,-15);ctx.lineTo(7,-5);ctx.fill();ellipse(-3,-1,1.5,2,'#eed79f');ellipse(3,-1,1.5,2,'#eed79f');}
   else if(type==='beetle'){for(let i=-1;i<=1;i++){const a=Math.sin(t*12+i)*3;line(-10,i*6,-21,i*9+a,'#7b6145',2.5);line(10,i*6,21,i*9-a,'#7b6145',2.5);}ellipse(0,0,15,18,hit?'#e9d9ae':'#b18956');ctx.strokeStyle='#68593d';ctx.lineWidth=1.5;ctx.stroke();ellipse(-5,-5,6,10,hit?'#f5e8c6':'#c8a46c');line(0,-16,0,15,'#776446',2);ellipse(0,-13,10,7,'#777b49');ellipse(-4,-15,1.6,2,'#e5d998');ellipse(4,-15,1.6,2,'#e5d998');}
@@ -127,11 +176,24 @@ function drawStorm(){
   ctx.restore();
 }
 function ambient(intro){const count=intro?25:13;for(let i=0;i<count;i++){const x=(hash(i,9)*width+Math.sin(clock*.2+i)*25+width)%width,y=(hash(i,8)*height-clock*(3+hash(i,7)*5)%height+height)%height,alpha=(.15+Math.sin(clock*1.4+i)*.13);ctx.globalAlpha=alpha;glow(x,y,7,'#daed9daa');ellipse(x,y,1.5,1.5,'#f1f5b3');}ctx.globalAlpha=1;}
-function renderIntro(){background(0,0,true);const mobile=width<760&&height>width*.72,x=width*(mobile?.63:.735),y=height*(mobile?.715:.51),s=mobile?1.7:2.7;glow(x,y-15,135,'#b9d68116');runeCircle(x,y+30*s,70*s,clock,.28);runeCircle(x,y+30*s,51*s,-clock,.12);const surrounds=mobile?[[105,25,'slime',14],[-95,50,'slime',12],[125,-65,'bat',8]]:[[145,40,'slime',22],[-165,95,'slime',17],[210,-105,'bat',13],[-68,-133,'beetle',19],[160,158,'brute',24]];for(const [dx,dy,type,r]of surrounds)enemy({x:x+dx,y:y+dy,r,type,id:dx,hp:10,maxHp:10,hit:0},clock);for(let i=0;i<7;i++){let a=i*2.4,rr=mobile?60:115,gx=x+Math.cos(a)*rr,gy=y+35+Math.sin(a)*rr*.45;diamond(gx,gy,4+(i%2),'#c0e79099');}player(x,y,clock,s,0,false);for(let i=0;i<2;i++){const a=clock*.6+i*Math.PI,xx=x+Math.cos(a)*s*36,yy=y+Math.sin(a)*s*20;glow(xx,yy,25,'#e5edaf12');blade(xx,yy,a+.8,s*.7);}ambient(true);}
-function renderGame(){const p=game.player;const camX=p.x,camY=p.y;background(camX,camY,false);ctx.save();let sx=0,sy=0;if(shake>0&&!reduced){sx=(Math.random()-.5)*shake;sy=(Math.random()-.5)*shake;}ctx.translate(width/2-camX+sx,height/2-camY+sy);
+function renderIntro(){
+  background(0,0,true);const mobile=width<760&&height>width*.72,x=width*(mobile?.63:.735),y=height*(mobile?.715:.51),s=mobile?1.7:2.7;
+  const surrounds=mobile?[[105,25,'slime',14],[-95,50,'slime',12],[125,-65,'bat',8]]:[[145,40,'slime',22],[-165,95,'slime',17],[210,-105,'bat',13],[-68,-133,'beetle',19],[160,158,'brute',24]];
+  const actors=surrounds.map(([dx,dy,type,r],id)=>actorVisual({x:x+dx,y:y+dy,r,type,id:id+1,hp:10,maxHp:10,hit:0}));
+  actors.push(actorVisual({x,y,facing:0},true,s));
+  const visible=actors.filter(actor=>actorInView(actor));
+  glow(x,y-15,135,'#b9d68116');drawActorShadows(visible);runeCircle(x,y+30*s,70*s,clock,.28);runeCircle(x,y+30*s,51*s,-clock,.12);
+  for(let i=0;i<7;i++){let a=i*2.4,rr=mobile?60:115,gx=x+Math.cos(a)*rr,gy=y+35+Math.sin(a)*rr*.45;diamond(gx,gy,4+(i%2),'#c0e79099');}
+  drawActors(visible);
+  for(let i=0;i<2;i++){const a=clock*.6+i*Math.PI,xx=x+Math.cos(a)*s*36,yy=y+Math.sin(a)*s*20;glow(xx,yy,25,'#e5edaf12');blade(xx,yy,a+.8,s*.7);}ambient(true);
+}
+function renderGame(){const p=game.player,camX=p.x,camY=p.y;background(camX,camY,false);let sx=0,sy=0;if(shake>0&&!reduced){sx=(Math.random()-.5)*shake;sy=(Math.random()-.5)*shake;}
+  const offsetX=width/2-camX+sx,offsetY=height/2-camY+sy;
+  const actors=game.enemies.map(e=>actorVisual(e)).filter(actor=>actorInView(actor,offsetX,offsetY));actors.push(actorVisual(p,true));
+  drawActorShadows(actors,offsetX,offsetY);ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(Math.abs(gem.x-p.x)>width/2+20||Math.abs(gem.y-p.y)>height/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   for(const e of game.effects)if(e.type==='ring')effects(e);
-  const actors=game.enemies.filter(e=>Math.abs(e.x-p.x)<width/2+100&&Math.abs(e.y-p.y)<height/2+110).map(e=>({y:e.y,e}));actors.push({y:p.y,p:true});actors.sort((a,b)=>a.y-b.y);for(const a of actors){if(a.p)player(p.x,p.y,clock,1.1,p.facing,Math.hypot(input.x,input.y)>.1,p.invuln);else enemy(a.e,clock);}
+  drawActors(actors,Math.hypot(input.x,input.y)>.1);
   for(const b of game.bullets){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);line(-18,0,0,0,'#c2eda83b',5);line(-9,0,5,0,b.color,2.8);ctx.fillStyle='#f6f6cf';ctx.beginPath();ctx.moveTo(7,0);ctx.lineTo(-1,-3.5);ctx.lineTo(-1,3.5);ctx.closePath();ctx.fill();ctx.restore();}
   for(const b of game.orbitals){blade(b.x,b.y,b.angle+clock,1);}
   for(const e of game.effects)if(e.type!=='ring')effects(e);
