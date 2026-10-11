@@ -28,15 +28,16 @@ export class Game {
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.status = 'playing'; this.time = 0; this.kills = 0; this.wave = 1;
     this.viewWidth = 1100; this.viewHeight = 650;
-    this.player = {x:0,y:0,r:15,hp:this.easy?140:100,maxHp:this.easy?140:100,speed:220,level:1,xp:0,xpNext:14,invuln:0,dashCooldown:0,dashDuration:0,facing:0};
+    this.player = {x:0,y:0,r:15,hp:this.easy?140:100,maxHp:this.easy?140:100,speed:220,level:1,xp:0,xpNext:14,invuln:0,skillCooldown:0,skillCooldownMax:15,facing:0};
     this.enemies = []; this.bullets = []; this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
+    this.storm = null;
     this.bossSpawned = false; this.bossDefeated = false;
     this.nextBossAt = 150; this.bossCount = 0; this.bossKills = 0;
     this.levels = Object.fromEntries([...UPGRADE_DEFS,...ENDLESS_UPGRADES].map(u => [u.id, 0]));
     this.weapons = [{id:'arrow',name:'翠羽飞矢',level:1,icon:'➶'}];
     this.stats = {damage:1,fireRate:1,moveSpeed:1,magnet:72};
     this._id = 0; this._clock = 0; this._shot = .15; this._spawn = .4;
-    this._pulse = 1; this._lightning = 1; this._choices = null; this._dashDirection = {x:1,y:0};
+    this._pulse = 1; this._lightning = 1; this._choices = null;
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     for(let i=0;i<4;i++) this._spawnEnemy('slime', 330 + i * 24);
   }
@@ -47,6 +48,24 @@ export class Game {
     this.effects.push({x,y,type,life,maxLife:life,r,color,text,...extra});
   }
   _damageMultiplier() { return 1 + this.levels.power * .25 + this.levels.endlessPower * .08; }
+  _castStorm() {
+    const p=this.player, halfW=this.viewWidth*.5, halfH=this.viewHeight*.5;
+    const targets=this.enemies.filter(e=>{
+      if(e.hp<=0) return false;
+      const dx=Math.max(0,Math.abs(e.x-p.x)-halfW), dy=Math.max(0,Math.abs(e.y-p.y)-halfH);
+      return dx*dx+dy*dy<=e.r*e.r;
+    });
+    p.skillCooldown=p.skillCooldownMax;
+    // This separate snapshot keeps every strike visible after enemies die or
+    // the generic particle cap trims hit effects during a crowded screen clear.
+    this.storm={x:p.x,y:p.y,viewWidth:this.viewWidth,viewHeight:this.viewHeight,life:.65,maxLife:.65,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
+    this._emit('skill');
+    for(const e of targets) {
+      this._hurtEnemy(e,160*this._damageMultiplier());
+      this._effect(e.x,e.y,'thunder',.6,e.r,'#d4e7ff');
+    }
+    this._effect(p.x,p.y,'ring',.45,95,'#d4e7ff');
+  }
   _nearest(x,y,range=1000,exclude) {
     let best=null, d=range*range;
     for(const e of this.enemies) if(e.hp>0 && !exclude?.has(e.id)) {
@@ -110,20 +129,12 @@ export class Game {
     this.time+=dt; this._clock+=dt;
     const wave=1+Math.floor(this.time/60);
     if(wave!==this.wave) { this.wave=wave; this._emit('wave'); }
-    p.invuln=Math.max(0,p.invuln-dt); p.dashCooldown=Math.max(0,p.dashCooldown-dt);
+    p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=Math.max(0,p.skillCooldown-dt);
+    if(this.storm) { this.storm.life-=dt; if(this.storm.life<=0) this.storm=null; }
     let ix=Number.isFinite(input.x)?input.x:0,iy=Number.isFinite(input.y)?input.y:0;
     const length=Math.hypot(ix,iy); if(length>1) { ix/=length; iy/=length; }
     if(length>.01) p.facing=Math.atan2(iy,ix);
-    if(input.dash && p.dashCooldown<=0) {
-      p.dashDuration=.19; p.dashCooldown=3; p.invuln=Math.max(p.invuln,.38);
-      this._dashDirection=length>.01?{x:ix/(Math.hypot(ix,iy)||1),y:iy/(Math.hypot(ix,iy)||1)}:{x:Math.cos(p.facing),y:Math.sin(p.facing)};
-      this._emit('dash');
-    }
-    if(p.dashDuration>0) {
-      p.dashDuration=Math.max(0,p.dashDuration-dt);
-      p.x+=this._dashDirection.x*790*dt; p.y+=this._dashDirection.y*790*dt;
-      this._effect(p.x,p.y,'dash',.25,14,'#b7e1c1');
-    } else { p.x+=ix*p.speed*dt; p.y+=iy*p.speed*dt; }
+    p.x+=ix*p.speed*dt; p.y+=iy*p.speed*dt;
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
     this._spawn-=dt;
     if(this._spawn<=0) {
@@ -165,6 +176,7 @@ export class Game {
         }
       }
     }
+    if(input.skill && p.skillCooldown<=0) this._castStorm();
     for(const e of this._nearby(p.x,p.y,85)) {
       if(e.hp>0 && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
         p.hp=Math.max(0,p.hp-e.damage);p.invuln=.72;this._emit('hurt');

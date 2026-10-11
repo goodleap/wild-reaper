@@ -8,14 +8,58 @@ const finite = (g) => {
   for(const e of g.enemies) assert(Number.isFinite(e.hp)&&Number.isFinite(e.maxHp)&&Number.isFinite(e.damage));
   assert(g.player.hp>=0&&g.player.hp<=g.player.maxHp);
   assert(Number.isFinite(g.player.maxHp)&&Number.isFinite(g.stats.damage));
+  assert(g.player.skillCooldown>=0&&g.player.skillCooldown<=g.player.skillCooldownMax);
+  if(g.storm) {assert(g.storm.targets.length<=181);for(const t of g.storm.targets)assert(Number.isFinite(t.x)&&Number.isFinite(t.y));}
   assert(g.enemies.length<=181,'enemy count stays bounded');
   assert(g.enemies.filter(e=>e.type==='boss'&&e.hp>0).length<=1,'only one living boss');
   assert(g.bullets.length<=60&&g.orbitals.length<=6&&g.effects.length<=201&&g.gems.length<=500);
   assert(['playing','upgrade','dead'].includes(g.status),'no terminal win state');
 };
-const dash = new Game();
-dash.update(.02,{x:1,y:0,dash:true});
-assert(dash.player.x>10&&dash.player.invuln>0&&dash.player.dashCooldown>2.9);
+// Isolate active skill behavior from passive shots, spawns and movement.
+const skillArena=()=>{const g=new Game();g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;return g;};
+const target=(g,x,y,{type='slime',hp=100,r=10}={})=>{
+  g._spawnEnemy(type);const e=g.enemies.at(-1);Object.assign(e,{x,y,r,hp,maxHp:hp,speed:0});return e;
+};
+const skill=skillArena();
+const inside=[target(skill,190,140),target(skill,-190,140),target(skill,190,-140),target(skill,-190,-140)];
+const edge=target(skill,208,155); // Circle intersects the top-right corner.
+const outside=[target(skill,211,0),target(skill,0,161),target(skill,208,158)]; // Corner AABB alone is insufficient.
+skill.update(0,{skill:true});
+assert.equal(skill.kills,5);assert.equal(skill.gems.length,5);
+assert.equal(skill.gems.reduce((n,g)=>n+g.value,0),inside.reduce((n,e)=>n+e.xp,0)+edge.xp);
+assert(outside.every(e=>e.hp===100),'offscreen enemies stay unharmed');
+assert.equal(skill.storm.targets.length,5);assert.equal(skill.storm.x,0);assert.equal(skill.storm.y,0);
+assert.equal(skill.player.skillCooldown,15);assert.equal(skill.player.invuln,0);
+assert.equal(skill.player.x,0);assert.equal(skill.player.y,0);
+assert.equal(skill.events.filter(e=>e.type==='skill').length,1);
+assert(!('dashCooldown' in skill.player)&&!('dashDuration' in skill.player));
+const bossSkill=skillArena();bossSkill.levels.power=2;
+const skillBoss=target(bossSkill,100,0,{type:'boss',hp:2000,r:35});
+bossSkill.update(0,{skill:true});
+assert.equal(skillBoss.hp,1760,'boss receives scaled damage, not an instant kill');
+bossSkill.update(.05,{skill:true});assert.equal(skillBoss.hp,1760,'held/repeated input respects cooldown');
+assert.equal(bossSkill.bossKills,0);assert.equal(bossSkill.kills,0);
+bossSkill.enemies=[];
+for(let i=0;i<298;i++)bossSkill.update(.05,{});
+assert(bossSkill.player.skillCooldown>0,'not ready before fifteen seconds');
+bossSkill.update(0,{skill:true});assert.equal(bossSkill.events.filter(e=>e.type==='skill').length,1);
+for(let i=0;i<2;i++)bossSkill.update(.05,{});
+bossSkill.update(0,{skill:true});assert.equal(bossSkill.events.filter(e=>e.type==='skill').length,2);
+const empty=skillArena();empty.update(.02,{x:1,y:0,skill:true});
+assert.equal(empty.player.x,4.4,'cast has no movement boost');assert.equal(empty.player.invuln,0);
+assert.equal(empty.player.skillCooldown,15);assert.equal(empty.storm.targets.length,0);
+assert.equal(empty.storm.x,empty.player.x,'empty storm stores the cast position');
+const skillFrozen={time:empty.time,life:empty.storm.life,cooldown:empty.player.skillCooldown};
+empty.status='upgrade';empty.update(.05,{skill:true});
+assert.deepEqual({time:empty.time,life:empty.storm.life,cooldown:empty.player.skillCooldown},skillFrozen,'paused upgrades freeze storm and cooldown');
+const save=skillArena();save.player.hp=1;target(save,0,0);
+save.update(.02,{skill:true});assert.equal(save.status,'playing');assert.equal(save.player.hp,1);
+assert.equal(save.kills,1);assert.equal(save.player.xp,4,'contact threat dies first, with normal XP pickup');
+const dense=skillArena();
+for(let i=0;i<180;i++)target(dense,-180+(i%18)*20,-135+Math.floor(i/18)*28);
+dense.update(0,{skill:true});
+assert.equal(dense.storm.targets.length,180,'storm preserves every target beyond generic effect cap');
+assert.equal(dense.kills,180);assert(dense.effects.length<=201);
 const pause = new Game();
 pause.player.xp=120;pause.update(.02,{});
 assert.equal(pause.status,'upgrade');assert.equal(pause.getUpgradeChoices().length,3);
@@ -76,7 +120,7 @@ const sim=(difficulty,seconds,immortal=false)=>{
     let vy=target?(target.y-p.y)/(distance||1):Math.sin(g.time*.7)*.2;
     for(const e of g.enemies){const dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||1;if(d<105){const force=(105-d)/105*2;vx+=dx/d*force;vy+=dy/d*force;}}
     const l=Math.hypot(vx,vy)||1;
-    g.update(1/30,{x:vx/l,y:vy/l,dash:g.player.hp<30&&g.player.dashCooldown<=0});
+    g.update(1/30,{x:vx/l,y:vy/l,skill:g.player.skillCooldown<=0&&g.enemies.length>=8});
     if(g.time<180)killsAt180=g.kills;
     maxEnemies=Math.max(maxEnemies,g.enemies.length);maxBullets=Math.max(maxBullets,g.bullets.length);maxGems=Math.max(maxGems,g.gems.length);
     if(frames%60===0)finite(g);

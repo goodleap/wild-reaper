@@ -19,7 +19,7 @@
 
     <main>
       <section class="arena" id="arena" aria-label="荒野回响游戏区域">
-        <canvas id="game-canvas" aria-label="使用 WASD 或方向键移动，空格冲刺；手机拖动屏幕移动"></canvas>
+        <canvas id="game-canvas" aria-label="使用 WASD 或方向键移动，空格释放天雷轰击；手机拖动屏幕移动"></canvas>
         <div class="vignette"></div>
         <div class="terrain-label"><span>01 / THE WHISPERING WOODS</span><span>低语之森</span></div>
 
@@ -45,16 +45,16 @@
           <div class="intro-bottom"><span><i class="live-dot"></i> 无需下载，即刻开战</span><span>探索你的生存流派 <span>↘</span></span></div>
         </div>
 
-        <div class="game-bottom hidden" id="game-bottom"><div class="loadout" id="loadout"></div><div class="dash-box"><span class="dash-key">SPACE</span><span id="dash-label">冲刺就绪</span><div class="dash-track"><i id="dash-fill"></i></div></div></div>
+        <div class="game-bottom hidden" id="game-bottom"><div class="loadout" id="loadout"></div><button class="skill-box" id="skill-button" aria-label="释放天雷轰击" title="天雷轰击 · 空格 · 冷却 15 秒"><span class="skill-key">SPACE</span><span id="skill-label">天雷轰击 · 就绪</span><div class="skill-track"><i id="skill-fill"></i></div></button></div>
         <div id="joystick" class="joystick hidden"><div id="joystick-thumb"></div></div>
-        <button class="touch-dash hidden" id="touch-dash" aria-label="冲刺">ϟ<small>冲刺</small></button>
+        <button class="touch-skill hidden" id="touch-skill" aria-label="释放天雷轰击"><span id="skill-symbol">ϟ</span><small id="touch-skill-label">天雷</small></button>
 
         <div class="modal-layer hidden" id="upgrade-overlay"><div class="upgrade-panel" role="dialog" aria-modal="true" aria-labelledby="upgrade-title"><div class="eyebrow centered">✦ &nbsp; LEVEL UP</div><h2 id="upgrade-title">荒野的馈赠</h2><p>选择一项强化，让下一波怪潮记住你。</p><div id="upgrade-cards" class="upgrade-cards"></div><span class="modal-footnote">时间已暂停 · 选择后继续冒险</span></div></div>
         <div class="modal-layer hidden" id="pause-overlay"><div class="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="eyebrow centered">TAKE A BREATH</div><h2 id="pause-title">在此，稍作停留。</h2><p>荒野会等你。准备好了就继续。</p><button class="primary-button wide" id="resume-button">继续冒险 <span>→</span></button><button class="secondary-button wide" id="quit-button">结束本局，返回首页</button></div></div>
         <div class="modal-layer hidden" id="end-overlay"><div class="dialog-panel end-panel" role="dialog" aria-modal="true" aria-labelledby="end-title"><div class="end-emblem" id="end-emblem">✦</div><div class="eyebrow centered" id="end-kicker">THE JOURNEY CONTINUES</div><h2 id="end-title">荒野记住了你。</h2><p id="end-description">每一次出发，都比上一次更强。</p><div class="end-stats"><div><strong id="end-time">00:00</strong><span>存活时间</span></div><div><strong id="end-kills">0</strong><span>击败怪物</span></div><div><strong id="end-level">1</strong><span>最终等级</span></div></div><button id="restart-button" class="primary-button wide">再次出发 <span>↗</span></button><button id="home-button" class="secondary-button wide">返回首页</button></div></div>
-        <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list"><div><b>01</b><p><strong>保持移动</strong><span>WASD / 方向键移动；手机拖动屏幕。灵弹会自动瞄准最近的敌人。</span></p></div><div><b>02</b><p><strong>收集与进化</strong><span>靠近绿色灵晶可拾取经验，升级时三选一，组合你的专属技能。</span></p></div><div><b>03</b><p><strong>冲出包围</strong><span>按空格或手机冲刺按钮短暂无敌，冷却 3 秒。Esc / P 暂停。</span></p></div><div><b>04</b><p><strong>无尽挑战</strong><span>没有时间上限。每分钟怪潮增强；首位领主在 02:30 出现，此后约每 2 分 30 秒再临，存活越久挑战越强。</span></p></div></div><button id="help-done" class="primary-button wide">准备好了 <span>→</span></button></div></div>
+        <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list"><div><b>01</b><p><strong>保持移动</strong><span>WASD / 方向键移动；手机拖动屏幕。灵弹会自动瞄准最近的敌人。</span></p></div><div><b>02</b><p><strong>收集与进化</strong><span>靠近绿色灵晶可拾取经验，升级时三选一，组合你的专属技能。</span></p></div><div><b>03</b><p><strong>天雷轰击</strong><span>按空格或点击天雷按钮，雷击屏幕内全部怪物，冷却 15 秒。伤害随强化提升，领主也会受到伤害。Esc / P 暂停。</span></p></div><div><b>04</b><p><strong>无尽挑战</strong><span>没有时间上限。每分钟怪潮增强；首位领主在 02:30 出现，此后约每 2 分 30 秒再临，存活越久挑战越强。</span></p></div></div><button id="help-done" class="primary-button wide">准备好了 <span>→</span></button></div></div>
       </section>
-      <footer class="footer"><div class="keyboard-guide"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移动</span><i></i><kbd class="space-key">SPACE</kbd><span>冲刺</span><i></i><kbd>ESC</kbd><span>暂停</span></div><div class="mobile-guide">拖动屏幕移动 · 点击右下角冲刺</div><span class="footer-note">保持移动。惊喜总在下一次升级。</span></footer>
+      <footer class="footer"><div class="keyboard-guide"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移动</span><i></i><kbd class="space-key">SPACE</kbd><span>天雷轰击</span><i></i><kbd>ESC</kbd><span>暂停</span></div><div class="mobile-guide">拖动屏幕移动 · 点击右下角释放天雷</div><span class="footer-note">保持移动。惊喜总在下一次升级。</span></footer>
     </main>
   </div>
   <script type="module" src="./app.js"></script>
