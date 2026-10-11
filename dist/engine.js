@@ -116,6 +116,9 @@ export class Game {
     this.companions=new Companions(this,{generation:companions});
     this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);
     this.settlements??=new Settlements(this,{generation:settlements});
+    // A debug run gets a one-time testing budget; choices still use the
+    // ordinary crystal thresholds and begin on the first gameplay update.
+    if(this.debug)this.grantResources({gold:500,crystals:150},'debugStart');
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -430,7 +433,10 @@ export class Game {
     this._trySkillUpgrade();return true;
   }
   getShopItems(){return this.settlements.getShopItems();}
-  buyShopItem(id){return this.status==='shop'&&this.settlements.buy(id);}
+  buyShopItem(id){
+    if(this.status!=='shop'||!this.settlements.buy(id))return false;
+    this._trySkillUpgrade();return true;
+  }
   closeShop(){
     if(this.status!=='shop')return false;
     const result=this.settlements.closeShop();this._trySkillUpgrade();return result!==false;

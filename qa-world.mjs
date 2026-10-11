@@ -12,12 +12,29 @@ function advance(g,t){for(let left=t;left>1e-8;left-=.025)g.update(Math.min(.025
 function kill(g,e){feet(g,{x:e.x,y:e.y+groundOffset(e)});g.dungeon.updateEnemy(e,0);g._hurtEnemy(e,e.hp+(e.affix?.shield||0)+100);assert(e.hp<=0,JSON.stringify({id:e.id,hp:e.hp,active:e.guardActive,x:e.x,y:e.y,player:g.player}));}
 function clearCamp(g){const camp=g.companions.spawn('warden');assert(camp);for(const e of g.enemies.filter(e=>e.rescueId===camp.id))g._hurtEnemy(e,e.hp+100);feet(g,camp);g.update(0);assert(g.companions.active);return g.companions.active;}
 
-// Deterministic broad building foundations really block feet, while front doors
-// and interaction approaches stay clear in every existing region.
+// Small houses retain real, finite collision bounds; the independent merchant
+// has no invisible house or stall. All approaches stay clear in every region.
 for(const [index,region] of REGIONS.entries()){
  const g=arena();g.regionIndex=index;g.region=region;g.terrain=new Terrain({region:region.id,seed:index});g.settlements.resetRegion();
  const layout=g.settlements.sites.map(s=>[s.id,s.type,s.x,s.y]);assert.equal(layout.length,5);assert.equal(new Set(layout.map(x=>x[1])).size,5);
- for(const s of g.settlements.sites){assert(g.terrain.isFree(s.door.x,s.door.y,20));assert(!g.settlements.isSafePoint(s.x,s.y,30));if(s.type!=='angel')assert(!g.terrain.isFree(s.x,s.y-s.depth/2,15),'building foundations have actual collision');}
+ for(const s of g.settlements.sites){
+  assert(g.terrain.isFree(s.door.x,s.door.y,20));assert(!g.settlements.isSafePoint(s.x,s.y,30));
+  if(s.type==='supply'||s.type==='occupied'){
+   assert(s.width>=50&&s.width<=60&&s.depth>=24&&s.depth<=32,'huts use a compact footprint beside the traveler');
+   assert(!g.terrain.isFree(s.x,s.y-s.depth/2,15),'small house foundations still block feet');
+   for(const wall of g.terrain.query(s.x-100,s.y-100,s.x+100,s.y+100).filter(o=>o.structureId===s.id)){
+    assert([wall.x,wall.y,wall.r,wall.halfLength,...Object.values(wall.bounds)].every(Number.isFinite),'shallow foundations never divide by zero');
+    assert(wall.bounds.minX>=s.x-s.width/2-.01&&wall.bounds.maxX<=s.x+s.width/2+.01,'collision width matches the small house');
+    assert(wall.bounds.minY>=s.y-s.depth-.01&&wall.bounds.maxY<=s.y+.01,'collision depth matches the small house');
+   }
+  }else if(s.type==='castle')assert(!g.terrain.isFree(s.x,s.y-s.depth/2,15),'castle foundation stays solid');
+  if(s.type==='merchant'){
+   assert.deepEqual(s.door,{x:s.x,y:s.y},'independent merchant interaction is located at the NPC feet');
+   assert.equal(g.terrain.query(s.x-200,s.y-200,s.x+200,s.y+200).some(o=>o.structureId===s.id),false,'merchant has no house/stall foundation');
+   assert(g.terrain.isFree(s.x,s.y,g.player.r),'merchant position remains walkable');
+   for(const house of g.settlements.sites.filter(o=>o.type==='supply'||o.type==='occupied'))assert(Math.hypot(s.x-house.x,s.y-house.y)>s.width/2+house.width/2+160,'merchant stands away from houses');
+  }
+ }
  g.settlements.resetRegion();assert.deepEqual(g.settlements.sites.map(s=>[s.id,s.type,s.x,s.y]),layout,'rebuilding unchanged region does not shuffle sites');
  const oldIds=new Set(g.terrain.query(-2000,-2000,2000,2000).filter(o=>o.structureId).map(o=>o.id));assert(oldIds.size>0);g.terrain.setStructures([]);assert(!g.terrain.query(-2000,-2000,2000,2000).some(o=>oldIds.has(o.id)),'the structures layer can be cleared without stale collisions');
 }
@@ -26,11 +43,34 @@ for(const type of ['merchant','castle','supply']){const s=site(safeDoors,type);a
 const shopping=arena(),merchant=near(shopping,'merchant');
 assert.equal(shopping.getInteraction().id,merchant.id);assert(shopping.interact());assert.equal(shopping.status,'shop');
 const stockBefore=structuredClone(merchant.stock);assert.equal(shopping.buyShopItem('heal'),false);assert.deepEqual(merchant.stock,stockBefore);assert.equal(shopping.gold,0,'unaffordable purchases cannot debit gold');
-shopping.gold=200;assert.equal(shopping.buyShopItem('heal'),false);assert.equal(shopping.gold,200,'a full health potion is rejected without payment');shopping.player.hp=40;
-assert(shopping.buyShopItem('heal'));assert.equal(shopping.player.hp,75);assert.equal(shopping.gold,188);assert.equal(shopping.buyShopItem('heal'),false,'stock cannot be purchased twice');
-assert(shopping.buyShopItem('magnet'));assert(shopping.buyShopItem('fury'));assert(shopping.buyShopItem('shield'));assert(shopping.buyShopItem('relic'));assert.equal(shopping.gold,96);assert.equal(shopping.relics.wardAmount,18);assert(shopping.relics.has(merchant.relicId));
+assert.equal(merchant.state,'ready');assert.equal(shopping.status,'shop','failed purchase keeps the merchant and shop open');
+shopping.gold=200;assert.equal(shopping.buyShopItem('heal'),false);assert.equal(shopping.gold,200,'a full health potion is rejected without payment');assert.deepEqual(merchant.stock,stockBefore);assert.equal(merchant.state,'ready');
+assert.equal(shopping.buyShopItem('unknown'),false);assert.equal(shopping.gold,200);assert.deepEqual(merchant.stock,stockBefore);
+shopping.adventure.furyTime=5;shopping.adventure.magnetTime=3;
 const shopFrozen={time:shopping.time,clock:shopping._clock,hp:shopping.player.hp,fury:shopping.adventure.furyTime,magnet:shopping.adventure.magnetTime};advance(shopping,3);assert.deepEqual({time:shopping.time,clock:shopping._clock,hp:shopping.player.hp,fury:shopping.adventure.furyTime,magnet:shopping.adventure.magnetTime},shopFrozen,'shopping freezes enemy time and buff decay');
-shopping.crystalsNext=40;shopping.addCrystals(40);assert.equal(shopping.status,'shop');assert(shopping.closeShop());assert.equal(shopping.status,'upgrade','banked skill choice waits until shopping is closed');assert(shopping.chooseUpgrade(shopping.getUpgradeChoices()[0].id));assert.equal(shopping.closeShop(),false);assert.equal(shopping.buyShopItem('fury'),false);
+assert(shopping.closeShop());assert.equal(shopping.status,'playing');assert.equal(merchant.state,'ready','closing without a purchase does not consume the merchant');assert.equal(shopping.settlements.activeShop,null);assert.equal(shopping.getInteraction().id,merchant.id);assert(shopping.interact(),'merchant can be reopened after cancellation');
+shopping.crystalsNext=40;shopping.addCrystals(40);assert.equal(shopping.status,'shop');assert(shopping.closeShop());assert.equal(shopping.status,'upgrade','banked skill choice waits until shopping is closed');assert(shopping.chooseUpgrade(shopping.getUpgradeChoices()[0].id));assert.equal(shopping.closeShop(),false);assert.equal(shopping.buyShopItem('fury'),false);assert.equal(merchant.state,'ready');
+for(const itemId of ['heal','magnet','fury','shield','relic']){
+ const buyer=arena(),trader=near(buyer,'merchant');buyer.gold=200;buyer.player.hp=40;assert(buyer.interact());
+ const item=buyer.getShopItems().find(i=>i.id===itemId),beforeStock=structuredClone(trader.stock);assert(item.available);
+ assert(buyer.buyShopItem(itemId));assert.equal(buyer.gold,200-item.price);assert.equal(trader.stock[itemId],beforeStock[itemId]-1);
+ for(const id of Object.keys(beforeStock))if(id!==itemId)assert.equal(trader.stock[id],beforeStock[id],'unselected goods are not sold');
+ if(itemId==='heal')assert.equal(buyer.player.hp,75);
+ if(itemId==='magnet')assert.equal(buyer.adventure.magnetTime,8);
+ if(itemId==='fury')assert.equal(buyer.adventure.furyTime,8);
+ if(itemId==='shield')assert.equal(buyer.relics.wardAmount,18);
+ if(itemId==='relic')assert(buyer.relics.has(trader.relicId));
+ assert.equal(trader.state,'spent','the first successful trade consumes this merchant');assert.equal(buyer.status,'playing');assert.equal(buyer.settlements.activeShop,null);assert.deepEqual(buyer.getShopItems(),[]);
+ assert.equal(buyer.getInteraction()?.id===trader.id,false);assert.equal(buyer.interact(trader.id),false);assert.equal(buyer.settlements.interact(trader.id),false);
+ assert.equal(buyer.buyShopItem(itemId),false);assert.equal(buyer.settlements.buy(itemId),false);assert.equal(buyer.buyShopItem(itemId==='relic'?'fury':'relic'),false,'a second item cannot be purchased after departure');assert.equal(buyer.gold,200-item.price);
+ assert.equal(buyer.events.filter(e=>e.type==='shopBought').length,1);assert.equal(buyer.events.filter(e=>e.type==='merchantDeparted').length,1);
+ assert.equal(buyer.settlements.sites.find(s=>s.id===trader.id),trader,'consumed merchant keeps its identity for world persistence');assert.equal(buyer.settlements.isSafePoint(trader.x,trader.y),true,'departed merchant does not reserve an invisible objective area');
+}
+const pendingBuyer=arena(),pendingTrader=near(pendingBuyer,'merchant');pendingBuyer.gold=100;assert(pendingBuyer.interact());pendingBuyer.crystalsNext=40;pendingBuyer.addCrystals(40);
+assert(pendingBuyer.buyShopItem('fury'));assert.equal(pendingBuyer.status,'upgrade','successful trade flushes a banked skill choice after closing the shop');assert.equal(pendingTrader.state,'spent');assert.equal(pendingBuyer.settlements.activeShop,null);assert(pendingBuyer.chooseUpgrade(pendingBuyer.getUpgradeChoices()[0].id));assert.equal(pendingBuyer.status,'playing');assert.equal(pendingBuyer.getInteraction()?.id===pendingTrader.id,false);
+const revisit=arena(),departed=near(revisit,'merchant');revisit.gold=100;assert(revisit.interact());assert(revisit.buyShopItem('shield'));const remainingGold=revisit.gold,departedStock=structuredClone(departed.stock);
+near(revisit,'castle');assert(revisit.interact());assert(revisit.dungeon.active);assert(revisit.interact());assert.equal(revisit.dungeon.active,null);feet(revisit,departed.door);
+assert.equal(revisit.settlements.sites.find(s=>s.id===departed.id),departed);assert.equal(departed.state,'spent');assert.deepEqual(departed.stock,departedStock);assert.equal(revisit.gold,remainingGold);assert.equal(revisit.getInteraction()?.id===departed.id,false,'castle round trip never respawns a departed merchant');assert.equal(revisit.interact(departed.id),false);
 const angel=arena(),shrine=near(angel,'angel');angel.player.hp=31;assert(angel.interact());assert.equal(angel.player.hp,66);assert.equal(shrine.state,'spent');assert.equal(angel.interact(shrine.id),false);assert.equal(angel.player.hp,66);
 const ward=arena(),wardSite=near(ward,'angel');assert(ward.interact());assert.equal(ward.relics.wardAmount,18);ward.player.invuln=0;ward._hurtPlayer(30);assert.equal(ward.player.hp,88);assert.equal(ward.relics.wardAmount,0,'angel shield absorbs exactly its advertised damage once');assert.equal(ward.settlements.interact(wardSite.id),false);
 const preserve=arena(),unusedAngel=near(preserve,'angel');preserve.relics.grantWard(18);assert.equal(preserve.getInteraction().enabled,false);assert.equal(preserve.interact(),false);assert.equal(unusedAngel.state,'ready','an unusable blessing remains available');
@@ -72,4 +112,4 @@ feet(journey,worldPortal);assert(journey.enterPortal());assert(journey.chooseSup
 
 const campRun=arena(),camp=campRun.companions.spawn('stormcaller');assert(camp);const campLife=camp.life,campEnemies=campRun.enemies;const campCastle=near(campRun,'castle');assert(campRun.interact());assert.equal(campRun.companions.camp,null);advance(campRun,2);feet(campRun,campRun.dungeon.active.entrance);assert(campRun.interact());assert.equal(campRun.companions.camp,camp);assert.equal(camp.life,campLife,'unrescued overworld camp timeout is suspended inside');assert.equal(campRun.enemies,campEnemies);
 const boundedRun=arena();near(boundedRun,'castle');assert(boundedRun.interact());const limits=boundedRun.dungeon.active.bounds;boundedRun.player.x=limits.maxX+1000;boundedRun.player.y=limits.minY-1000;boundedRun.update(.025);assert(boundedRun.player.x<limits.maxX&&boundedRun.player.y>limits.minY,'independent finite bounds recover oversized displacements');boundedRun.status='dead';assert.equal(boundedRun.dungeon.exit(),false);assert.equal(boundedRun.interact(),false,'death cannot claim or leave to bypass the result');
-console.log('World content: deterministic solid buildings, shop stocks/payment/pause, angel single-use healing/shield, distinct hut rewards, finite connected castle, guarded chests, frozen overworld, preserved buffs/allies, retreat continuity and exclusive once-only Boss treasures passed.');
+console.log('World content: compact solid huts, independent merchants, one successful trade and departure, rejected/cancelled trade preservation, pending upgrades, merchant persistence after castle return, angel healing/shield, distinct hut rewards, finite connected castle, guarded chests, frozen overworld, preserved buffs/allies, retreat continuity and exclusive once-only Boss treasures passed.');

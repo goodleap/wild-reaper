@@ -43,7 +43,7 @@ for(const difficulty of ['normal','casual']){const radio=$(`difficulty-${difficu
 
 
 function clearInput(){keys.clear();skillRequested=false;portalRequested=false;touch=null;input={x:0,y:0,skill:false};show('joystick',false);$('joystick-thumb').style.transform='';}
-function startGame(){pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';saveSetup();game=new Game({difficulty:selectedDifficulty,debug:debugMode});game.viewWidth=width;game.viewHeight=height;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?'调试模式 · 城堡已移至出生点附近。':'击杀自动成长 · 拾取灵晶强化技能，金币可交易。');updateHUD();canvas.focus({preventScroll:true});}
+function startGame(){pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';saveSetup();game=new Game({difficulty:selectedDifficulty,debug:debugMode});game.viewWidth=width;game.viewHeight=height;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?'调试模式 · 500 金币、150 灵晶已到账，城堡就在附近。':'击杀自动成长 · 拾取灵晶强化技能，金币可交易。');updateHUD();canvas.focus({preventScroll:true});}
 function home(){pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=null;paused=false;runEnded=false;clearInput();for(const id of ['hud','game-bottom','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','touch-skill','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('intro');arena.classList.remove('playing');arena.classList.remove('has-encounter');arena.classList.remove('has-relics');arena.classList.remove('near-portal');arena.classList.remove('has-companion');arena.classList.remove('has-rescue-power');arena.classList.remove('has-supers');arena.classList.remove('in-dungeon');$('terrain-code').textContent='01 / THE WHISPERING WOODS';$('terrain-name').textContent='低语之森';$('toast').classList.remove('visible');bestText();$('start-button').focus({preventScroll:true});}
 function pause(){if(!game||!['playing','relic','upgrade','super','shop'].includes(game.status)||runEnded)return;paused=true;clearInput();show('pause-overlay');$('resume-button').focus({preventScroll:true});}
 function focusGameDialog(){const id={relic:'relic-cards',upgrade:'upgrade-cards',super:'super-cards',shop:'shop-items'}[game?.status];if(id)$(id).querySelector('button:not(:disabled)')?.focus({preventScroll:true});else canvas.focus({preventScroll:true});}
@@ -106,15 +106,16 @@ function openSuperChoices(){
   show('super-overlay');cards.querySelector('button')?.focus({preventScroll:true});
 }
 function openShop(force=false){
+  if(game?.status!=='shop'||!game.settlements?.activeShop)return;
   const items=game.settlements?.getShopItems()||[],site=game.settlements?.activeShop,key=JSON.stringify([site?.id,game.gold,game.player.hp,items]);
   if(!force&&key===shopKey&&!$('shop-overlay').classList.contains('hidden'))return;
   const entering=$('shop-overlay').classList.contains('hidden');shopKey=key;clearInput();show('portal-action',false);$('shop-title').textContent=site?.name||'荒野商人的货摊';$('shop-gold').textContent=game.gold;
   const cards=$('shop-items');cards.replaceChildren();for(const item of items){const button=document.createElement('button');button.className='shop-item';button.disabled=item.available===false||item.stock<=0||game.gold<item.price;
     button.innerHTML=`<span class="shop-icon" style="color:${item.color}">${item.icon}</span><span class="shop-copy"><strong>${item.name}</strong><small>${item.desc}</small><em>${item.stock<=0?'已售罄':item.reason||`剩余 ${item.stock} 份`}</em></span><span class="shop-price">◉ ${item.price}</span>`;
-    button.onclick=()=>{if(game?.status!=='shop'||paused||helpOpen)return;if(game.buyShopItem(item.id)){tone(660,.13,'sine',.035,880);$('shop-feedback').textContent=`已购买${item.name}`;}else $('shop-feedback').textContent='暂时无法购买，请检查金币或当前状态。';openShop(true);updateHUD();};cards.append(button);
+    button.onclick=()=>{if(game?.status!=='shop'||paused||helpOpen)return;if(game.buyShopItem(item.id)){tone(660,.13,'sine',.035,880);shopKey='';show('shop-overlay',false);clearInput();notify(`已购买${item.name} · 游商已离开`,2);canvas.focus({preventScroll:true});}else{$('shop-feedback').textContent='暂时无法购买，请检查金币或当前状态。';openShop(true);}updateHUD();};cards.append(button);
   }
   if(force)cards.querySelector('button:not(:disabled)')?.focus({preventScroll:true});
-  if(entering){$('shop-feedback').textContent='商品数量有限 · 交易期间时间暂停';show('shop-overlay');$('shop-close').focus({preventScroll:true});}
+  if(entering){$('shop-feedback').textContent='购买一件后游商离开 · 交易期间时间暂停';show('shop-overlay');$('shop-close').focus({preventScroll:true});}
 }
 function closeShop(){if(game?.status!=='shop'||paused||helpOpen)return;game.closeShop();shopKey='';show('shop-overlay',false);clearInput();updateHUD();canvas.focus({preventScroll:true});}
 function updateSuperHUD(){
@@ -507,12 +508,12 @@ function adventureSceneProps(camX,camY){
   if(adventure?.treasure&&visible(adventure.treasure))props.push({...adventure.treasure,type:'treasure'});
   props.push(...(game?.environment?.props||[]).filter(prop=>prop.state!=='spent'&&visible(prop)));
   if(game.portal&&visible({...game.portal,y:game.portal.y-30}))props.push({...game.portal,type:'portal',sortY:game.portal.y});
-  if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(Math.abs(site.x-camX)<width/2+200&&Math.abs(site.y-camY)<height/2+230)props.push({...site,isSettlement:true});
+  if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type!=='merchant'&&Math.abs(site.x-camX)<width/2+200&&Math.abs(site.y-camY)<height/2+230)props.push({...site,isSettlement:true});
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
   return props;
 }
 function drawAdventureShadowPaths(mask,props){
-  for(const prop of props){if(prop.isSettlement){if(prop.type!=='angel'){const w=prop.width||140,d=prop.depth||70;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*44,prop.y+SUN.y*44);mask.lineTo(prop.x-w/2+SUN.x*44,prop.y+SUN.y*44);mask.closePath();}continue;}if(prop.type==='portal')continue;const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
+  for(const prop of props){if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
     mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();}
 }
 function drawAdventureProp(prop){
@@ -1019,7 +1020,29 @@ function drawTownNpc(actor){
   else{ellipse(0,-23,16,3.2,'#b79c66');line(-8,5,9,5,'#655a35',2.5);diamond(1,5,3,'#d9c383');}
   ctx.restore();ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle=angel?'#f0e8c6':'#e5d3a0';ctx.fillText(e.name,e.x,e.y-53);ctx.restore();
 }
+function drawSmallHut(site){
+  const {x,y,width:w,depth,region,state}=site,marsh=region==='marsh',ruins=region==='ruins';
+  const wallTop=-depth-8,roofTop=wallTop-24,behind=game.player.y+19.8<y+4&&Math.abs(game.player.x-x)<w/2+20&&game.player.y>y+roofTop-14;
+  ctx.save();ctx.translate(x,y);ctx.lineJoin='round';
+  // The foundation matches collision; the compact roof adds only a small eave.
+  ctx.fillStyle='#384132';ctx.fillRect(-w/2-2,-depth,w+4,depth+3);
+  for(let i=0;i<2;i++){ctx.fillStyle=i?'#70785e':'#626d55';ctx.fillRect(-10,i*3,20,3);line(-10,i*3,10,i*3,'#a7ac8655',1);}
+  ctx.save();if(behind)ctx.globalAlpha=.36;
+  ctx.fillStyle=ruins?'#747968':marsh?'#62685b':'#867451';ctx.strokeStyle='#3a4934';ctx.lineWidth=1.4;ctx.fillRect(-w/2,wallTop,w,-wallTop);ctx.strokeRect(-w/2,wallTop,w,-wallTop);
+  for(let yy=wallTop+9;yy<0;yy+=9)line(-w/2,yy,w/2,yy,ruins?'#505d51':'#655f42',.8);
+  ctx.fillStyle='#253b2c';ctx.fillRect(-7,-25,14,25);ctx.strokeStyle='#aa9d76';ctx.lineWidth=1.3;ctx.strokeRect(-7,-25,14,25);ellipse(4,-12,1,1,'#d4c082');
+  for(const xx of [-w*.34,w*.34]){ctx.fillStyle=state==='spent'?'#354739':site.type==='occupied'&&state!=='cleared'?'#ae8158':'#d8bb77';ctx.fillRect(xx-4,-27,8,10);ctx.strokeStyle='#4e563c';ctx.lineWidth=1.2;ctx.strokeRect(xx-4,-27,8,10);line(xx,-27,xx,-17,'#656346',.8);}
+  if(marsh)for(const xx of [-w/2+4,w/2-4])line(xx,-2,xx,6,'#68694b',3);
+  ctx.fillStyle='#787c62';ctx.fillRect(w/2-14,roofTop-7,7,19);ctx.fillStyle='#95977a';ctx.fillRect(w/2-16,roofTop-8,11,3);
+  ctx.fillStyle=ruins?'#5b675d':marsh?'#536b60':'#58654a';ctx.strokeStyle='#374d3b';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-w/2-6,wallTop+3);ctx.lineTo(-w/2+4,roofTop);ctx.lineTo(w/2-4,roofTop);ctx.lineTo(w/2+6,wallTop+3);ctx.closePath();ctx.fill();ctx.stroke();line(-w/2+4,roofTop,w/2-4,roofTop,'#9ca58188',1.5);
+  for(let i=1;i<4;i++){const yy=roofTop+i*6;line(-w/2+4-i*2,yy,w/2-4+i*2,yy,'#81907255',.8);}
+  ctx.restore();ctx.textAlign='center';ctx.font='600 10px system-ui,sans-serif';ctx.fillStyle=state==='spent'?'#a3b39a':'#dfd3ad';ctx.shadowColor='#10251c';ctx.shadowBlur=3;ctx.fillText(site.name,0,roofTop-17);ctx.shadowBlur=0;
+  if(state==='spent'){ctx.font='9px system-ui';ctx.fillStyle='#99ad91';ctx.fillText('已探索',0,20);}else if(site.type==='occupied'&&state==='active'){ctx.font='9px system-ui';ctx.fillStyle='#edc29c';ctx.fillText('清除屋外守卫',0,20);}
+  ctx.restore();
+}
 function drawSettlement(site){
+  if(site.type==='merchant')return;
+  if(site.type==='supply'||site.type==='occupied'){drawSmallHut(site);return;}
   const {x,y,type}=site,w=site.width||140,depth=site.depth||70,castle=type==='castle',marsh=site.region==='marsh',ruins=site.region==='ruins';
   ctx.save();ctx.translate(x,y);ctx.lineJoin='round';
   if(type==='angel'){ellipse(0,0,35,15,'#dbd9ac12');ctx.strokeStyle='#c6c6a178';ctx.lineWidth=1.2;ctx.beginPath();ctx.ellipse(0,0,34,14,0,0,TAU);ctx.stroke();for(let i=0;i<8;i++){const a=i*TAU/8;diamond(Math.cos(a)*34,Math.sin(a)*14,2.2,'#cfd0a690');}if(site.state==='spent'){ctx.fillStyle='#aeb5a0';ctx.font='9px system-ui';ctx.textAlign='center';ctx.fillText('祝福已赠予',0,-17);}ctx.restore();return;}
@@ -1034,17 +1057,6 @@ function drawSettlement(site){
     for(const side of [-1,1]){const xx=side*(w/2-24);ctx.fillStyle='#636b5d';ctx.fillRect(xx-25,-137,50,139);ctx.fillStyle='#8a9077';ctx.fillRect(xx-28,-137,56,10);ctx.fillStyle='#535f52';for(let i=0;i<3;i++)ctx.fillRect(xx-28+i*22,-151,13,21);for(let row=0;row<5;row++){const yy=-119+row*24;line(xx-24,yy,xx+24,yy,'#3e4c3e77',1);line(xx+(row%2?10:-10),yy,xx+(row%2?10:-10),yy+23,'#3e4c3e66',1);}ctx.fillStyle='#182c28';ctx.fillRect(xx-6,-103,12,28);line(xx-6,-103,xx-6,-76,'#9da286',1.5);ctx.fillStyle='#8f6c66';ctx.beginPath();ctx.moveTo(xx+22,-130);ctx.lineTo(xx+22,-89);ctx.lineTo(xx+15,-96);ctx.lineTo(xx+8,-89);ctx.lineTo(xx+8,-130);ctx.fill();line(xx+8,-130,xx+22,-130,'#c5b184',2);}
     ctx.fillStyle='#122321';ctx.beginPath();ctx.moveTo(-27,0);ctx.lineTo(-27,-51);ctx.quadraticCurveTo(0,-82,27,-51);ctx.lineTo(27,0);ctx.closePath();ctx.fill();ctx.strokeStyle='#92947b';ctx.lineWidth=4;ctx.stroke();for(const xx of [-18,-9,0,9,18])line(xx,-50,xx,-17,'#617368',2);
     for(const xx of [-42,42]){line(xx,-33,xx,-10,'#343e2c',4);ellipse(xx,-35,5,9,'#d9a265');ellipse(xx,-37,2,5,'#f5d5a0');}
-  }else{
-    const wall=ruins?'#747968':marsh?'#62685b':'#867451',roof=ruins?'#5b675d':marsh?'#536b60':'#58654a';
-    ctx.fillStyle=wall;ctx.fillRect(-w/2,-depth,w,depth);ctx.strokeStyle='#3a4934';ctx.lineWidth=2;ctx.strokeRect(-w/2,-depth,w,depth);
-    for(let yy=-depth+14;yy<0;yy+=14)line(-w/2,yy,w/2,yy,ruins?'#505d51':'#655f42',1);if(ruins)for(let xx=-w/2+22;xx<w/2;xx+=28)line(xx,-depth,xx,-2,'#535f5066',1);
-    ctx.fillStyle='#253b2c';ctx.fillRect(-16,-43,32,43);ctx.strokeStyle='#aa9d76';ctx.lineWidth=3;ctx.strokeRect(-16,-43,32,43);line(9,-22,9,-18,'#d4c082',2);
-    for(const xx of [-43,43]){ctx.fillStyle=site.state==='spent'?'#354739':site.type==='occupied'&&site.state!=='cleared'?'#ae8158':'#d8bb77';ctx.fillRect(xx-10,-45,20,19);ctx.strokeStyle='#4e563c';ctx.lineWidth=3;ctx.strokeRect(xx-10,-45,20,19);line(xx,-45,xx,-26,'#656346',2);line(xx-10,-35,xx+10,-35,'#656346',2);}
-    if(marsh){for(const xx of [-w/2+7,w/2-7])line(xx,-4,xx,15,'#68694b',7);}
-    ctx.fillStyle=roof;ctx.strokeStyle='#374d3b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-w/2-14,-depth+6);ctx.lineTo(-w/2+7,-depth-47);ctx.lineTo(w/2-4,-depth-47);ctx.lineTo(w/2+14,-depth+6);ctx.closePath();ctx.fill();ctx.stroke();line(-w/2+7,-depth-47,w/2-4,-depth-47,'#9ca58188',3);
-    for(let i=1;i<5;i++){const yy=-depth-47+i*10;line(-w/2+7-i*4,yy,w/2-4+i*4,yy,'#81907244',1);}
-    ctx.fillStyle='#787c62';ctx.fillRect(w/2-33,-depth-68,15,29);ctx.fillStyle='#95977a';ctx.fillRect(w/2-36,-depth-70,21,6);
-    if(site.type==='merchant'){ctx.fillStyle='#bbb084';ctx.beginPath();ctx.moveTo(15,-43);ctx.lineTo(w/2+30,-43);ctx.lineTo(w/2+37,-20);ctx.lineTo(12,-20);ctx.closePath();ctx.fill();for(let xx=22;xx<w/2+30;xx+=20){ctx.fillStyle='#747e58';ctx.fillRect(xx,-40,9,20);}line(w/2+32,-22,w/2+32,17,'#8e8b63',3);ctx.fillStyle='#76663e';ctx.fillRect(w/2+9,5,27,18);line(w/2+14,4,w/2+30,4,'#ba9a5e',2);}
   }
   ctx.restore();ctx.textAlign='center';ctx.font='600 10px system-ui,sans-serif';ctx.fillStyle=site.state==='spent'?'#a3b39a':castle?'#d5c6e2':'#dfd3ad';ctx.shadowColor='#10251c';ctx.shadowBlur=3;ctx.fillText(site.name||({merchant:'旅人商铺',supply:'林间小屋',occupied:'被占据的小屋',castle:'旧王城堡'}[type]),0,castle?-164:-depth-82);ctx.shadowBlur=0;
   if(site.state==='spent'||site.state==='claimed'||site.explored){ctx.font='9px system-ui';ctx.fillStyle='#99ad91';ctx.fillText('已探索',0,33);}else if(site.type==='occupied'&&site.state==='active'){ctx.font='9px system-ui';ctx.fillStyle='#edc29c';ctx.fillText('清除屋外守卫',0,35);}
@@ -1108,7 +1120,7 @@ function renderIntro(){
 }
 function renderGame(){const p=game.player,camX=p.x,camY=p.y;background(camX,camY,false);let sx=0,sy=0;if(shake>0&&!reduced){sx=(Math.random()-.5)*shake;sy=(Math.random()-.5)*shake;}
   const offsetX=width/2-camX+sx,offsetY=height/2-camY+sy;
-  const actors=game.enemies.map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally)actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type==='merchant'||site.type==='angel'&&site.state!=='spent'){const npc={x:site.x+(site.type==='merchant'?site.width*.33:0),y:site.y+(site.type==='merchant'?12:0)-19.8,isTownNpc:true,townKind:site.type,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:900001};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
+  const actors=game.enemies.map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally)actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:900001};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
   const terrain=terrainInView(camX,camY),adventureProps=adventureSceneProps(camX,camY);
   ctx.save();ctx.translate(offsetX,offsetY);drawMudGround();drawDungeonGround();ctx.restore();
   drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active?null:target=>drawMapLights(camX-sx,camY-sy,target));ctx.save();ctx.translate(offsetX,offsetY);

@@ -7,10 +7,10 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const WARD=18;
 export const SETTLEMENT_RULES=Object.freeze({maxSites:5,interactRadius:82,angelHealing:.35,ward:WARD,guards:4});
 const SITE_DEFS=Object.freeze([
-  {type:'merchant',name:'旅人商铺',width:144,depth:72,radius:410,angle:.12},
-  {type:'supply',name:'林间小屋',width:138,depth:68,radius:610,angle:2.2},
+  {type:'merchant',name:'荒野游商',width:42,depth:24,radius:410,angle:.12},
+  {type:'supply',name:'林间小屋',width:54,depth:28,radius:610,angle:2.2},
   {type:'angel',name:'天使圣坛',width:70,depth:36,radius:750,angle:4.2},
-  {type:'occupied',name:'被占据的小屋',width:152,depth:76,radius:970,angle:3.1},
+  {type:'occupied',name:'被占据的小屋',width:58,depth:30,radius:970,angle:3.1},
   {type:'castle',name:'古堡入口',width:240,depth:90,radius:1180,angle:5.65}
 ]);
 
@@ -21,13 +21,13 @@ export class Settlements {
   }
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _hash(x,y=0){return hash(x+(this.game.regionIndex||0)*137,y+(this.game.regionIndex||0)*281);}
-  _bodyCenter(site){return {x:site.x,y:site.y-site.depth*.5};}
+  _bodyCenter(site){return {x:site.x,y:site.y-(site.type==='merchant'?0:site.depth*.5)};}
   _obstacles(site) {
-    if(site.type==='angel')return [];
+    if(site.type==='angel'||site.type==='merchant')return [];
     // Overlapping horizontal capsules fill a rounded rectangular foundation.
     // The decorative roof never enlarges these foot-based collision bounds.
-    const rows=Math.ceil(site.depth/32),r=18,halfLength=site.width*.5-r,result=[];
-    for(let i=0;i<rows;i++)result.push({id:`${site.id}:wall:${i}`,type:'log',x:site.x,y:site.y-r-i*(site.depth-r*2)/(rows-1),r,halfLength,angle:0,structureId:site.id,structureType:site.type,variant:'building-wall'});
+    const rows=Math.ceil(site.depth/32),r=Math.min(18,site.depth*.5,site.width*.5),halfLength=site.width*.5-r,result=[];
+    for(let i=0;i<rows;i++)result.push({id:`${site.id}:wall:${i}`,type:'log',x:site.x,y:rows===1?site.y-site.depth*.5:site.y-r-i*(site.depth-r*2)/(rows-1),r,halfLength,angle:0,structureId:site.id,structureType:site.type,variant:'building-wall'});
     return result;
   }
   _setStructures(){this.game.terrain.setStructures?.(this.sites.flatMap(site=>this._obstacles(site)));}
@@ -69,7 +69,7 @@ export class Settlements {
     for(let i=0;i<(nearSpawn?128:192);i++) {
       const ring=Math.floor(i/32),angle=(nearSpawn?-Math.PI/2:def.angle+rotation)+(i%32)*TAU/32,radius=nearSpawn?190+ring*40:def.radius+ring*100;
       const x=Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
-      const site={...def,id:`site:${this.game.regionIndex||0}:${def.type}`,x,y,sortY:y,door:{x,y:y+30},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
+      const site={...def,id:`site:${this.game.regionIndex||0}:${def.type}`,x,y,sortY:y,door:{x,y:y+(def.type==='merchant'?0:30)},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
       if(!this._validSite(site,{nearSpawn}))continue;
       if(site.type==='supply')site.name=region==='marsh'?'沼泽高脚屋':region==='ruins'?'遗迹石屋':'林间小屋';
       if(site.type==='merchant') {
@@ -83,8 +83,8 @@ export class Settlements {
   resetRegion() {
     this.activeShop=null;this.sites=[];this.game.terrain.setStructures?.([]);
     if(!this.generation)return;
-    // Keep the ordinary generation order byte-for-byte equivalent. Only a
-    // debug run's initial region gives its existing castle first placement.
+    // Only a debug run's initial region gives its existing castle first
+    // placement; ordinary regions keep the usual site ordering.
     const castleIndex=SITE_DEFS.findIndex(def=>def.type==='castle');
     const nearbyCastle=this.game.debug&&this.game.regionIndex===0?this._createSite(SITE_DEFS[castleIndex],castleIndex,{nearSpawn:true}):null;
     if(nearbyCastle){this.sites.push(nearbyCastle);this._setStructures();}
@@ -98,6 +98,7 @@ export class Settlements {
     // calls into hazard/objective placement are allowed from this predicate.
     if(this.game.dungeon?.active)return true;
     return this.sites.every(site=>{
+      if(site.type==='merchant'&&site.state==='spent')return true;
       const center=this._bodyCenter(site);
       return Math.hypot(center.x-x,center.y-y)>site.width*.5+r+70;
     });
@@ -109,7 +110,7 @@ export class Settlements {
       const d=distance(p,site.door);if(d>site.interactRadius||d>=best)continue;
       if(site.state==='spent'&&site.type!=='castle')continue;
       let label='',description='',enabled=true;
-      if(site.type==='merchant'){label='与商人交易';description='本局金币购买补给与遗物';}
+      if(site.type==='merchant'){label='与商人交易';description='购买一件补给或遗物后，游商将离开';}
       else if(site.type==='angel'){
         label='接受天使祝福';description='恢复 35% 生命；满血时获得护盾';
         if(g.player.hp>=g.player.maxHp&&(g.relics?.wardAmount||0)>=WARD){enabled=false;description='生命与护盾已充盈，祝福仍会保留';}
@@ -172,7 +173,9 @@ export class Settlements {
     else if(id==='relic'){if(!g.relics.acquire(item.relicId))return false;}
     else return false;
     // Stock and payment commit together, after all rejection checks.
-    site.stock[id]--;g.gold-=item.price;g._emit('shopBought',{itemId:id,name:item.name,price:item.price});return true;
+    site.stock[id]--;g.gold-=item.price;site.state='spent';
+    g._emit('shopBought',{itemId:id,name:item.name,price:item.price});
+    this.closeShop();g._emit('merchantDeparted',{itemId:id,name:item.name});return true;
   }
   closeShop() {
     if(this.game.status!=='shop'||!this.activeShop)return false;
