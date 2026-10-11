@@ -170,21 +170,98 @@ function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r
   ctx.restore();if(e.hp<e.maxHp&&e.type!=='boss'){const w=r*1.7;ctx.fillStyle='#102114';ctx.fillRect(x-w/2,y-r-10,w,3);ctx.fillStyle='#adc990';ctx.fillRect(x-w/2,y-r-10,w*Math.max(0,e.hp/e.maxHp),3);}}
 function blade(x,y,angle,s=1){ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.scale(s,s);ctx.strokeStyle='#32492b';ctx.lineWidth=1;ctx.fillStyle='#e9eac3';ctx.beginPath();ctx.moveTo(0,-17);ctx.quadraticCurveTo(12,-4,5,13);ctx.lineTo(0,5);ctx.lineTo(-4,11);ctx.quadraticCurveTo(-9,-4,0,-17);ctx.fill();ctx.stroke();line(0,-12,1,8,'#9fae72',1);ctx.restore();}
 function effects(e){const alpha=clamp(e.life/e.maxLife,0,1),progress=1-alpha;ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=e.color||'#e9e4b7';ctx.fillStyle=e.color||'#e9e4b7';if(e.type==='ring'){ctx.lineWidth=3*alpha;ctx.beginPath();ctx.arc(e.x,e.y,e.r*(.2+.8*progress),0,TAU);ctx.stroke();ctx.globalAlpha=alpha*.06;ctx.fill();}else if(e.type==='hit'){for(let i=0;i<5;i++){const a=i*TAU/5;line(e.x+Math.cos(a)*3,e.y+Math.sin(a)*3,e.x+Math.cos(a)*e.r*(1+progress),e.y+Math.sin(a)*e.r*(1+progress),e.color,2);}}else if(e.type==='lightning'){ctx.shadowBlur=10;ctx.shadowColor=e.color;ctx.lineWidth=2.3;ctx.beginPath();ctx.moveTo(e.x,e.y);const dx=e.x2-e.x,dy=e.y2-e.y,d=Math.hypot(dx,dy)||1;for(let i=1;i<=7;i++){let jitter=i===7?0:Math.sin(i*43+e.x)*13;ctx.lineTo(e.x+dx*i/7-dy/d*jitter,e.y+dy*i/7+dx/d*jitter);}ctx.stroke();}else if(e.type==='damage'||e.type==='heal'){ctx.font=`600 ${e.type==='heal'?15:11}px ui-monospace,monospace`;ctx.textAlign='center';ctx.fillText(e.text||'',e.x,e.y);}ctx.restore();}
+// Build the discharge once per cast. Pausing freezes its age and its geometry.
+const stormGeometryCache=new WeakMap();
+function lightningPath(start,end,seed,depth=5,roughness=.2){
+  const points=[start];
+  function split(a,b,level,key){
+    if(level<=0){points.push(b);return;}
+    const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+    const along=.4+hash(seed,key)*.2,offset=(hash(seed+19,key)-.5)*d*roughness*2;
+    const midpoint={x:a.x+dx*along-dy/d*offset,y:a.y+dy*along+dx/d*offset};
+    split(a,midpoint,level-1,key*2+1);split(midpoint,b,level-1,key*2+2);
+  }
+  split(start,end,depth,1);return points;
+}
+function getStormGeometry(storm){
+  if(stormGeometryCache.has(storm))return stormGeometryCache.get(storm);
+  const viewWidth=storm.viewWidth||width,viewHeight=storm.viewHeight||height;
+  const targets=storm.targets.length?storm.targets:[{x:storm.x-90,y:storm.y+70,r:14,seed:1},{x:storm.x+110,y:storm.y-75,r:14,seed:2},{x:storm.x+15,y:storm.y+140,r:14,seed:3}];
+  const boltLimit=viewWidth<600?8:14,selected=[];
+  // Large targets lead; farthest-point selection spreads detailed bolts across
+  // the viewport instead of hiding the entire horde under full-height strokes.
+  if(targets.length<=boltLimit)selected.push(...targets);
+  else{
+    let next=targets.reduce((best,target)=>target.r>best.r?target:best,targets[0]);
+    const remaining=new Set(targets),distances=new Map();
+    while(selected.length<boltLimit&&remaining.size){
+      selected.push(next);remaining.delete(next);let farthest=-1,candidate=null;
+      for(const target of remaining){
+        const distance=((target.x-next.x)/viewWidth)**2+((target.y-next.y)/viewHeight)**2;
+        const nearest=Math.min(distances.get(target)??Infinity,distance);distances.set(target,nearest);
+        if(nearest>farthest){farthest=nearest;candidate=target;}
+      }
+      next=candidate;
+    }
+  }
+  const selectedSet=new Set(selected),mainBolts=selected.map((target,index)=>{
+    const seed=(target.seed||index+1)*13.7;
+    const end={x:target.x,y:target.y+3};
+    const start={x:target.x+(hash(seed,2)-.5)*Math.min(180,viewWidth*.35),y:Math.min(storm.y-viewHeight/2-45,end.y-190)};
+    const trunk=lightningPath(start,end,seed,5,.17),branches=[];
+    for(let i=0;i<3;i++){
+      const at=7+i*6+Math.floor(hash(seed,i+4)*4),origin=trunk[at];
+      const side=hash(seed,i+11)>.5?1:-1,length=40+hash(seed,i+17)*70;
+      const tip={x:origin.x+side*length*.72,y:origin.y+length*(.55+hash(seed,i+20)*.55)};
+      const branch=lightningPath(origin,tip,seed+i*23+3,3,.24);branches.push(branch);
+      if(i===1){const fork=branch[4];branches.push(lightningPath(fork,{x:fork.x-side*length*.35,y:fork.y+length*.4},seed+83,2,.2));}
+    }
+    return{trunk,branches};
+  });
+  const impacts=targets.map((target,index)=>{
+    const seed=target.seed||index+1,hero=selectedSet.has(target),radius=clamp(target.r*.65+7,13,35),paths=[];
+    for(let i=0;i<(hero?5:2);i++){
+      const angle=(i/(hero?5:2)+hash(seed,i)*.19)*TAU,length=radius*(.75+hash(seed,i+6)*.55);
+      const dx=Math.cos(angle),dy=Math.sin(angle)*.48;
+      paths.push([{x:target.x+dx*3,y:target.y+3+dy*3},{x:target.x+dx*length*.45-dy*5,y:target.y+3+dy*length*.45+dx*3},{x:target.x+dx*length*.7+dy*3,y:target.y+3+dy*length*.7-dx*2},{x:target.x+dx*length,y:target.y+3+dy*length}]);
+    }
+    return{x:target.x,y:target.y+3,r:radius,paths,hero};
+  });
+  const geometry={mainBolts,impacts,targetCount:storm.targets.length,boltLimit};
+  stormGeometryCache.set(storm,geometry);return geometry;
+}
+function stormBrightness(storm,calm=reduced){
+  const progress=clamp(1-storm.life/storm.maxLife,0,1),age=progress*storm.maxLife;
+  if(calm)return .8*(1-progress);
+  // One main discharge, one weaker return stroke, then a faint afterglow.
+  const first=age<.045?1:Math.exp(-(age-.045)*18);
+  const returnStroke=.5*Math.exp(-Math.pow((age-.185)/.028,2));
+  return clamp(first+returnStroke+.22*(1-progress),0,1);
+}
+function stormExposure(storm){
+  if(reduced||!storm||storm.life<=0)return 0;
+  return .09*Math.max(0,1-(storm.maxLife-storm.life)/.095)**2;
+}
+function appendLightningPath(points){ctx.moveTo(points[0].x,points[0].y);for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);}
 function drawStorm(){
   const storm=game.storm;if(!storm||storm.life<=0)return;
-  const alpha=clamp(storm.life/storm.maxLife,0,1),progress=1-alpha;
-  const targets=storm.targets.length?storm.targets:[{x:storm.x-90,y:storm.y+70,r:14,seed:1},{x:storm.x+110,y:storm.y-75,r:14,seed:2},{x:storm.x+15,y:storm.y+140,r:14,seed:3}];
-  ctx.save();ctx.lineJoin='round';ctx.lineCap='round';
-  for(const target of targets){
-    const seed=target.seed||0,top=target.y-Math.max(260,storm.viewHeight||height)*.85;
-    ctx.globalAlpha=alpha;ctx.strokeStyle='#9acfff';ctx.lineWidth=reduced?2:5;ctx.shadowColor='#8fbfff';ctx.shadowBlur=reduced?0:12;
-    ctx.beginPath();ctx.moveTo(target.x-30,top);
-    for(let i=1;i<=8;i++){const amount=i/8,jitter=i===8?0:(hash(seed,i)-.5)*48;ctx.lineTo(target.x-30*(1-amount)+jitter,top+(target.y-top)*amount);}
-    ctx.stroke();ctx.strokeStyle='#eff9ff';ctx.lineWidth=1.4;ctx.shadowBlur=0;ctx.stroke();
-    ctx.globalAlpha=alpha*.7;ctx.strokeStyle='#c5e7ff';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(target.x,target.y+3,(target.r+12)*(1+progress),9+progress*12,0,0,TAU);ctx.stroke();
-    if(!reduced){ctx.globalAlpha=alpha*.4;glow(target.x,target.y,45,'#a0ccff70');}
+  const geometry=getStormGeometry(storm),brightness=stormBrightness(storm),progress=clamp(1-storm.life/storm.maxLife,0,1);
+  ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.shadowBlur=0;
+  ctx.beginPath();for(const bolt of geometry.mainBolts)appendLightningPath(bolt.trunk);
+  // Batch the shared glow passes; there is no per-enemy blur or gradient.
+  for(const [strokeWidth,color,opacity] of [[14,'#5199ff',.09],[8,'#73b8ff',.22],[4,'#abdfff',.8],[1.9,'#ffffff',1]]){
+    ctx.lineWidth=strokeWidth;ctx.strokeStyle=color;ctx.globalAlpha=brightness*opacity;ctx.stroke();
   }
-  ctx.restore();
+  ctx.beginPath();for(const bolt of geometry.mainBolts)for(const branch of bolt.branches)appendLightningPath(branch);
+  ctx.strokeStyle='#83c5ff';ctx.lineWidth=3;ctx.globalAlpha=brightness*.3;ctx.stroke();
+  ctx.strokeStyle='#d5f1ff';ctx.lineWidth=.9;ctx.globalAlpha=brightness*.8;ctx.stroke();
+  // Even targets killed on the casting frame retain their own impact snapshot.
+  const impactAlpha=reduced?brightness:Math.max(brightness*.8,.65*(1-progress)**1.5);
+  ctx.beginPath();for(const impact of geometry.impacts)for(const path of impact.paths)appendLightningPath(path);
+  ctx.strokeStyle='#6dbbff';ctx.lineWidth=4;ctx.globalAlpha=impactAlpha*.24;ctx.stroke();
+  ctx.strokeStyle='#e5f6ff';ctx.lineWidth=1.25;ctx.globalAlpha=impactAlpha;ctx.stroke();
+  ctx.beginPath();for(const impact of geometry.impacts){ctx.moveTo(impact.x+2.2,impact.y);ctx.ellipse(impact.x,impact.y,2.2,1.6,0,0,TAU);}
+  ctx.fillStyle='#ffffff';ctx.globalAlpha=impactAlpha;ctx.fill();ctx.restore();
 }
 function ambient(intro){const count=intro?25:13;for(let i=0;i<count;i++){const x=(hash(i,9)*width+Math.sin(clock*.2+i)*25+width)%width,y=(hash(i,8)*height-clock*(3+hash(i,7)*5)%height+height)%height,alpha=(.15+Math.sin(clock*1.4+i)*.13);ctx.globalAlpha=alpha;glow(x,y,7,'#daed9daa');ellipse(x,y,1.5,1.5,'#f1f5b3');}ctx.globalAlpha=1;}
 function renderIntro(){
@@ -210,7 +287,7 @@ function renderGame(){const p=game.player,camX=p.x,camY=p.y;background(camX,camY
   for(const e of game.effects)if(e.type!=='ring')effects(e);
   drawStorm();
   ctx.restore();
-  if(game.storm?.life>0&&!reduced){ctx.fillStyle=`rgba(166,207,255,${.075*game.storm.life/game.storm.maxLife})`;ctx.fillRect(0,0,width,height);}
+  const exposure=stormExposure(game.storm);if(exposure>0){ctx.fillStyle=`rgba(177,219,255,${exposure})`;ctx.fillRect(0,0,width,height);}
   ambient(false);
   const boss=game.enemies.find(e=>e.type==='boss');if(boss&&(Math.abs(boss.x-p.x)>width/2-70||Math.abs(boss.y-p.y)>height/2-80)){const a=Math.atan2(boss.y-p.y,boss.x-p.x),edge=Math.min((width/2-33)/Math.max(.01,Math.abs(Math.cos(a))),(height/2-80)/Math.max(.01,Math.abs(Math.sin(a))));ctx.save();ctx.translate(width/2+Math.cos(a)*edge,height/2+Math.sin(a)*edge);ctx.rotate(a);ctx.fillStyle='#ebbd91';ctx.beginPath();ctx.moveTo(9,0);ctx.lineTo(-5,-6);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();}
   if(p.hp/p.maxHp<.3){const danger=ctx.createRadialGradient(width/2,height/2,height*.2,width/2,height/2,Math.max(width,height)*.65);danger.addColorStop(0,'transparent');danger.addColorStop(1,'#ae392144');ctx.fillStyle=danger;ctx.fillRect(0,0,width,height);}
