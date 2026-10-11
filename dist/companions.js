@@ -200,7 +200,7 @@ export class Companions {
   }
   _quake(x,y,r,damage,echo,seed) {
     const g=this.game;
-    g._effect(x,y,'ring',echo?.6:.48,r,echo?'#c6ead5':'#9de0b3',undefined,{evolved:true,echo,branch:'echoes',ally:true,seed});
+    g._effect(x,y,'ring',echo?.6:.48,r,echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:y,evolved:true,echo,branch:'echoes',ally:true,seed});
     for(const enemy of g.enemies)if(enemy.hp>0&&g._inView(enemy)&&Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r)
       g._hitEnemy(enemy,damage,echo?14:30,{x,y,groundY:y+groundOffset(g.player,true)},echo?'companionEcho':'companionPulse');
   }

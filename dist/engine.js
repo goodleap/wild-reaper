@@ -21,6 +21,9 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const rand = (a, b) => a + Math.random() * (b - a);
 const sq = (v) => v * v;
 const dist2 = (a, b) => sq(a.x - b.x) + sq(a.y - b.y);
+// Visual variation must never consume the combat/loot random stream.
+const feedbackSeed = (x,y,time,id=0) => (Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
+const HIT_COLORS=Object.freeze({arrow:'#e8f3ad',orbit:'#f2d492',lightning:'#cce9ff',companionLightning:'#cce9ff',storm:'#d4e7ff',conduction:'#c4e8ff',pulse:'#b9dca0',echo:'#c6ead5',companionPulse:'#b9dca0',companionEcho:'#c6ead5',bleed:'#e8a486',mushroom:'#ffbd70',super:'#ead4aa',relic:'#ddc8f5'});
 function circleImpact(x,y,dx,dy,cx,cy,r) {
   const ox=x-cx,oy=y-cy,c=ox*ox+oy*oy-r*r;if(c<=0)return 0;
   const a=dx*dx+dy*dy;if(a<1e-12)return Infinity;
@@ -123,8 +126,21 @@ export class Game {
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
   _effect(x,y,type,life,r,color,text,extra={}) {
-    if(this.effects.length > 200) this.effects.shift();
-    this.effects.push({x,y,type,life,maxLife:life,r,color,text,...extra});
+    // A screen clear can defeat hundreds of enemies at once. Keep the newest
+    // ordinary bursts while allowing a boss's longer farewell to finish.
+    if(type==='defeat'&&this.effects.filter(e=>e.type==='defeat').length>=24) {
+      let oldest=this.effects.findIndex(e=>e.type==='defeat'&&!e.boss);
+      if(oldest<0) {
+        if(!extra.boss)return;
+        oldest=this.effects.findIndex(e=>e.type==='defeat');
+      }
+      this.effects.splice(oldest,1);
+    }
+    while(this.effects.length>=200) {
+      const oldest=this.effects.findIndex(e=>e.type!=='defeat'||!e.boss);
+      this.effects.splice(Math.max(0,oldest),1);
+    }
+    this.effects.push({x,y,type,life,maxLife:life,r,color,text,seed:feedbackSeed(x,y,this._clock),...extra});
   }
   _damageMultiplier() { return (1 + this.levels.power * .25 + this.levels.endlessPower * .08 + this.rescuePower * .08 + (this.player.level-1)*.01)*(this.adventure?.damageMultiplier()||1)*(this.relics?.damageMultiplier()||1); }
   _inView(entity,margin=0) {
@@ -189,16 +205,21 @@ export class Game {
     amount=this.elites?.beforeDamage(enemy,amount)??amount;
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
+    const angle=Math.atan2(enemy.y-(Number.isFinite(origin?.y)?origin.y:enemy.y),enemy.x-(Number.isFinite(origin?.x)?origin.x:enemy.x));
+    const strength=clamp(actual/Math.max(1,enemy.maxHp||actual)*3,0,1),color=HIT_COLORS[source]||'#e8f3ad';
+    const seed=feedbackSeed(0,0,this._clock,enemy.id);
     enemy.hp -= amount; enemy.hit = .12;
+    enemy.hitAngle=angle;enemy.hitSource=source;enemy.hitStrength=strength;
     if(knockback && enemy.type!=='boss') {
       const dx=enemy.x-origin.x,dy=enemy.y-origin.y,d=Math.hypot(dx,dy)||1;
       this._moveEntity(enemy,dx/d*knockback,dy/d*knockback);
       if(enemy.charge?.phase==='windup'){enemy.charge.startX=enemy.x;enemy.charge.startY=enemy.y+groundOffset(enemy);}
     }
-    this._effect(enemy.x,enemy.y,'hit',.16,enemy.r*.7,'#e8f3ad');
+    this._effect(enemy.x,enemy.y,'hit',.24,enemy.r*.7,color,undefined,{source,angle,strength,seed});
     if(Math.random()<.24 || enemy.type==='boss') this._effect(enemy.x+rand(-8,8),enemy.y-enemy.r,'damage',.65,0,'#f1e4aa',String(Math.round(amount)));
     if(enemy.hp<=0) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
+      this._effect(enemy.x,enemy.y,'defeat',enemy.type==='boss'?.95:.5,enemy.r,color,undefined,{enemyType:enemy.type,source,boss:enemy.type==='boss',angle,strength,seed});
       this.kills++; this._emit('kill');
       // Kill XP is automatic. Loot is a separate skill/currency resource and
       // never opens a modal in the middle of an attack's target loop.
@@ -711,7 +732,7 @@ export class Game {
 
   _castPulse(x,y,radius,damage,knockback,echo=false,control=false) {
     const origin={x,y,groundY:y+groundOffset(this.player,true)};
-    this._effect(x,y,'ring',control?.65:echo?.6:.48,radius,control?'#9fe5cf':echo?'#c6ead5':'#9de0b3',undefined,{evolved:this.evolutions.pulse,echo,control,branch:this.branches.pulse});
+    this._effect(x,y,'ring',control?.65:echo?.6:.48,radius,control?'#9fe5cf':echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:origin.groundY,evolved:this.evolutions.pulse,echo,control,branch:this.branches.pulse});
     const source=echo?'echo':'pulse';
     for(const e of this.enemies)if(e.hp>0&&dist2(origin,e)<sq(radius+e.r)) {
       const dealt=this._hitEnemy(e,damage,knockback,origin,source);
