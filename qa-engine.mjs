@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
+import { Terrain, groundOffset } from './dist/terrain.js';
 let seed=61851;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 const finite = (g) => {
@@ -10,13 +11,16 @@ const finite = (g) => {
   assert(Number.isFinite(g.player.maxHp)&&Number.isFinite(g.stats.damage));
   assert(g.player.skillCooldown>=0&&g.player.skillCooldown<=g.player.skillCooldownMax);
   if(g.storm) {assert(g.storm.targets.length<=181);for(const t of g.storm.targets)assert(Number.isFinite(t.x)&&Number.isFinite(t.y));}
+  assert(g.terrain.isFree(g.player.x,g.player.y+groundOffset(g.player,true),g.player.r),'player feet stay outside terrain');
+  for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r),`${e.type} feet stay outside terrain`);
+  assert(g.terrain.cacheSize<=g.terrain.cacheLimit,'terrain cache stays bounded');
   assert(g.enemies.length<=181,'enemy count stays bounded');
   assert(g.enemies.filter(e=>e.type==='boss'&&e.hp>0).length<=1,'only one living boss');
   assert(g.bullets.length<=60&&g.orbitals.length<=6&&g.effects.length<=201&&g.gems.length<=500);
   assert(['playing','upgrade','dead'].includes(g.status),'no terminal win state');
 };
 // Isolate active skill behavior from passive shots, spawns and movement.
-const skillArena=()=>{const g=new Game();g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;return g;};
+const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]})});g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;return g;};
 const target=(g,x,y,{type='slime',hp=100,r=10}={})=>{
   g._spawnEnemy(type);const e=g.enemies.at(-1);Object.assign(e,{x,y,r,hp,maxHp:hp,speed:0});return e;
 };

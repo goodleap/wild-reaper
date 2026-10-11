@@ -104,7 +104,6 @@ function background(camX,camY,intro){ctx.fillStyle='#2b4130';ctx.fillRect(0,0,wi
   for(let tx=sx;tx<ex;tx++)for(let ty=sy;ty<ey;ty++){const seed=hash(tx,ty),x=tx*tile+offX,y=ty*tile+offY;ellipse(x+seed*90,y+hash(ty,tx)*100,55+seed*40,27+seed*26,'#112e1710');for(let i=0;i<6;i++){let ax=x+hash(tx*7+i,ty)*tile,ay=y+hash(ty*9+i,tx)*tile;grass(ax,ay,.6+hash(i+tx,ty)*.6,hash(tx,ty+i));}if(seed>.83)stone(x+55,y+45,.5+seed*.6,seed);else if(seed>.61)fern(x+30,y+80,.7,seed);if(seed<.4)for(let i=0;i<3;i++)flower(x+35+i*9,y+100+hash(i,tx)*10,.7,seed);for(let i=0;i<5;i++){ctx.fillStyle=i%2?'#89977425':'#142d233a';ctx.fillRect(x+hash(i+tx,ty+7)*140,y+hash(i+ty,tx+6)*140,2+i%2,1);}}
   // Clusters are decorative ground cover; the central fighting space stays readable.
   if(intro){tree(width*.93,height*.14,1.7,.7);tree(width*.99,height*.48,1.2,.3);tree(width*.85,height*.97,1.5,.5);fern(width*.78,height*.88,2,.4);fern(width*.97,height*.8,1.7,.3);stone(hX-100,hY+72,1.5,.7);stone(hX+95,hY-96,1.3,.4);}
-  else{for(let tx=Math.floor(-offX/520)-1;tx<(width-offX)/520+1;tx++)for(let ty=Math.floor(-offY/520)-1;ty<(height-offY)/520+1;ty++){const n=hash(tx+31,ty+17),x=tx*520+offX+110,y=ty*520+offY+50;if(n>.62){ctx.globalAlpha=.57;tree(x,y,.65+n*.4,n);ctx.globalAlpha=1;}}}
   if(intro){const pad=Math.max(40,width*.08);ctx.save();ctx.globalAlpha=.075;ctx.fillStyle='#dee8a0';sunBeamPath(sunBeamGeometry(width*.74-SUN.x/SUN.y*pad,-pad,height+pad*2,width*.04,width*.07));ctx.fill();ctx.restore();}
   else drawMapLights(camX,camY);
 }
@@ -129,7 +128,7 @@ function actorInView(actor,offsetX=0,offsetY=0){
   return cx+(shape.halfWidth+5)*scale>=0&&cx-(shape.halfWidth+shape.shadowLength*.45+5)*scale<=width
     &&cy-(shape.top+5)*scale<=height&&footY+offsetY+(shape.shadowLength+shape.shadowWidth*.4+5)*scale>=0;
 }
-function drawActorShadows(actors,offsetX=0,offsetY=0){
+function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[]){
   if(width<=0||height<=0)return;
   const maskWidth=Math.max(1,Math.ceil(width*.5)),maskHeight=Math.max(1,Math.ceil(height*.5));
   if(actorShadowCanvas.width!==maskWidth||actorShadowCanvas.height!==maskHeight){actorShadowCanvas.width=maskWidth;actorShadowCanvas.height=maskHeight;}
@@ -148,6 +147,7 @@ function drawActorShadows(actors,offsetX=0,offsetY=0){
       const rotation=SUN_ANGLE;mask.moveTo(cx+rx*Math.cos(rotation),cy+rx*Math.sin(rotation));
       mask.ellipse(cx,cy,rx,ry,rotation,0,TAU);mask.closePath();
     }
+    if(!flying)drawTerrainShadowPaths(mask,terrain);
     mask.fill('nonzero');
   }
   mask.globalAlpha=1;
@@ -155,7 +155,120 @@ function drawActorShadows(actors,offsetX=0,offsetY=0){
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.drawImage(actorShadowCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
 }
-function drawActors(actors,moving=false){for(const actor of sortActors(actors)){const e=actor.entity;if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,moving,e.invuln||0);else enemy(e,clock);}}
+function drawActor(actor,moving=false){const e=actor.entity;if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,moving,e.invuln||0);else enemy(e,clock);}
+function drawActors(actors,moving=false){for(const actor of sortActors(actors))drawActor(actor,moving);}
+// Solid terrain shares one world-space source with movement collision. The
+// old decorative trees are retained only on the title screen.
+function terrainInView(camX,camY){
+  return game?.terrain?.query(camX-width/2-180,camY-height/2-180,camX+width/2+180,camY+height/2+180)||[];
+}
+function sceneDrawList(actors,props){
+  const items=actors.map(actor=>({kind:'actor',sortY:actor.footY,actor}));
+  for(const prop of props)items.push({kind:'terrain',sortY:prop.sortY??prop.y,prop});
+  return items.sort((a,b)=>a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:String(a.prop.id).localeCompare(String(b.prop.id))):a.kind==='terrain'?-1:1));
+}
+function drawScene(actors,props,mainPlayer,moving){
+  for(const item of sceneDrawList(actors,props)){
+    if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else drawActor(item.actor,moving);
+  }
+}
+function terrainCapsulePath(target,halfLength,radius){
+  target.moveTo(-halfLength,-radius);target.lineTo(halfLength,-radius);
+  target.arc(halfLength,0,radius,-Math.PI/2,Math.PI/2);
+  target.lineTo(-halfLength,radius);target.arc(-halfLength,0,radius,Math.PI/2,Math.PI*1.5);target.closePath();
+}
+function drawTerrainShadowPaths(mask,props){
+  for(const prop of props){
+    const {x,y,r,type,scale=1}=prop;
+    if(type==='log'){
+      const offset=r*.7,angle=prop.angle||0,dx=Math.cos(angle),dy=Math.sin(angle),radius=r*1.08;
+      const cx=x+SUN.x*offset,cy=y+SUN.y*offset,ax=cx-dx*prop.halfLength,ay=cy-dy*prop.halfLength,bx=cx+dx*prop.halfLength,by=cy+dy*prop.halfLength;
+      mask.moveTo(ax+dy*radius,ay-dx*radius);mask.lineTo(bx+dy*radius,by-dx*radius);
+      mask.arc(bx,by,radius,angle-Math.PI/2,angle+Math.PI/2);mask.lineTo(ax-dy*radius,ay+dx*radius);
+      mask.arc(ax,ay,radius,angle+Math.PI/2,angle+Math.PI*1.5);mask.closePath();
+    }else{
+      const offset=type==='tree'?35*scale:r*.48,cx=x+SUN.x*offset,cy=y+SUN.y*offset;
+      const rx=type==='tree'?39*scale:r*.88,ry=type==='tree'?51*scale:r*1.07;
+      mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();
+    }
+  }
+}
+function treeCanopyOpacity(prop,mainPlayer){
+  if(!mainPlayer)return 1;
+  const scale=prop.scale||1,playerFoot=mainPlayer.y+ACTOR_VISUALS.player.foot*1.1;
+  if(playerFoot>=(prop.sortY??prop.y))return 1;
+  const distance=Math.hypot((mainPlayer.x-prop.x)/(68*scale+14),(mainPlayer.y-7-(prop.y-67*scale))/(46*scale+23));
+  return 1-.65*clamp((1.12-distance)/.38,0,1);
+}
+const terrainCanopyCache=new Map();
+function treeCanopyImage(seed){
+  if(terrainCanopyCache.has(seed))return terrainCanopyCache.get(seed);
+  const bitmap=document.createElement('canvas');bitmap.width=256;bitmap.height=256;
+  const ink=bitmap.getContext('2d');ink.setTransform(2,0,0,2,128,248);
+  const oval=(x,y,rx,ry,color)=>{ink.fillStyle=color;ink.beginPath();ink.ellipse(x,y,rx,ry,0,0,TAU);ink.fill();};
+  const clusters=[[-30,-57,29,25],[-7,-47,34,24],[25,-60,30,27],[-27,-83,28,24],[3,-86,35,29],[29,-85,26,23],[0,-68,38,30]];
+  for(let i=0;i<clusters.length;i++){const [x,y,rx,ry]=clusters[i];oval(x,y,rx,ry,['#24462f','#2f5033','#385b37','#345638'][i%4]);}
+  for(let i=0;i<11;i++){
+    const x=(hash(seed+13,i)-.5)*88,y=-91+hash(seed+27,i)*47;
+    oval(x+3,y-4,10+hash(seed,i)*7,5+hash(i,seed)*4,i%3?'#64805225':'#91a56629');
+    ink.strokeStyle='#163b2327';ink.lineWidth=1.2;ink.beginPath();ink.moveTo(x-4,y+4);ink.lineTo(x+4,y+2);ink.stroke();
+  }
+  oval(20,-98,14,5,'#a4b27a1c');
+  if(terrainCanopyCache.size>=24)terrainCanopyCache.delete(terrainCanopyCache.keys().next().value);
+  terrainCanopyCache.set(seed,bitmap);return bitmap;
+}
+function drawTerrainTree(prop,mainPlayer){
+  const scale=prop.scale||1,r=prop.r/scale,seed=prop.seed||0;
+  ctx.save();ctx.translate(prop.x,prop.y);ctx.scale(scale,scale);
+  // The solid root crown fits the circular collision base; foliage is overhead.
+  ellipse(0,1,r*.92,r*.72,'#273626');ctx.fillStyle='#666345';ctx.strokeStyle='#34422e';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(-9,-12);ctx.lineTo(-r*.9,-r*.28);ctx.lineTo(-r*.83,r*.17);ctx.lineTo(-12,7);ctx.lineTo(-r*.4,r*.92);ctx.lineTo(-r*.1,r*.9);ctx.lineTo(3,11);ctx.lineTo(r*.64,r*.74);ctx.lineTo(r*.8,r*.55);ctx.lineTo(12,4);ctx.lineTo(r*.98,-r*.08);ctx.lineTo(r*.87,-r*.28);ctx.lineTo(8,-14);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#736647';ctx.beginPath();ctx.moveTo(-11,8);ctx.quadraticCurveTo(-8,-21,-10,-62);ctx.lineTo(5,-72);ctx.quadraticCurveTo(5,-22,10,8);ctx.quadraticCurveTo(0,16,-11,8);ctx.fill();ctx.stroke();
+  line(-4,-50,-3,4,'#464c34',2);line(2,-52,4,1,'#9a86582e',3);line(-8,-34,-28,-58,'#626044',7);line(1,-44,24,-65,'#796849',7);
+  line(-7,2,-r*.64,r*.45,'#8b79524d',2);line(7,5,r*.52,r*.48,'#a18b593d',1.5);
+  // Fade the complete canopy once; overlapping leaf clusters stay equally clear.
+  ctx.save();ctx.globalAlpha=treeCanopyOpacity(prop,mainPlayer);ctx.drawImage(treeCanopyImage(seed),-64,-124,128,128);ctx.restore();
+  for(let i=0;i<3;i++)grass((i-1)*r*.6,r*.65,.55,hash(seed,i));ctx.restore();
+}
+function drawTerrainRock(prop){
+  const {r}=prop,seed=prop.seed||0;ctx.save();ctx.translate(prop.x,prop.y);ctx.scale(r,r);
+  ctx.lineJoin='round';ctx.lineWidth=1.8/r;ctx.strokeStyle='#354438';
+  ctx.fillStyle='#677160';ctx.beginPath();ctx.moveTo(-.94,.1);ctx.lineTo(-.78,-.89);ctx.lineTo(-.13,-1.5);ctx.lineTo(.61,-1.19);ctx.lineTo(.98,-.31);ctx.lineTo(.89,.53);ctx.lineTo(.31,.96);ctx.lineTo(-.54,.83);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#919681';ctx.beginPath();ctx.moveTo(-.78,-.89);ctx.lineTo(-.13,-1.5);ctx.lineTo(.61,-1.19);ctx.lineTo(.98,-.31);ctx.lineTo(.25,-.51);ctx.lineTo(-.25,-.39);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#77816c';ctx.beginPath();ctx.moveTo(.25,-.51);ctx.lineTo(.98,-.31);ctx.lineTo(.89,.53);ctx.lineTo(.31,.96);ctx.lineTo(.14,.22);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#4f5f50';ctx.beginPath();ctx.moveTo(-.94,.1);ctx.lineTo(-.78,-.89);ctx.lineTo(-.25,-.39);ctx.lineTo(.14,.22);ctx.lineTo(.31,.96);ctx.lineTo(-.54,.83);ctx.closePath();ctx.fill();
+  line(-.13,-1.5,.2,-.92,'#bcc0a245',1.4/r);line(.2,-.92,.6,-1.18,'#bbc3a645',1.2/r);
+  line(-.2,-.36,-.43,.06,'#374f4038',1.8/r);line(-.43,.06,-.27,.3,'#374f4038',1.8/r);
+  for(let i=0;i<5;i++){
+    const x=-.52+hash(seed+i,4)*.75,y=-.88+hash(seed+i,8)*.38;
+    ellipse(x,y,.17+hash(i,seed)*.09,.065+hash(seed,i)*.06,['#79965b','#6e8c52','#8fa36d'][i%3]);
+  }
+  ellipse(-.55,.69,.3,.11,'#5a77434d');ctx.restore();grass(prop.x-r*.66,prop.y+r*.73,.7,seed);
+}
+function drawTerrainLog(prop){
+  const {r,halfLength:length}=prop,seed=prop.seed||0;ctx.save();ctx.translate(prop.x,prop.y);ctx.rotate(prop.angle||0);
+  ctx.lineJoin='round';ctx.lineCap='round';ctx.fillStyle='#68573b';ctx.strokeStyle='#33402d';ctx.lineWidth=2;
+  ctx.beginPath();terrainCapsulePath(ctx,length,r);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#89724a';ctx.beginPath();ctx.moveTo(-length,-r*.86);ctx.quadraticCurveTo(0,-r*1.05,length,-r*.85);ctx.lineTo(length,-r*.22);ctx.quadraticCurveTo(0,-r*.46,-length,-r*.16);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#4d4a32';ctx.beginPath();ctx.moveTo(-length,r*.47);ctx.quadraticCurveTo(0,r*.7,length,r*.41);ctx.lineTo(length,r*.9);ctx.lineTo(-length,r*.9);ctx.closePath();ctx.fill();
+  for(let i=0;i<5;i++){
+    const yy=(-.7+i*.33)*r;ctx.strokeStyle=i%2?'#a188554c':'#3a412d66';ctx.lineWidth=i%2?1.2:1.8;
+    ctx.beginPath();ctx.moveTo(-length+7,yy);ctx.lineTo(-length*.3,yy+(hash(seed,i)-.5)*r*.35);ctx.lineTo(length*.3,yy+(hash(i,seed)-.5)*r*.3);ctx.lineTo(length-6,yy);ctx.stroke();
+  }
+  // Exposed cut ends, growth rings and a snapped branch distinguish fallen wood.
+  for(const side of [-1,1]){
+    ellipse(side*length,0,r*.74,r*.93,side>0?'#bc9c65':'#9b8155');ctx.strokeStyle='#6b613e';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.strokeStyle='#856f454d';ctx.lineWidth=1;for(const fraction of [.36,.64]){ctx.beginPath();ctx.ellipse(side*length,0,r*.74*fraction,r*.93*fraction,0,0,TAU);ctx.stroke();}
+    line(side*length,0,side*length+r*.36,r*.47,'#73624170',1.1);
+  }
+  line(-length*.28,-r*.66,-length*.07,-r*1.26,'#655739',r*.31);ellipse(-length*.07,-r*1.26,r*.16,r*.12,'#b39a62');
+  ellipse(length*.18,-r*.55,length*.27,r*.21,'#6f864a');ellipse(length*.09,-r*.62,length*.16,r*.12,'#97a96366');ctx.restore();
+}
+function drawTerrain(prop,mainPlayer){
+  if(prop.type==='tree')drawTerrainTree(prop,mainPlayer);
+  else if(prop.type==='rock')drawTerrainRock(prop);
+  else if(prop.type==='log')drawTerrainLog(prop);
+}
 function player(x,y,t,scale=1,facing=0,moving=false,invuln=0){ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(invuln>0&&Math.floor(t*18)%2===0)ctx.globalAlpha=.65;const b=moving?Math.sin(t*17)*1.3:Math.sin(t*2)*.65;ctx.translate(0,b);const flip=Math.cos(facing)<-.1?-1:1;ctx.scale(flip,1);
   // Cloak, boots, soft hood and the little lantern make a readable silhouette.
   ctx.strokeStyle='#253c2a';ctx.lineWidth=1.6;ctx.fillStyle='#567b49';ctx.beginPath();ctx.moveTo(-10,-4);ctx.quadraticCurveTo(-17,6,-16,15);ctx.quadraticCurveTo(0,21,15,14);ctx.lineTo(9,-7);ctx.closePath();ctx.fill();ctx.stroke();
@@ -278,10 +391,11 @@ function renderIntro(){
 function renderGame(){const p=game.player,camX=p.x,camY=p.y;background(camX,camY,false);let sx=0,sy=0;if(shake>0&&!reduced){sx=(Math.random()-.5)*shake;sy=(Math.random()-.5)*shake;}
   const offsetX=width/2-camX+sx,offsetY=height/2-camY+sy;
   const actors=game.enemies.map(e=>actorVisual(e)).filter(actor=>actorInView(actor,offsetX,offsetY));actors.push(actorVisual(p,true));
-  drawActorShadows(actors,offsetX,offsetY);ctx.save();ctx.translate(offsetX,offsetY);
+  const terrain=terrainInView(camX,camY);
+  drawActorShadows(actors,offsetX,offsetY,terrain);ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(Math.abs(gem.x-p.x)>width/2+20||Math.abs(gem.y-p.y)>height/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   for(const e of game.effects)if(e.type==='ring')effects(e);
-  drawActors(actors,Math.hypot(input.x,input.y)>.1);
+  drawScene(actors,terrain,p,Math.hypot(input.x,input.y)>.1);
   for(const b of game.bullets){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);line(-18,0,0,0,'#c2eda83b',5);line(-9,0,5,0,b.color,2.8);ctx.fillStyle='#f6f6cf';ctx.beginPath();ctx.moveTo(7,0);ctx.lineTo(-1,-3.5);ctx.lineTo(-1,3.5);ctx.closePath();ctx.fill();ctx.restore();}
   for(const b of game.orbitals){blade(b.x,b.y,b.angle+clock,1);}
   for(const e of game.effects)if(e.type!=='ring')effects(e);

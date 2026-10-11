@@ -1,3 +1,5 @@
+import { Terrain, groundOffset } from './terrain.js';
+
 const TAU = Math.PI * 2;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -23,7 +25,8 @@ const ENDLESS_UPGRADES = [
 ];
 
 export class Game {
-  constructor({difficulty='normal'}={}) {
+  constructor({difficulty='normal',terrain=new Terrain()}={}) {
+    this.terrain=terrain;
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.status = 'playing'; this.time = 0; this.kills = 0; this.wave = 1;
@@ -39,6 +42,7 @@ export class Game {
     this._id = 0; this._clock = 0; this._shot = .15; this._spawn = .4;
     this._pulse = 1; this._lightning = 1; this._choices = null;
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
+    this._moveEntity(this.player,0,0,true);
     for(let i=0;i<4;i++) this._spawnEnemy('slime', 330 + i * 24);
   }
 
@@ -84,14 +88,15 @@ export class Game {
     // Density and movement stay bounded; health and contact damage keep rising.
     const health=hp*(type==='boss'?1+(bossIndex-1)*.65+sq(bossIndex-1)*.12:1+t*.003+Math.pow(lateMinutes,1.45)*.32);
     const danger=type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.18;
-    this.enemies.push({id:++this._id,x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),orbitHit:0,attackCooldown:0});
+    const enemy={id:++this._id,x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),orbitHit:0,attackCooldown:0};
+    this._moveEntity(enemy,0,0);this.enemies.push(enemy);
   }
   _hurtEnemy(enemy,amount,knockback=0) {
     if(enemy.hp<=0) return;
     enemy.hp -= amount; enemy.hit = .12;
     if(knockback && enemy.type!=='boss') {
       const dx=enemy.x-this.player.x,dy=enemy.y-this.player.y,d=Math.hypot(dx,dy)||1;
-      enemy.x += dx/d*knockback; enemy.y += dy/d*knockback;
+      this._moveEntity(enemy,dx/d*knockback,dy/d*knockback);
     }
     this._effect(enemy.x,enemy.y,'hit',.16,enemy.r*.7,'#e8f3ad');
     if(Math.random()<.24 || enemy.type==='boss') this._effect(enemy.x+rand(-8,8),enemy.y-enemy.r,'damage',.65,0,'#f1e4aa',String(Math.round(amount)));
@@ -121,6 +126,48 @@ export class Game {
       }
     return found;
   }
+  _moveEntity(entity,dx,dy,isPlayer=false) {
+    const offset=groundOffset(entity,isPlayer),moved=this.terrain.moveCircle(entity.x,entity.y+offset,dx,dy,entity.r);
+    entity.x=moved.x;entity.y=moved.y-offset;return moved;
+  }
+  _moveEnemy(e,dt) {
+    const x=e.x,y=e.y+groundOffset(e),tx=this.player.x,ty=this.player.y+groundOffset(this.player,true);
+    const dx=tx-x,dy=ty-y,d=Math.hypot(dx,dy)||1;
+    let nx=dx/d,ny=dy/d,detouring=false;
+    e._navTimer=(e._navTimer||0)-dt;
+    if(e._navTimer<=0) {
+      e._navTimer=.16+(e.id%4)*.025;
+      const obstacle=this.terrain.firstBlocker(x,y,tx,ty,e.r+3);
+      if(obstacle?.id!==e._navObstacle?.id)e._navSide=0;
+      e._navObstacle=obstacle;
+    }
+    const obstacle=e._navObstacle;
+    if(obstacle) {
+      const q=this.terrain.closestPoint(obstacle,x,y),ox=x-q.x,oy=y-q.y,od=Math.hypot(ox,oy)||1;
+      const radius=obstacle.r+e.r+8;
+      if(od<radius+80) {
+        const outwardX=ox/od,outwardY=oy/od;
+        if(!e._navSide) {
+          const preference=-outwardY*nx+outwardX*ny;
+          e._navSide=Math.abs(preference)>.08?Math.sign(preference):e.id%2?1:-1;
+        }
+        // Continuously advancing a tangent target carries enemies around both
+        // circular trunks and a fallen trunk's end caps, instead of parking them.
+        const lookahead=clamp(radius*.8,26,62);
+        const wx=q.x+outwardX*radius-outwardY*e._navSide*lookahead;
+        const wy=q.y+outwardY*radius+outwardX*e._navSide*lookahead;
+        const wd=Math.hypot(wx-x,wy-y)||1;nx=(wx-x)/wd;ny=(wy-y)/wd;detouring=true;
+      }
+    }
+    const wobble=!detouring&&e.type==='bat'?Math.sin(this._clock*5+e.phase)*.52:0;
+    const speed=e.speed*(e.type==='boss'?1+Math.max(0,Math.sin(this._clock*.85))*1.15:1);
+    this._moveEntity(e,(nx-ny*wobble)*speed*dt,(ny+nx*wobble)*speed*dt);
+    e._navProgressTimer=(e._navProgressTimer||0)+dt;
+    if(e._navProgressTimer>.9) {
+      if(detouring&&Number.isFinite(e._navProgressX)&&Math.hypot(e.x-e._navProgressX,e.y-e._navProgressY)<2)e._navSide*=-1;
+      e._navProgressX=e.x;e._navProgressY=e.y;e._navProgressTimer=0;
+    }
+  }
 
   update(dt,input={}) {
     if(this.status!=='playing') return;
@@ -134,7 +181,7 @@ export class Game {
     let ix=Number.isFinite(input.x)?input.x:0,iy=Number.isFinite(input.y)?input.y:0;
     const length=Math.hypot(ix,iy); if(length>1) { ix/=length; iy/=length; }
     if(length>.01) p.facing=Math.atan2(iy,ix);
-    p.x+=ix*p.speed*dt; p.y+=iy*p.speed*dt;
+    this._moveEntity(p,ix*p.speed*dt,iy*p.speed*dt,true);
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
     this._spawn-=dt;
     if(this._spawn<=0) {
@@ -155,11 +202,7 @@ export class Game {
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
-      const dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||1;
-      const wobble=e.type==='bat'?Math.sin(this._clock*5+e.phase)*.52:0;
-      let speed=e.speed;
-      if(e.type==='boss') speed*=1+Math.max(0,Math.sin(this._clock*.85))*1.15;
-      e.x+=(dx/d-dy/d*wobble)*speed*dt; e.y+=(dy/d+dx/d*wobble)*speed*dt;
+      this._moveEnemy(e,dt);
     }
     this._rebuildGrid();
     // Soft separation keeps the horde readable while preserving dense swarms.
@@ -171,8 +214,8 @@ export class Game {
         const dx=e.x-n.x,dy=e.y-n.y,d=Math.hypot(dx,dy),overlap=(e.r+n.r)*.76-d;
         if(overlap>0 && d>.1) {
           const force=Math.min(overlap,30*dt)*.5;
-          if(e.type!=='boss') { e.x+=dx/d*force;e.y+=dy/d*force; }
-          if(n.type!=='boss') { n.x-=dx/d*force;n.y-=dy/d*force; }
+          if(e.type!=='boss')this._moveEntity(e,dx/d*force,dy/d*force);
+          if(n.type!=='boss')this._moveEntity(n,-dx/d*force,-dy/d*force);
         }
       }
     }
