@@ -19,7 +19,7 @@ const PALETTES={
   warden:{cloth:['#5b6340','#8f8052','#c1ac76'],arm:['#495e3a','#718653','#a4ac70'],outline:'#374831',skin:['#908662','#bfb185','#e0d1a0'],face:'#344638',eye:'#f2ebbf'},
   stormcaller:{cloth:['#49435e','#796e9d','#aaa0c4'],arm:['#58516f','#8a80aa','#b1a6cc'],outline:'#373c4d',skin:['#9292ac','#c3bfda','#e1dceb'],face:'#353d54',eye:'#eaf0ff'},
   merchant:{cloth:['#665237','#997c4d','#ccb37b'],arm:['#756040','#ac8c57','#d5b977'],outline:'#444632',skin:['#a3946d','#d2c09a','#eee0b8'],face:'#414832',eye:'#f3eccb'},
-  angel:{cloth:['#9aa68c','#d4dbc0','#f4f0d8'],arm:['#a6b69b','#d3dfbe','#f5f0d8'],outline:'#667c6a',skin:['#a7ae91','#d4d6b8','#f1ebd0'],face:'#53665d',eye:'#fff4d7'}
+  angel:{cloth:['#b1b7a0','#e4e5cf','#fff9e8'],arm:['#bbc4ad','#e4e8d1','#fff9e8'],outline:'#89957d',skin:['#d7b18e','#f1d4b2','#fff0d6'],face:'#efd0ab',eye:'#5c5548'}
 };
 
 export function humanoidFaceState(entity={},time=0,reduced=false){
@@ -141,7 +141,13 @@ export class HumanoidArt {
     if(kind==='traveler'){
       c.beginPath();c.moveTo(-7,-6);c.lineTo(8,-6);c.lineTo(10,10);c.quadraticCurveTo(0,14,-9,10);c.closePath();paint(c,'#adc19a');return;
     }
-    const p=PALETTES[kind];coatPath(c,12);paint(c,material(c,flip,p.cloth,14,-8,13),p.outline,1.15);
+    const p=PALETTES[kind];
+    if(kind==='angel'){
+      // A gently gathered waist and a curved ivory skirt retain the same small
+      // body envelope; the dress does not exaggerate the character's proportions.
+      c.beginPath();c.moveTo(-8,-7);c.quadraticCurveTo(0,-9,8,-7);c.quadraticCurveTo(7,-2,6.5,1);c.quadraticCurveTo(8,6,12,10);c.quadraticCurveTo(0,16,-12,10);c.quadraticCurveTo(-8,6,-6.5,1);c.quadraticCurveTo(-7,-2,-8,-7);c.closePath();
+    }else coatPath(c,12);
+    paint(c,material(c,flip,p.cloth,14,-8,13),p.outline,1.15);
     // A few broad fold planes survive at game size; there is no noisy fabric grain.
     poly(c,[[-6,-4],[-3,3],[-6,11],[-9,10]],'#152d242b');poly(c,[[5,-5],[8,9],[4,12],[3,4]],kind==='angel'?'#ffffff55':'#efebca22');
     line(c,[[-6,2],[-7,9]],kind==='stormcaller'?'#c5b7d440':'#e6e7b83b',.75);
@@ -157,8 +163,10 @@ export class HumanoidArt {
       poly(c,[[5,5],[10,5],[11,11],[5,12]],'#b59a64','#5c5338',.8);line(c,[[6,7],[9,7]],'#e2c88e',.7);
       poly(c,[[-9,-7],[0,-3],[9,-7],[6,-1],[0,1],[-6,-1]],'#c2ac75','#6a623f',.65);
     }else{
-      poly(c,[[-3,-7],[2,-7],[4,12],[-3,12]],material(c,flip,['#a1a47b','#d0cba0','#f4e9bf'],6,-6,13));line(c,[[1,-3],[1,10]],'#fff2c3',.9);
-      poly(c,[[-9,-7],[0,-3],[9,-7],[7,-1],[0,1],[-7,-1]],'#b9c5a7','#869d83',.65);line(c,[[-7,-6],[0,-2],[7,-6]],'#fff0c4',1.15);gem(c,0,-3,2.5,['#b4a364','#e8d698','#fff5cf'],flip);line(c,[[-10,10],[0,13],[10,10]],'#e8dab1',1.1);
+      poly(c,[[-2,2],[2,2],[4,12],[-4,12]],'#fff9e3');
+      c.beginPath();c.moveTo(-8,-6);c.quadraticCurveTo(0,-1,8,-6);c.strokeStyle='#e0cb91';c.lineWidth=1.2;c.stroke();
+      line(c,[[-6.5,1],[6.5,1]],'#bbab76',2);line(c,[[-6.5,.6],[6.5,.6]],'#f5e6b7',.9);gem(c,0,1,1.8,['#ad985c','#e5cd87','#fff4c3'],flip);
+      c.beginPath();c.moveTo(-10,10);c.quadraticCurveTo(0,14.5,10,10);c.strokeStyle='#e4d6aa';c.lineWidth=1.1;c.stroke();
     }
   }
   _head(c,kind,flip){
@@ -168,7 +176,11 @@ export class HumanoidArt {
       oval(c,2,-12,10,9,'#32452f');
       c.beginPath();c.moveTo(-13,-11);c.quadraticCurveTo(-7,-27,3,-28);c.strokeStyle='#b5ab82';c.lineWidth=1;c.stroke();
     }else{
-      oval(c,0,-13.2,10.6,11,material(c,flip,[p.face,p.face,kind==='angel'?'#809381':kind==='stormcaller'?'#596179':'#64745a'],11,-22,-4));
+      if(kind==='angel'){
+        // Shoulder-length gold locks sit behind an uncovered, warmly lit face.
+        c.beginPath();c.moveTo(-10,-25);c.quadraticCurveTo(0,-32,10,-25);c.quadraticCurveTo(14,-18,12.5,-10);c.quadraticCurveTo(12,-4,14,-2);c.quadraticCurveTo(10,1,6,-3);c.lineTo(-6,-3);c.quadraticCurveTo(-10,1,-14,-2);c.quadraticCurveTo(-12,-5,-13,-11);c.quadraticCurveTo(-15,-19,-10,-25);c.closePath();paint(c,material(c,flip,['#ab9259','#d7bd7d','#f3df9f'],15,-28,1),'#91865f',.8);
+        oval(c,0,-13.2,10.3,11,material(c,flip,p.skin,11,-22,-4));
+      }else oval(c,0,-13.2,10.6,11,material(c,flip,[p.face,p.face,kind==='stormcaller'?'#596179':'#64745a'],11,-22,-4));
       // Caps cast a painted shadow; the angel has an exposed forehead instead.
       if(kind!=='angel'){c.beginPath();c.moveTo(-10,-16);c.quadraticCurveTo(0,-24,10,-16);c.lineTo(9,-13);c.quadraticCurveTo(0,-17,-9,-13);c.closePath();paint(c,'#14252a40');}
       if(kind==='stormcaller'){
@@ -188,13 +200,15 @@ export class HumanoidArt {
         c.beginPath();c.moveTo(-12,-23);c.quadraticCurveTo(0,-26,12,-23);c.lineTo(13,-20);c.quadraticCurveTo(0,-22,-13,-20);c.closePath();paint(c,'#5f5d3b');
         oval(c,0,-20,16,3.5,material(c,flip,['#867048','#b89d65','#ddc991'],17,-25,-18));line(c,[[-12,-18.5],[0,-17.5],[12,-19]],'#c9b67b',.8);
       }else{
-        // Uneven short locks, a side part and an open forehead read as hair;
+        // Soft cheek-side locks, a side part and an open forehead read as hair;
         // the floating halo remains separate from the head silhouette.
-        c.beginPath();c.moveTo(-11,-12);c.quadraticCurveTo(-15,-21,-10,-27);c.quadraticCurveTo(-9,-29,-6,-29);c.quadraticCurveTo(-4,-32,1,-30);c.quadraticCurveTo(6,-31,9,-27);c.quadraticCurveTo(13,-24,12,-17);c.lineTo(10,-12);c.lineTo(9,-18);c.quadraticCurveTo(9,-22,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.lineTo(-10,-13);c.closePath();
+        c.beginPath();c.moveTo(-11,-4);c.quadraticCurveTo(-14,-11,-13,-20);c.quadraticCurveTo(-13,-28,-6,-29);c.quadraticCurveTo(-2,-32,3,-29);c.quadraticCurveTo(9,-29,11,-24);c.quadraticCurveTo(14,-17,12,-9);c.quadraticCurveTo(11,-5,12,-3);c.quadraticCurveTo(8,-5,9,-11);c.lineTo(9,-18);c.quadraticCurveTo(9,-22,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.quadraticCurveTo(-9,-10,-11,-4);c.closePath();
         paint(c,material(c,flip,['#ad975d','#dcc788','#fff0bb'],14,-32,-12),'#7d8965',.9);
         c.beginPath();c.moveTo(3,-28);c.quadraticCurveTo(-2,-28,-7,-24);c.strokeStyle='#fff1c5';c.lineWidth=1.15;c.stroke();
         c.beginPath();c.moveTo(5,-27);c.quadraticCurveTo(9,-25,10,-21);c.strokeStyle='#fff1c599';c.lineWidth=.85;c.stroke();
         line(c,[[-9,-24],[-11,-21]],'#b39f66',.8);
+        c.beginPath();c.moveTo(-11,-17);c.quadraticCurveTo(-12,-10,-11,-6);c.strokeStyle='#f1d895';c.lineWidth=.8;c.stroke();
+        c.beginPath();c.moveTo(11,-16);c.quadraticCurveTo(10,-9,11,-6);c.strokeStyle='#fff0b988';c.lineWidth=.75;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,0,TAU);c.strokeStyle='#b5a365';c.lineWidth=1.7;c.stroke();c.strokeStyle='#f6e4a4';c.lineWidth=.85;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,Math.PI*1.15,Math.PI*1.85);c.strokeStyle='#fff8d5';c.lineWidth=.9;c.stroke();
       }
