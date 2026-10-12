@@ -204,9 +204,9 @@ export class HumanoidArt {
         c.beginPath();c.moveTo(-12,-23);c.quadraticCurveTo(0,-26,12,-23);c.lineTo(13,-20);c.quadraticCurveTo(0,-22,-13,-20);c.closePath();paint(c,'#5f5d3b');
         oval(c,0,-20,16,3.5,material(c,flip,['#867048','#b89d65','#ddc991'],17,-25,-18));line(c,[[-12,-18.5],[0,-17.5],[12,-19]],'#c9b67b',.8);
       }else{
-        // The centered round crown flows into a swept fringe and curved cheek
-        // locks. The face stays open across its widest part, rather than long.
-        c.beginPath();c.moveTo(-13,-3);c.bezierCurveTo(-10,-6,-12.7,-11,-13,-17.5);c.bezierCurveTo(-13.5,-24.8,-7.2,-29.5,0,-29.5);c.bezierCurveTo(7.2,-29.5,13.5,-24.8,13,-17.5);c.bezierCurveTo(12.7,-11,10,-6,13,-3);c.quadraticCurveTo(9,-1.6,7.8,-5.2);c.bezierCurveTo(7.2,-8,9.5,-10.5,9.6,-14.5);c.quadraticCurveTo(10,-20.7,5,-23);c.quadraticCurveTo(2.5,-18.8,-3.5,-17.6);c.quadraticCurveTo(-2.6,-18.8,-2.2,-20.2);c.quadraticCurveTo(-5.5,-18,-9.3,-17);c.bezierCurveTo(-10.3,-12.7,-7.2,-9,-7.8,-5.2);c.quadraticCurveTo(-9,-1.6,-13,-3);c.closePath();
+        // A fuller swept fringe covers more forehead. Curved side locks frame
+        // the upper cheeks, then turn outward to keep the short chin open.
+        c.beginPath();c.moveTo(-13,-3);c.bezierCurveTo(-10,-6,-12.7,-11,-13,-17.5);c.bezierCurveTo(-13.5,-24.8,-7.2,-29.5,0,-29.5);c.bezierCurveTo(7.2,-29.5,13.5,-24.8,13,-17.5);c.bezierCurveTo(12.7,-11,10,-6,13,-3);c.quadraticCurveTo(8.7,-1.6,7.2,-5.2);c.bezierCurveTo(6.7,-8,8.1,-10.5,8.3,-14);c.quadraticCurveTo(8.8,-20.3,4.8,-22.5);c.quadraticCurveTo(2.1,-17.8,-3.9,-16);c.quadraticCurveTo(-3,-17.4,-2.7,-18.9);c.quadraticCurveTo(-5.5,-16.7,-8.3,-15.7);c.bezierCurveTo(-8.8,-12.2,-6.7,-9,-7.2,-5.2);c.quadraticCurveTo(-8.7,-1.6,-13,-3);c.closePath();
         paint(c,material(c,flip,['#b39b63','#e1ca8c','#fff0bb'],14,-30,-8),'#9c946e',.75);
         c.beginPath();c.moveTo(2,-26.8);c.quadraticCurveTo(-3,-26.8,-7.7,-22.8);c.strokeStyle='#fff3ca';c.lineWidth=1.1;c.stroke();
         c.beginPath();c.moveTo(5,-25.8);c.quadraticCurveTo(10,-23.4,10.7,-19.8);c.strokeStyle='#fff2c699';c.lineWidth=.8;c.stroke();
@@ -254,10 +254,7 @@ export class HumanoidArt {
       else if(state==='blink')line(c,[[x-1.4,y+.2],[x+1.4,y+.2]],p.eye,1);
       else if(state==='focus')line(c,[[x-1.5,y+(i?-.6:.3)],[x+1.5,y+(i?.3:-.6)]],p.eye,1.5);
       else if(state==='glad'){c.beginPath();c.moveTo(x-1.5,y+.8);c.quadraticCurveTo(x,y-1.5,x+1.5,y+.8);c.strokeStyle=p.eye;c.lineWidth=1.1;c.stroke();}
-      else{
-        oval(c,x,y,kind==='traveler'?1.5:angel?1.15:1.4,kind==='traveler'?2:angel?1.55:1.95,p.eye);
-        if(angel){const side=i?1:-1;line(c,[[x+side*.8,y-.5],[x+side*1.7,y-1.35]],p.eye,.75);oval(c,x+.25,y-.5,.3,.36,'#fff4df');}
-      }
+      else oval(c,x,y,kind==='traveler'||angel?1.5:1.4,kind==='traveler'||angel?2:1.95,p.eye);
     }
     if(angel){
       c.beginPath();c.moveTo(-1.4,-7.7);c.quadraticCurveTo(0,state==='hurt'?-8.6:state==='focus'?-7.7:-6.4,1.4,-7.7);c.strokeStyle='#b57e6c';c.lineWidth=.65;c.stroke();
