@@ -18,7 +18,7 @@ import { ImmersionArt } from './immersion-art.js';
 import { presentUpgrade, upgradeCardHTML } from './upgrade-presentation.js';
 import { resolveCharacterStats, weaponStats, skillStats } from './combat-stats.js';
 import { groundOffset, rockShadowParts } from './terrain.js';
-import { isGrounded } from './environment.js';
+import { isGrounded, obstacleHeight } from './height-rules.js';
 import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-map.js';
 
 const $ = (id) => document.getElementById(id);
@@ -508,10 +508,37 @@ function terrainInView(camX,camY){
   return game?.terrain?.query(camX-width/2-260,camY-height/2-260,camX+width/2+260,camY+height/2+260)||[];
 }
 function sceneVisible(entity){if(!game?.dungeon?.active||!game.dungeon.vision)return true;const actor=entity.type&&ACTOR_VISUALS[entity.type]||entity.isCompanion;const y=entity.groundY??(entity.y+(actor?groundOffset(entity,!!entity.isCompanion):0));return game.dungeon.vision.isVisible(entity.x,y,actor?entity.r||0:0);}
+function flightCrossesProp(actor,prop){
+  const half=prop.type==='log'?(prop.halfLength||0):0,dx=Math.cos(prop.angle||0),dy=Math.sin(prop.angle||0);
+  const along=clamp((actor.x-prop.x)*dx+(actor.footY-prop.y)*dy,-half,half);
+  const radius=(prop.r||0)+(actor.entity.r||actor.shape.radius*actor.scale);
+  return (actor.x-prop.x-dx*along)**2+(actor.footY-prop.y-dy*along)**2<=radius*radius;
+}
+function flightOverlapsSilhouette(actor,prop){
+  const visual=prop.visual||{},half=prop.type==='log'?(prop.halfLength||0):0;
+  const halfWidth=visual.halfWidth??Math.max(Math.abs(Math.cos(prop.angle||0))*half+(prop.r||0),prop.width?prop.width*.5+16:40);
+  const top=visual.top??(Math.abs(Math.sin(prop.angle||0))*half+(prop.isSettlement?prop.type==='castle'?175:(prop.depth||28)+95:80));
+  const bottom=visual.bottom??Math.abs(Math.sin(prop.angle||0))*half+(prop.r||16);
+  return actor.x+actor.shape.halfWidth*actor.scale>=prop.x-halfWidth&&actor.x-actor.shape.halfWidth*actor.scale<=prop.x+halfWidth
+    &&actor.footY>=prop.y-top&&actor.y-actor.shape.top*actor.scale<=prop.y+bottom;
+}
 function sceneDrawList(actors,props,adventureProps=[]){
   const items=actors.map(actor=>({kind:'actor',sortY:actor.footY,actor}));
   for(const prop of props)if(prop.visual!==false&&(!prop.structureId||prop.variant==='castle-wall'||prop.variant==='hut-wall'))items.push({kind:'terrain',sortY:prop.sortY??prop.y,prop});
   for(const prop of adventureProps)items.push({kind:'adventure',sortY:prop.sortY??prop.y,prop});
+  const scenery=items.filter(item=>item.kind!=='actor'),low=scenery.filter(item=>item.kind==='terrain'&&obstacleHeight(item.prop)==='low');
+  for(const item of items){
+    if(item.kind!=='actor'||isGrounded(item.actor.entity))continue;
+    let front=item.sortY;
+    // Only raise draw order while crossing a nearby low footprint. Body and
+    // shadow anchors stay unchanged; distant foreground scenery still wins.
+    for(const prop of low)if(prop.sortY>=front&&flightCrossesProp(item.actor,prop.prop))front=prop.sortY+.01;
+    if(front===item.sortY)continue;
+    // Keep a total, stable depth order and preserve tall silhouettes in front
+    // of flight. A global air layer would incorrectly paint bats over roofs.
+    for(const prop of scenery)if(prop.sortY>item.sortY&&prop.sortY<=front&&(prop.kind!=='terrain'||obstacleHeight(prop.prop)==='high')&&flightOverlapsSilhouette(item.actor,prop.prop))front=Math.min(front,prop.sortY-.01);
+    item.sortY=Math.max(item.sortY,front);
+  }
   return items.sort((a,b)=>a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:String(a.prop.id).localeCompare(String(b.prop.id))):({terrain:0,adventure:1,actor:2}[a.kind]-{terrain:0,adventure:1,actor:2}[b.kind])));
 }
 function drawScene(actors,props,mainPlayer,adventureProps=[]){

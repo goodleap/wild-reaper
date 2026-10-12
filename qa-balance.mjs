@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { portalDoor } from './dist/portal-geometry.js';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { movementProfile } from './dist/height-rules.js';
 
 // These short scenarios validate pacing mechanics, not a simulated player's skill.
 let seed=819263;
@@ -25,7 +26,7 @@ function advance(g,seconds,input={}) {
 }
 function feetFree(g) {
   assert(g.terrain.isFree(g.player.x,g.player.y+groundOffset(g.player,true),g.player.r));
-  for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r),`${e.type} cannot enter solid terrain`);
+  for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r,movementProfile(e)),`${e.type} cannot enter solid terrain`);
 }
 
 // Enemy entry and auto targeting must work in narrow portrait viewports too.

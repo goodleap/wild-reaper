@@ -1,4 +1,5 @@
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
+import { blocksObstacle, obstacleHeight } from './height-rules.js';
 const CELL=520, TAU=Math.PI*2, EPS=.02;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -87,6 +88,7 @@ function obstacle(spec,index=0) {
   const a=axis(o);
   o.bounds=Object.freeze({minX:Math.min(a.ax,a.bx)-o.r,minY:Math.min(a.ay,a.by)-o.r,maxX:Math.max(a.ax,a.bx)+o.r,maxY:Math.max(a.ay,a.by)+o.r});
   o.sortY=spec.sortY??o.y;
+  o.heightBand=obstacleHeight(o);
   return Object.freeze(o);
 }
 
@@ -156,9 +158,9 @@ export class Terrain {
   closestPoint(o,x,y) {const a=axis(o);return pointOnSegment(x,y,a.ax,a.ay,a.bx,a.by);}
   isDry(x,y,r=0) {return !this.island||this.island.isDry(x,y,r);}
   isNaturalFree(x,y,r=0) {return (!this.island||this.island.naturalCircleFree(x,y,r))&&this.isFree(x,y,r);}
-  isFree(x,y,r=0) {
+  isFree(x,y,r=0,profile='ground') {
     if(this.island&&!this.island.contains(x,y,r))return false;
-    return !this.query(x-r,y-r,x+r,y+r).some(o=>{const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
+    return !this.query(x-r,y-r,x+r,y+r).some(o=>{if(!blocksObstacle(o,profile))return false;const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
   }
   _resolve(x,y,r,items,fromX=x,fromY=y) {
     let blocked=false;
@@ -180,28 +182,28 @@ export class Terrain {
     }
     return {x,y,blocked};
   }
-  resolveCircle(x,y,r) {
-    if(this.isFree(x,y,r))return {x,y,blocked:false};
+  resolveCircle(x,y,r,profile='ground') {
+    if(this.isFree(x,y,r,profile))return {x,y,blocked:false};
     const originalX=x,originalY=y;let blocked=false;
     if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked=coast.blocked;}
     for(let pass=0;pass<8;pass++) {
-      const resolved=this._resolve(x,y,r,this.query(x-r-110,y-r-110,x+r+110,y+r+110));
+      const resolved=this._resolve(x,y,r,this.query(x-r-110,y-r-110,x+r+110,y+r+110).filter(o=>blocksObstacle(o,profile)));
       x=resolved.x;y=resolved.y;blocked||=resolved.blocked;
       if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked||=coast.blocked;}
-      if(this.isFree(x,y,r))return {x,y,blocked};
+      if(this.isFree(x,y,r,profile))return {x,y,blocked};
     }
     // Only relevant to overlapping injected obstacles; procedural props are sparse.
     for(let radius=24;radius<=1024;radius+=24)for(let i=0;i<24;i++){
       const a=i*TAU/24,nx=originalX+Math.cos(a)*radius,ny=originalY+Math.sin(a)*radius;
-      if(this.isFree(nx,ny,r))return {x:nx,y:ny,blocked:true};
+      if(this.isFree(nx,ny,r,profile))return {x:nx,y:ny,blocked:true};
     }
     return {x,y,blocked};
   }
-  moveCircle(x,y,dx,dy,r) {
-    const start=this.resolveCircle(x,y,r);x=start.x;y=start.y;
+  moveCircle(x,y,dx,dy,r,profile='ground') {
+    const start=this.resolveCircle(x,y,r,profile);x=start.x;y=start.y;
     const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(3,Math.min(6,r*.45))));
     const sx=dx/steps,sy=dy/steps;let blocked=start.blocked;
-    const items=this.query(Math.min(x,x+dx)-r-110,Math.min(y,y+dy)-r-110,Math.max(x,x+dx)+r+110,Math.max(y,y+dy)+r+110);
+    const items=this.query(Math.min(x,x+dx)-r-110,Math.min(y,y+dy)-r-110,Math.max(x,x+dx)+r+110,Math.max(y,y+dy)+r+110).filter(o=>blocksObstacle(o,profile));
     if(!items.length&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
     for(let i=0;i<steps;i++) {
       let next=this._resolve(x+sx,y+sy,r,items,x,y);blocked||=next.blocked;
@@ -211,9 +213,10 @@ export class Terrain {
     }
     return {x,y,blocked};
   }
-  firstBlocker(x1,y1,x2,y2,r=0) {
+  firstBlocker(x1,y1,x2,y2,r=0,profile='ground') {
     let found=null,best=Infinity;const dx=x2-x1,dy=y2-y1,length=dx*dx+dy*dy||1;
     for(const o of this.query(Math.min(x1,x2)-r,Math.min(y1,y2)-r,Math.max(x1,x2)+r,Math.max(y1,y2)+r)) {
+      if(!blocksObstacle(o,profile))continue;
       const a=axis(o),rr=r+o.r;
       if(segmentDistanceSq(x1,y1,x2,y2,a.ax,a.ay,a.bx,a.by)<rr*rr) {
         const t=clamp(((o.x-x1)*dx+(o.y-y1)*dy)/length,0,1);

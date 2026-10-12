@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { isGrounded } from './height-rules.js';
 import { clearBossAttacks } from './bosses.js';
 import { resolveCharacterStats, scalePlayerDamage } from './combat-stats.js';
 
@@ -28,20 +29,41 @@ export const ATTACK_SOURCES=Object.freeze({
 });
 const RAW_SOURCE=Object.freeze({owner:'external'});
 export const attackSource=source=>ATTACK_SOURCES[source]||RAW_SOURCE;
+const PROPAGATION_PROFILES=Object.freeze({pulse:'ground',echo:'ground',companionPulse:'ground',companionEcho:'ground',storm:'overhead',angel:'overhead'});
+export const attackProfile=source=>PROPAGATION_PROFILES[source]||'projectile';
 
 export class CombatResolution {
   constructor(game){this.game=game;}
 
+  groundPoint(entity){
+    if(Number.isFinite(entity?.groundY))return {x:entity.x,y:entity.groundY};
+    const human=entity===this.game.player||entity?.isCompanion||entity?.isCaptive||entity?.isTownNpc;
+    const offset=groundOffset(entity||{},human);
+    return {x:entity?.x,y:(entity?.y??0)+(Number.isFinite(offset)?offset:0)};
+  }
+
+  // Acquisition checks the same projected path as execution. Unknown plain
+  // points are already ground coordinates; callers can supply groundY for a
+  // body-space effect, a prop, or a projectile segment.
+  clearPath(origin,target,{source='arrow',profile=attackProfile(source),radius=0,targetGroundY}={}){
+    if(profile==='overhead'||!this.game.terrain?.firstBlocker)return true;
+    const a=this.groundPoint(origin),b=this.groundPoint(target);
+    if(Number.isFinite(targetGroundY))b.y=targetGroundY;
+    else if(source==='arrow'&&Number.isFinite(origin?.y))b.y=target.y+a.y-origin.y;
+    return !this.game.terrain.firstBlocker(a.x,a.y,b.x,b.y,radius,profile);
+  }
+
   // One pure target gate is reused for acquisition, attack validation and
   // delayed damage. It never awakens an enemy or reveals unexplored rooms.
-  canTarget(enemy,origin=this.game.player,{requireView=false,range=Infinity,canHitFlying=true}={}){
+  canTarget(enemy,origin=this.game.player,{requireView=false,range=Infinity,canHitFlying=true,source='raw',profile,checkPath=false,pathRadius=0}={}){
     const g=this.game;
     if(!enemy||enemy.hp<=0||enemy.rescueSpawnGrace>0)return false;
-    if(!canHitFlying&&(enemy.flying||enemy.type==='bat'))return false;
+    if((!canHitFlying||(checkPath&&(profile??attackProfile(source))==='ground'))&&!isGrounded(enemy))return false;
     if(requireView&&!g._inView(enemy))return false;
     if(Number.isFinite(range)&&Math.hypot(enemy.x-origin.x,enemy.y-origin.y)>range)return false;
     if(enemy.dungeonId&&g.dungeon?.canDamage(enemy,origin)===false)return false;
-    return g.regions?.canTarget(enemy)!==false;
+    if(g.regions?.canTarget(enemy)===false)return false;
+    return !checkPath||this.clearPath(origin,enemy,{source,profile,radius:pathRadius});
   }
 
   // Raw base damage is scaled exactly once at attack creation. Passing damage

@@ -3,6 +3,7 @@ import { LEVEL_CAPS } from './dist/combat-catalog.js';
 import { portalDoor } from './dist/portal-geometry.js';
 import { Game, xpCost, crystalCost, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { movementProfile } from './dist/height-rules.js';
 let seed=61851;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 const finite = (g) => {
@@ -14,7 +15,7 @@ const finite = (g) => {
   assert(g.player.skillCooldown>=0&&g.player.skillCooldown<=g.player.skillCooldownMax);
   if(g.storm) {assert(g.storm.targets.length<=181);for(const t of g.storm.targets)assert(Number.isFinite(t.x)&&Number.isFinite(t.y));}
   assert(g.terrain.isFree(g.player.x,g.player.y+groundOffset(g.player,true),g.player.r),'player feet stay outside terrain');
-  for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r),`${e.type} feet stay outside terrain`);
+  for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r,movementProfile(e)),`${e.type} feet stay outside terrain`);
   assert(g.terrain.cacheSize<=g.terrain.cacheLimit,'terrain cache stays bounded');
   assert(g.enemies.length<=181,'enemy count stays bounded');
   assert(g.enemyBullets.length<=BALANCE.maxEnemyBullets,'enemy projectile count stays bounded');
@@ -29,7 +30,7 @@ const finite = (g) => {
     assert(g.enemies.filter(e=>e.eventId).length<=1,'one optional encounter actor');
   }
   assert(g.bullets.length<=60&&g.orbitals.length<=6&&g.effects.length<=201&&g.gems.length<=500);
-  assert(['playing','upgrade','dead'].includes(g.status),'no terminal win state');
+  assert(['playing','upgrade','super','dead'].includes(g.status),'no terminal win state');
 };
 // Isolate active skill behavior from passive shots, spawns and movement.
 const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false});g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;};

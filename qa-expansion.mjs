@@ -235,7 +235,8 @@ assert.equal(fan.g.enemyBullets.length,0,'the emitted projectiles have a finite 
 
 const openFan=warning();advance(openFan.g,3);
 assert(openFan.g.player.hp<openFan.g.player.maxHp,'standing in the fan path can take projectile damage');
-const coveredFan=warning('fan',{terrain:new Terrain({obstacles:[{id:'fan-cover',type:'rock',x:-110,y:19.8,r:45}]})});
+const coveredFan=warning('fan');
+coveredFan.g.terrain=new Terrain({obstacles:[{id:'fan-cover',type:'rock',heightBand:'high',x:-110,y:19.8,r:45}]});
 advance(coveredFan.g,3);
 assert.equal(coveredFan.g.player.hp,coveredFan.g.player.maxHp,'solid cover absorbs the projectiles that would reach the player');
 assert(!coveredFan.g.enemyBullets.some(b=>Math.abs(b.vy)<1e-10),'the center projectile is consumed by cover');

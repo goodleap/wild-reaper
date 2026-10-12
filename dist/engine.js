@@ -6,6 +6,7 @@ import { resolveCharacterStats, upgradeEffectTotal } from './combat-stats.js';
 import { EVOLUTIONS } from './combat-catalog.js';
 export { EVOLUTIONS } from './combat-catalog.js';
 import { Terrain, groundOffset } from './terrain.js';
+import { blocksObstacle, isGrounded, movementProfile } from './height-rules.js';
 import { Island } from './islands.js';
 import { waterIntersectsCircle } from './water-geometry.js';
 import { Adventure } from './adventure.js';
@@ -130,11 +131,12 @@ export class Game {
     return dx*dx+dy*dy<=sq(entity.r||0);
   }
   _castStorm() { return this.attacks.castStorm(); }
-  _nearest(x,y,range=BALANCE.arrowRange,exclude,originEntity=null) {
+  _nearest(x,y,range=BALANCE.arrowRange,exclude,originEntity=null,options={}) {
     const origin=originEntity||{x,y,groundY:y+groundOffset(this.player,true)};
     let best=null, d=range*range;
-    for(const e of this.enemies) if(!exclude?.has(e.id)&&this.combat.canTarget(e,origin,{requireView:true})) {
-      const n=sq(e.x-x)+sq(e.y-y); if(n<d) { d=n; best=e; }
+    for(const e of this.enemies) if(!exclude?.has(e.id)) {
+      const n=sq(e.x-x)+sq(e.y-y);
+      if(n<d&&this.combat.canTarget(e,origin,{requireView:true,checkPath:true,source:'arrow',...options})) { d=n; best=e; }
     }
     return best;
   }
@@ -216,7 +218,7 @@ export class Game {
     return found;
   }
   _moveEntity(entity,dx,dy,isPlayer=false) {
-    const offset=groundOffset(entity,isPlayer||entity.isCompanion),moved=this.terrain.moveCircle(entity.x,entity.y+offset,dx,dy,entity.r);
+    const offset=groundOffset(entity,isPlayer||entity.isCompanion),moved=this.terrain.moveCircle(entity.x,entity.y+offset,dx,dy,entity.r,movementProfile(entity));
     entity.x=moved.x;entity.y=moved.y-offset;return moved;
   }
   _moveEnemy(e,dt,target=null) {
@@ -235,7 +237,7 @@ export class Game {
         }
       }
       const tx=e._coastTarget?.x??rawX,ty=e._coastTarget?.y??rawY;
-      const obstacle=this.terrain.firstBlocker(x,y,tx,ty,e.r+3);
+      const obstacle=this.terrain.firstBlocker(x,y,tx,ty,e.r+3,movementProfile(e));
       if(obstacle?.id!==e._navObstacle?.id)e._navSide=0;
       e._navObstacle=obstacle;
     }
@@ -287,7 +289,8 @@ export class Game {
       const slam=e.slam;e.slam=null;e.slamRecovery=.3;
       this._effect(slam.x,slam.y,'bossSlam',.5,slam.r,'#edaa78');this._emit('bossSlam');
       const p=this.player;
-      if(Math.hypot(p.x-slam.x,p.y+groundOffset(p,true)-slam.y)<slam.r+p.r)this._hurtPlayer(e.damage*1.3);
+      const py=p.y+groundOffset(p,true);
+      if(isGrounded(p)&&Math.hypot(p.x-slam.x,py-slam.y)<slam.r+p.r&&!this.terrain.firstBlocker(slam.x,slam.y,p.x,py,0,'ground'))this._hurtPlayer(e.damage*1.3);
     }
   }
   _updateBoar(e,dt) {
@@ -321,7 +324,7 @@ export class Game {
     e.castCooldown=Math.max(0,(e.castCooldown||0)-dt);
     if(e.cast){e.cast.life=Math.max(0,e.cast.life-dt);return true;}
     const p=this.player,dx=p.x-e.x,dy=p.y+groundOffset(p,true)-e.y-groundOffset(e),distance=Math.hypot(dx,dy);
-    if(this._inView(e)&&distance<=360) {
+    if(this._inView(e)&&distance<=360&&!this.terrain.firstBlocker(e.x,e.y+groundOffset(e),p.x,p.y+groundOffset(p,true),6,'projectile')) {
       if(e.castCooldown<=0){e.cast={life:.65,maxLife:.65,angle:Math.atan2(dy,dx)};e.castCooldown=3.8;this._emit('sporeWindup');return true;}
       if(distance<=290)return true;
     }
@@ -348,7 +351,7 @@ export class Game {
       const dx=b.vx*dt,dy=b.vy*dt;
       let terrainHit=Infinity;
       for(const o of this.terrain.query(Math.min(b.x,b.x+dx)-b.r,Math.min(b.y,b.y+dy)-b.r,Math.max(b.x,b.x+dx)+b.r,Math.max(b.y,b.y+dy)+b.r))
-        terrainHit=Math.min(terrainHit,obstacleImpact(o,b.x,b.y,dx,dy,b.r));
+        if(blocksObstacle(o,'projectile'))terrainHit=Math.min(terrainHit,obstacleImpact(o,b.x,b.y,dx,dy,b.r));
       const playerHit=circleImpact(b.x,b.y,dx,dy,px,py,p.r+b.r);
       if(playerHit<terrainHit){this._hurtPlayer(b.damage);b.life=0;}
       else if(terrainHit<Infinity)b.life=0;

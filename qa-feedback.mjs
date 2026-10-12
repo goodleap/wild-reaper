@@ -63,7 +63,7 @@ assert.equal(shield.hp,shieldBefore);assert.equal(shield.hit,0);assert.equal(shi
 for(const amount of [0,-1,NaN,Infinity])assert.equal(rejected._hurtEnemy(shield,amount),0);
 assert.equal(rejected.effects.length,0);assert.equal(randomCalls,0);
 const blocked=arena();assert(blocked.dungeon.enter({id:'feedback-castle',door:{x:0,y:19.8}}));
-blocked.terrain=new Terrain({obstacles:[{id:'wall',type:'log',x:85,y:0,r:12,halfLength:280,angle:Math.PI/2}]});
+blocked.terrain=new Terrain({obstacles:[{id:'wall',type:'log',structureType:'castle-wall',x:85,y:0,r:12,halfLength:280,angle:Math.PI/2}]});
 blocked.enemies=[];blocked.effects=[];blocked.player.x=0;blocked.player.y=0;
 const behindWall=enemy(blocked,'slime',{x:145,y:0,dungeonId:blocked.dungeon.active.id,guardActive:true});
 resetRolls();assert.equal(blocked._hitEnemy(behindWall,90,0,blocked.player,'lightning'),0);

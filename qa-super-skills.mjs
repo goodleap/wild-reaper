@@ -59,8 +59,13 @@ for(const def of SUPER_SKILLS)for(let level=1;level<=3;level++){
  const gain=dealt/priorCast[def.id][level-1];assert(gain>=1.25&&gain<=1.41,`${def.id} remains a measured upgrade rather than a runaway power jump`);
  assert.equal(sleeper.hp,10000,`${def.id} damage and control exclude dormant portal guards even inside an active field`);
 }
-const barrier=new Terrain({obstacles:[{id:'super-wall',type:'log',x:100,y:19.8,r:18,halfLength:220,angle:Math.PI/2}]});
-for(const def of SUPER_SKILLS){const g=arena(barrier);acquire(g,def.id);const hidden=enemy(g,200);g.superSkills.cooldowns[def.id]=0;advance(g,2);assert.equal(hidden.hp,10000,`${def.id} cannot bypass a closed castle wall`);}
+const barrier=new Terrain({obstacles:[{id:'super-wall',type:'log',structureType:'castle-wall',x:100,y:19.8,r:18,halfLength:220,angle:Math.PI/2}]});
+for(const def of SUPER_SKILLS){
+ const g=arena();assert(g.dungeon.enter({id:'super-castle',door:{x:0,y:19.8}}));
+ g.terrain=barrier;g.dungeon.active.terrain=barrier;g.enemies=[];g.player.x=0;g.player.y=0;
+ acquire(g,def.id);const hidden=enemy(g,200);hidden.dungeonId=g.dungeon.active.id;hidden.guardActive=true;
+ g.superSkills.cooldowns[def.id]=0;advance(g,2);assert.equal(hidden.hp,10000,`${def.id} cannot bypass a closed castle wall`);
+}
 const vortex=arena();acquire(vortex,'vortex');const anchor=enemy(vortex,130),dragged=enemy(vortex,200),heavy=enemy(vortex,175,0,'boss');vortex.superSkills.cooldowns.vortex=0;advance(vortex,.6);assert(dragged.x<200);assert.equal(heavy.x,175,'a vortex does not drag Boss telegraphs');assert(vortex.terrain.isFree(dragged.x,dragged.y+groundOffset(dragged),dragged.r));
 const dense=arena();for(const def of SUPER_SKILLS)acquire(dense,def.id);for(let i=0;i<180;i++)enemy(dense,130+i%12*8,-80+Math.floor(i/12)*9,'slime',1e6);dense.player.invuln=30;
 for(let i=0;i<400;i++){dense.update(.025);assert(dense.superSkills.fields.length<=SUPER_RULES.maxFields);assert(dense.superSkills._volleys.length<=2);assert(dense.effects.length<=201);assert(dense.enemies.every(e=>Number.isFinite(e.x)&&Number.isFinite(e.y)&&Number.isFinite(e.hp)));}

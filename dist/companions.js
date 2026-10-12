@@ -229,7 +229,7 @@ export class Companions {
     const g=this.game,excluded=new Set();let origin=active,hits=0;
     const damage=105*(1+Math.floor(g.time/60)*.12);
     for(let i=0;i<5;i++) {
-      const enemy=g._nearest(origin.x,origin.y,i?190:430,excluded,origin);if(!enemy)break;
+      const enemy=g._nearest(origin.x,origin.y,i?190:430,excluded,origin,{source:'companionLightning'});if(!enemy)break;
       if(!hits)active.castFacing=Math.atan2(enemy.y-active.y,enemy.x-active.x);
       excluded.add(enemy.id);hits++;
       g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:enemy.x,y2:enemy.y,evolved:true,branch:'chain',chainIndex:i,ally:true});
@@ -239,14 +239,14 @@ export class Companions {
     active._attack=3.8;active.castFace=.25;return true;
   }
   _quake(x,y,r,damage,echo,seed) {
-    const g=this.game;
+    const g=this.game,source=echo?'companionEcho':'companionPulse',origin={x,y:y-groundOffset(g.player,true),groundY:y};
     g._effect(x,y,'ring',echo?.6:.48,r,echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:y,evolved:true,echo,branch:'echoes',ally:true,seed});
-    for(const enemy of g.enemies)if(enemy.hp>0&&g._inView(enemy)&&Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r)
-      g._hitEnemy(enemy,damage,echo?14:30,{x,y,groundY:y+groundOffset(g.player,true)},echo?'companionEcho':'companionPulse');
+    for(const enemy of g.enemies)if(g.combat.canTarget(enemy,origin,{requireView:true,checkPath:true,source,canHitFlying:false})&&Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r)
+      g._hitEnemy(enemy,damage,echo?14:30,origin,source);
   }
   _castQuake(active) {
     const g=this.game,foot=this._foot(active);
-    if(!g.enemies.some(e=>e.hp>0&&g._inView(e)&&Math.hypot(e.x-foot.x,e.y+groundOffset(e)-foot.y)<185+e.r))return false;
+    if(!g.enemies.some(e=>g.combat.canTarget(e,active,{requireView:true,checkPath:true,source:'companionPulse',canHitFlying:false})&&Math.hypot(e.x-foot.x,e.y+groundOffset(e)-foot.y)<185+e.r))return false;
     const damage=90*(1+Math.floor(g.time/60)*.12);
     this._quake(foot.x,foot.y,185,damage,false,active.id);
     active._echoes.push({x:foot.x,y:foot.y,r:215,damage:damage*.65,life:.35,regionIndex:g.regionIndex});

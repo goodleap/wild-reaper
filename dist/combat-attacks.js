@@ -1,5 +1,6 @@
 import { STORM_DURATION } from './storm-geometry.js';
 import { groundOffset } from './terrain.js';
+import { blocksObstacle, isGrounded } from './height-rules.js';
 import { weaponStats, skillStats, ATTACK_DEFAULTS } from './combat-stats.js';
 
 const TAU=Math.PI*2;
@@ -9,7 +10,17 @@ const dist2=(a,b)=>sq(a.x-b.x)+sq(a.y-b.y);
 // supports isolated simulations and old callers during the staged migration.
 const canTarget=(g,e,origin,options={})=>g.combat?.canTarget
   ?g.combat.canTarget(e,origin,options)
-  :e.hp>0&&!(e.rescueSpawnGrace>0)&&(!options.requireView||g._inView(e))&&(!e.dungeonId||g.dungeon.canDamage(e,origin));
+  :e.hp>0&&!(e.rescueSpawnGrace>0)&&(options.canHitFlying!==false||isGrounded(e))&&(!options.requireView||g._inView(e))&&(!e.dungeonId||g.dungeon.canDamage(e,origin));
+const clearPath=(g,origin,target,options={})=>g.combat?.clearPath?.(origin,target,options)!==false;
+const propPath=(g,origin,prop,source)=>clearPath(g,origin,{x:prop.x,y:prop.aimY??prop.y,groundY:prop.y},{source,radius:source==='arrow'?4:0});
+function nearestProp(g,props,fallback,range,eligible){
+  const p=g.player;let result=null,best=range*range;
+  for(const prop of props||[fallback].filter(Boolean))if(eligible(prop)){
+    const d=sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y);
+    if(d<best&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,p,prop,'arrow')){best=d;result=prop;}
+  }
+  return result;
+}
 
 export function circleImpact(x,y,dx,dy,cx,cy,r) {
   const ox=x-cx,oy=y-cy,c=ox*ox+oy*oy-r*r;if(c<=0)return 0;
@@ -40,7 +51,7 @@ export class CombatAttacks {
 
   castStorm() {
     const g=this.game,p=g.player,stats=skillStats(g,'storm');
-    const targets=g.enemies.filter(e=>canTarget(g,e,p,{requireView:true}));
+    const targets=g.enemies.filter(e=>canTarget(g,e,p,{requireView:true,source:'storm',checkPath:true}));
     p.skillCooldownMax=stats.cooldown;p.skillCooldown=stats.cooldown;p.castFace=.25;
     g.storm={x:p.x,y:p.y,viewWidth:g.viewWidth,viewHeight:g.viewHeight,life:STORM_DURATION,maxLife:STORM_DURATION,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
     g._emit('skill');
@@ -58,7 +69,9 @@ export class CombatAttacks {
     }
     g._shot-=dt;
     if(g._shot<=0) {
-      const enemy=g._nearest(p.x,p.y,stats.range),supply=g.adventure?.nearestSupply(280),vine=g.environment?.nearestDestructible?.(280);
+      const enemy=g._nearest(p.x,p.y,stats.range,undefined,p,{source:'arrow',pathRadius:4}),
+        supply=nearestProp(g,g.adventure?.props,g.adventure?.nearestSupply(280),280,prop=>prop.hp>0),
+        vine=nearestProp(g,g.environment?.mechanisms?.props,g.environment?.nearestDestructible?.(280),280,prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active'));
       const supplyDistance=supply?sq(supply.x-p.x)+sq((supply.aimY??supply.y)-p.y):Infinity;
       let target=supply&&(!enemy||(dist2(enemy,p)>180*180&&supplyDistance<dist2(enemy,p)))?supply:enemy;
       if(vine&&(!enemy||dist2(enemy,p)>150*150))target=vine;
@@ -91,7 +104,7 @@ export class CombatAttacks {
       const x=b.x,y=b.y,dx=b.vx*remaining,dy=b.vy*remaining;
       let impact=null,first=Infinity,isSupply=false,wallHit=Infinity;
       const groundY=y+groundOffset(g.player,true),origin={x,y,groundY};
-      if(g.dungeon.active)for(const wall of g.terrain.query(Math.min(x,x+dx)-b.r,Math.min(groundY,groundY+dy)-b.r,Math.max(x,x+dx)+b.r,Math.max(groundY,groundY+dy)+b.r))wallHit=Math.min(wallHit,obstacleImpact(wall,x,groundY,dx,dy,b.r));
+      for(const wall of g.terrain.query(Math.min(x,x+dx)-b.r,Math.min(groundY,groundY+dy)-b.r,Math.max(x,x+dx)+b.r,Math.max(groundY,groundY+dy)+b.r))if(blocksObstacle(wall,'projectile'))wallHit=Math.min(wallHit,obstacleImpact(wall,x,groundY,dx,dy,b.r));
       first=wallHit;
       const nearby=g._nearby(x+dx*.5,y+dy*.5,Math.hypot(dx,dy)*.5+64);
       for(const e of nearby)if(!b.hitIds.has(e.id)&&canTarget(g,e,origin)) {
@@ -105,14 +118,14 @@ export class CombatAttacks {
       const fraction=Number.isFinite(first)?first:1;
       b.x=x+dx*fraction;b.y=y+dy*fraction;
       g.environment?.hitSegment(x,y,b.x,b.y,b.r,'arrow');
-      if(!impact){if(Number.isFinite(wallHit))b.life=0;break;}
+      if(!impact){if(Number.isFinite(wallHit)){b.life=0;g._effect(b.x,b.y,'hit',.18,7,'#d8cfba',undefined,{source:'arrow',angle:b.angle||0,strength:.18});}break;}
       if(isSupply){g.adventure.hitSupply(impact,b.damage);b.life=0;break;}
       b.hitIds.add(impact.id);g._hitEnemy(impact,b.damage,4,origin,'arrow');g._emit('hit');
       if(--b.pierce<=0||b.hitIds.size>=targetLimit){b.life=0;break;}
       remaining*=1-first;
       if(b.branch==='pierce'||b.branch==='ricochet')b.damage*=b.retention??.65;
       if(b.branch==='ricochet') {
-        const next=(b.bounces||0)<(b.maxBounces??2)?g._nearest(b.x,b.y,150,b.hitIds):null;
+        const next=(b.bounces||0)<(b.maxBounces??2)?g._nearest(b.x,b.y,150,b.hitIds,{x:b.x,y:b.y,groundY:b.y+groundOffset(g.player,true)},{source:'arrow',pathRadius:b.r}):null;
         if(!next){b.life=0;break;}
         b.bounces=(b.bounces||0)+1;
         b.angle=Math.atan2(next.y-b.y,next.x-b.x);
@@ -140,12 +153,14 @@ export class CombatAttacks {
     for(let i=0;i<stats.count;i++) {
       const a=g._clock*stats.rotationSpeed+i*TAU/stats.count;
       const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a,evolved:g.evolutions.orbit,surge};
+      const origin={x:blade.x,y:blade.y,groundY:blade.y+groundOffset(p,true)};
+      if(!clearPath(g,p,origin,{source:'orbit',radius:blade.r}))continue;
       g.orbitals.push(blade);
-      g.environment?.hitAt(blade.x,blade.y,blade.r,'orbit');
-      for(const e of g._nearby(blade.x,blade.y,65))if(e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)&&canTarget(g,e,p)) {
-        g._hitEnemy(e,stats.damage,8,p,'orbit');e.orbitHit=stats.hitInterval;
+      g.environment?.hitAt(blade.x,blade.y,blade.r,'orbit',prop=>propPath(g,origin,prop,'orbit'));
+      for(const e of g._nearby(blade.x,blade.y,65))if(e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)&&canTarget(g,e,origin,{source:'orbit',checkPath:true})) {
+        g._hitEnemy(e,stats.damage,8,origin,'orbit');e.orbitHit=stats.hitInterval;
       }
-      for(const prop of g.adventure?.props||[])if(prop.hp>0&&(prop._orbitNext||0)<=g.time&&sq(prop.x-blade.x)+sq((prop.aimY??prop.y)-blade.y)<sq(prop.r+blade.r)) {
+      for(const prop of g.adventure?.props||[])if(prop.hp>0&&(prop._orbitNext||0)<=g.time&&sq(prop.x-blade.x)+sq((prop.aimY??prop.y)-blade.y)<sq(prop.r+blade.r)&&propPath(g,origin,prop,'orbit')) {
         g.adventure.hitSupply(prop,stats.damage);prop._orbitNext=g.time+stats.hitInterval;
       }
     }
@@ -173,20 +188,20 @@ export class CombatAttacks {
     let origin=p;const excluded=new Set();
     if(stats.focus) {
       let target=null;
-      for(const e of g.enemies)if(dist2(e,p)<=stats.range*stats.range&&canTarget(g,e,p,{requireView:true})) {
+      for(const e of g.enemies)if(dist2(e,p)<=stats.range*stats.range&&canTarget(g,e,p,{requireView:true,source:'lightning',checkPath:true})) {
         if(!target||(e.type==='boss'&&target.type!=='boss')||((e.type==='boss')===(target.type==='boss')&&(e.hp>target.hp||(e.hp===target.hp&&dist2(e,p)<dist2(target,p)))))target=e;
       }
       if(target) {
         g._effect(p.x,p.y,'lightning',.32,0,'#dcecff',undefined,{x2:target.x,y2:target.y,evolved:true,branch:'focus',focus:true,chainIndex:0});
         g._hitEnemy(target,stats.primaryDamage,0,p,'lightning');
-        g.environment?.hitAt(target.x,target.y,target.r,'lightning');
+        g.environment?.hitAt(target.x,target.y,target.r,'lightning',prop=>propPath(g,target,prop,'lightning'));
       }
     }else for(let i=0;i<stats.targetLimit;i++) {
-      const e=g._nearest(origin.x,origin.y,i===0?stats.range:stats.chainRange,excluded,origin);if(!e)break;
+      const e=g._nearest(origin.x,origin.y,i===0?stats.range:stats.chainRange,excluded,origin,{source:'lightning'});if(!e)break;
       excluded.add(e.id);
       g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:stats.evolved,branch:stats.branch,chainIndex:i});
       g._hitEnemy(e,stats.damage*(i>=3?.4:1),0,origin,'lightning');
-      g.environment?.hitAt(e.x,e.y,e.r,'lightning');origin=e;
+      g.environment?.hitAt(e.x,e.y,e.r,'lightning',prop=>propPath(g,e,prop,'lightning'));origin=e;
     }
   }
 
@@ -194,11 +209,11 @@ export class CombatAttacks {
     const g=this.game,origin={x,y,groundY:y+groundOffset(g.player,true)};
     g._effect(x,y,'ring',control?.65:echo?.6:.48,radius,control?'#9fe5cf':echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:origin.groundY,evolved:g.evolutions.pulse,echo,control,branch:g.branches.pulse});
     const source=echo?'echo':'pulse';
-    for(const e of g.enemies)if(dist2(origin,e)<sq(radius+e.r)&&canTarget(g,e,origin)) {
+    for(const e of g.enemies)if(dist2(origin,e)<sq(radius+e.r)&&canTarget(g,e,origin,{source,checkPath:true,canHitFlying:false})) {
       const dealt=g._hitEnemy(e,damage,knockback,origin,source);
       if(control&&dealt>0&&e.hp>0&&e.type!=='boss')e.branchSlowUntil=g._clock+1.1;
     }
-    g.environment?.hitAt(x,y,radius,source);
-    for(const prop of g.adventure?.props||[])if(prop.hp>0&&sq(prop.x-x)+sq((prop.aimY??prop.y)-y)<sq(radius+prop.r))g.adventure.hitSupply(prop,damage);
+    g.environment?.hitAt(x,y,radius,source,prop=>propPath(g,origin,prop,source));
+    for(const prop of g.adventure?.props||[])if(prop.hp>0&&sq(prop.x-x)+sq((prop.aimY??prop.y)-y)<sq(radius+prop.r)&&propPath(g,origin,prop,source))g.adventure.hitSupply(prop,damage);
   }
 }

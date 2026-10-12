@@ -221,7 +221,7 @@ export class Dungeon {
   canDamage(enemy,origin=this.game.player){
     if(!this.active||enemy.dungeonId!==this.active.id)return true;
     const a=origin===this.game.player?this._playerFoot():foot(origin),b=foot(enemy);
-    return this.vision.isVisible(b.x,b.y,enemy.r||0)&&!this.game.terrain.firstBlocker(a.x,a.y,b.x,b.y,0);
+    return this.vision.isVisible(b.x,b.y,enemy.r||0)&&!this.game.terrain.firstBlocker(a.x,a.y,b.x,b.y,0,'sight');
   }
   awaken(enemy){
     const state=this.active;if(!state||enemy.dungeonId!==state.id)return false;
@@ -232,7 +232,7 @@ export class Dungeon {
     const state=this.active;if(!state||enemy.dungeonId!==state.id)return false;
     const g=this.game,p=this._playerFoot(),point=foot(enemy),cell=this._cellAt(point.x,point.y),playerCell=this._cellAt(p.x,p.y);
     const sameRoom=cell&&playerCell&&cell.id===playerCell.id,room=state.rooms.get(enemy.dungeonRoom);
-    const visible=this.vision.isVisible(point.x,point.y,enemy.r||0)&&!g.terrain.firstBlocker(p.x,p.y,point.x,point.y,0);
+    const visible=this.vision.isVisible(point.x,point.y,enemy.r||0)&&!g.terrain.firstBlocker(p.x,p.y,point.x,point.y,0,'sight');
     if(room&&playerCell?.id===room.cellId)room.started=true;
     // Crossing a doorway or actually taking damage wakes one pack. Merely
     // querying a sleeping target through an open door never starts combat.

@@ -41,13 +41,13 @@ const bounded=arena();for(let i=0;i<DUNGEON_RULES.maxStates;i++){enter(bounded,s
 assert(enter(bounded,site('capacity-hut','supply')),'the castle scene limit does not starve persistent huts');leave(bounded);
 const blocked=arena(),blockedState=enter(blocked,site('blocked-chest','supply'));
 const blockedChest=blockedState.chests[0];
-blocked.terrain=new Terrain({obstacles:[{id:'solid',type:'log',x:0,y:blockedChest.y+25,r:12,halfLength:180,angle:0}]});blockedState.terrain=blocked.terrain;feet(blocked,{x:blockedChest.x,y:blockedChest.y+49});
+blocked.terrain=new Terrain({obstacles:[{id:'solid',type:'log',structureType:'castle-wall',x:0,y:blockedChest.y+25,r:12,halfLength:180,angle:0}]});blockedState.terrain=blocked.terrain;feet(blocked,{x:blockedChest.x,y:blockedChest.y+49});
 assert.equal(blocked.dungeon.getInteraction(),null,'a nearby chest across a solid wall is not interactable');
 
 // A dormant target seen through a doorway can be queried without a side
 // effect, then awakened by actual damage. An adjacent hidden target cannot.
 const wake=arena(),castle=enter(wake,site('wake-castle','castle'));
-wake.terrain=new Terrain({obstacles:[{id:'screen',type:'log',x:90,y:0,r:12,halfLength:200,angle:Math.PI*.5}]});castle.terrain=wake.terrain;wake.enemies=[];feet(wake,{x:0,y:0});
+wake.terrain=new Terrain({obstacles:[{id:'screen',type:'log',structureType:'castle-wall',x:90,y:0,r:12,halfLength:200,angle:Math.PI*.5}]});castle.terrain=wake.terrain;wake.enemies=[];feet(wake,{x:0,y:0});
 const visible=wake._spawnEnemy('beetle'),hidden=wake._spawnEnemy('boss');
 Object.assign(visible,{x:55,y:-groundOffset(visible),hp:200,maxHp:200,dungeonId:castle.id,dungeonRoom:1,guardActive:false});
 Object.assign(hidden,{x:140,y:-groundOffset(hidden),hp:200,maxHp:200,dungeonId:castle.id,dungeonRoom:2,guardActive:false});
@@ -60,9 +60,9 @@ feet(wake,{x:130,y:0});assert(wake.dungeon.canDamage(hidden));assert.equal(wake.
 // room. Changing only the dividing wall must change damage and waking alike.
 function doorwayArena(solid,boss=false){
   const g=arena(),state=enter(g,site('attack-doorway','castle'));
-  const terrain=new Terrain({obstacles:solid?[{id:'divider',type:'log',x:0,y:0,r:14,halfLength:180,angle:Math.PI/2}]:[
-    {id:'upper-post',type:'log',x:0,y:-135,r:14,halfLength:45,angle:Math.PI/2},
-    {id:'lower-post',type:'log',x:0,y:135,r:14,halfLength:45,angle:Math.PI/2}
+  const terrain=new Terrain({obstacles:solid?[{id:'divider',type:'log',structureType:'castle-wall',x:0,y:0,r:14,halfLength:180,angle:Math.PI/2}]:[
+    {id:'upper-post',type:'log',structureType:'castle-wall',x:0,y:-135,r:14,halfLength:45,angle:Math.PI/2},
+    {id:'lower-post',type:'log',structureType:'castle-wall',x:0,y:135,r:14,halfLength:45,angle:Math.PI/2}
   ]});
   Object.assign(state,{terrain,cols:2,rows:1,originX:-360,originY:-180,
     bounds:{minX:-360,maxX:360,minY:-180,maxY:180},

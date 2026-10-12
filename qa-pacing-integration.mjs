@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { movementProfile } from './dist/height-rules.js';
 
 let seed=628231;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -44,7 +45,7 @@ for(const [width,height] of [[1100,650],[393,717]])for(const angle of [0,Math.PI
     const e=g._spawnEnemy(['slime','beetle','bat','boar'][i%4],undefined,angle+(i%11-5)*.12),dx=e.x-g.player.x,dy=e.y-g.player.y;
     assert(Math.abs(dx)-e.r>=width/2||Math.abs(dy)-e.r>=height/2,'cohorts enter outside the viewport');
     assert(dx*Math.cos(angle)+dy*Math.sin(angle)>0,'the advertised side is respected');
-    assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r),'directed placement resolves solid terrain');
+    assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r,movementProfile(e)),'directed placement resolves solid terrain');
   }
 }
 

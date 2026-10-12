@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Game } from './dist/engine.js';
+import { movementProfile } from './dist/height-rules.js';
 
 const fixed=(spec)=>new Terrain({obstacles:Array.isArray(spec)?spec:[spec]});
 const circle={id:'rock',type:'rock',x:0,y:0,r:36};
 const types=['slime','bat','beetle','brute','boss'];
 const foot=(e,player=false)=>({x:e.x,y:e.y+groundOffset(e,player)});
 const place=(e,x,y,player=false)=>{e.x=x;e.y=y-groundOffset(e,player);};
-const safe=(terrain,e,player=false)=>{const p=foot(e,player);assert(terrain.isFree(p.x,p.y,e.r),`${e.type||'player'} penetrated terrain at ${p.x},${p.y}`);};
+const safe=(terrain,e,player=false)=>{const p=foot(e,player);assert(terrain.isFree(p.x,p.y,e.r,movementProfile(e)),`${e.type||'player'} penetrated terrain at ${p.x},${p.y}`);};
 const arena=(terrain)=>{
   const g=new Game({terrain,adventure:false});g.enemies=[];g._shot=g._spawn=1e8;g.nextBossAt=1e8;g.player.invuln=1e8;return g;
 };

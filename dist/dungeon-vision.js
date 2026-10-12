@@ -1,6 +1,7 @@
 // A dungeon shares its world-space camera and capsule walls with combat.
 // Visibility is current line of sight; exploration is persistent static memory.
 // Rendering may rebuild a view after resize, but only update() discovers tiles.
+import { blocksObstacle } from './height-rules.js';
 const TAU=Math.PI*2, TILE=24, EPSILON=.000015;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const within=(x,y,b)=>x>=b.minX&&x<=b.maxX&&y>=b.minY&&y<=b.maxY;
@@ -68,7 +69,7 @@ export class DungeonVision {
     let record=this._states.get(state);
     if(!record||record.terrain!==state.terrain){
       const b=state.bounds,cols=Math.ceil((b.maxX-b.minX)/TILE),rows=Math.ceil((b.maxY-b.minY)/TILE);
-      const walls=state.terrain.query(b.minX,b.minY,b.maxX,b.maxY).map(capsule);
+      const walls=state.terrain.query(b.minX,b.minY,b.maxX,b.maxY).filter(o=>blocksObstacle(o,'sight')).map(capsule);
       record={terrain:state.terrain,cols,rows,seen:new Uint8Array(cols*rows),walls,junctions:wallJunctions(walls),pieces:[],known:[],knownByWall:new Map(),rects:[],dirty:false,discoverKey:null,count:0};
       for(const wall of walls){
         const count=Math.max(1,Math.ceil(wall.length*2/TILE));
@@ -122,7 +123,7 @@ export class DungeonVision {
     const radius=Math.max(0,Number.isFinite(r)?r:0),key=`${x},${y},${radius}`;
     if(this._visibleQueries.has(key))return this._visibleQueries.get(key);
     const p=this._origin,v=this.view,b=this._state.bounds,terrain=this._state.terrain;
-    const clear=(px,py)=>within(px,py,v)&&within(px,py,b)&&!terrain.firstBlocker(p.x,p.y,px,py,0);
+    const clear=(px,py)=>within(px,py,v)&&within(px,py,b)&&!terrain.firstBlocker(p.x,p.y,px,py,0,'sight');
     let visible=clear(x,y);
     if(!visible&&radius>0){
       const dx=p.x-x,dy=p.y-y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d,sample=Math.min(radius*.85,d);

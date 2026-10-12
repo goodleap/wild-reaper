@@ -49,9 +49,9 @@ export class CombatStatus {
     const game=this.game,origin={x,y,type:source.type,r:source.r};
     let target=null,nearest=STATUS_RULES.conductionRange**2;
     for(const enemy of game.enemies) {
-      if(enemy===source||enemy.id===source.id||!game.combat.canTarget(enemy,origin,{requireView:true}))continue;
+      if(enemy===source||enemy.id===source.id)continue;
       const distance=(enemy.x-x)**2+(enemy.y-y)**2;
-      if(distance<=nearest) { target=enemy;nearest=distance; }
+      if(distance<=nearest&&game.combat.canTarget(enemy,origin,{requireView:true,source:'conduction',checkPath:true})) { target=enemy;nearest=distance; }
     }
     if(!target)return;
     game._effect(x,y,'conduction',.26,0,'#c4e8ff',undefined,{x2:target.x,y2:target.y});

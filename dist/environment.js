@@ -223,10 +223,10 @@ export class Environment {
     prop.blastRadius=ENVIRONMENT_BALANCE.blastRadius;prop.source=source;
     this._consumed.add(prop.id);this.game._emit('mushroomArmed',{x:prop.x,y:prop.y});return true;
   }
-  hitAt(x,y,r=0,source='arrow'){
+  hitAt(x,y,r=0,source='arrow',canHit=null){
     if(!WEAPON_SOURCES.has(source)||![x,y,r].every(Number.isFinite)||r<0)return 0;
-    let count=0;for(const prop of this.props)if(Math.hypot(prop.x-x,(prop.aimY??prop.y-13)-y)<=r+(prop.r||17)&&this._arm(prop,source))count++;
-    return count+this.mechanisms.hitAt(x,y,r,source);
+    let count=0;for(const prop of this.props)if(Math.hypot(prop.x-x,(prop.aimY??prop.y-13)-y)<=r+(prop.r||17)&&(!canHit||canHit(prop))&&this._arm(prop,source))count++;
+    return count+this.mechanisms.hitAt(x,y,r,source,canHit);
   }
   hitSegment(x1,y1,x2,y2,r=0,source='arrow'){
     if(!WEAPON_SOURCES.has(source)||![x1,y1,x2,y2,r].every(Number.isFinite)||r<0)return 0;

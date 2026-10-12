@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { Game, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { movementProfile } from './dist/height-rules.js';
 import { Adventure } from './dist/adventure.js';
 
 // Short, isolated behavior checks. Play balance is evaluated separately.
@@ -24,7 +25,7 @@ function monster(g,type,x) {
 }
 function feetFree(g) {
   assert(g.terrain.isFree(g.player.x,g.player.y+groundOffset(g.player,true),g.player.r));
-  for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r));
+  for(const e of g.enemies)assert(g.terrain.isFree(e.x,e.y+groundOffset(e),e.r,movementProfile(e)));
 }
 function preparedBoar({terrain=openGround()}={}) {
   const g=arena({terrain}),e=monster(g,'boar',-180);
@@ -91,11 +92,11 @@ cancelledCast.g.update(.025,{skill:true});
 assert(cancelledCast.e.hp<=0&&cancelledCast.e.cast===null,'a same-frame kill cancels ranged windup');
 assert.equal(cancelledCast.g.enemyBullets.length,0,'a killed caster does not launch a delayed shot');
 
-const sheltered=arena({terrain:new Terrain({obstacles:[{id:'cover',type:'rock',x:-50,y:19.8,r:20}]})});
+const sheltered=arena({terrain:new Terrain({obstacles:[{id:'cover',type:'rock',heightBand:'high',x:-50,y:19.8,r:20}]})});
 hostileShot(sheltered,-100,5000);sheltered.update(.05);
 assert.equal(sheltered.player.hp,sheltered.player.maxHp,'cover absorbs an incoming projectile before it reaches the player');
 assert.equal(sheltered.enemyBullets.length,0,'a projectile hitting cover is consumed');feetFree(sheltered);
-const exposed=arena({terrain:new Terrain({obstacles:[{id:'behind',type:'rock',x:70,y:19.8,r:20}]})});
+const exposed=arena({terrain:new Terrain({obstacles:[{id:'behind',type:'rock',heightBand:'high',x:70,y:19.8,r:20}]})});
 hostileShot(exposed,-100,5000);exposed.update(.05);
 assert(exposed.player.hp<exposed.player.maxHp,'a wall behind the player cannot retroactively prevent an earlier impact');
 

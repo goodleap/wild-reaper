@@ -232,13 +232,12 @@ export class Settlements {
     for(const site of this.sites)if(site.type==='angel') {
       site.castFace=Math.max(0,(site.castFace||0)-dt);
       site.healing=false;
-      const nearby=distance(p,site)<=ANGEL_RULES.guardRadius&&!g.terrain.firstBlocker(site.x,site.y,p.x,p.y,0);
+      const nearby=distance(p,site)<=ANGEL_RULES.guardRadius&&!g.terrain.firstBlocker(site.x,site.y,p.x,p.y,0,'projectile');
       if(nearby){inAura=true;site.healing=player.hp<player.maxHp;}
       site._attack=Math.max(0,(site._attack||0)-dt);
       if(site._attack>1e-8||!g._inView(site,ANGEL_RULES.guardRadius))continue;
       const canHit=enemy=>enemy.hp>0&&!enemy.dungeonId&&!(enemy.rescueSpawnGrace>0)&&enemy.guardActive!==false&&g._inView(enemy)&&
-        Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y)<=ANGEL_RULES.guardRadius&&
-        !g.terrain.firstBlocker(site.x,site.y,enemy.x,enemy.y+groundOffset(enemy),0);
+        Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y)<=ANGEL_RULES.guardRadius;
       let target=null,nearest=Infinity;
       for(const enemy of g.enemies)if(canHit(enemy)){const d=Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y);if(d<nearest){target=enemy;nearest=d;}}
       if(!target)continue;

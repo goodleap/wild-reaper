@@ -1,13 +1,13 @@
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
+import { isGrounded } from './height-rules.js';
+// Ground hazards and marsh immersion share the movement altitude rule.
+// Poison clouds remain airborne hazards and do not use this exemption.
+export { isGrounded } from './height-rules.js';
 
 const CELL=520,WEAPON_SOURCES=new Set(['arrow','orbit','pulse','echo','lightning','storm']);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export const REGIONAL_MECHANISM_RULES=Object.freeze({maxProps:8,safeRadius:280,vineRadius:54,vineWarning:1.1,vineActive:2.5,vineSlow:.6,gasRadius:70,gasWarning:1.4,gasActive:3.6,gasInterval:1,gasPlayerDamage:6,gasEnemyDamage:20,runeRadius:48,runeCharge:.6,runeDuration:12,runeInterval:1.4,runeTargets:3,runeRange:420});
-
-// Ground hazards share this definition with marsh immersion. Poison clouds
-// remain airborne hazards and intentionally do not use this exemption.
-export function isGrounded(entity){return !!entity&&entity.flying!==true&&entity.type!=='bat'&&entity.type!=='angel'&&entity.kind!=='angel'&&entity.townKind!=='angel';}
 
 // A bounded filter preserves one-use locations without growing with distance.
 // False positives only omit an object; they can never grant another activation.
@@ -111,9 +111,9 @@ export class RegionalMechanisms {
     prop.id??=`vine:fixture:${++this._fixtureId}`;prop.state='cut';prop.hp=0;this._used.add(prop.id);
     this.game._effect(prop.x,prop.y,'vineCut',.45,prop.r,'#afd887');return true;
   }
-  hitAt(x,y,r=0,source='arrow'){
+  hitAt(x,y,r=0,source='arrow',canHit=null){
     if(!WEAPON_SOURCES.has(source)||![x,y,r].every(Number.isFinite)||r<0)return 0;
-    let count=0;for(const prop of this.props)if(prop.type==='vine'&&Math.hypot(prop.x-x,(prop.aimY??prop.y)-y)<=r+prop.r&&this._cut(prop))count++;
+    let count=0;for(const prop of this.props)if(prop.type==='vine'&&Math.hypot(prop.x-x,(prop.aimY??prop.y)-y)<=r+prop.r&&(!canHit||canHit(prop))&&this._cut(prop))count++;
     this.props=this.props.filter(o=>o.state!=='cut');return count;
   }
   hitSegment(x1,y1,x2,y2,r=0,source='arrow'){

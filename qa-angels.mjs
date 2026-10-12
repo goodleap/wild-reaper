@@ -18,7 +18,7 @@ feet(healing,0,0);angel(healing,10,0,'angel:overlap');healing.settlements.update
 healing.player.hp=99;healing.settlements.update(2);assert.equal(healing.player.hp,100);assert.equal(healing.relics.wardAmount,0,'full health no longer creates a one-shot shield');
 for(const status of ['paused','shop','super','upgrade','dead']){healing.player.hp=60;healing.status=status;haven._attack=1;healing.settlements.update(1);assert.equal(healing.player.hp,60);assert.equal(haven._attack,1,'pause states freeze angel cooldowns');}healing.status='playing';
 healing.dungeon.active={id:'fixture'};healing.settlements.update(1);assert.equal(healing.player.hp,60,'an overworld aura cannot heal through a castle transition');healing.dungeon.active=null;
-healing.terrain=new Terrain({obstacles:[{x:25,y:0,r:12}]});feet(healing,55,0);healing.settlements.update(1);assert.equal(healing.player.hp,60,'solid walls block aura recovery');
+healing.terrain=new Terrain({obstacles:[{x:25,y:0,r:12,structureType:'hut-wall',heightBand:'high'}]});feet(healing,55,0);healing.settlements.update(1);assert.equal(healing.player.hp,60,'solid walls block aura recovery');
 
 const combat=arena(),guardian=angel(combat);feet(combat,0,0);const first=enemy(combat,75,0,40),splash=enemy(combat,112,0),far=enemy(combat,215,0),outside=enemy(combat,ANGEL_RULES.guardRadius+.01,0),sleeping=enemy(combat,40,0);sleeping.guardActive=false;
 combat.settlements.update(.025);assert(first.hp<=0);assert.equal(combat.kills,1);assert.equal(combat.player.xp,first.xp,'angel kills use the ordinary kill and experience path');assert(combat.gems.length>0,'normal crystal loot remains available');
@@ -53,7 +53,7 @@ for(let frame=0;frame<60;frame++){
 assert.equal(durable.hp,10000-10*ANGEL_RULES.damage,'the guardian delivers ten strikes during a one-second 60 Hz window');
 assert(livePeak<=2,'the brief sky-strike lifetime bounds each guardian to two simultaneous bolts');assert.equal(cadence.storm,null);
 const spawning=enemy(cadence,0,30);spawning.rescueSpawnGrace=.8;cadence.settlements.update(.2);assert.equal(spawning.hp,300,'guardians respect rescue spawn safety');
-const wall=arena();angel(wall);feet(wall,0,0);wall.terrain=new Terrain({obstacles:[{x:50,y:0,r:20}]});const shielded=enemy(wall,100,0);wall.settlements.update(5);assert.equal(shielded.hp,300,'nearby lightning cannot strike through a building wall');
+const wall=arena();angel(wall);feet(wall,0,0);wall.terrain=new Terrain({obstacles:[{x:50,y:0,r:20,structureType:'hut-wall',heightBand:'high'}]});const shielded=enemy(wall,100,0);wall.settlements.update(5);assert.equal(shielded.hp,300-ANGEL_RULES.damage,'overhead angel lightning reaches an in-range outdoor target behind tall cover');
 const inCastle=enemy(wall,0,45);inCastle.dungeonId='castle';wall.settlements.update(5);assert.equal(inCastle.hp,300,'castle enemies are excluded even if their numeric coordinates overlap the haven');
 
 const generation=arena();generation.regions={portals:[]};generation.portal=null;generation.settlements=new Settlements(generation);

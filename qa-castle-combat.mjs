@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 let seed=957131;Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
-const vertical={id:'cross-wall',type:'log',x:85,y:0,r:12,halfLength:280,angle:Math.PI/2};
-const horizontal={id:'near-wall',type:'log',x:0,y:0,r:14,halfLength:400,angle:0};
+const vertical={id:'cross-wall',type:'log',structureType:'castle-wall',x:85,y:0,r:12,halfLength:280,angle:Math.PI/2};
+const horizontal={id:'near-wall',type:'log',structureType:'castle-wall',x:0,y:0,r:14,halfLength:400,angle:0};
 function arena(wall=vertical){
  const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false});g.enemies=[];
  assert(g.dungeon.enter({id:'combat-castle',door:{x:0,y:19.8}}));

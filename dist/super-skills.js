@@ -1,11 +1,13 @@
 import { groundOffset } from './terrain.js';
 import { SUPER_SKILL_DEFS } from './combat-catalog.js';
 import { scalePlayerDamage } from './combat-stats.js';
+import { isGrounded } from './height-rules.js';
 
 const freeze=Object.freeze;
 export const SUPER_SKILLS=SUPER_SKILL_DEFS;
 export const SUPER_RULES=freeze({maxLevel:3,maxFields:12,maxTargets:16,regionFallback:freeze({gold:60,crystals:100}),castleFallback:freeze({gold:120,crystals:180})});
 const DEFINITIONS=new Map(SUPER_SKILLS.map(skill=>[skill.id,skill]));
+const PROPAGATION=freeze({thorns:'ground',miasma:'projectile',runes:'projectile',meteor:'overhead',swords:'projectile',vortex:'projectile'});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
 const segmentDistance=(x,y,x1,y1,x2,y2)=>{
@@ -124,17 +126,22 @@ export class SuperSkills {
   }
 
   _foot(entity=this.game.player) {
-    return {x:entity.x,y:entity.y+groundOffset(entity,entity===this.game.player||!!entity.isCompanion)};
+    const y=Number.isFinite(entity.groundY)?entity.groundY:entity.y+groundOffset(entity,entity===this.game.player||!!entity.isCompanion);
+    return {x:entity.x,y,groundY:y};
   }
-  _visible(enemy) {
+  _visible(enemy,origin=this._foot()) {
     return enemy.hp>0&&!enemy.isCompanion&&!(enemy.rescueSpawnGrace>0)&&this.game._inView(enemy)&&
-      (enemy.dungeonId?this.game.dungeon.canDamage(enemy):enemy.guardActive!==false);
+      (enemy.dungeonId?this.game.dungeon.canDamage(enemy,{...origin,groundY:origin.y}):enemy.guardActive!==false);
   }
-  _lineClear(from,to,r=0) {
-    return !this.game.terrain?.firstBlocker(from.x,from.y,to.x,to.y,r);
+  _lineClear(from,to,r=0,profile='projectile') {
+    // Falling attacks can clear outdoor cover, but still respect an interior's
+    // walls in addition to the explored-room gate applied by _visible.
+    const effective=profile==='overhead'&&this.game.dungeon?.active?'projectile':profile;
+    return !this.game.terrain?.firstBlocker(from.x,from.y,to.x,to.y,r,effective);
   }
-  _targets(origin=this._foot(),range=420,{strongest=false}={}) {
-    const targets=this.game.enemies.filter(enemy=>this._visible(enemy)&&distance(origin,this._foot(enemy))<=range&&this._lineClear(origin,this._foot(enemy)));
+  _targets(origin=this._foot(),range=420,{strongest=false,skillId='swords'}={}) {
+    const profile=PROPAGATION[skillId]||'projectile';
+    const targets=this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,origin)&&distance(origin,this._foot(enemy))<=range&&this._lineClear(origin,this._foot(enemy),0,profile));
     targets.sort((a,b)=>strongest?(Number(b.type==='boss')-Number(a.type==='boss')||b.hp-a.hp||distance(origin,this._foot(a))-distance(origin,this._foot(b))):distance(origin,this._foot(a))-distance(origin,this._foot(b)));
     return targets;
   }
@@ -156,19 +163,21 @@ export class SuperSkills {
     this.fields.push(field);return field;
   }
   _areaTargets(field,limit=SUPER_RULES.maxTargets) {
-    return this.game.enemies.filter(enemy=>this._visible(enemy)&&distance(field,this._foot(enemy))<=field.r+enemy.r&&this._lineClear(field,this._foot(enemy)))
+    const profile=PROPAGATION[field.skillId]||'projectile';
+    return this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,field)&&distance(field,this._foot(enemy))<=field.r+enemy.r&&this._lineClear(field,this._foot(enemy),0,profile))
       .sort((a,b)=>distance(field,this._foot(a))-distance(field,this._foot(b))).slice(0,limit);
   }
   _damage(enemy,amount,origin) {
     // Raw damage deliberately bypasses bleed, shock and lightning refunds.
-    return this.game._hurtEnemy(enemy,amount,0,origin,'super');
+    const source=origin===this.game.player?origin:{...origin,groundY:origin.y};
+    return this.game._hurtEnemy(enemy,amount,0,source,'super');
   }
   _burst(field,life=.55) {
     this.game._effect(field.x,field.y,'superBurst',life,field.r,field.color,undefined,{skillId:field.skillId,seed:field.seed});
   }
 
   _cast(id,level) {
-    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,id==='runes'?450:420,{strongest:id==='swords'});
+    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,id==='runes'?450:420,{strongest:id==='swords',skillId:id});
     if(!targets.length)return false;
     const stats=getSuperSkillStats(id,level);
     // Snapshot a cast once: a kill-triggered buff must not retroactively alter
@@ -207,7 +216,7 @@ export class SuperSkills {
           length=lo;
         }
         const end={x:p.x+dx*length,y:p.y+dy*length};
-        const along=g.enemies.filter(enemy=>this._visible(enemy)&&!hit.has(enemy.id)&&segmentDistance(enemy.x,enemy.y,p.x,p.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
+        const along=g.enemies.filter(enemy=>this._visible(enemy,origin)&&!hit.has(enemy.id)&&segmentDistance(enemy.x,enemy.y,p.x,p.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
           .sort((a,b)=>distance(p,a)-distance(p,b)).slice(0,8);
         g._effect(p.x,p.y,'superRay',.48,width,DEFINITIONS.get(id).color,undefined,{x2:end.x,y2:end.y,skillId:id,seed:++this._id});
         for(const enemy of along){hit.add(enemy.id);this._damage(enemy,damage,p);}
@@ -275,11 +284,13 @@ export class SuperSkills {
       volley.tick+=volley.interval;volley.remaining--;
       const index=volley.index++;
       if(formation)formation.released=volley.count-volley.remaining;
-      const target=this._targets(this._foot(),430,{strongest:true})[0];
-      if(!target)continue;
       const a=-Math.PI+.35+(index/(volley.count-1))*(Math.PI-.7),x=p.x+Math.cos(a)*35,y=p.y-13+Math.sin(a)*25;
+      const origin={x,y:y+groundOffset(p,true),groundY:y+groundOffset(p,true)};
+      if(!this._lineClear(this._foot(),origin,9,'projectile'))continue;
+      const target=this._targets(origin,430,{strongest:true,skillId:'swords'})[0];
+      if(!target)continue;
       g._effect(x,y,'superSword',.34,9,DEFINITIONS.get('swords').color,undefined,{x2:target.x,y2:target.y,skillId:'swords',seed:++this._id});
-      this._damage(target,volley.damage,p);
+      this._damage(target,volley.damage,origin);
     }
     this._volleys=this._volleys.filter(volley=>volley.remaining>0);
   }
