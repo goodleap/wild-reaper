@@ -179,7 +179,9 @@ export class HumanoidArt {
       if(kind==='angel'){
         // Shoulder-length gold locks sit behind an uncovered, warmly lit face.
         c.beginPath();c.moveTo(-10,-25);c.quadraticCurveTo(0,-32,10,-25);c.quadraticCurveTo(14,-18,12.5,-10);c.quadraticCurveTo(12,-4,14,-2);c.quadraticCurveTo(10,1,6,-3);c.lineTo(-6,-3);c.quadraticCurveTo(-10,1,-14,-2);c.quadraticCurveTo(-12,-5,-13,-11);c.quadraticCurveTo(-15,-19,-10,-25);c.closePath();paint(c,material(c,flip,['#ab9259','#d7bd7d','#f3df9f'],15,-28,1),'#91865f',.8);
-        oval(c,0,-13.2,10.3,11,material(c,flip,p.skin,11,-22,-4));
+        // The uncovered cheeks and chin form one near-circular silhouette;
+        // side locks stay outside it instead of cutting the face into a column.
+        c.beginPath();c.ellipse(0,-12.8,10.8,10.4,0,0,TAU);paint(c,material(c,flip,p.skin,11,-22,-4),'#bd986344',.6);
       }else oval(c,0,-13.2,10.6,11,material(c,flip,[p.face,p.face,kind==='stormcaller'?'#596179':'#64745a'],11,-22,-4));
       // Caps cast a painted shadow; the angel has an exposed forehead instead.
       if(kind!=='angel'){c.beginPath();c.moveTo(-10,-16);c.quadraticCurveTo(0,-24,10,-16);c.lineTo(9,-13);c.quadraticCurveTo(0,-17,-9,-13);c.closePath();paint(c,'#14252a40');}
@@ -202,13 +204,13 @@ export class HumanoidArt {
       }else{
         // Soft cheek-side locks, a side part and an open forehead read as hair;
         // the floating halo remains separate from the head silhouette.
-        c.beginPath();c.moveTo(-11,-4);c.quadraticCurveTo(-14,-11,-13,-20);c.quadraticCurveTo(-13,-28,-6,-29);c.quadraticCurveTo(-2,-32,3,-29);c.quadraticCurveTo(9,-29,11,-24);c.quadraticCurveTo(14,-17,12,-9);c.quadraticCurveTo(11,-5,12,-3);c.quadraticCurveTo(8,-5,9,-11);c.lineTo(9,-18);c.quadraticCurveTo(9,-22,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.quadraticCurveTo(-9,-10,-11,-4);c.closePath();
+        c.beginPath();c.moveTo(-11,-4);c.quadraticCurveTo(-14,-11,-13,-20);c.quadraticCurveTo(-13,-28,-6,-29);c.quadraticCurveTo(-2,-32,3,-29);c.quadraticCurveTo(9,-29,11,-24);c.quadraticCurveTo(14,-17,12,-9);c.quadraticCurveTo(11,-5,12,-3);c.quadraticCurveTo(11.3,-5,11.6,-10);c.quadraticCurveTo(11.7,-17,9.7,-20);c.quadraticCurveTo(8.8,-23,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.quadraticCurveTo(-12,-11,-11,-4);c.closePath();
         paint(c,material(c,flip,['#ad975d','#dcc788','#fff0bb'],14,-32,-12),'#7d8965',.9);
         c.beginPath();c.moveTo(3,-28);c.quadraticCurveTo(-2,-28,-7,-24);c.strokeStyle='#fff1c5';c.lineWidth=1.15;c.stroke();
         c.beginPath();c.moveTo(5,-27);c.quadraticCurveTo(9,-25,10,-21);c.strokeStyle='#fff1c599';c.lineWidth=.85;c.stroke();
         line(c,[[-9,-24],[-11,-21]],'#b39f66',.8);
         c.beginPath();c.moveTo(-11,-17);c.quadraticCurveTo(-12,-10,-11,-6);c.strokeStyle='#f1d895';c.lineWidth=.8;c.stroke();
-        c.beginPath();c.moveTo(11,-16);c.quadraticCurveTo(10,-9,11,-6);c.strokeStyle='#fff0b988';c.lineWidth=.75;c.stroke();
+        c.beginPath();c.moveTo(12,-16);c.quadraticCurveTo(12.5,-10,12,-7);c.strokeStyle='#fff0b988';c.lineWidth=.75;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,0,TAU);c.strokeStyle='#b5a365';c.lineWidth=1.7;c.stroke();c.strokeStyle='#f6e4a4';c.lineWidth=.85;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,Math.PI*1.15,Math.PI*1.85);c.strokeStyle='#fff8d5';c.lineWidth=.9;c.stroke();
       }

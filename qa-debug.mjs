@@ -18,6 +18,7 @@ function settleTransition(game) {
 for(const options of [{},{debug:false},{debug:'true'},{debug:1},{debug:0},{debug:null}]) {
   const g=new Game(options);assert.equal(g.debug,false);assert.deepEqual(layout(g),ordinaryLayout);
   assert.deepEqual(resources(g),{gold:0,crystals:0});assert.equal(debugGrants(g).length,0);
+  assert.equal(g.player.speed,220,'ordinary and non-boolean debug options retain the normal movement speed');
   assert.equal(g.enemies.filter(e=>e.debugWave).length,0,'normal runs never get the testing ring');
   assert.deepEqual(spawnDebugWave(g),[],'a helper call cannot bypass the strict debug flag');
   assert(Math.hypot(castle(g).door.x,castle(g).door.y)>320,'ordinary castle retains exploration distance');
@@ -54,23 +55,24 @@ for(let terrainSeed=0;terrainSeed<100;terrainSeed++) {
     const x=from.x+(site.door.x-from.x)*i/20,y=from.y+(site.door.y-from.y)*i/20;
     assert(g.settlements._hazardFree(x,y,g.player.r),'subsequent environment generation preserves the entrance path');
   }
-  assert.deepEqual(resources(g),{gold:500,crystals:150});
+  assert.deepEqual(resources(g),{gold:500,crystals:0});assert.equal(g.player.speed,660);
   assert.equal(g.player.level,1);assert.equal(g.player.xp,0);assert.equal(g.player.hp,100);assert.equal(g.player.invuln,0,'the debug budget does not add invulnerability or character levels');
   assert.equal(g.skillLevel,1);assert.equal(g.status,'playing','construction does not open an upgrade before gameplay is ready');
-  assert.equal(debugGrants(g).length,1);assert.deepEqual(debugGrants(g)[0],{type:'resources',source:'debugStart',gold:500,crystals:150});
+  assert.equal(debugGrants(g).length,1);assert.deepEqual(debugGrants(g)[0],{type:'resources',source:'debugStart',gold:500,crystals:0});
   if(terrainSeed===0)assert.deepEqual(site.door,{x:0,y:-170},'default castle is visible directly above spawn');
 }
 
 const g=new Game({debug:true}),site=castle(g),initialLayout=layout(g),worldTerrain=g.terrain;
 g.enemies=[];g._spawn=Infinity;g._shot=Infinity;
-g.update(0,{});assert.equal(g.status,'upgrade','the regular update offers the first affordable skill choice');
-assert.equal(g.chooseUpgrade('not-a-choice'),false);assert.deepEqual(resources(g),{gold:500,crystals:150},'invalid choices never spend the debug budget');
-for(const expected of [{crystals:110,skillLevel:2,status:'upgrade'},{crystals:0,skillLevel:3,status:'playing'}]) {
-  const choices=g.getUpgradeChoices();assert.equal(choices.length,3);
-  assert(g.chooseUpgrade(choices[0].id),'debug skills must be chosen from the ordinary offered choices');
-  assert.equal(g.crystals,expected.crystals);assert.equal(g.skillLevel,expected.skillLevel);assert.equal(g.status,expected.status);
-}
+g.update(.016,{});assert.equal(g.status,'playing','the first real update has no opening skill choice');assert.equal(g.skillLevel,1);assert.equal(g.crystals,0);
+assert.equal(g.chooseUpgrade('not-a-choice'),false);assert.deepEqual(resources(g),{gold:500,crystals:0},'invalid choices never spend the debug budget');
+g.addCrystals(g.crystalsNext-1);g.update(.016,{});assert.equal(g.status,'playing','ordinary crystal costs still gate debug upgrades');
+g.addCrystals(1);g.update(.016,{});assert.equal(g.status,'upgrade','earning enough crystals still offers the ordinary skill choice');
+const choices=g.getUpgradeChoices();assert.equal(choices.length,3);
+assert(g.chooseUpgrade(choices.find(choice=>choice.id!=='speed').id),'debug skills still use the ordinary offered choices');
+assert.equal(g.crystals,0);assert.equal(g.skillLevel,2);assert.equal(g.status,'playing','one earned upgrade does not produce a second opening choice');
 assert.equal(g.player.level,1);assert.equal(g.player.xp,0);assert.equal(g.gold,500);
+const upgradedSpeed=g.player.speed;assert.equal(upgradedSpeed,660,'a normal skill choice keeps debug movement intact');
 g.gold-=73;
 const spentResources=resources(g);
 // Walk through the real update/input path. Touching the door must enter without
@@ -81,6 +83,7 @@ for(let i=0;i<120&&!g.dungeon.active;i++) {
 }
 settleTransition(g);
 const dungeon=g.dungeon.active;assert(dungeon,'walking to the debug castle door automatically enters the normal dungeon');
+assert.equal(g.player.speed,upgradedSpeed,'entering the castle keeps debug movement');
 const maze=JSON.stringify(dungeon.cells),guardIds=g.enemies.map(e=>e.id);
 assert.equal(dungeon.bossDefeated,false);assert.equal(dungeon.rewardClaimed,false);
 assert.equal(g.enemies.filter(e=>e.dungeonBoss).length,1,'debug entrance uses the normal guarded dungeon');
@@ -109,13 +112,15 @@ g.update(0);assert.equal(g.dungeon.active,dungeon);
 walkTo(inside,()=>Math.hypot(feet(g).x-inside.x,feet(g).y-inside.y)<3);
 walkTo(dungeon.entrance,()=>!g.dungeon.active);
 assert.deepEqual(resources(g),spentResources,'castle entry, exit and reentry never grant the starting budget again');
+assert.equal(g.player.speed,upgradedSpeed,'castle exit and reentry preserve the speed multiplier');
 assert.equal(debugGrants(g).length,1);
 
 const restarted=new Game({debug:true});assert.deepEqual(layout(restarted),initialLayout);assert.equal(restarted.dungeon.states.size,0,'restart creates a fresh run at the same nearby entrance');
 assert(restarted.enemies.filter(enemy=>enemy.debugWave).length>=32,'a fresh run gets a fresh testing cohort');
-assert.deepEqual(resources(restarted),{gold:500,crystals:150},'a new run receives exactly one fresh budget');
+assert.deepEqual(resources(restarted),{gold:500,crystals:0},'a new run receives gold without pre-earned crystals');
+assert.equal(restarted.player.speed,660,'a new run restores the initial debug speed');
 assert.equal(debugGrants(restarted).length,1);
-restarted.gold-=91;restarted.crystals-=127;const remaining=resources(restarted);
+restarted.gold-=91;restarted.addCrystals(23);const remaining=resources(restarted);
 const restartedRingIds=restarted.enemies.filter(enemy=>enemy.debugWave).map(enemy=>enemy.id);
 restarted.settlements.resetRegion();assert.deepEqual(resources(restarted),remaining,'regenerating regional sites does not refill debug resources');
 assert.deepEqual(restarted.enemies.filter(enemy=>enemy.debugWave).map(enemy=>enemy.id),restartedRingIds,'regenerating sites never duplicates the testing wave');
@@ -123,6 +128,37 @@ restarted.portal={nextRegionIndex:1};assert(restarted._switchRegion());assert.eq
 assert.equal(restarted.enemies.filter(enemy=>enemy.debugWave).length,0,'later regions use normal populations');assert.deepEqual(spawnDebugWave(restarted),[]);
 assert.equal(restarted.settlements.sites.filter(s=>s.type==='castle').length,1);assert(Math.hypot(castle(restarted).door.x,castle(restarted).door.y)>320,'later regions retain regular castle distance');
 assert.deepEqual(resources(restarted),remaining,'changing regions preserves the spent resource balance');
+assert.equal(restarted.player.speed,660,'changing worlds retains debug speed');
 const disabled=new Game({debug:true,settlements:false});assert.equal(disabled.settlements.sites.length,0,'debug does not override a deliberately disabled feature');
-assert.deepEqual(resources(disabled),{gold:500,crystals:150},'the starting budget does not depend on settlement generation');
-console.log('Debug entry: strict flag, one-time resources and safe 32–40-monster testing ring across 100 terrains, ordinary stats/rewards, clear castle approach, real walking and persistent maze entry/exit/reentry, fresh restart and regular later regions passed.');
+assert.deepEqual(resources(disabled),{gold:500,crystals:0},'the starting budget does not depend on settlement generation');
+
+// Compare actual updates on clear ground, including normalized diagonal input
+// and a speed upgrade. Refreshing stats must apply the debug factor only once.
+const movementGame=(debug,obstacles=[])=>{
+  const game=new Game({debug,adventure:false,terrain:new Terrain({obstacles})});
+  game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;
+  return game;
+};
+const normalMove=movementGame(false),debugMove=movementGame(true);
+for(const speedLevel of [0,2]){
+  for(const game of [normalMove,debugMove]){game.levels.speed=speedLevel;game._refreshStats();const speed=game.player.speed;game._refreshStats();assert.equal(game.player.speed,speed,'repeated stat refresh never compounds the multiplier');}
+  assert(Math.abs(debugMove.player.speed-normalMove.player.speed*3)<1e-9);
+  for(const input of [{x:1,y:0},{x:1,y:1}]){
+    const distances=[];
+    for(const game of [normalMove,debugMove]){
+      const start={x:game.player.x,y:game.player.y};game.update(.04,input);
+      const distance=Math.hypot(game.player.x-start.x,game.player.y-start.y);distances.push(distance);
+      assert(Math.abs(distance-game.player.speed*.04)<1e-9,'diagonal input travels the same distance as an axial step');
+    }
+    assert(Math.abs(distances[1]-distances[0]*3)<1e-9,'debug movement covers three times the ordinary distance');
+  }
+}
+// At 660 units/s the allowed 50 ms update could cross this entire thin wall
+// with an endpoint-only collision check. The real swept movement must stop it.
+const thinWall={type:'log',id:'thin-debug-wall',x:16.2,y:19.8,r:.5,halfLength:100,angle:Math.PI/2};
+const blocked=movementGame(true,[thinWall]);
+assert.equal(blocked.player.x,0);assert(blocked.terrain.isFree(feet(blocked).x,feet(blocked).y,blocked.player.r));
+for(let i=0;i<12;i++)blocked.update(.05,{x:1,y:0});
+assert(blocked.player.x<=thinWall.x-thinWall.r-blocked.player.r,'fast movement never crosses a thin wall');
+assert(blocked.terrain.isFree(feet(blocked).x,feet(blocked).y,blocked.player.r),'the stopped player remains outside the wall');
+console.log('Debug entry: strict flag, gold-only budget, earned crystal upgrades, triple movement with normalized diagonals and thin-wall collision, safe 32–40-monster testing ring across 100 terrains, ordinary enemy stats/rewards, clear castle approach, persistent maze entry/exit/reentry, fresh restart and regular later regions passed.');

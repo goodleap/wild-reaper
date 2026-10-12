@@ -135,9 +135,9 @@ export class Game {
     this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
     this.settlements.ensureAngels?.();
     spawnDebugWave(this);
-    // A debug run gets a one-time testing budget; choices still use the
-    // ordinary crystal thresholds and begin on the first gameplay update.
-    if(this.debug)this.grantResources({gold:500,crystals:150},'debugStart');
+    // Keep debug entry immediately playable. Shop gold is granted once;
+    // crystals earned later still use the ordinary upgrade thresholds.
+    if(this.debug)this.grantResources({gold:500},'debugStart');
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -852,7 +852,7 @@ export class Game {
   }
   _refreshStats() {
     this.stats.damage=this._damageMultiplier();this.stats.fireRate=1+this.levels.rapid*.15;
-    this.stats.moveSpeed=this.hero.baseSpeed/220*(1+this.levels.speed*.08)*(this.relics?.movementMultiplier()||1);
+    this.stats.moveSpeed=this.hero.baseSpeed/220*(1+this.levels.speed*.08)*(this.relics?.movementMultiplier()||1)*(this.debug?3:1);
     this.stats.magnet=BALANCE.magnet*(1+this.levels.magnet*.35);
     this.player.speed=220*this.stats.moveSpeed;
   }
