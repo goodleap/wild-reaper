@@ -39,3 +39,5 @@ npm run stamp-version -- --commit-count N
 ```
 
 不要以 Sites 自身的 Git 历史代替 GitHub 代码仓库计数。
+
+版本脚本同时更新入口脚本、样式和 ES 模块依赖的资源版本。`dist/index.html` 中的 `release-imports` 由脚本生成，发布前运行版本脚本，避免浏览器混用不同版本的页面与脚本。

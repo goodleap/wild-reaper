@@ -1,19 +1,18 @@
-/* The persistent HUD occupies the upper corners; touch controls own the lower edge. */
-#arena{--character-hud-width:232px;--hud-map-size:128px;--hud-actions-width:178px;--hud-edge:16px}
-#arena.compact-hud{--character-hud-width:190px;--hud-map-size:104px;--hud-actions-width:154px;--hud-edge:10px}
-#arena.narrow-hud{--character-hud-width:204px}
-#character-hud{position:relative;flex:0 0 auto;width:min(var(--character-hud-width),calc(100% - var(--hud-actions-width) - 12px));padding:7px 6px 6px;border:1px solid #a7c99324;border-radius:10px;background:linear-gradient(135deg,#10261de6,#10251bbb);box-shadow:0 3px 15px #06130c26;color:#dce9d0;pointer-events:none;text-shadow:0 1px 3px #0a1912}
+/* Active character information stays compact; passive run progress sits at the lower edge. */
+#arena{--character-hud-width:208px;--hud-map-size:128px;--hud-actions-width:178px;--hud-edge:16px}
+#arena.compact-hud{--character-hud-width:172px;--hud-map-size:104px;--hud-actions-width:154px;--hud-edge:10px}
+#arena.narrow-hud{--character-hud-width:184px}
+#character-hud{position:relative;flex:0 0 auto;width:min(var(--character-hud-width),calc(100% - var(--hud-actions-width) - 12px));padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:#dce9d0;pointer-events:none;text-shadow:0 1px 3px #0a1912}
 #character-hud>*{pointer-events:none}
-#character-hud .character-button{position:absolute;z-index:2;inset:-1px;width:calc(100% + 2px);height:calc(100% + 2px);min-height:44px;border:1px solid transparent;border-radius:10px;background:transparent;padding:0;pointer-events:auto;touch-action:manipulation;transition:border-color .15s,background .15s}
-#character-hud .character-button:hover{border-color:#bedb9366;background:#c6ed9106}
+#character-hud .character-button{position:absolute;z-index:2;inset:0;width:100%;height:100%;min-height:44px;border:0;border-radius:3px;background:transparent;padding:0;pointer-events:auto;touch-action:manipulation}
 #character-hud .character-button:focus-visible{outline:2px solid var(--lime);outline-offset:2px}
-.character-hud-heading{display:flex;align-items:center;gap:7px;min-height:19px;margin-bottom:3px;font:600 11px/1.4 ui-monospace,monospace}
+.character-hud-heading{display:flex;align-items:center;gap:6px;min-height:16px;margin-bottom:2px;font:600 10px/1.4 ui-monospace,monospace}
 #character-hud #level-label{color:#d6f6a8;white-space:nowrap}
 #character-hud .gold-counter{margin-left:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font:10px/1.4 ui-monospace,monospace}
 #character-hud .gold-counter b{font-weight:500}
 .character-hud-expand{font:15px/1 ui-monospace,monospace;color:#b8cd9e;flex:0 0 auto}
-#hud #character-hud .vitals{display:grid;gap:3px;width:100%;margin:0}
-.character-meter{display:flex;align-items:center;gap:5px;min-width:0;height:15px}
+#hud #character-hud .vitals{display:grid;gap:2px;width:100%;margin:0}
+.character-meter{display:flex;align-items:center;gap:4px;min-width:0;height:14px}
 .character-meter-label{flex:0 0 20px;font-size:10px;line-height:1;white-space:nowrap}
 #character-hud .hp-heart{flex:0 0 20px;font-size:14px;line-height:1;text-align:center}
 #character-hud .health-track,#character-hud .xp-track,#character-hud .crystal-track{flex:1 1 auto;min-width:12px;max-width:none;height:4px;margin:0;border-radius:5px;background:#07140bd9;box-shadow:inset 0 0 0 1px #b8cf9710;overflow:hidden}
@@ -23,19 +22,20 @@
 #character-hud #hp-label{color:#ecf1dc}
 #character-hud .experience-row,#character-hud #xp-caption{color:#a3d5d2}
 #character-hud .crystal-row,#character-hud #crystal-label{color:#c7e2a4}
-.character-hud-loadouts{display:flex;flex-direction:column;gap:3px;margin-top:5px;padding-top:5px;border-top:1px solid #badb9d18;min-width:0}
-#character-hud .combat-loadout{display:flex;align-items:center;gap:3px;max-width:100%;min-width:0;height:23px;padding:0;overflow:visible;white-space:nowrap;pointer-events:none;touch-action:auto}
-#character-hud .combat-loadout .loadout-label{flex:0 0 18px;width:18px;font-size:9px;letter-spacing:0;color:#a7bea1}
-#character-hud .combat-loadout .combat-slot,#character-hud .loadout-overflow{flex:0 0 31px;width:31px;min-width:31px;height:23px;display:inline-flex;align-items:center;justify-content:center;gap:2px;padding:2px;border:1px solid #b7d19930;border-radius:5px;background:#a0c17808;box-shadow:none;backdrop-filter:none;overflow:visible}
-#character-hud .combat-loadout .combat-slot>span{font-size:16px;line-height:1}
-#character-hud .combat-loadout .combat-slot>small{font:9px/1 ui-monospace,monospace;margin:0;letter-spacing:-.5px}
-#character-hud .combat-loadout .combat-slot i{font-size:7px}
+.character-hud-loadouts{display:flex;align-items:center;flex-wrap:nowrap;gap:4px;min-width:0;min-height:19px;margin:4px 0 0;padding:0;border:0}
+#character-hud .combat-loadout{position:relative;display:flex;flex:0 0 auto;align-items:center;gap:2px;max-width:100%;min-width:0;height:19px;padding:0;overflow:visible;white-space:nowrap;pointer-events:none;touch-action:auto}
+#character-hud #super-loadout::before{content:"";position:absolute;left:-3px;top:4px;bottom:4px;width:1px;background:#b9d5a838}
+#character-hud .combat-loadout .loadout-label{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+#character-hud .combat-loadout .combat-slot,#character-hud .loadout-overflow{flex:0 0 24px;width:24px;min-width:24px;height:19px;display:inline-flex;align-items:center;justify-content:center;gap:1px;padding:1px;border:1px solid #b7d19930;border-radius:5px;background:#a0c17808;box-shadow:none;backdrop-filter:none;overflow:visible}
+#character-hud .combat-loadout .combat-slot>span{font-size:13px;line-height:1}
+#character-hud .combat-loadout .combat-slot>small{font:8px/1 ui-monospace,monospace;margin:0;letter-spacing:-.5px}
+#character-hud .combat-loadout .combat-slot i{font-size:6px}
 #character-hud .combat-loadout .super-slot{border-color:#cfb7e637;background:#ceadf00a}
 #character-hud .combat-loadout .weapon-slot.evolved{border-color:#dfce8052;background:#debd6810}
-#character-hud .combat-loadout .weapon-slot.evolved::after{top:-3px;right:-2px;font-size:8px}
-#character-hud .loadout-overflow{font:600 10px/1 ui-monospace,monospace;color:#c4d7ae;border-style:dashed;border-color:#adc69550}
+#character-hud .combat-loadout .weapon-slot.evolved::after{top:-3px;right:-2px;font-size:6px}
+#character-hud .loadout-overflow{font:600 9px/1 ui-monospace,monospace;color:#c4d7ae;border-style:dashed;border-color:#adc69550}
 .character-hud-status{display:flex;align-items:center;gap:3px;min-width:0;overflow:hidden}
-#character-hud .buff-status,#character-hud .companion-status{position:static;inset:auto;transform:none;display:flex;flex-direction:row;align-items:center;gap:3px;width:auto;max-width:none;min-width:0;margin:5px 0 0;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
+#character-hud .buff-status,#character-hud .companion-status{position:static;inset:auto;transform:none;display:flex;flex-direction:row;align-items:center;gap:3px;width:auto;max-width:none;min-width:0;margin:3px 0 0;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
 #character-hud .buff-badge{height:20px;gap:2px;padding:2px 3px;border-radius:5px;font-size:9px;border-color:#b8dba425}
 #character-hud .buff-icon{font-size:13px}
 #character-hud .buff-time{gap:0;font-size:8px}
@@ -47,14 +47,15 @@
 #character-hud .companion-track,#character-hud #rescue-power,#character-hud #relic-loadout{display:none!important}
 #game-bottom{justify-content:flex-end}
 
-/* Map canvas geometry is unchanged; the single run summary sits below its hit target. */
-#hud .timer-block{position:absolute;left:auto;right:0;top:calc(var(--hud-map-size) + 6px);display:flex;align-items:center;justify-content:space-between;gap:6px;width:var(--hud-actions-width);max-width:var(--hud-actions-width);min-height:20px;transform:none;padding:2px 4px;border-radius:5px;background:#11271bb3;text-align:right}
-#hud .timer-block .hud-caption{display:none}
-#hud .run-stats{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex:0 0 auto}
-#hud .timer-block #timer{font:500 11px/1.3 ui-monospace,monospace;letter-spacing:0}
-#hud .timer-block .kills-block{gap:2px;font:10px/1.3 ui-monospace,monospace}
-#hud .timer-block .kills-block strong{font:500 10px/1.3 ui-monospace,monospace;letter-spacing:0}
-#hud .timer-block .timer-goal{min-width:0;overflow:hidden;text-overflow:ellipsis;margin:0;font:9px/1.3 ui-monospace,monospace;letter-spacing:0;white-space:nowrap}
+/* Run progress is readable but does not intercept movement gestures. */
+#run-summary{position:absolute;z-index:3;left:calc(12px + var(--safe-left));right:auto;top:auto;bottom:calc(12px + var(--safe-bottom));display:flex;align-items:center;justify-content:flex-start;gap:9px;width:max-content;max-width:calc(100% - 120px - var(--safe-left) - var(--safe-right));min-height:14px;margin:0;transform:none;padding:0;border:0;border-radius:0;background:none;box-shadow:none;text-align:left;color:#b4c7a9;text-shadow:0 1px 3px #06100ddd;pointer-events:none}
+#run-summary *{pointer-events:none}
+#run-summary .hud-caption{display:none}
+#run-summary .run-stats{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex:0 0 auto}
+#run-summary #timer{font:500 11px/1.3 ui-monospace,monospace;letter-spacing:0;color:#c2d2b8}
+#run-summary .kills-block{display:flex;align-items:center;gap:2px;font:10px/1.3 ui-monospace,monospace}
+#run-summary .kills-block strong{font:500 10px/1.3 ui-monospace,monospace;letter-spacing:0;color:#b4c7a9}
+#run-summary .timer-goal{min-width:0;overflow:hidden;text-overflow:ellipsis;margin:0;font:9px/1.3 ui-monospace,monospace;letter-spacing:0;white-space:nowrap;color:#a4b799}
 #combat-notices{position:absolute;z-index:3;top:calc(var(--hud-edge) + var(--safe-top));left:calc(var(--hud-edge) + var(--safe-left) + var(--character-hud-width) + 14px);right:calc(var(--hud-edge) + var(--safe-right) + var(--hud-actions-width) + 14px);display:flex;flex-direction:column;align-items:center;gap:7px;pointer-events:none}
 #arena #combat-notices .boss-bar,#arena #combat-notices .encounter-status{position:static;inset:auto;transform:none;width:100%;max-width:280px;margin:0;letter-spacing:0}
 #arena #combat-notices .boss-bar{padding:6px 8px;border-radius:6px;background:#241e1acc;font-size:10px}
@@ -68,7 +69,7 @@
 #arena #combat-notices #encounter-goal{font-size:9px;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
 #arena #combat-notices #encounter-time{font-size:9px;margin-left:0}
 #arena #combat-notices .encounter-icon{font-size:16px;flex:0 0 auto}
-#arena.narrow-hud #combat-notices{left:auto;right:calc(var(--hud-edge) + var(--safe-right));top:calc(var(--hud-edge) + var(--safe-top) + var(--hud-map-size) + 33px);width:var(--hud-actions-width);gap:5px}
+#arena.narrow-hud #combat-notices{left:auto;right:calc(var(--hud-edge) + var(--safe-right));top:calc(var(--hud-edge) + var(--safe-top) + var(--hud-map-size) + 8px);width:var(--hud-actions-width);gap:5px}
 #arena.narrow-hud #combat-notices .boss-bar{padding:5px 6px;font-size:9px}
 #arena.narrow-hud #combat-notices .encounter-status{padding:5px 6px;gap:4px}
 #arena.narrow-hud #combat-notices .encounter-status strong{font-size:9px}
@@ -149,13 +150,11 @@
   #character-hud .buff-badge,#character-hud .companion-detail{padding-left:2px;padding-right:2px}
 }
 @media(max-height:430px){
-  #character-hud{padding-top:5px;padding-bottom:5px}
-  #character-hud .character-hud-heading{min-height:17px;margin-bottom:2px}
+  #character-hud .character-hud-heading{min-height:16px;margin-bottom:2px}
   #character-hud .character-meter{height:13px}
   #hud #character-hud .vitals{gap:2px}
-  #character-hud .character-hud-loadouts{margin-top:4px;padding-top:4px;gap:2px}
-  #character-hud .combat-loadout,#character-hud .combat-loadout .combat-slot,#character-hud .loadout-overflow{height:21px}
-  #character-hud .buff-status,#character-hud .companion-status{margin-top:4px}
+  #character-hud .character-hud-loadouts{margin-top:3px}
+  #character-hud .buff-status,#character-hud .companion-status{margin-top:3px}
   .character-panel{padding:13px 18px}
   .character-panel>.eyebrow{display:none}
   .character-panel h2{font-size:19px;margin:0 40px 3px 0}

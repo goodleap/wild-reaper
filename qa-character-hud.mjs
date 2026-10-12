@@ -70,11 +70,39 @@ function fire(node,type,extra={}){
 }
 const key=(code,extra={})=>{const event={code,key:code==='Escape'?'Escape':code,repeat:false,target:$('game-canvas'),preventDefault(){},...extra};for(const handler of windowListeners.keydown||[])handler(event);};
 const click=id=>fire($(id),'click');
+let touchPointerId=100;
+const tap=id=>{
+  const node=$(id),pointerId=touchPointerId++,event={pointerId,pointerType:'touch',isPrimary:true};
+  fire(node,'pointerdown',event);fire(node,'pointerup',event);return fire(node,'click',{...event,detail:1});
+};
 const start=()=>{click('start-button');run('renderGame=()=>{};renderIntro=()=>{};game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;');};
 const model=()=>JSON.parse(run('JSON.stringify({time:game.runTime,clock,skill:game.player.skillCooldown,point:[game.player.x,game.player.y]})'));
+assert($('run-summary').classList.contains('hidden'),'the menu starts without run statistics');
 start();
+assert(!$('run-summary').classList.contains('hidden'),'starting a run shows passive run statistics');
+assert(!$('hud').contains($('run-summary')),'run statistics are outside the interactive top HUD');
+assert.equal($('run-summary').parentElement,$('hud').parentElement);
+assert.equal($('run-summary').querySelectorAll('button,a,input,select').length,0,'passive statistics have no controls');
+for(const id of ['timer','kills','phase-label','wave-label'])assert($('run-summary').contains($(id)),`${id} belongs in passive run statistics`);
+
+// Resource captions contain values only; the row supplies the single text label.
+const numericResource=/^\d+(?:\.\d+)?k? \/ \d+(?:\.\d+)?k?$/;
+for(const id of ['xp-caption','crystal-label'])assert.match($(id).textContent,numericResource);
+run('game.player.xp=12345;game.player.xpNext=45678;game.crystals=23456;game.crystalsNext=56789;updateHUD();');
+for(const id of ['xp-caption','crystal-label'])assert.match($(id).textContent,numericResource,'large values must not restore a duplicate resource name');
+run('game.player.xp=0;game.crystals=0;updateHUD();');
+
+// Actual pointer event sequences exercise touch activation for all three HUD
+// controls. This verifies current-script bindings; release cache consistency is
+// tested separately, and DOM simulation cannot verify a mobile browser itself.
+tap('character-button');assert(run('characterOpen&&!paused'));tap('character-done');assert.equal(run('characterOpen'),false);
+tap('pause-button');assert(run('paused'));assert(!$('pause-overlay').classList.contains('hidden'));tap('resume-button');assert.equal(run('paused'),false);
+tap('map-button');assert(run('mapOpen&&!paused'));tap('map-done');assert.equal(run('mapOpen'),false);
 
 // The whole upper-left block is a keyboard-accessible, single modal trigger.
+assert.equal($('loadout').parentElement,$('super-loadout').parentElement,'weapons and skills share one equipment strip');
+const hudChildren=$('character-hud').children;
+assert.equal(hudChildren.indexOf($('loadout').parentElement),hudChildren.findIndex(child=>child.contains($('hp-label')))+1,'the shared equipment row immediately follows the attribute meters');
 assert.equal($('character-button').tagName,'BUTTON');assert.equal($('character-button').getAttribute('aria-controls'),'character-overlay');
 for(const id of ['loadout','super-loadout','buff-status','companion-status','xp-caption','xp-fill','crystal-label','crystal-fill'])assert($('character-hud').contains($(id)),`${id} belongs in the upper-left character group`);
 for(const id of ['loadout','super-loadout','buff-status','companion-status'])assert(!$('game-bottom').contains($(id)),`${id} must not occupy thumb controls`);
@@ -131,15 +159,35 @@ fire($('character-content'),'click',{target:$('character-equip-arrow')});assert.
 run("game.status='upgrade';renderCharacter();");equip=$('character-equip-arrow');assert(equip.disabled);fire($('character-content'),'click',{target:equip});assert.equal(run('game.build.isEquipped("arrow")'),true);key('Escape');assert.equal(run('game.status'),'upgrade');
 run("game.status='playing';");
 
-// Long builds have a bounded single HUD row; the full skill collection remains
-// available in the details page. Exercise the real catalog, not invented IDs.
+// Long builds share one bounded equipment strip; weapon and skill slots use one
+// budget, including overflow counters. Exercise resize breakpoints and actual
+// catalog items, then remove a weapon through the real equipment control.
 run("game.build.increment('pulse');game.build.increment('lightning');for(const id of ['thorns','miasma','runes','meteor','swords','vortex'])game.superSkills.owned[id]=1;updateHUD();");
-const owned=run('game.build.getSkillLoadout().length'),shown=$('super-loadout').querySelectorAll('.skill-slot').length;
-assert(shown<owned&&shown>0,`the compact HUD limits its skill slots: owned=${owned}, shown=${shown}, html=${$('super-loadout').innerHTML}`);
-const overflow=$('super-loadout').textContent.match(/\+(\d+)/);assert(overflow,'hidden skills have a +N counter');assert.equal(Number(overflow[1]),owned-shown);
+const owned=run('game.build.getSkillLoadout().length');
+const assertSharedSlots=(budget)=>{
+  const shown=$('super-loadout').querySelectorAll('.skill-slot').length;
+  assert(shown<owned&&shown>0,`the compact HUD limits its skill slots: owned=${owned}, shown=${shown}`);
+  const overflow=$('super-loadout').textContent.match(/\+(\d+)/);assert(overflow,'hidden skills have a +N counter');assert.equal(Number(overflow[1]),owned-shown);
+  const weaponSlots=$('loadout').querySelectorAll('.combat-slot').length,skillSlots=$('super-loadout').querySelectorAll('.combat-slot').length;
+  assert(weaponSlots<=2,'weapons reserve at most two positions');
+  assert.equal(weaponSlots+skillSlots,budget,'the shared equipment strip fills but never exceeds its slot budget');
+  assert($('loadout').querySelectorAll('.weapon-slot').length>0,'at least one equipped weapon stays visible');
+};
+for(const [width,height,budget] of [[320,717,5],[393,717,6],[1100,700,7],[844,390,6]]){
+  viewport={...viewport,width,height};run('resize();updateHUD();');assertSharedSlots(budget);
+}
+viewport={...viewport,width:393,height:717};run('resize();updateHUD();');
+const skillSlotsBeforeRemoval=$('super-loadout').querySelectorAll('.skill-slot').length;
+key('KeyC');click('character-tab-weapons');
+fire($('character-content'),'click',{target:$('character-equip-arrow')});
+assert.equal(run('game.build.isEquipped("arrow")'),false);assertSharedSlots(6);
+assert.equal($('super-loadout').querySelectorAll('.skill-slot').length,skillSlotsBeforeRemoval+1,'removing a weapon immediately gives its slot to the skills row');
+fire($('character-content'),'click',{target:$('character-equip-arrow')});assertSharedSlots(6);
+assert.equal($('super-loadout').querySelectorAll('.skill-slot').length,skillSlotsBeforeRemoval,'re-equipping returns the original skill capacity');
+key('Escape');
 key('KeyC');click('character-tab-skills');assert.equal($('character-content').querySelectorAll('[data-capability-id]').length,owned,'details list every acquired skill');
-click('quit-button');assert.equal(run('game'),null);assert.equal(run('characterOpen'),false);assert($('character-overlay').classList.contains('hidden'));assert.equal($('character-button').getAttribute('aria-expanded'),'false');
+click('quit-button');assert.equal(run('game'),null);assert($('run-summary').classList.contains('hidden'),'returning home hides passive run statistics');assert.equal(run('characterOpen'),false);assert($('character-overlay').classList.contains('hidden'));assert.equal($('character-button').getAttribute('aria-expanded'),'false');
 start();assert.equal(run('characterOpen'),false);assert.equal(run('characterTab'),'attributes');
 run("game.sceneTransition.active=true;");key('KeyC');click('character-button');assert.equal(run('characterOpen'),false,'scene changes cannot be interrupted by details');
 
-console.log('Character HUD: upper-left ownership, frozen simulation/cooldowns, pause and reward preservation, modal exclusivity, drag/cancel guards, tabs, equipment investment, and bounded skill rows passed (VM DOM; no browser layout assertion).');
+console.log('Character HUD: touch activation, equipment below attributes with shared responsive slots, value-only resource captions, passive run-statistics lifecycle, frozen simulation/cooldowns, pause and reward preservation, modal exclusivity, drag/cancel guards, tabs, and equipment investment passed (VM DOM; no browser layout assertion).');
