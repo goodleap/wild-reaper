@@ -179,9 +179,9 @@ export class HumanoidArt {
       if(kind==='angel'){
         // Shoulder-length gold locks sit behind an uncovered, warmly lit face.
         c.beginPath();c.moveTo(-10,-25);c.quadraticCurveTo(0,-32,10,-25);c.quadraticCurveTo(14,-18,12.5,-10);c.quadraticCurveTo(12,-4,14,-2);c.quadraticCurveTo(10,1,6,-3);c.lineTo(-6,-3);c.quadraticCurveTo(-10,1,-14,-2);c.quadraticCurveTo(-12,-5,-13,-11);c.quadraticCurveTo(-15,-19,-10,-25);c.closePath();paint(c,material(c,flip,['#ab9259','#d7bd7d','#f3df9f'],15,-28,1),'#91865f',.8);
-        // The uncovered cheeks and chin form one near-circular silhouette;
-        // side locks stay outside it instead of cutting the face into a column.
-        c.beginPath();c.ellipse(0,-12.8,10.8,10.4,0,0,TAU);paint(c,material(c,flip,p.skin,11,-22,-4),'#bd986344',.6);
+        // Soft oval cheeks taper into a short, rounded chin. The contour itself
+        // narrows below the eyes; framing locks reinforce it without a long point.
+        c.beginPath();c.moveTo(0,-23.5);c.bezierCurveTo(-7,-24,-10,-19.5,-9.3,-13.8);c.bezierCurveTo(-8.8,-8.7,-5.4,-5,-2,-3);c.quadraticCurveTo(0,-1.6,2,-3);c.bezierCurveTo(5.4,-5,8.8,-8.7,9.3,-13.8);c.bezierCurveTo(10,-19.5,7,-24,0,-23.5);c.closePath();paint(c,material(c,flip,p.skin,11,-22,-4),'#bd986344',.6);
       }else oval(c,0,-13.2,10.6,11,material(c,flip,[p.face,p.face,kind==='stormcaller'?'#596179':'#64745a'],11,-22,-4));
       // Caps cast a painted shadow; the angel has an exposed forehead instead.
       if(kind!=='angel'){c.beginPath();c.moveTo(-10,-16);c.quadraticCurveTo(0,-24,10,-16);c.lineTo(9,-13);c.quadraticCurveTo(0,-17,-9,-13);c.closePath();paint(c,'#14252a40');}
@@ -204,13 +204,13 @@ export class HumanoidArt {
       }else{
         // Soft cheek-side locks, a side part and an open forehead read as hair;
         // the floating halo remains separate from the head silhouette.
-        c.beginPath();c.moveTo(-11,-4);c.quadraticCurveTo(-14,-11,-13,-20);c.bezierCurveTo(-13,-26.2,-7.5,-30.1,-1,-30.2);c.bezierCurveTo(5.3,-30.3,9.8,-27.8,11,-24);c.quadraticCurveTo(14,-17,12,-9);c.quadraticCurveTo(11,-5,12,-3);c.quadraticCurveTo(10.6,-5,10.8,-10);c.quadraticCurveTo(10.9,-17,9.4,-20);c.quadraticCurveTo(8.8,-23,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.quadraticCurveTo(-10.8,-11,-10.6,-4);c.closePath();
+        c.beginPath();c.moveTo(-11,-4);c.quadraticCurveTo(-14,-11,-13,-20);c.bezierCurveTo(-13,-26.2,-7.5,-30.1,-1,-30.2);c.bezierCurveTo(5.3,-30.3,9.8,-27.8,11,-24);c.quadraticCurveTo(14,-17,12,-9);c.quadraticCurveTo(11,-5,12,-3);c.quadraticCurveTo(8,-2,7.1,-5);c.bezierCurveTo(6.5,-7.7,8,-11,8.2,-15);c.quadraticCurveTo(8.6,-22,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-8.6,-18);c.bezierCurveTo(-8.7,-14,-6.7,-10,-7.2,-6);c.quadraticCurveTo(-8,-2,-11,-4);c.closePath();
         paint(c,material(c,flip,['#ad975d','#dcc788','#fff0bb'],14,-32,-12),'#7d8965',.9);
         c.beginPath();c.moveTo(3,-28);c.quadraticCurveTo(-2,-28,-7,-24);c.strokeStyle='#fff1c5';c.lineWidth=1.15;c.stroke();
         c.beginPath();c.moveTo(5,-27);c.quadraticCurveTo(9,-25,10,-21);c.strokeStyle='#fff1c599';c.lineWidth=.85;c.stroke();
         line(c,[[-9,-24],[-11,-21]],'#b39f66',.8);
-        c.beginPath();c.moveTo(-11,-17);c.quadraticCurveTo(-12,-10,-11,-6);c.strokeStyle='#f1d895';c.lineWidth=.8;c.stroke();
-        c.beginPath();c.moveTo(12,-16);c.quadraticCurveTo(12.5,-10,12,-7);c.strokeStyle='#fff0b988';c.lineWidth=.75;c.stroke();
+        c.beginPath();c.moveTo(-10.6,-18);c.quadraticCurveTo(-9,-11,-9.2,-6);c.strokeStyle='#f1d895';c.lineWidth=.8;c.stroke();
+        c.beginPath();c.moveTo(10,-19);c.quadraticCurveTo(10.5,-10,9,-5);c.strokeStyle='#fff0b988';c.lineWidth=.75;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,0,TAU);c.strokeStyle='#b5a365';c.lineWidth=1.7;c.stroke();c.strokeStyle='#f6e4a4';c.lineWidth=.85;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,Math.PI*1.15,Math.PI*1.85);c.strokeStyle='#fff8d5';c.lineWidth=.9;c.stroke();
       }
@@ -246,7 +246,7 @@ export class HumanoidArt {
     poly(c,[[12,-34],[12,-28],flip>0?[16,-29]:[7,-30]],'#f3fcff');poly(c,[flip>0?[7,-30]:[16,-29],[12,-28],[12,-25]],'#9ca4c9');line(c,[[8,-25],[12,-24],[15,-27]],'#c5b490',1.3);
   }
   _face(c,kind,state){
-    const p=PALETTES[kind],xs=kind==='traveler'?[-2,6]:[-4,4],y=kind==='traveler'?-12:-12.6;
+    const p=PALETTES[kind],xs=kind==='traveler'?[-2,6]:kind==='angel'?[-3.6,3.6]:[-4,4],y=kind==='traveler'?-12:-12.6;
     for(let i=0;i<2;i++){
       const x=xs[i];
       if(state==='hurt')line(c,[[x+(i?1.5:-1.5),y-1.6],[x+(i?-.9:.9),y],[x+(i?1.5:-1.5),y+1.4]],p.eye,1.2);
