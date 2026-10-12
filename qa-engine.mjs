@@ -98,7 +98,7 @@ assert.equal(boss.bossCount,1,'overdue boss waits for current boss');
 boss._hurtEnemy(firstBoss,firstBoss.hp+1);
 assert.equal(boss.bossKills,1);assert(boss.events.some(e=>e.type==='bossKill'));
 boss.update(.02,{});assert.equal(boss.bossCount,1,'a pending region reward holds the next Boss');
-boss.player.x=boss.portal.x;boss.player.y=boss.portal.y-groundOffset(boss.player,true);assert(boss.enterPortal());assert(boss.chooseSuper(boss.getSuperChoices()[0].id));
+boss.player.x=boss.portal.x;boss.player.y=boss.portal.y-groundOffset(boss.player,true);assert(boss.chooseSuper(boss.getSuperChoices()[0].id));assert(boss.enterPortal());
 for(let i=0;i<101;i++)boss.update(.02,{});
 assert.equal(boss.bossCount,2);assert.equal(boss.enemies.filter(e=>e.type==='boss').length,1);
 const secondBoss=boss.enemies.find(e=>e.type==='boss');
@@ -125,7 +125,9 @@ assert(late.enemies.at(-1).hp>late.enemies[0].hp*2&&late.enemies.at(-1).damage>l
 
 const priority=['orbit','pulse','lightning','multishot','power','rapid','vitality','magnet','regen','speed','endlessPower','endlessVitality','endlessRegen'];
 const sim=(difficulty,seconds,immortal=false)=>{
-  const g=new Game({difficulty});let frames=0,upgrades=0,killsAt180=0,levelAt180=1,maxEnemies=0,maxBullets=0,maxGems=0;
+  // Keep the long-run numeric bot independent of authored navigation targets.
+  // Guarded portal exploration and return travel are covered in qa-portals.
+  const g=new Game({difficulty,adventure:false});let frames=0,upgrades=0,killsAt180=0,levelAt180=1,maxEnemies=0,maxBullets=0,maxGems=0;
   while(['playing','upgrade','super'].includes(g.status)&&g.time<seconds&&frames++<30*(seconds+10)) {
     if(g.status==='super'){assert(g.chooseSuper(g.getSuperChoices()[0].id));continue;}
     if(g.status==='upgrade') {

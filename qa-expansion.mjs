@@ -198,7 +198,7 @@ for(let round=1;round<=4;round++) {
   assert.equal(schedule.enemies.filter(e=>e.type==='boss'&&e.hp>0).length,1,'a due round cannot overlap a living Boss');
   assert.equal(schedule.bossCount,round);
   schedule._hurtEnemy(boss,boss.hp+1);schedule.enemies=[];
-  schedule.player.x=schedule.portal.x;schedule.player.y=schedule.portal.y-groundOffset(schedule.player,true);assert(schedule.enterPortal());assert(schedule.chooseSuper(schedule.getSuperChoices()[0].id));schedule.regionGrace=0;
+  schedule.player.x=schedule.portal.x;schedule.player.y=schedule.portal.y-groundOffset(schedule.player,true);schedule.regions.flushReward();assert(schedule.chooseSuper(schedule.getSuperChoices()[0].id));assert(schedule.enterPortal());schedule.regionGrace=0;
 }
 assert.deepEqual(kinds,['ancient','bloom','ancient','bloom'],'even rounds introduce the new lord without replacing the first fight');
 

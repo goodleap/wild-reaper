@@ -127,6 +127,11 @@ assert.equal(reward.kills,1);assert.equal(xpTotal(reward),expectedXp);advance(re
 // live arrays plus a fixed-size consumed-location filter during long travel.
 for(const region of ['forest','marsh','ruins']) {
   const g=arena(region,true),m=mechanism(g),expectedType={forest:'vine',marsh:'gas',ruins:'rune'}[region];
+  if(region==='ruins') {
+    assert.equal(m.props.length,0,'rune assistance now belongs to permanent relic sites, not the random hazard cache');
+    g.player.x=20000;g.player.y=12000;m._refresh(true);assert.equal(m.props.length,0);
+    continue;
+  }
   assert(m.props.length>0);assert(m.props.every(p=>p.type===expectedType));
   for(const p of m.props)assert(Math.hypot(p.x,p.y)>=RULES.safeRadius+p.r,'each new region has a clear starting area');
   const start=m.props[0],original={id:start.id,x:start.x,y:start.y};
@@ -134,7 +139,6 @@ for(const region of ['forest','marsh','ruins']) {
   g.player.x=0;g.player.y=0;g.environment._refresh(true);m._refresh(true);
   const restored=m.props.find(p=>p.id===original.id);assert(restored);assert.equal(restored.x,original.x);assert.equal(restored.y,original.y);
   if(region==='forest')g.environment.hitAt(restored.x,restored.y,0,'arrow');
-  if(region==='ruins'){g.player.x=restored.x;g.player.y=restored.y-groundOffset(g.player,true);advance(g,.6);assert.equal(restored.state,'active');}
   if(region!=='marsh') {
     g.player.x=20000;g.player.y=12000;g.environment._refresh(true);m._refresh(true);
     g.player.x=0;g.player.y=0;g.environment._refresh(true);m._refresh(true);
@@ -161,8 +165,9 @@ safety.adventure=new Adventure(safety,{generation:false});assert.equal(safety.ad
 const portalBoss=monster(safety,260,-21.2,'boss');safety._hurtEnemy(portalBoss,portalBoss.hp+1);
 assert(safety.portal);assert(safety.environment.isHazardFree(safety.portal.x,safety.portal.y,45),'portal placement avoids existing hazardous ground');
 const oldEnvironment=safety.environment,oldMechanisms=mechanism(safety),oldHp=safety.player.hp;
+safety.regions.flushReward();assert(safety.chooseSuper(safety.getSuperChoices()[0].id));
 safety._features.environment=true;safety.player.x=safety.portal.x;safety.player.y=safety.portal.y-groundOffset(safety.player,true);
-assert(safety.enterPortal());assert(safety.chooseSuper(safety.getSuperChoices()[0].id));
+assert(safety.enterPortal());
 assert.notEqual(safety.environment,oldEnvironment);assert.notEqual(mechanism(safety),oldMechanisms);
 assert(!mechanism(safety).props.some(p=>p.id.startsWith('qa-')),'travel discards old mechanism state and pending attacks');
 assert.equal(safety.player.hp,oldHp);advance(safety,.1);assert.equal(safety.player.hp,oldHp,'the fresh protected landing cannot inherit old gas damage');

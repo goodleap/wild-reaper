@@ -33,6 +33,8 @@ export class Adventure {
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<g.viewHeight*.5+margin;}
   _free(x,y,r=36){return this.game.terrain.isFree(x,y,r);}
   _environmentFree(x,y,r=0){
+    if(this.game.regions?.isSafePoint(x,y,r)===false)return false;
+    if(this.game.relicSites?.isSafePoint(x,y,r)===false)return false;
     if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
     const environment=this.game.environment;if(!environment)return true;
     if(environment.isHazardFree?.(x,y,r)===false)return false;

@@ -18,7 +18,8 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 // Reproduce the first-minute starvation: an ignored 35 s camp previously
 // blocked the 70 s event until the old, overly broad boss warning took over.
 const opening=arena();opening.time=35;opening.companions.update(0);
-const camp=opening.companions.camp;assert(camp);assert(distance(camp,{x:0,y:groundOffset(opening.player,true)})>=319);
+assert.equal(opening.companions.camp,null,'rescues no longer appear as timed random events');
+const camp=opening.companions.spawn('stormcaller',320,19.8);assert(camp);assert(distance(camp,{x:0,y:groundOffset(opening.player,true)})>=319);
 for(const guard of opening.enemies)opening.companions.updateEnemy(guard,0);
 assert(opening.enemies.every(e=>e.guardActive===false),'the camp does not engage from its initial 320-unit spawn');
 opening.time=70;opening.encounters.update(0);
@@ -85,3 +86,5 @@ feet(hunt,{x:900,y:19.8});assert(hunt.companions._canStart());
 assert.equal(hunt.companions.spawn('warden',0,19.8),null,'rescue placement does not overlap a distant waiting hunt');
 
 console.log('Event scheduling QA passed: ignored/engaged rescue, first-minute event, portal hold, boss safety, house resume and once-only rewards.');
+
+const stationed=arena();stationed.nextBossAt=Infinity;const guardian=stationed._spawnEnemy('boss',1);guardian.guardActive=false;assert(stationed.companions._canStart());guardian.guardActive=true;assert(!stationed.companions._canStart(),'only an engaged guardian blocks objectives');

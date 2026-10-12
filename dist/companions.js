@@ -43,15 +43,18 @@ export class Companions {
     }
     return null;
   }
-  spawn(kind=this._nextKind,x,y) {
+  spawn(kind=this._nextKind,x,y,{siteId=null}={}) {
     const g=this.game,def=definition(kind);
-    if(!def||g.status!=='playing'||this.camp||this.active||!this._canStart()||g.enemies.length+RESCUE_RULES.guards>180)return null;
+    const guards=siteId?9:RESCUE_RULES.guards;
+    if(siteId&&!g.relicSites?.sites.some(s=>s.id===siteId&&s.type==='rescue'&&s.state==='ready'))return null;
+    if(!def||g.status!=='playing'||this.camp||this.active||!this._canStart()||g.enemies.length+guards>180)return null;
     const point=this._point(x,y);if(!point)return null;
-    const camp={id:`rescue:${++g._id}`,kind,name:def.name,...point,r:24,state:'trapped',guardIds:[],guardTotal:RESCUE_RULES.guards,remainingGuards:RESCUE_RULES.guards,life:RESCUE_RULES.campDuration,maxLife:RESCUE_RULES.campDuration,_remaining:new Set()};
-    for(let i=0;i<RESCUE_RULES.guards;i++) {
-      const angle=-Math.PI/2+i*TAU/RESCUE_RULES.guards,enemy=g._spawnEnemy(i%3===0?'beetle':'slime',1);
+    const camp={id:`rescue:${++g._id}`,kind,name:def.name,...point,r:24,state:'trapped',siteId,category:siteId?'relic':'random',guardIds:[],guardTotal:guards,remainingGuards:guards,life:RESCUE_RULES.campDuration,maxLife:RESCUE_RULES.campDuration,_remaining:new Set()};
+    for(let i=0;i<guards;i++) {
+      const angle=-Math.PI/2+i*TAU/guards,enemy=g._spawnEnemy(siteId&&i%4===0?'brute':i%3===0?'beetle':'slime',1);
+      if(!enemy){g.enemies=g.enemies.filter(e=>e.rescueId!==camp.id);return null;}
       enemy.rescueId=camp.id;enemy.eventRole='rescueGuard';enemy.xp=2;
-      enemy.hp*=1.25;enemy.maxHp=enemy.hp;enemy.guardActive=false;
+      enemy.relicSiteId=siteId;enemy.hp*=siteId?1.8:1.25;enemy.maxHp=enemy.hp;enemy.guardActive=false;
       enemy.rescueHome={x:point.x+Math.cos(angle)*92,y:point.y+Math.sin(angle)*92};
       enemy.x=enemy.rescueHome.x;enemy.y=enemy.rescueHome.y-groundOffset(enemy);
       enemy._navTimer=0;g._moveEntity(enemy,0,0);
@@ -67,6 +70,7 @@ export class Companions {
     this.camp=null;
     // Never simulate kills while discarding a camp's surviving guards.
     this.game.enemies=this.game.enemies.filter(e=>e.rescueId!==camp.id);
+    this.game.relicSites?.complete(camp.siteId,false);
     this.nextAt=this.game.time+RESCUE_RULES.interval;
     if(expired)this.game._emit('rescueExpired',{name:camp.name});
   }
@@ -74,6 +78,7 @@ export class Companions {
     const camp=this.camp;
     if(!camp||camp.state!=='trapped'||this.game.status!=='playing'||enemy.hp>0||enemy.rescueId!==camp.id||!camp._remaining.delete(enemy.id))return;
     camp.remainingGuards=camp._remaining.size;
+    const site=this.game.relicSites?.sites.find(s=>s.id===camp.siteId);if(site)site.progress=camp.guardTotal-camp.remainingGuards;
     if(!camp.remainingGuards) {
       camp.state='ready';
       this.game._emit('rescueReady',{name:camp.name,kind:camp.kind});
@@ -85,6 +90,7 @@ export class Companions {
     if(!camp||camp.state!=='ready'||this.active||g.status!=='playing'||distance(this._foot(),camp)>RESCUE_RULES.rescueRadius)return false;
     // Detach the reward-bearing camp before any effect/notification can reenter.
     this.camp=null;
+    if(camp.siteId&&!g.relicSites?.complete(camp.siteId,true))return false;
     this.active={id:++g._id,kind:camp.kind,name:camp.name,heroId:camp.kind,x:camp.x,y:camp.y-groundOffset(g.player,true),r:15,isCompanion:true,remaining:RESCUE_RULES.companionDuration,maxDuration:RESCUE_RULES.companionDuration,facing:g.player.facing,moving:false,speed:250,_attack:.8,_echoes:[],_stuckFor:0};
     this._resetFollowing(this.active);
     this.rescuedCount++;g.rescuePower++;g._refreshStats();
@@ -179,10 +185,16 @@ export class Companions {
       for(const echo of active._echoes)echo.life-=dt;
     }
     if(this.camp) {
-      this.camp.life=Math.max(0,this.camp.life-dt);
-      if(this.camp.life<=0||distance(this._foot(),this.camp)>1200)this._clearCamp(true);
+      if(this.camp.siteId) {
+        const present=new Set(g.enemies.filter(e=>e.hp>0&&e.rescueId===this.camp.id).map(e=>e.id));
+        if([...this.camp._remaining].some(id=>!present.has(id)))this._clearCamp(true);
+      }else {
+        this.camp.life=Math.max(0,this.camp.life-dt);
+        if(this.camp.life<=0||distance(this._foot(),this.camp)>1200)this._clearCamp(true);
+      }
     }
-    if(this.generation&&!this.camp&&!this.active&&g.time>=this.nextAt&&this._canStart()&&!this.spawn())this.nextAt=g.time+6;
+    // Fixed rescue ruins own generation and activation. Explicit spawn() is
+    // retained for isolated encounters and deterministic QA scenarios.
   }
   _castLightning(active) {
     const g=this.game,excluded=new Set();let origin=active,hits=0;

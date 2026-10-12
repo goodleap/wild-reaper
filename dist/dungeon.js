@@ -123,7 +123,7 @@ export class Dungeon {
   }
   enter(site){
     const g=this.game;
-    if(!site||!site.id||this.active||g.status!=='playing'||!this._near(this._door(site),site.interactRadius||100)||g.enemies.some(e=>e.type==='boss'&&e.hp>0))return false;
+    if(!site||!site.id||this.active||g.status!=='playing'||!this._near(this._door(site),site.interactRadius||100)||g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false))return false;
     let state=this.states.get(site.id);
     if(!state){if(this.states.size>=DUNGEON_RULES.maxStates)return false;state=this._makeState(site);this.states.set(site.id,state);}
     this._world=this._snapshotWorld(site);
@@ -260,5 +260,5 @@ export class Dungeon {
     }
     return {currentRoom:cell.id,remaining,total:room?.total||0,clearedRooms:battleRooms.filter(r=>r.cleared).length,combatRooms:battleRooms.length,next,bossDistance:state.distances.get(state.bossRoom.id)};
   }
-  resetRegion(){if(this.active)return false;this.states.clear();this._world=null;return true;}
+  resetRegion(){if(this.active)return false;this.states=new Map();this._world=null;return true;}
 }

@@ -1,11 +1,15 @@
 import { groundOffset } from './terrain.js';
-import { RegionalMechanisms } from './regional-mechanisms.js';
+import { RegionalMechanisms, isGrounded } from './regional-mechanisms.js';
+export { isGrounded } from './regional-mechanisms.js';
 
 const CELL=520,TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const WEAPON_SOURCES=new Set(['arrow','orbit','pulse','echo','lightning','storm']);
 export const ENVIRONMENT_BALANCE=Object.freeze({maxProps:20,maxMuds:12,mushroomFuse:.9,blastRadius:82,mudMultiplier:.74,safeRadius:240,despawnDistance:1800});
+const BODY_HEIGHTS=Object.freeze({slime:[34,16],beetle:[40,18],brute:[55,26],boar:[49,22],spore:[52,20],boss:[109,49]});
+const humanoid=entity=>!!(entity.isCompanion||entity.isCaptive||entity.isTownNpc);
+const mudDistance=(mud,x,y)=>mud.rx>0&&mud.ry>0?Math.hypot((x-mud.x)/mud.rx,(y-mud.y)/mud.ry):Infinity;
 
 // This fixed-size filter remembers armed locations for the whole run. A false
 // positive can only omit a mushroom; leaving and revisiting never farms it.
@@ -32,12 +36,14 @@ export class Environment {
     this.mechanisms=new RegionalMechanisms(this,{generation});
   }
   _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
-  _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};}
+  _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer||humanoid(entity))};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<=g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<=g.viewHeight*.5+margin;}
   _terrainClear(x,y,r){return Math.hypot(x,y)>=ENVIRONMENT_BALANCE.safeRadius+r&&this.game.terrain.isFree(x,y,r);}
   _objectiveClear(x,y,r){
     const adventure=this.game.adventure;
     if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
+    if(this.game.relicSites?.isSafePoint(x,y,r)===false)return false;
+    if(this.game.regions?.isSafePoint?.(x,y,r)===false)return false;
     if(adventure?.props.some(o=>distance(o,{x,y})<r+(o.r||18)+8))return false;
     if(adventure?.treasure&&distance(adventure.treasure,{x,y})<r+(adventure.treasure.r||27)+15)return false;
     return true;
@@ -91,9 +97,23 @@ export class Environment {
     this.props.push(...props.slice(0,Math.max(0,ENVIRONMENT_BALANCE.maxProps-this.props.length)));
     this.muds.push(...muds.slice(0,Math.max(0,ENVIRONMENT_BALANCE.maxMuds-this.muds.length)));
   }
-  movementMultiplier(entity,isPlayer=false){
+  getImmersion(entity,isPlayer=entity===this.game.player){
+    if(!isGrounded(entity))return null;
+    const point=this._foot(entity,isPlayer);let mud=null,nearest=1;
+    // Choose the deepest overlapping pool instead of adding their depths.
+    // Only the sprite sinks: movement, collision and ordering keep their feet.
+    for(const patch of this.muds){const d=mudDistance(patch,point.x,point.y);if(d<nearest){nearest=d;mud=patch;}}
+    if(!mud)return null;
+    const t=Math.min(1,(1-nearest)/.6),depth=t*t*(3-2*t);
+    const human=isPlayer||humanoid(entity),body=BODY_HEIGHTS[entity.type]||[34,16];
+    const radius=Number.isFinite(entity.r)&&entity.r>0?entity.r:15;
+    const maxSink=human?16:Math.min(18,body[0]*radius/body[1]*.35);
+    return {x:point.x,footY:point.y,waterY:point.y,depth,sink:maxSink*depth,maxSink,width:human?14:Math.max(5,Math.min(35,radius*.83)),mud};
+  }
+  movementMultiplier(entity,isPlayer=entity===this.game.player){
+    if(!isGrounded(entity))return 1;
     const point=this._foot(entity,isPlayer);
-    const mud=this.muds.some(m=>((point.x-m.x)/m.rx)**2+((point.y-m.y)/m.ry)**2<=1)?ENVIRONMENT_BALANCE.mudMultiplier:1;
+    const mud=this.muds.some(m=>mudDistance(m,point.x,point.y)<=1)?ENVIRONMENT_BALANCE.mudMultiplier:1;
     return Math.min(mud,this.mechanisms.movementMultiplier(entity,isPlayer));
   }
   isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r);}

@@ -35,7 +35,7 @@ function rescue(g,kind='stormcaller',x=350,y=19.8) {
 function travel(g) {
   const boss=monster(g,300,0,'boss');g._hurtEnemy(boss,boss.hp+1);
   g.player.x=g.portal.x;g.player.y=g.portal.y-groundOffset(g.player,true);
-  assert(g.enterPortal());if(g.status==='super')assert(g.chooseSuper(g.getSuperChoices()[0].id));
+  g.regions.flushReward();assert(g.chooseSuper(g.getSuperChoices()[0].id));assert(g.enterPortal());
 }
 
 assert.deepEqual(HEROES.map(h=>h.id),['traveler']);
@@ -245,6 +245,8 @@ assert.equal(pendingTravel.regionIndex,1);assert.equal(pendingTravel.companions.
 assert.equal(pendingTravel.rescuePower,0);assert.equal(pendingTravel.companions.rescuedCount,0);
 assert.equal(pendingTravel.kills,beforeTravelKills+1,'travel only rewards the defeated Boss, never cleared rescue guards');
 assert(!pendingTravel.enemies.some(e=>e.rescueId===lostCamp.id));
+const backToCamp=pendingTravel.regions.portals.find(p=>p.direction==='back');pendingTravel.player.x=backToCamp.x;pendingTravel.player.y=backToCamp.y-groundOffset(pendingTravel.player,true);assert(pendingTravel.enterPortal(backToCamp.id));
+assert.equal(pendingTravel.companions.camp,lostCamp,'an unfinished camp is restored on returning to its region');assert.equal(pendingTravel.enemies.filter(e=>e.rescueId===lostCamp.id).length,6);
 const followingTravel=arena(),follower=rescue(followingTravel,'warden');
 advance(followingTravel,7);const remaining=follower.remaining;
 follower._attack=0;monster(followingTravel,follower.x+100,follower.y);followingTravel.companions.resolve();
@@ -261,17 +263,18 @@ for(const entity of [followingTravel.player,follower]){
   assert.equal(entity.walkPhase,0,'portal relocation is not counted as a walking stride');
 }
 
-// Generation is infrequent and does not compete with major authored fights.
+// Rescues live at fixed ruins; explicit activation still respects nearby fights.
 const scheduled=arena({companions:true});advance(scheduled,34.9);assert.equal(scheduled.companions.camp,null);
-advance(scheduled,.2);assert(scheduled.companions.camp,'the first optional rescue appears after the opening');
-assert.equal(scheduled.enemies.filter(e=>e.rescueId).length,6);
+advance(scheduled,.2);assert.equal(scheduled.companions.camp,null,'rescues are activated at fixed ruins, never spawned by a timer');
+assert.equal(scheduled.enemies.filter(e=>e.rescueId).length,0);
+const explicitCamp=scheduled.companions.spawn('stormcaller',350,19.8);assert(explicitCamp);assert.equal(scheduled.enemies.filter(e=>e.rescueId).length,6);
 const blocker=arena({companions:true});monster(blocker,350,0,'boss');advance(blocker,40);
-assert.equal(blocker.companions.camp,null,'an active Boss prevents a new rescue camp');
+assert.equal(blocker.companions.spawn('warden',350,19.8),null,'an active Boss prevents activating a rescue camp');
 const imminent=arena({companions:true});imminent.nextBossAt=55;advance(imminent,40);
-assert.equal(imminent.companions.camp,null,'rescue generation leaves time before the upcoming Boss');
+assert.equal(imminent.companions.spawn('warden',350,19.8),null,'an imminent legacy Boss blocks a competing rescue');
 const eventBlock=arena({companions:true});eventBlock.encounters=new Encounters(eventBlock,{generation:false});
 const event=eventBlock.encounters.spawn('hunt',0,19.8);event.life=100;advance(eventBlock,40);
-assert.equal(eventBlock.companions.camp,null,'an active timed objective prevents another rescue objective');
+assert.equal(eventBlock.companions.spawn('warden',350,19.8),null,'an active nearby objective prevents another rescue objective');
 const campBlock=arena();campBlock.companions.spawn('warden',350,19.8);campBlock.player.x=150;
 campBlock.encounters=new Encounters(campBlock);campBlock.encounters.nextAt=0;advance(campBlock,.1);
 assert.equal(campBlock.encounters.active,null,'a nearby engaged rescue camp defers automatic timed encounters');

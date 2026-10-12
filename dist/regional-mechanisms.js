@@ -4,6 +4,10 @@ const CELL=520,WEAPON_SOURCES=new Set(['arrow','orbit','pulse','echo','lightning
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export const REGIONAL_MECHANISM_RULES=Object.freeze({maxProps:8,safeRadius:280,vineRadius:54,vineWarning:1.1,vineActive:2.5,vineSlow:.6,gasRadius:70,gasWarning:1.4,gasActive:3.6,gasInterval:1,gasPlayerDamage:6,gasEnemyDamage:20,runeRadius:48,runeCharge:.6,runeDuration:12,runeInterval:1.4,runeTargets:3,runeRange:420});
 
+// Ground hazards share this definition with marsh immersion. Poison clouds
+// remain airborne hazards and intentionally do not use this exemption.
+export function isGrounded(entity){return !!entity&&entity.flying!==true&&entity.type!=='bat'&&entity.type!=='angel'&&entity.kind!=='angel'&&entity.townKind!=='angel';}
+
 // A bounded filter preserves one-use locations without growing with distance.
 // False positives only omit an object; they can never grant another activation.
 class UsedLocations {
@@ -24,9 +28,12 @@ export class RegionalMechanisms {
     this.props=[];this._used=new UsedLocations();this._refreshClock=0;this._fixtureId=0;this._gasCooldown=0;this._gasEnemyClock=1;
     if(generation)this._refresh(true);
   }
-  _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};}
+  _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer||entity.isCompanion||entity.isCaptive||entity.isTownNpc)};}
   _visible(prop,margin=0){const g=this.game;return Math.abs(prop.x-g.player.x)<=g.viewWidth*.5+margin&&Math.abs(prop.y-g.player.y)<=g.viewHeight*.5+margin;}
   _candidate(tx,ty){
+    // Rune support now belongs to a permanent, deliberately activated relic.
+    // The roaming cache only owns renewable woodland/marsh hazards.
+    if(this.region==='ruins')return null;
     const env=this.environment,seed=env._hash(tx+1423,ty+1451);
     if(seed>.64)return null;
     const type=this.region==='marsh'?'gas':this.region==='ruins'?'rune':'vine',r=REGIONAL_MECHANISM_RULES[`${type}Radius`];
@@ -41,6 +48,8 @@ export class RegionalMechanisms {
   }
   _objectiveClear(prop){
     const g=this.game,r=prop.r;
+    if(g.relicSites?.isSafePoint(prop.x,prop.y,r)===false)return false;
+    if(g.regions?.isSafePoint?.(prop.x,prop.y,r)===false)return false;
     if(g.settlements?.isSafePoint(prop.x,prop.y,r)===false)return false;
     if(g.adventure?.props.some(o=>distance(o,prop)<r+(o.r||18)+20))return false;
     if(g.adventure?.treasure&&distance(g.adventure.treasure,prop)<r+70)return false;
@@ -83,7 +92,8 @@ export class RegionalMechanisms {
     }
     return true;
   }
-  movementMultiplier(entity,isPlayer=false){
+  movementMultiplier(entity,isPlayer=entity===this.game.player){
+    if(!isGrounded(entity))return 1;
     const point=this._foot(entity,isPlayer);
     return this.props.some(o=>o.type==='vine'&&o.state==='active'&&distance(o,point)<=o.r)?REGIONAL_MECHANISM_RULES.vineSlow:1;
   }
@@ -137,8 +147,7 @@ export class RegionalMechanisms {
       if(distance(prop,this._foot())>prop.r){prop.state='idle';prop.charge=0;return;}
       prop.state='charging';prop.charge=Math.min(1,(prop.charge||0)+dt/REGIONAL_MECHANISM_RULES.runeCharge);
       if(prop.charge<1-1e-9)return;
-      prop.charge=1;prop.id??=`rune:fixture:${++this._fixtureId}`;this._used.add(prop.id);
-      this._phase(prop,'active',REGIONAL_MECHANISM_RULES.runeDuration);prop._shot=.3;this.game._emit('runeActivated');return;
+      this.activateRune(prop);return;
     }
     if(prop.state!=='active')return;
     prop.remaining-=dt;
@@ -153,6 +162,11 @@ export class RegionalMechanisms {
       g._effect(prop.x,prop.y,'runeBolt',.32,enemy.r,'#85e2de',undefined,{x2:enemy.x,y2:enemy.y,seed:enemy.id});
       g._hurtEnemy(enemy,damage,0,prop,'rune');
     }
+  }
+  activateRune(prop){
+    if(this.game.status!=='playing'||prop.type!=='rune'||!['idle','charging'].includes(prop.state))return false;
+    prop.charge=1;prop.id??=`rune:fixture:${++this._fixtureId}`;this._used.add(prop.id);
+    this._phase(prop,'active',REGIONAL_MECHANISM_RULES.runeDuration);prop._shot=.3;this.game._emit('runeActivated');return true;
   }
   _gasDamage(dt){
     const g=this.game,active=this.props.filter(o=>o.type==='gas'&&o.state==='active'&&this._visible(o));

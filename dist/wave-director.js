@@ -28,7 +28,7 @@ export class WaveDirector {
   }
   _bossBlocks() {
     const g=this.game;
-    return g.enemies.some(e=>e.type==='boss'&&e.hp>0)||
+    return g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false)||
       (!g.portal&&Number.isFinite(g.nextBossAt)&&(g.nextBossAt<=g.time||
         (g.pressurePhase==='steady'&&g.nextBossAt-g.time<WAVE_RULES.warning+WAVE_RULES.attackLimit+1)));
   }

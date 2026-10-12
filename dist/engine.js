@@ -15,6 +15,7 @@ import { SuperSkills, SUPER_SKILLS } from './super-skills.js';
 import { Dungeon } from './dungeon.js';
 import { Settlements } from './settlements.js';
 import { WaveDirector } from './wave-director.js';
+import { RelicSites } from './relic-sites.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
@@ -82,7 +83,7 @@ export class Game {
     this.terrain=terrain;
     this.debug=debug===true;
     this.regionIndex=0;this.region=regionFor(0);this.portal=null;this.regionGrace=0;this.regionTransition=null;
-    this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements};this._interactHeld=false;
+    this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.hero=getHero(hero);
@@ -90,7 +91,7 @@ export class Game {
     this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
     const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
-    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:this.hero.skillCooldown,facing:0};
+    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
     this.skillLevel=1;this.crystals=0;this.crystalsNext=crystalCost(1);this.gold=0;this.coins=[];
     this.enemies = []; this.bullets = []; this.enemyBullets=[];this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
@@ -121,6 +122,9 @@ export class Game {
     this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);
     this.settlements??=new Settlements(this,{generation:settlements});
     this.waveDirector=new WaveDirector(this);
+    this.discoveredMap=new Set();this.regions.initialize();
+    this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
+    this.settlements.ensureAngels?.();
     // A debug run gets a one-time testing budget; choices still use the
     // ordinary crystal thresholds and begin on the first gameplay update.
     if(this.debug)this.grantResources({gold:500,crystals:150},'debugStart');
@@ -157,7 +161,7 @@ export class Game {
       const dx=Math.max(0,Math.abs(e.x-p.x)-halfW), dy=Math.max(0,Math.abs(e.y-p.y)-halfH);
       return dx*dx+dy*dy<=e.r*e.r;
     });
-    p.skillCooldown=p.skillCooldownMax;
+    p.skillCooldown=this.debug?0:p.skillCooldownMax;
     // This separate snapshot keeps every strike visible after enemies die or
     // the generic particle cap trims hit effects during a crowded screen clear.
     this.storm={x:p.x,y:p.y,viewWidth:this.viewWidth,viewHeight:this.viewHeight,life:.65,maxLife:.65,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
@@ -204,6 +208,7 @@ export class Game {
   _hurtEnemy(enemy,amount,knockback=0,origin=this.player,source='raw') {
     if(enemy.hp<=0||!Number.isFinite(amount)||amount<=0)return 0;
     if(enemy.dungeonId&&!this.dungeon.canDamage(enemy,origin))return 0;
+    if(this.regions&&!this.regions.canDamage(enemy))return 0;
     amount=this.elites?.beforeDamage(enemy,amount)??amount;
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
@@ -408,13 +413,16 @@ export class Game {
     this.enemyBullets=this.enemyBullets.filter(b=>b.life>0);
   }
 
-  canEnterPortal() { return !this.dungeon.active&&this.regions.canEnter(); }
+  _initializeRegionalBoss(boss){initBoss(boss);}
+  _clearRegionalBossAttacks(boss){boss.slam=null;boss.charge=null;boss.cast=null;boss._chargeSegment=null;clearBossAttacks(boss);}
+  canEnterPortal(id) { return !this.dungeon.active&&this.regions.canEnter(id); }
   getInteraction() {
     if(this.status!=='playing')return null;
     if(this.dungeon.active)return this.dungeon.getInteraction();
     const candidates=[];
     const settlement=this.settlements.getInteraction();if(settlement)candidates.push(settlement);
-    if(this.canEnterPortal())candidates.push({id:this.portal.id,type:'portal',label:'选择超级技能 · 前往'+this.portal.nextRegion.name,description:'击败区域首领的专属奖励',x:this.portal.x,y:this.portal.y,enabled:true});
+    const portal=this.regions.getInteraction();if(portal)candidates.push(portal);
+    const relic=this.relicSites?.getInteraction();if(relic)candidates.push(relic);
     const p=this.player,footY=p.y+groundOffset(p,true);
     return candidates.sort((a,b)=>Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
   }
@@ -422,24 +430,24 @@ export class Game {
     const interaction=this.getInteraction();
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
-    return interaction.type==='portal'?this.enterPortal():this.settlements.interact(interaction.id);
+    if(interaction.category==='relic'||interaction.type==='relic')return !!this.relicSites?.interact(interaction.id);
+    return interaction.type==='portal'?this.enterPortal(interaction.id):this.settlements.interact(interaction.id);
   }
-  enterPortal() {
-    if(!this.canEnterPortal())return false;
-    if(!this.superSkills.pending)this.superSkills.offer('region',this.region.id);
-    if(this.superSkills.pending?.source!=='region'||!this.superSkills.getChoices().length)return false;
-    this.status='super';this._emit('superChoice',{source:'region',regionId:this.region.id});return true;
+  enterPortal(id) {
+    if(!this.canEnterPortal(id))return false;
+    return this._switchRegion(this.regions._portal(id));
   }
   getSuperChoices() {return this.superSkills.getChoices();}
   chooseSuper(id) {
     if(this.status!=='super')return false;
     const pending=this.superSkills.pending;
     if(!pending)return false;
-    if(pending.source==='region'&&(!this.portal||this.portal.nextRegionIndex!==this.regionIndex+1||pending.regionId!==this.region.id))return false;
+    if(pending.source==='region'&&(!this.regions.rewardPortal||pending.regionId!==this.region.id))return false;
     if(pending.source==='castle'&&(!this.dungeon.active?.bossDefeated||!this.dungeon.active.rewardPending||this.dungeon.active.rewardClaimed))return false;
     if(!this.superSkills.choose(id))return false;
-    if(pending.source==='region')this._switchRegion();
-    else {this.dungeon.completeReward();if(this.status==='super')this.status='playing';}
+    if(pending.source==='region')this.regions.completeReward();
+    else this.dungeon.completeReward();
+    if(this.status==='super')this.status='playing';
     this._trySkillUpgrade();return true;
   }
   getShopItems(){return this.settlements.getShopItems();}
@@ -456,38 +464,51 @@ export class Game {
     if(this.status!=='relic'||!this.relics.choose(id))return false;
     this.status='playing';this._trySkillUpgrade();return true;
   }
-  _switchRegion() {
-    const portal=this.portal;if(!portal)return false;
-    const from=this.region.id,p=this.player;
+  _switchRegion(portal=this.portal) {
+    if(!portal||!Number.isInteger(portal.nextRegionIndex)||this.dungeon.active)return false;
+    const from=this.region.id,fromIndex=this.regionIndex,p=this.player;
     const furyTime=this.adventure?.furyTime||0,magnetTime=this.adventure?.magnetTime||0;
-    this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;
-    this.status='playing';this.regionGrace=2;
+    // Clear only transient attacks. Persistent sites and surviving objective
+    // guards remain in a suspended per-region snapshot for return journeys.
+    for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
+    this.superSkills.clearScene();this.regions.saveWorld();
+    this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];
+    this.status='playing';this.regionGrace=2;this.sceneKind='world';
     this.regionTransition={life:.7,maxLife:.7,name:this.region.name,from,to:this.region.id};
-    this.enemies=[];this.bullets=[];this.enemyBullets=[];this.gems=[];this.coins=[];this.effects=[];this.orbitals=[];this.storm=null;
-    this._pulseEchoes=[];this._grid.clear();this._choices=null;
+    this.bullets=[];this.enemyBullets=[];this.effects=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];this._grid.clear();this._choices=null;
     this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply'||e.type==='superChosen');
-    this.superSkills.clearScene();
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
-    // The continuous clock, boss schedule and active-skill cooldown survive.
-    // Only the old scene is discarded, without invoking kill/reward hooks.
-    this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex});
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);
-    this._moveEntity(p,0,0,true);
-    resetLocomotion(p);
-    this.environment=null;this.adventure=null;this.encounters=null;
-    if(this._features.adventure) {
-      this.adventure=new Adventure(this);this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;
+    if(!this.regions.restoreWorld(this.regionIndex)) {
+      this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex});this.enemies=[];this.gems=[];this.coins=[];
+      this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.discoveredMap=new Set();
+      this.companions.camp=null;this.companions.generation=this._features.companions;this.companions.nextAt=this.time+35;
+      this.dungeon.resetRegion();
+      this._moveEntity(p,0,0,true);
+      if(this._features.adventure)this.adventure=new Adventure(this);
+      if(this._features.encounters)this.encounters=new Encounters(this);
+      if(this._features.environment)this.environment=new Environment(this);
+      this.settlements=new Settlements(this,{generation:this._features.settlements});
+      this.regions.initialize(portal,fromIndex);
+      this.relicSites=new RelicSites(this,{generation:!!(this._features.adventure&&(this._features.encounters||this._features.companions))});
     }
-    if(this._features.encounters)this.encounters=new Encounters(this);
-    if(this._features.environment)this.environment=new Environment(this);
-    this.companions.onRegionChange();
-    this.dungeon.resetRegion();this.settlements.resetRegion();this.waveDirector.reset();
-    this._refreshStats();this._refreshWeapons();
-    this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});
-    return true;
+    if(this.adventure){this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;}
+    const arrival=this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>candidate.nextRegionIndex===fromIndex);
+    if(arrival) {
+      // Land just in front of the paired gate, never at a different region's
+      // coordinates. The interaction latch prevents an immediate bounce back.
+      let point={x:arrival.x,y:arrival.y+90};
+      for(const offset of [90,60,-60,-90,0])if(this.terrain.isFree(arrival.x,arrival.y+offset,p.r+4)){point={x:arrival.x,y:arrival.y+offset};break;}
+      p.x=point.x;p.y=point.y-groundOffset(p,true);
+    }
+    this._moveEntity(p,0,0,true);resetLocomotion(p);
+    const active=this.companions.active;if(active){active._echoes=[];active.x=p.x;active.y=p.y;this.companions._resetFollowing(active);this.companions._safeReturn(active);}
+    this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
+    this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});return true;
   }
 
   update(dt,input={}) {
+    this.regions.flushReward();
     if(this.status!=='playing') return;
     const interact=!!input.interact,pressed=interact&&!this._interactHeld;this._interactHeld=interact;
     if(pressed&&this.interact())return;
@@ -498,8 +519,8 @@ export class Game {
     this.regionGrace=Math.max(0,this.regionGrace-dt);
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
     this.relics.update(dt);
-    if(!inDungeon)this._updatePressure(dt);
-    p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=Math.max(0,p.skillCooldown-dt);
+    if(!inDungeon){this.regions.update(dt);this._updatePressure(dt);}
+    p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debug?0:Math.max(0,p.skillCooldown-dt);
     this.environment?.update(dt);
     if(this.status==='dead')return;
     if(this.storm) { this.storm.life-=dt; if(this.storm.life<=0) this.storm=null; }
@@ -512,14 +533,14 @@ export class Game {
     updateLocomotion(p,oldX,oldY,dt);
     this.adventure?.update(dt);
     this.companions.update(dt);
-    if(!inDungeon){this.encounters?.update(dt);this.settlements.update(dt);}
+    if(!inDungeon){this.encounters?.update(dt);this.settlements.update(dt);this.relicSites?.update(dt);}
     else this.dungeon.update(dt);
     if(this.levels.regen || this.levels.endlessRegen) p.hp=Math.min(p.maxHp,p.hp+(this.levels.regen*.8+this.levels.endlessRegen*.3)*dt);
     if(!inDungeon)this._spawn-=dt;
     if(!inDungeon&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
-      const bossActive=this.enemies.some(e=>e.type==='boss'&&e.hp>0);
+      const bossActive=this.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false);
       const rate=Math.min(4.5,BALANCE.spawnBase+this.time*.008)*(this.easy?.78:1)*(bossActive?.38:1);
       this._spawn=1/rate;
       if(this.enemies.length<180) {
@@ -527,7 +548,7 @@ export class Game {
         this.elites.maybePromote(enemy);
       }
     }
-    if(!inDungeon&&!this.portal&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
+    if(!inDungeon&&!this.regions.guarded&&!this.portal&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');
@@ -536,6 +557,7 @@ export class Game {
       if(e.hp<=0) continue;
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
+      if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
       if(this.companions.updateEnemy(e,dt))continue;
       if(this.elites.updateEnemy(e,dt))continue;
       if(this.encounters?.updateEnemy(e,dt))continue;
@@ -608,7 +630,7 @@ export class Game {
     this.gems=this.gems.filter(g=>g.value>0);this.coins=this.coins.filter(c=>c.value>0);
     for(const e of this.effects) {e.life-=dt;if(e.type==='damage'||e.type==='heal')e.y-=dt*26;}
     this.effects=this.effects.filter(e=>e.life>0);
-    this._trySkillUpgrade();
+    this.regions.flushReward();this._trySkillUpgrade();
   }
 
   _updateArrow(b,dt) {

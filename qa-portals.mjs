@@ -21,109 +21,106 @@ function monster(g,type,x=200,y=0) {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
 const xpTotal=g=>g.player.xp;
+function claim(g) {
+  g.regions.flushReward();assert.equal(g.status,'super');const index=g.regionIndex,id=g.getSuperChoices()[0].id;
+  assert(g.chooseSuper(id));assert.equal(g.regionIndex,index,'claiming a Boss reward never changes maps');
+  return id;
+}
 function openPortal(g) {
-  const boss=monster(g,'boss',280,-21.2);g._hurtEnemy(boss,boss.hp+1);
-  assert(g.portal,'a defeated Boss opens a portal');return boss;
+  let boss=g.enemies.find(e=>e.portalId&&e.hp>0);
+  if(!boss)boss=monster(g,'boss',280,-21.2);
+  if(boss.portalId){g.player.x=g.portal.x;g.player.y=g.portal.y+180-groundOffset(g.player,true);g.regions.update();}
+  g._hurtEnemy(boss,boss.hp+1);assert(g.portal&&g.portal.state==='active');return boss;
 }
-function standAtPortal(g) {g.player.x=g.portal.x;g.player.y=g.portal.y-groundOffset(g.player,true);}
-function usePortal(g) {
-  standAtPortal(g);g.update(0);g.update(0,{interact:true});
-  if(g.status==='super')assert(g.chooseSuper(g.getSuperChoices()[0].id));
-}
+function standAtPortal(g,portal=g.portal) {g.player.x=portal.x;g.player.y=portal.y-groundOffset(g.player,true);}
+function usePortal(g,portal=g.portal) {standAtPortal(g,portal);return g.enterPortal(portal.id);}
 
 assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins']);
-const access=arena(),firstBoss=openPortal(access),portalId=access.portal.id;
-const firstOffer=access.superSkills.getChoices().map(c=>c.id);
-access._hurtEnemy(firstBoss,100);
-assert.equal(access.portal.id,portalId,'repeated death processing cannot create another portal');
-assert.deepEqual(access.superSkills.getChoices().map(c=>c.id),firstOffer,'the same Boss reward cannot reroll its super skill offer');
-assert.equal(access.enterPortal(),false,'a portal cannot be entered from far away');
-standAtPortal(access);access.update(0);
-assert.equal(access.regionIndex,0);assert.equal(access.status,'playing','walking into a portal never enters automatically');
-for(const state of ['paused','upgrade','dead']) {
-  access.status=state;assert.equal(access.enterPortal(),false);access.update(.05,{interact:true});
-  assert.equal(access.regionIndex,0,`${state} blocks portal entry`);
+const swampGate=arena(),water=[{id:'gate-water',x:1120,y:0,rx:80,ry:45},{id:'guardian-water',x:0,y:1235,rx:80,ry:45}];
+swampGate.environment={muds:water,props:[],isHazardFree:()=>true};
+const clearGate=swampGate.regions._safePoint({x:0,y:0},true);
+for(const mud of water) {
+  assert(((clearGate.x-mud.x)/(mud.rx+112))**2+((clearGate.y-mud.y)/(mud.ry+112))**2>=1,'the gate approach stays outside existing water');
+  assert(((clearGate.x-mud.x)/(mud.rx+66))**2+((clearGate.y+115-mud.y)/(mud.ry+66))**2>=1,'the guardian stands on dry ground');
 }
-access.status='playing';const blockingBoss=monster(access,'boss',450,0);
-assert.equal(access.enterPortal(),false,'an active Boss prevents leaving its encounter');
-access.enemies=access.enemies.filter(e=>e!==blockingBoss);access.update(0);access.update(0,{interact:true});
-assert.equal(access.status,'super','explicit interaction opens the pending low-frequency reward');
-const choices=access.getSuperChoices(),choiceIds=choices.map(c=>c.id);
-assert.equal(choices.length,3);assert.equal(new Set(choiceIds).size,3);
-for(let i=0;i<8;i++)assert.deepEqual(access.getSuperChoices().map(c=>c.id),choiceIds,'reopening a reward cannot reroll the offered super skills');
-const frozen={time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y};
-advance(access,2,{x:1,skill:true});
-assert.deepEqual({time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y},frozen,'the super skill choice freezes combat, movement and timers');
-assert.equal(access.chooseSuper('invalid-relic'),false);assert.equal(access.status,'super');
-assert(access.chooseSuper(choiceIds[0]));assert.equal(access.region.id,'marsh');
-assert.equal(access.chooseSuper(choiceIds[0]),false,'a repeated choice cannot duplicate a super skill or advance another map');
-assert.equal(access.regionIndex,1);assert.equal(access.portal,null);
+assert.equal(swampGate.environment.muds,water);assert.equal(water.length,2,'gate placement never deletes swamp terrain');
+const wetGuardian=arena(),footWater={x:1120,y:210,rx:80,ry:45};wetGuardian.environment={muds:[footWater],props:[],isHazardFree:()=>true};
+assert(((0-footWater.y)/(footWater.ry+112))**2>1,'the first candidate gate itself is dry');
+const dryGuardianGate=wetGuardian.regions._safePoint({x:0,y:0},true);assert.notDeepEqual(dryGuardianGate,{x:1120,y:0},'a dry gate is still rejected when its guardian footing is flooded');
 
-const travel=arena({hero:'warden',adventure:true,encounters:true,environment:true});
-travel.time=241;travel._clock=241;travel.wave=5;travel.nextBossAt=500;travel.player.level=9;
-Object.assign(travel.player,{hp:91,maxHp:210,xp:37,xpNext:600,skillCooldown:7.4});
-Object.assign(travel.levels,{orbit:5,pulse:3,lightning:2,power:3,speed:2});
-travel._syncEvolutions();travel._refreshStats();travel._refreshWeapons();
+const reserved=arena();reserved.relicSites={isSafePoint:(x,y,r)=>Math.hypot(x-1120,y)>200+r};
+const reservedGate=reserved.regions._safePoint({x:0,y:0},true);assert(reserved.relicSites.isSafePoint(reservedGate.x,reservedGate.y,180),'a later gate respects an existing relic footprint');
+const access=arena(),firstBoss=openPortal(access),portalId=access.portal.id;
+const firstOffer=access.getSuperChoices().map(c=>c.id);access._hurtEnemy(firstBoss,100);
+assert.equal(access.portal.id,portalId);assert.deepEqual(access.getSuperChoices().map(c=>c.id),firstOffer,'death cannot reroll the reward');
+assert.equal(access.enterPortal(),false,'pending skill reward precedes travel');
+access.update(0);assert.equal(access.status,'super','the first frame after a lethal hit opens the reward immediately');
+assert.equal(access.regionIndex,0);const choices=access.getSuperChoices(),choiceIds=choices.map(c=>c.id);
+assert.equal(choices.length,3);assert.equal(new Set(choiceIds).size,3);
+const frozen={time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y};
+advance(access,2,{x:1,skill:true});assert.deepEqual({time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y},frozen);
+assert.equal(access.chooseSuper('invalid-relic'),false);assert(access.chooseSuper(choiceIds[0]));assert.equal(access.regionIndex,0);
+assert.equal(access.chooseSuper(choiceIds[0]),false);assert.equal(access.portal.rewardClaimed,true);
+assert.equal(access.enterPortal(),false,'remote interaction cannot travel');standAtPortal(access);access.update(0);
+assert.equal(access.regionIndex,0,'walking into an active gate never automatically travels');
+for(const state of ['paused','upgrade','dead']){access.status=state;assert.equal(access.enterPortal(),false);assert.equal(access.regionIndex,0);}
+access.status='playing';const blockingBoss=monster(access,'boss',450,0);assert.equal(access.enterPortal(),false,'an engaged Boss prevents flight through a gate');
+blockingBoss.guardActive=false;assert(access.enterPortal(),'a dormant remote guardian never locks all gates');assert.equal(access.region.id,'marsh');
+const returnGate=access.regions.portals.find(p=>p.direction==='back');assert(returnGate&&returnGate.state==='active');
+assert(usePortal(access,returnGate));assert.equal(access.regionIndex,0);assert.equal(access.portal.id,portalId);assert.equal(access.superSkills.owned[choiceIds[0]],1);
+assert.equal(access.superSkills.pending,null,'return journeys do not award the same skill again');
+
+const travel=arena({adventure:true,encounters:true,environment:true,companions:true});
+// The arena helper strips enemies for unrelated mechanics; a real world retains its guardian.
+travel.regions.initialize();travel.enemies=travel.enemies.filter(e=>e.portalId);travel.relicSites.generation=false;
+const sleeping=travel.enemies.find(e=>e.portalId);assert(sleeping);assert.equal(sleeping.guardActive,false);assert.equal(travel.portal.state,'locked');
+assert.equal(travel.enterPortal(),false);assert.equal(travel.encounters._canStart(),true,'distant guardian leaves exploration and optional events available');
+const spawnPosition={x:sleeping.x,y:sleeping.y};advance(travel,.2);assert.deepEqual({x:sleeping.x,y:sleeping.y},spawnPosition,'dormant guards do not pursue the player from offscreen');
+standAtPortal(travel);travel.regions.update();assert(sleeping.guardActive);assert.equal(travel.encounters._canStart(),false);
+travel.player.x=travel.portal.x+800;travel.regions.update();assert.equal(sleeping.guardActive,false,'leaving the arena disengages the guardian');
+assert.equal(travel._hurtEnemy(sleeping,1000),0,'distant guardian cannot be sniped outside its arena');
+travel.time=241;travel._clock=241;travel.player.level=9;travel.player.hp=91;travel.player.skillCooldown=7.4;
+Object.assign(travel.levels,{orbit:5,pulse:3,lightning:2,power:3,speed:2});travel._syncEvolutions();travel._refreshStats();travel._refreshWeapons();
 travel.relics.owned.push('leafWard');travel.relics.shieldReady=false;travel.relics.shieldCooldown=7.8;
 travel.adventure.furyTime=4.3;travel.adventure.magnetTime=5.2;
-const defeated=openPortal(travel);standAtPortal(travel);
-const oldTerrain=travel.terrain,oldAdventure=travel.adventure,oldEnvironment=travel.environment,oldEncounters=travel.encounters;
-const oldEnemy=monster(travel,'spore',400);oldEnemy.cast={life:.001,maxLife:.65,angle:0};
-travel.enemyBullets.push({id:9001,x:999,y:999,r:6,vx:0,vy:0,life:1,damage:10});
-travel.bullets.push({x:999,y:999,r:4,vx:0,vy:0,life:1,damage:10,pierce:1,hitIds:new Set()});
-travel._pulseEchoes.push({x:999,y:999,r:180,damage:60,life:.01,maxLife:.35});
-travel.storm={x:999,y:999,life:.3,maxLife:.65,targets:[]};
-travel.effects.push({type:'old-map-effect',x:999,y:999,life:1,maxLife:1});
-travel.gems.push({x:999,y:999,r:5,value:77});
+openPortal(travel);const skillId=claim(travel);standAtPortal(travel);
+const old={terrain:travel.terrain,adventure:travel.adventure,environment:travel.environment,encounters:travel.encounters,settlements:travel.settlements,relicSites:travel.relicSites,portal:travel.portal};
+const castle=travel.settlements.sites.find(s=>s.type==='castle');const castleState={id:castle.id,rewardClaimed:true,visited:new Set([1,2])};travel.dungeon.states.set(castle.id,castleState);
+const oldEnemy=monster(travel,'spore',400);oldEnemy.cast={life:.001};
+const guard=monster(travel,'slime',800);guard.relicSiteId='kept-site';guard.eventId='kept-event';guard.guardActive=false;guard.hp=234;
+travel.gems.push({x:999,y:999,r:5,value:77});travel.effects.push({type:'old-map-effect',x:999,y:999,life:1,maxLife:1});
 travel.adventure.treasure={id:'old-chest',x:800,y:800,r:27,state:'locked',life:100};
-travel.environment.props.push({id:'old-environment-prop',x:900,y:900,r:17,state:'armed',fuse:.01});
-travel.encounters.active={id:'old-event',type:'hunt',x:800,y:800,r:210,life:10,goal:12,progress:3};
-travel.events.push({type:'old-map-event'});
-const preserved={
-  hero:travel.player.heroId,hp:travel.player.hp,maxHp:travel.player.maxHp,xp:travel.player.xp,level:travel.player.level,xpNext:travel.player.xpNext,
-  levels:structuredClone(travel.levels),evolutions:structuredClone(travel.evolutions),time:travel.time,clock:travel._clock,wave:travel.wave,
-  skillCooldown:travel.player.skillCooldown,nextBossAt:travel.nextBossAt,shieldCooldown:travel.relics.shieldCooldown,
-  fury:travel.adventure.furyTime,magnet:travel.adventure.magnetTime,kills:travel.kills,bossKills:travel.bossKills
-};
-assert(travel.enterPortal());assert.equal(travel.status,'super');advance(travel,2,{x:1,skill:true});
-assert.equal(oldEnemy.cast.life,.001,'old enemy attacks remain frozen throughout the super skill choice');
-assert.equal(oldEnvironment.props.find(p=>p.id==='old-environment-prop').fuse,.01,'old environmental fuses also freeze throughout the choice');
-assert(travel.chooseSuper(travel.getSuperChoices()[0].id));
-assert.deepEqual({
-  hero:travel.player.heroId,hp:travel.player.hp,maxHp:travel.player.maxHp,xp:travel.player.xp,level:travel.player.level,xpNext:travel.player.xpNext,
-  levels:travel.levels,evolutions:travel.evolutions,time:travel.time,clock:travel._clock,wave:travel.wave,
-  skillCooldown:travel.player.skillCooldown,nextBossAt:travel.nextBossAt,shieldCooldown:travel.relics.shieldCooldown,
-  fury:travel.adventure.furyTime,magnet:travel.adventure.magnetTime,kills:travel.kills,bossKills:travel.bossKills
-},preserved,'travel preserves all earned progression, live buffs and global difficulty clocks');
-assert.notEqual(travel.terrain,oldTerrain);assert.notEqual(travel.adventure,oldAdventure);assert.notEqual(travel.environment,oldEnvironment);assert.notEqual(travel.encounters,oldEncounters);
-assert.equal(travel.enemies.length,0);assert.equal(travel.bullets.length,0);assert.equal(travel.enemyBullets.length,0);assert.equal(travel.gems.length,0);assert.equal(travel._pulseEchoes.length,0);assert.equal(travel.storm,null);
-assert(!travel.events.some(e=>e.type==='old-map-event'));assert(!travel.effects.some(e=>e.type==='old-map-effect'));
-assert.equal(travel.adventure.treasure,null);assert.equal(travel.encounters.active,null);
-assert(!travel.environment.props.some(p=>p.id==='old-environment-prop'));
-assert(travel.terrain.isFree(travel.player.x,travel.player.y+groundOffset(travel.player,true),travel.player.r+80),'the next map starts in a clear area');
-assert(travel.player.invuln>0&&travel.regionGrace>0,'travel gives a short protected landing');
-assert(travel.adventure._nextTreasureAt>travel.time+40&&travel.encounters.nextAt>travel.time+60,'new objectives schedule from the retained run clock');
-advance(travel,.5);assert.equal(travel.enemies.length,0,'ordinary spawns wait during the landing grace period');
-assert.equal(travel.adventure.treasure,null);assert.equal(travel.encounters.active,null,'old timestamps cannot trigger objectives immediately after travel');
-assert.equal(travel.nextBossAt,preserved.nextBossAt,'travel does not reset or accelerate the Boss schedule');
+travel.encounters.active={id:'old-event',siteId:'kept-site',type:'hunt',x:800,y:800,r:210,life:10,goal:24,progress:3};
+const saved={hp:travel.player.hp,time:travel.time,clock:travel._clock,skillCooldown:travel.player.skillCooldown,shieldCooldown:travel.relics.shieldCooldown,fury:travel.adventure.furyTime,magnet:travel.adventure.magnetTime,gold:travel.gold,crystals:travel.crystals};
+assert(usePortal(travel));assert.equal(travel.regionIndex,1);assert.notEqual(travel.terrain,old.terrain);
+assert.equal(travel.enemies.filter(e=>e.portalId).length,1,'the new region has its own locked gate and sleeping guardian');
+assert.equal(travel.regions.portals.length,2);assert.equal(travel.portal.state,'locked');
+assert.deepEqual({hp:travel.player.hp,time:travel.time,clock:travel._clock,skillCooldown:travel.player.skillCooldown,shieldCooldown:travel.relics.shieldCooldown,fury:travel.adventure.furyTime,magnet:travel.adventure.magnetTime,gold:travel.gold,crystals:travel.crystals},saved);
+assert.equal(travel.bullets.length,0);assert.equal(travel.enemyBullets.length,0);assert.equal(travel._pulseEchoes.length,0);assert.equal(travel.storm,null);
+assert(!travel.effects.some(e=>e.type==='old-map-effect'));assert.equal(travel.dungeon.states.size,0);assert(travel.player.invuln>0&&travel.regionGrace>0);
+const nextGate=travel.portal,back=travel.regions.portals.find(p=>p.direction==='back');advance(travel,.1);assert(usePortal(travel,back));
+for(const key of Object.keys(old))assert.equal(travel[key],old[key],`${key} restored by identity`);
+assert.equal(travel.dungeon.states.get(castle.id),castleState,'castle progress survives round trips');assert.equal(travel.encounters.active.progress,3);assert.equal(travel.adventure.treasure.id,'old-chest');
+assert(travel.enemies.includes(guard));assert.equal(guard.hp,234);assert(!travel.enemies.includes(oldEnemy),'ordinary chase mobs are released on suspension');
+assert.equal(travel.superSkills.owned[skillId],1);assert.equal(travel.superSkills.pending,null);
+assert(usePortal(travel));assert.equal(travel.portal,nextGate,'revisiting uses the same uncleared next gate');assert.equal(travel.regions.states.size,1,'only inactive region snapshots are stored');
 
 const route=arena(),routeIds=[route.region.id],terrainSignatures=[];
-for(let i=0;i<3;i++) {
-  route.time=180+i*180;route.wave=4+i*4;route.waveDirector.count=route.wave;route.waveDirector.reset();const priorWave=route.wave;openPortal(route);usePortal(route);
-  routeIds.push(route.region.id);assert.equal(route.regionIndex,i+1);
-  terrainSignatures.push(JSON.stringify(route.terrain.query(200,-900,1100,900).map(o=>[o.type,o.x,o.y,o.r])));
-  assert.equal(route.time,180+i*180);assert.equal(route.wave,priorWave,'regional travel retains the real encounter count');
-}
-assert.deepEqual(routeIds,['forest','marsh','ruins','forest']);
-assert.equal(new Set(terrainSignatures).size,3,'each region transition builds a different seeded map');
+for(let i=0;i<3;i++) {route.time=180+i*180;openPortal(route);claim(route);assert(usePortal(route));routeIds.push(route.region.id);terrainSignatures.push(JSON.stringify(route.terrain.query(200,-900,1100,900).map(o=>[o.type,o.x,o.y,o.r])));}
+assert.deepEqual(routeIds,['forest','marsh','ruins','forest']);assert.equal(new Set(terrainSignatures).size,3);assert.equal(route.regions.states.size,3);
+for(let index=2;index>=0;index--){const back=route.regions.portals.find(p=>p.direction==='back');assert(back);assert(usePortal(route,back));assert.equal(route.regionIndex,index);}
+assert.equal(route.portal.state,'active','all visited regions remain returnable');
 
-const xpChoice=arena();openPortal(xpChoice);standAtPortal(xpChoice);
-xpChoice.crystalsNext=40;xpChoice.crystals=41;const savedXp=xpChoice.player.xp;
-assert(xpChoice.enterPortal());assert(xpChoice.chooseSuper(xpChoice.getSuperChoices()[0].id));
-assert.equal(xpChoice.crystals,41,'the region transition itself never consumes earned crystals');
-assert.equal(xpChoice.status,'upgrade','banked crystals open their normal choice after the super reward transition');
-assert.equal(xpChoice.player.level,1);assert.equal(xpChoice.player.xp,savedXp,'the separate super reward never loses or duplicates XP');
+const xpChoice=arena();openPortal(xpChoice);xpChoice.crystalsNext=40;xpChoice.crystals=41;const savedXp=xpChoice.player.xp;
+claim(xpChoice);assert.equal(xpChoice.regionIndex,0);assert.equal(xpChoice.status,'upgrade');assert.equal(xpChoice.crystals,41);assert.equal(xpChoice.player.xp,savedXp);
 assert(xpChoice.chooseUpgrade(xpChoice.getUpgradeChoices()[0].id));assert.equal(xpChoice.crystals,1);
+
+const debugStorm=arena({debug:true}),stormTarget=monster(debugStorm,'slime',90,0);
+assert.equal(debugStorm.player.skillCooldownMax,0);const initialHealth=stormTarget.hp;
+debugStorm.update(0,{skill:true});debugStorm.update(0,{skill:true});
+assert.equal(debugStorm.player.skillCooldown,0);assert.equal(stormTarget.hp,initialHealth-320,'debug allows consecutive full-screen storm casts');
+const ordinaryStorm=arena(),ordinaryTarget=monster(ordinaryStorm,'slime',90,0);ordinaryStorm.update(0,{skill:true});const afterFirst=ordinaryTarget.hp;
+ordinaryStorm.update(0,{skill:true});assert.equal(ordinaryTarget.hp,afterFirst,'normal mode retains the skill cooldown');
 
 const mixed=arena();
 for(const [i,id] of ['shield','swift','summoner'].entries())assert(mixed.elites.promote(monster(mixed,'slime',150+i*80),id));
@@ -231,4 +228,4 @@ for(const region of REGIONS) {
 assert(populations[1].spore>populations[0].spore,'marsh produces more spore enemies under the same sampled spawn rolls');
 assert(populations[2].beetle+populations[2].brute>populations[0].beetle+populations[0].brute,'ruins favor beetles and brutes without increasing the spawn count');
 
-console.log('Portal and elite mechanics: deliberate travel, preserved progression, fresh worlds, region populations, shield/swift/summoner behavior and bounded rewards passed.');
+console.log('Portal and elite mechanics: deliberate travel, preserved progression, persistent round trips, discovered gates, region populations, shield/swift/summoner behavior and bounded rewards passed.');

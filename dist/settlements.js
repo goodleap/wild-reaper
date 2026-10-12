@@ -6,11 +6,11 @@ const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const WARD=18;
-export const SETTLEMENT_RULES=Object.freeze({maxSites:5,interactRadius:82,angelHealing:.35,ward:WARD,guards:4});
+export const SETTLEMENT_RULES=Object.freeze({maxSites:7,interactRadius:82,ward:WARD,guards:4});
+export const ANGEL_RULES=Object.freeze({auraRadius:115,healingPerSecond:.03,attackRange:230,strikeRadius:60,attackInterval:2.5,damage:115});
 const SITE_DEFS=Object.freeze([
   {type:'merchant',name:'荒野游商',width:42,depth:24,radius:410,angle:.12},
   {type:'supply',name:'林间小屋',width:54,depth:28,radius:610,angle:2.2},
-  {type:'angel',name:'天使圣坛',width:70,depth:36,radius:750,angle:4.2},
   {type:'occupied',name:'被占据的小屋',width:58,depth:30,radius:970,angle:3.1},
   {type:'castle',name:'古堡入口',width:240,depth:90,radius:1180,angle:5.65}
 ]);
@@ -90,9 +90,36 @@ export class Settlements {
     const nearbyCastle=this.game.debug&&this.game.regionIndex===0?this._createSite(SITE_DEFS[castleIndex],castleIndex,{nearSpawn:true}):null;
     if(nearbyCastle){this.sites.push(nearbyCastle);this._setStructures();}
     SITE_DEFS.forEach((def,index)=>{if(nearbyCastle&&def.type==='castle')return;const site=this._createSite(def,index);if(site){this.sites.push(site);this._setStructures();}});
+    this.ensureAngels();
     // Starter monster angles are random and must not change site identities.
     // Resolve the rare overlap after placing the deterministic foundations.
     for(const enemy of this.game.enemies)if(enemy.hp>0)this.game._moveEntity?.(enemy,0,0);
+  }
+  _angelPoint(anchor) {
+    const g=this.game;
+    // A small, fixed ring beside the anchor keeps the safe haven recognizable
+    // on return. It never follows the player or moves an existing building.
+    for(const radius of [85,105,125,145])for(let i=0;i<16;i++) {
+      const angle=i*TAU/16,x=anchor.x+Math.cos(angle)*radius,y=anchor.y+Math.sin(angle)*radius;
+      if(!g.terrain.isFree(x,y,28)||!this._hazardFree(x,y,28))continue;
+      if(g.terrain.firstBlocker(anchor.x,anchor.y,x,y,18))continue;
+      if(this.sites.some(s=>s.type!=='angel'&&!(s.type==='merchant'&&s.state==='spent')&&distance({x,y},this._bodyCenter(s))<s.width*.5+48))continue;
+      if(g.adventure?.props.some(o=>distance(o,{x,y})<65))continue;
+      if(g.adventure?.treasure&&distance(g.adventure.treasure,{x,y})<90)continue;
+      return {x,y};
+    }
+    return null;
+  }
+  ensureAngels() {
+    const g=this.game;if(!this.generation||g.dungeon?.active)return;
+    const anchors=(g.regionIndex||0)===0?[{id:'spawn:0',x:0,y:19.8}]:[];
+    for(const portal of g.regions?.portals||[])if(portal.state==='active'&&Number.isFinite(portal.x)&&Number.isFinite(portal.y))anchors.push(portal);
+    if(g.portal?.state==='active'&&!anchors.some(a=>a.id===g.portal.id))anchors.push(g.portal);
+    for(const anchor of anchors) {
+      const id=`angel:${anchor.id}`;if(this.sites.some(s=>s.id===id))continue;
+      const point=this._angelPoint(anchor);if(!point)continue;
+      this.sites.push({id,type:'angel',name:'守望天使',...point,sortY:point.y,door:{...point},width:40,depth:20,r:15,interactRadius:0,state:'ready',flying:true,anchorId:anchor.id,auraRadius:ANGEL_RULES.auraRadius,attackRange:ANGEL_RULES.attackRange,region:g.region?.id||'forest',seed:this._hash(point.x,point.y),_attack:0,healing:false});
+    }
   }
   isSafePoint(x,y,r=0) {
     // Purely consult the existing region list: no generation or recursive
@@ -108,14 +135,11 @@ export class Settlements {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return null;
     const p=this._foot();let nearest=null,best=Infinity;
     for(const site of this.sites) {
+      if(site.type==='angel')continue;
       const d=distance(p,site.door);if(d>site.interactRadius||d>=best)continue;
       if(site.state==='spent'&&site.type!=='castle')continue;
       let label='',description='',enabled=true;
       if(site.type==='merchant'){label='与商人交易';description='购买一件补给或遗物后，游商将离开';}
-      else if(site.type==='angel'){
-        label='接受天使祝福';description='恢复 35% 生命；满血时获得护盾';
-        if(g.player.hp>=g.player.maxHp&&(g.relics?.wardAmount||0)>=WARD){enabled=false;description='生命与护盾已充盈，祝福仍会保留';}
-      }
       else if(site.type==='supply'){label='搜寻小屋';description='少量金币、灵晶与药草';}
       else if(site.type==='occupied') {
         label=site.state==='active'?`剩余 ${site.remainingGuards} 名守卫`:site.state==='cleared'?'领取小屋宝藏':'挑战小屋守卫';
@@ -123,7 +147,7 @@ export class Settlements {
         if(site.state==='ready'&&!canStartObjective(g,{skipSite:site})){enabled=false;description='附近仍有战斗或首领即将出现，稍后再挑战小屋';}
       } else if(site.type==='castle') {
         label=site.explored||site.state==='spent'?'重返已探索古堡':'进入古堡迷宫';description=site.explored?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';
-        if(g.enemies.some(e=>e.type==='boss'&&e.hp>0)){enabled=false;description='先击败当前区域首领';}
+        if(g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false)){enabled=false;description='先击败当前区域首领';}
       }
       nearest={id:site.id,siteId:site.id,type:site.type,label,description,x:site.door.x,y:site.door.y,enabled};best=d;
     }
@@ -134,12 +158,6 @@ export class Settlements {
     const site=this.sites.find(s=>s.id===id),g=this.game;
     if(site.type==='castle')return !!g.dungeon?.enter(site);
     if(site.type==='merchant'){this.activeShop=site;g.status='shop';g._emit('shopOpen',{name:site.name});return true;}
-    if(site.type==='angel') {
-      const p=g.player,heal=Math.min(p.maxHp-p.hp,p.maxHp*SETTLEMENT_RULES.angelHealing);
-      if(heal>0){p.hp+=heal;g._effect(p.x,p.y-28,'heal',.8,0,'#e8efbf',`+${Math.ceil(heal)}`);}
-      else if(!g.relics?.grantWard(WARD))return false;
-      site.state='spent';g._effect(site.x,site.y,'ring',.8,72,'#eee5b5');g._emit('angelBlessing',{healed:heal});return true;
-    }
     if(site.type==='occupied'&&site.state==='ready')return this._startGuards(site);
     if(site.type==='supply'||(site.type==='occupied'&&site.state==='cleared')) {
       site.state='spent';const occupied=site.type==='occupied';
@@ -210,9 +228,36 @@ export class Settlements {
     if(!site.remainingGuards){site.state='cleared';this.game._emit('houseCleared',{name:site.name});this.game._effect(site.door.x,site.door.y,'ring',.75,75,'#f2d28d');}
     return true;
   }
+  _updateAngels(dt,p) {
+    const g=this.game,player=g.player;let inAura=false;
+    for(const site of this.sites)if(site.type==='angel') {
+      site.healing=false;
+      const nearby=distance(p,site)<=ANGEL_RULES.auraRadius&&!g.terrain.firstBlocker(site.x,site.y,p.x,p.y,0);
+      if(nearby){inAura=true;site.healing=player.hp<player.maxHp;}
+      site._attack=Math.max(0,(site._attack||0)-dt);
+      if(site._attack>0||!g._inView(site))continue;
+      const canHit=enemy=>enemy.hp>0&&!enemy.dungeonId&&enemy.guardActive!==false&&g._inView(enemy)&&
+        Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y)<=ANGEL_RULES.attackRange&&
+        !g.terrain.firstBlocker(site.x,site.y,enemy.x,enemy.y+groundOffset(enemy),0);
+      let target=null,nearest=Infinity;
+      for(const enemy of g.enemies)if(canHit(enemy)){const d=Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y);if(d<nearest){target=enemy;nearest=d;}}
+      if(!target)continue;
+      site._attack=ANGEL_RULES.attackInterval;
+      const impact={x:target.x,y:target.y+groundOffset(target)},origin={x:site.x,y:site.y-19.8,groundY:site.y};
+      const damage=ANGEL_RULES.damage*(1+Math.max(0,g.regionIndex||0)*.25);
+      for(const enemy of g.enemies)if(canHit(enemy)&&Math.hypot(enemy.x-impact.x,enemy.y+groundOffset(enemy)-impact.y)<=ANGEL_RULES.strikeRadius)
+        g._hurtEnemy(enemy,damage,0,origin,'angel');
+      g._effect(impact.x,impact.y,'angelStrike',.55,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:site.x,sourceY:site.y,angelId:site.id});
+    }
+    // Overlapping havens never multiply healing; the aura stops at its real
+    // world-space boundary and heals no one through a building foundation.
+    if(inAura&&dt>0&&player.hp>0&&player.hp<player.maxHp)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*ANGEL_RULES.healingPerSecond*dt);
+  }
   update(dt) {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return;
+    this.ensureAngels();
     const p=this._foot(),majorFight=majorFightActive(g);
+    this._updateAngels(dt,p);
     for(const site of this.sites)if(site.state==='active')for(const enemy of g.enemies) {
       if(enemy.hp<=0||enemy.settlementId!==site.id)continue;
       const foot={x:enemy.x,y:enemy.y+groundOffset(enemy)},near=!majorFight&&distance(p,site.door)<OBJECTIVE_RULES.houseEngage&&distance(foot,site.door)<OBJECTIVE_RULES.houseEngage;

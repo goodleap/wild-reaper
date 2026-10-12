@@ -91,14 +91,21 @@ function mushroom(c,armed){
 }
 
 function portal(c,variant){
+  const locked=variant===3;
   const mint=variant===0,amber=variant===2;
   const pale=amber?'#ffe1a5':mint?'#b6f4da':'#e1c5f7',bright=amber?'#cba45f':mint?'#74b8a4':'#ad8fc0',dark=amber?'#34473a':mint?'#153b3c':'#2b3048';
   // Narrow, uneven masonry surrounds a translucent opening. The opening is
   // rendered inside the arch, leaving feet and neighbouring actors readable.
   const aperture=c.createRadialGradient(6,-49,1,0,-39,37);aperture.addColorStop(0,bright+'ae');aperture.addColorStop(.35,dark+'e8');aperture.addColorStop(.75,dark+'ef');aperture.addColorStop(1,bright+'35');
   c.fillStyle=aperture;c.beginPath();c.moveTo(-23,-6);c.lineTo(-23,-43);c.bezierCurveTo(-23,-64,-12,-74,0,-74);c.bezierCurveTo(13,-74,24,-63,24,-43);c.lineTo(24,-6);c.quadraticCurveTo(0,2,-23,-6);c.fill();
-  for(let i=0;i<28;i++){const a=hash(i,13)*TAU,r=hash(i,19),x=Math.cos(a)*20*r,y=-39+Math.sin(a)*31*r;oval(c,x,y,.25+hash(i,37)*.6,.3,pale+'9e');}
-  for(let i=0;i<5;i++){c.strokeStyle=i%2?bright+'38':pale+'36';c.lineWidth=1.2;c.beginPath();c.moveTo(-18,-11-i*11);c.bezierCurveTo(22,-27-i*7,-20,-49-i*3,15,-66+i*2);c.stroke();}
+  if(!locked)for(let i=0;i<28;i++){const a=hash(i,13)*TAU,r=hash(i,19),x=Math.cos(a)*20*r,y=-39+Math.sin(a)*31*r;oval(c,x,y,.25+hash(i,37)*.6,.3,pale+'9e');}
+  if(!locked)for(let i=0;i<5;i++){c.strokeStyle=i%2?bright+'38':pale+'36';c.lineWidth=1.2;c.beginPath();c.moveTo(-18,-11-i*11);c.bezierCurveTo(22,-27-i*7,-20,-49-i*3,15,-66+i*2);c.stroke();}
+  if(locked){
+    poly(c,[[-22,-6],[-22,-43],[-16,-61],[0,-71],[16,-61],[23,-43],[23,-6]],'#353f39');
+    path(c,[[-19,-52],[20,-12]],'#232d26',5);path(c,[[19,-52],[-20,-12]],'#232d26',5);
+    for(let i=0;i<9;i++){const x=-17+i*4.2,y=-49+i*4.2;oval(c,x,y,2.8,1.8,'#9b9173',.7);oval(c,x,y,1.5,.8,'#3d4437',.7);oval(c,-x,y,2.8,1.8,'#a49a79',-.7);oval(c,-x,y,1.5,.8,'#3d4437',-.7);}
+    poly(c,[[0,-42],[8,-34],[0,-26],[-8,-34]],'#92734f','#d2af77',1);path(c,[[-3,-34],[0,-38],[3,-34],[0,-30],[-3,-34]],'#ebbd78',1);
+  }
   for(let side=-1;side<=1;side+=2){
     for(let i=0;i<4;i++){const x=side*27,y=-8-i*12,dx=side*(i%2?1:0);poly(c,[[x-5+dx,y],[x-6+dx,y-11],[x+4+dx,y-12],[x+6+dx,y-1]],i%2?'#687868':'#788572','#31483c',1);path(c,[[x+5+dx,y-2],[x+3+dx,y-10],[x-4+dx,y-10]],'#bac1a16e',.75);path(c,[[x-4+dx,y-1],[x+4+dx,y-2]],'#344b3b',.8);if(i===1||i===3){path(c,[[x-2,y-4],[x+1,y-7],[x-1,y-9]],pale+'d0',.8);}}
   }
@@ -158,7 +165,7 @@ export class PropArt {
     const isPortal=key.startsWith('portal'),isChest=key.startsWith('chest'),small=key.startsWith('pickup')||key.startsWith('bullet')||key.startsWith('blade');
     const w=isPortal?84:isChest?76:small?40:64,h=isPortal?96:isChest?64:small?44:48,ox=w*.5,oy=isPortal?88:isChest?54:small?22:40;
     const canvas=this.makeCanvas();canvas.width=w*2;canvas.height=h*2;const c=canvas.getContext('2d');c.setTransform(2,0,0,2,ox*2,oy*2);c.lineJoin='round';c.lineCap='round';
-    if(isPortal)portal(c,key==='portal:ruins'?2:key==='portal:marsh'?1:0);
+    if(isPortal)portal(c,key==='portal:locked'?3:key==='portal:ruins'?2:key==='portal:marsh'?1:0);
     else if(isChest){const royal=key.includes(':royal:'),state=key.endsWith(':open')?'open':key.endsWith(':ready')?'ready':key.endsWith(':locked')?'locked':'closed';chest(c,royal,state);}
     else if(key.startsWith('crate'))crate(c,key==='crate:hit');
     else if(key.startsWith('mushroom'))mushroom(c,key==='mushroom:armed');
@@ -171,7 +178,7 @@ export class PropArt {
   }
   drawProp(c,prop,options=OPTIONS){
     let key,scale=1;
-    if(prop.type==='portal')key=prop.nextRegion?.id==='marsh'?'portal:marsh':prop.nextRegion?.id==='ruins'?'portal:ruins':'portal:forest';
+    if(prop.type==='portal')key=prop.state==='locked'?'portal:locked':prop.nextRegion?.id==='marsh'?'portal:marsh':prop.nextRegion?.id==='ruins'?'portal:ruins':'portal:forest';
     else if(prop.type==='mushroom')key=prop.state==='armed'?'mushroom:armed':'mushroom:idle';
     else if(prop.type==='supply')key=prop.hit>0?'crate:hit':'crate:idle';
     else if(prop.type==='treasure'){
@@ -183,7 +190,7 @@ export class PropArt {
     if((prop.state==='unlocked'||prop.isDungeonTreasure&&prop.state!=='locked'&&prop.state!=='claimed')&&!options.dense){
       const t=options.reduced?0:options.time||0;c.save();c.globalAlpha*=options.reduced?.65:.55+Math.sin(t*2.5)*.25;spark(c,prop.x+16*scale,prop.y-32*scale,2.1,prop.royal?'#f3daf7':'#fff0ae');spark(c,prop.x-11*scale,prop.y-35*scale,1.2,'#fff0cd');c.restore();
     }
-    if(prop.type==='portal'&&!options.dense){const t=options.reduced?0:options.time||0;c.save();c.globalAlpha*=.45;for(let i=0;i<3;i++){const a=i*TAU/3+t*.25;spark(c,prop.x+Math.cos(a)*13,prop.y-39+Math.sin(a)*25,1.7,'#e2e6d0');}c.restore();}
+    if(prop.type==='portal'&&prop.state!=='locked'&&!options.dense){const t=options.reduced?0:options.time||0;c.save();c.globalAlpha*=.45;for(let i=0;i<3;i++){const a=i*TAU/3+t*.25;spark(c,prop.x+Math.cos(a)*13,prop.y-39+Math.sin(a)*25,1.7,'#e2e6d0');}c.restore();}
     return true;
   }
   drawPickup(c,item,options=OPTIONS){

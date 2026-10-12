@@ -197,7 +197,8 @@ export class EncounterArt {
   drawGround(c, active, options = {}) {
     if (active?.type !== 'hunt' || !(active.r > 0)) return;
     const scale = active.r / TEMPLATE_R, floor = this._floor(), goal = clamp(Math.round(active.goal || 12), 1, 36);
-    const completed = clamp(Math.floor((active.progress || 0) / (active.goal || 12) * goal), 0, goal);
+    const progress = active.state === 'cleared' ? (active.goal || 12) : active.state === 'ready' || active.state === 'failed' ? 0 : (active.progress || 0);
+    const completed = clamp(Math.floor(progress / (active.goal || 12) * goal), 0, goal);
     const dim = this._inlay(false), lit = this._inlay(true);
     c.save(); c.translate(active.x, active.y); c.scale(scale, scale);
     c.drawImage(floor.canvas, -FLOOR_SIZE / 2, -FLOOR_SIZE / 2, FLOOR_SIZE, FLOOR_SIZE);
@@ -217,7 +218,7 @@ export class EncounterArt {
       const scale = active.r / TEMPLATE_R;
       props = Object.freeze(Array.from({ length: 4 }, (_, i) => {
         const angle = Math.PI / 4 + i * Math.PI / 2, x = active.x + Math.cos(angle) * (active.r + 30 * scale), y = active.y + Math.sin(angle) * (active.r + 30 * scale);
-        return Object.freeze({ id: `${active.id}:marker:${i}`, type: 'huntMarker', x, y, sortY: y, r: 13 * scale, scale, index: i, height: 36 * scale, shadowHeight: 29 * scale, shadowWidth: 21 * scale });
+        return Object.freeze({ id: `${active.id}:marker:${i}`, type: 'huntMarker', site: active, x, y, sortY: y, r: 13 * scale, scale, index: i, height: 36 * scale, shadowHeight: 29 * scale, shadowWidth: 21 * scale });
       }));
       this.eventProps.set(active, props);
     }
@@ -230,6 +231,7 @@ export class EncounterArt {
     const lean = Math.sin(phase) * 1.1, height = 8.2 + Math.sin(phase * .7) * .9;
     c.save(); c.translate(prop.x, prop.y); c.scale(scale, scale);
     c.drawImage(marker.canvas, -24, -46, 48, 56);
+    if (prop.site?.state === 'ready' || prop.site?.state === 'failed') { c.restore(); return; }
     // Tiny warm flames provide scale without obscuring combat or changing RNG.
     c.beginPath(); c.moveTo(-4, -26); c.quadraticCurveTo(-5, -30, lean - 1, -27 - height);
     c.quadraticCurveTo(lean + 1, -31, 3.6, -29); c.quadraticCurveTo(5, -26, 0, -25); c.closePath();

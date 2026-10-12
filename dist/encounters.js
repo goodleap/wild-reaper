@@ -10,7 +10,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export class Encounters {
   constructor(game,{generation=true}={}) {
     this.game=game;this.generation=generation;this.active=null;
-    this.nextAt=game.time+70;this._id=0;this._nextType=Math.random()<.5?'treasure':'hunt';
+    this.nextAt=game.time+70;this._id=0;this._nextType='treasure';
   }
   _foot(entity=this.game.player,isPlayer=true) {
     return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};
@@ -34,13 +34,16 @@ export class Encounters {
     }
     return null;
   }
-  spawn(type=this._nextType,x,y) {
+  spawn(type=this._nextType,x,y,{siteId=null}={}) {
     const g=this.game;
     if(this.active||g.status!=='playing'||!TYPES.includes(type))return null;
     if(type==='treasure'&&g.enemies.length>=180)return null;
+    const relic=type==='hunt'&&!!siteId,goal=relic?24:12;
+    if(siteId&&!g.relicSites?.sites.some(s=>s.id===siteId&&s.type==='hunt'&&s.state==='ready'))return null;
+    if(relic&&g.enemies.length+goal>180)return null;
     const point=this._point(x,y,type);if(!point)return null;
     const life=type==='hunt'?40:35;
-    const active={id:`encounter:${++this._id}`,type,...point,r:210,life,maxLife:life,goal:12,progress:0,enemyId:null,state:'active'};
+    const active={id:`encounter:${++this._id}`,type,...point,r:210,life,maxLife:life,goal,progress:0,enemyId:null,state:'active',siteId,category:relic?'relic':'random'};
     if(type==='treasure') {
       const enemy=g._spawnEnemy('beetle',1);if(!enemy)return null;
       enemy.eventRole='treasure';enemy.eventId=active.id;
@@ -51,7 +54,21 @@ export class Encounters {
       g._moveEntity(enemy,0,0);active.enemyId=enemy.id;
       active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);
     }
-    this.active=active;this._nextType=type==='hunt'?'treasure':'hunt';
+    if(relic) {
+      active._remaining=new Set();active.guardIds=[];
+      for(let i=0;i<goal;i++) {
+        const type=i%8===0?'brute':i%3===0?'beetle':'slime',enemy=g._spawnEnemy(type,1);
+        if(!enemy){g.enemies=g.enemies.filter(e=>e.eventId!==active.id);return null;}
+        const angle=i*TAU/12+(i>=12?TAU/24:0),radius=i<12?155:195;
+        enemy.eventRole='huntGuard';enemy.eventId=active.id;enemy.relicSiteId=siteId;
+        enemy.huntHome={x:point.x+Math.cos(angle)*radius,y:point.y+Math.sin(angle)*radius};
+        enemy.x=enemy.huntHome.x;enemy.y=enemy.huntHome.y-groundOffset(enemy);
+        enemy.hp*=1.5;enemy.maxHp=enemy.hp;enemy.xp=2;enemy.guardActive=false;
+        enemy._navTimer=0;g._moveEntity(enemy,0,0);
+        active.guardIds.push(enemy.id);active._remaining.add(enemy.id);
+      }
+    }
+    this.active=active;this._nextType='treasure';
     g._emit(type==='hunt'?'encounterHunt':'encounterTreasure');
     g._effect(active.x,active.y,'ring',.75,type==='hunt'?80:48,'#e8ce85');
     return active;
@@ -62,9 +79,10 @@ export class Encounters {
     // Detach before reward hooks, so duplicate kill/cleanup calls cannot pay twice.
     this.active=null;this.nextAt=g.time+95;
     g.enemies=g.enemies.filter(e=>e.eventId!==active.id);
+    if(active.siteId&&!g.relicSites?.complete(active.siteId,success))success=false;
     if(success) {
       const chase=active.type==='treasure';
-      g.grantResources(chase?{gold:24,crystals:8}:{gold:6,crystals:40},chase?'宝物精':'限时狩猎');
+      g.grantResources(chase?{gold:24,crystals:8}:active.siteId?{gold:18,crystals:72}:{gold:6,crystals:40},chase?'宝物精':active.siteId?'遗迹狩猎':'限时狩猎');
       g.adventure?.dropPickup(chase?'magnet':'fury',active.x,active.y);
       g._effect(active.x,active.y,'ring',.8,90,'#f3d28c');
       g._emit('encounterComplete');
@@ -78,12 +96,31 @@ export class Encounters {
       if(enemy.eventId!==active.id||enemy.id!==active.enemyId||enemy.eventRole!=='treasure')return;
       active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);this._finish(true);return;
     }
+    if(active.siteId) {
+      if(enemy.eventId!==active.id||enemy.eventRole!=='huntGuard'||!active._remaining.delete(enemy.id))return;
+      active.progress=active.goal-active._remaining.size;
+      const site=this.game.relicSites?.sites.find(s=>s.id===active.siteId);if(site)site.progress=active.progress;
+      if(!active._remaining.size)this._finish(true);
+      return;
+    }
     if(enemy.type==='boss'||enemy.guardianId||enemy.rescueId||enemy.elite||enemy.affix||enemy.summoned||enemy.eventRole||enemy._encounterCounted===active.id)return;
     if(distance(this._foot(),active)>active.r||distance(this._foot(enemy,false),active)>active.r)return;
     enemy._encounterCounted=active.id;active.progress++;
     if(active.progress>=active.goal)this._finish(true);
   }
   updateEnemy(enemy,dt) {
+    if(enemy.eventRole==='huntGuard') {
+      const active=this.active,g=this.game;
+      if(!active||active.id!==enemy.eventId||enemy.hp<=0||g.status!=='playing')return true;
+      const foot=this._foot(enemy,false),engaged=distance(this._foot(),active)<active.r+140&&distance(foot,active)<active.r+120;
+      enemy.guardActive=engaged;enemy.guardReturnTarget=null;
+      if(engaged)g._moveEnemy(enemy,dt);
+      else {
+        enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
+        if(distance(foot,enemy.huntHome)>4)g._moveEnemy(enemy,dt,enemy.huntHome);
+      }
+      return true;
+    }
     if(enemy.eventRole!=='treasure')return false;
     const active=this.active,g=this.game;
     if(!active||active.id!==enemy.eventId||enemy.hp<=0||g.status!=='playing')return true;
@@ -114,6 +151,13 @@ export class Encounters {
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
     const active=this.active;
     if(active) {
+      if(active.siteId) {
+        // Only real lethal hits remove IDs. Scene/range cleanup must never
+        // finish a relic or silently refresh its finite defenders.
+        const present=new Set(g.enemies.filter(e=>e.hp>0&&e.eventId===active.id).map(e=>e.id));
+        if([...active._remaining].some(id=>!present.has(id)))this._finish(false);
+        return;
+      }
       active.life=Math.max(0,active.life-dt);
       if(active.type==='treasure') {
         const enemy=g.enemies.find(e=>e.id===active.enemyId&&e.eventId===active.id&&e.hp>0);
