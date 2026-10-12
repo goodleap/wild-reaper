@@ -25,7 +25,7 @@ const other=game('marsh');assert.equal(map.draw(ctx,other,{width:420,height:420,
 // uncover coastline 340 units away just because discovery is circular.
 const phone=game();phone.viewWidth=320;map.discover(phone);for(const key of phone.terrain.island.explored){const [gx]=key.split(',').map(Number);assert(Math.abs((gx+.5)*cell)<=110);}
 assert.equal(stack.length,0);
-console.log('Island map: world-owned exploration, hidden unknown coasts/roads, full-island framing, correct traveler position, distant discovered gate targets and phone visibility passed.');
+console.log('Island map: world-owned exploration, hidden unknown coasts, full-island framing, correct traveler position, distant discovered gate targets and phone visibility passed.');
 // A fully explored island must not construct thousands of overlapping clip
 // subpaths: that makes native Canvas path rasterization stall for seconds.
 const surveyed=game();surveyed.terrain.island.explored=new Set();for(let y=-52;y<=52;y++)for(let x=-52;x<=52;x++)surveyed.terrain.island.explored.add(`${x},${y}`);

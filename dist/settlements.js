@@ -9,7 +9,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const WARD=18;
 export const SETTLEMENT_RULES=Object.freeze({maxSites:7,interactRadius:82,ward:WARD,guards:4});
 const ANGEL_GUARD_RADIUS=150;
-export const ANGEL_RULES=Object.freeze({guardRadius:ANGEL_GUARD_RADIUS,auraRadius:ANGEL_GUARD_RADIUS,attackRange:ANGEL_GUARD_RADIUS,healingPerSecond:.03,strikeRadius:60,attackInterval:.2,damage:115});
+export const ANGEL_RULES=Object.freeze({guardRadius:ANGEL_GUARD_RADIUS,auraRadius:ANGEL_GUARD_RADIUS,attackRange:ANGEL_GUARD_RADIUS,healingPerSecond:.03,strikeRadius:60,attackInterval:.1,damage:115});
 const SITE_DEFS=Object.freeze([
   {type:'merchant',name:'荒野游商',width:42,depth:24,radius:410,angle:.12},
   {type:'supply',name:'林间小屋',width:54,depth:28,radius:610,angle:2.2},
@@ -243,8 +243,8 @@ export class Settlements {
       const damage=ANGEL_RULES.damage*(1+Math.max(0,g.regionIndex||0)*.25);
       for(const enemy of g.enemies)if(canHit(enemy)&&Math.hypot(enemy.x-impact.x,enemy.y+groundOffset(enemy)-impact.y)<=ANGEL_RULES.strikeRadius)
         g._hurtEnemy(enemy,damage,0,origin,'angel');
-      // A long sky strike with a short lifetime: five casts/second still show
-      // one live main bolt per guardian, without a global flash or shake.
+      // A long sky strike with a short lifetime: ten casts/second show at most
+      // two live main bolts per guardian, without a global flash or shake.
       g._effect(impact.x,impact.y,'angelStrike',.18,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:site.x,sourceY:site.y,angelId:site.id});
     }
     // Overlapping havens never multiply healing; the aura stops at its real

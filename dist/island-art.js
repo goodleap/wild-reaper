@@ -4,9 +4,9 @@
 const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const PALETTES={
-  forest:{deep:'#193e48',sea:'#25535a',shallow:'#537e71',sand:'#97996d',grain:'#d8cc98',surf:'#c3dec8',path:'#9a9d70'},
-  marsh:{deep:'#213e48',sea:'#30555a',shallow:'#57796b',sand:'#858e69',grain:'#bbc49a',surf:'#bfd6c0',path:'#99a684'},
-  ruins:{deep:'#243e51',sea:'#345967',shallow:'#668a85',sand:'#aaa995',grain:'#d5d1b5',surf:'#d6e1d1',path:'#aaa797'},
+  forest:{deep:'#193e48',sea:'#25535a',shallow:'#537e71',sand:'#97996d',grain:'#d8cc98',surf:'#c3dec8'},
+  marsh:{deep:'#213e48',sea:'#30555a',shallow:'#57796b',sand:'#858e69',grain:'#bbc49a',surf:'#bfd6c0'},
+  ruins:{deep:'#243e51',sea:'#345967',shallow:'#668a85',sand:'#aaa995',grain:'#d5d1b5',surf:'#d6e1d1'},
 };
 export function traceIslandContour(ctx,points){ctx.beginPath();for(let i=0;i<points.length;i++)ctx[i?'lineTo':'moveTo'](points[i].x,points[i].y);ctx.closePath();}
 function fragments(points,spacing){const result=[];for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);for(let t=0;t<length;t+=spacing)result.push({x:a.x+dx*t/length,y:a.y+dy*t/length,tx:dx/length,ty:dy/length,seed:i*719+Math.round(t)});}return result;}
@@ -14,15 +14,11 @@ function stroke(c,x,y,tx,ty,length,color,width=1){c.beginPath();c.moveTo(x,y);c.
 export class IslandArt {
   constructor(){this.cache=new WeakMap();}
   _shape(island){let shape=this.cache.get(island);if(!shape){shape={outer:island.points,shallow:island.contour(island.shallowWidth||100),grass:island.contour((island.shallowWidth||100)+35),foam:fragments(island.contour(9),25),shore:fragments(island.contour((island.shallowWidth||100)-4),18),beach:fragments(island.contour((island.shallowWidth||100)+17),16),fringe:fragments(island.contour((island.shallowWidth||100)+35),9)};this.cache.set(island,shape);}return shape;}
-  _routes(ctx,island,view,palette){
-    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
-    for(const route of island.routes||[]){if(Math.max(route.ax,route.bx)<view.minX-100||Math.min(route.ax,route.bx)>view.maxX+100||Math.max(route.ay,route.by)<view.minY-100||Math.min(route.ay,route.by)>view.maxY+100)continue;ctx.beginPath();ctx.moveTo(route.ax,route.ay);ctx.lineTo(route.bx,route.by);ctx.strokeStyle=palette.path;ctx.globalAlpha=.10;ctx.lineWidth=26;ctx.stroke();ctx.globalAlpha=.055;ctx.lineWidth=48;ctx.stroke();}ctx.restore();
-  }
   draw(ctx,island,{camX=0,camY=0,width=1100,height=700,time=0,reduced=false,dense=false}={},drawLand=()=>{}){
     if(!island?.points?.length)return false;
     const shape=this._shape(island),palette=PALETTES[island.region]||PALETTES.forest,clock=reduced?0:time;
     const view={minX:camX-width/2,minY:camY-height/2,maxX:camX+width/2,maxY:camY+height/2};
-    if(island.contains(camX,camY,Math.hypot(width/2,height/2)+135)){drawLand();ctx.save();ctx.translate(width/2-camX,height/2-camY);this._routes(ctx,island,view,palette);ctx.restore();return true;}
+    if(island.contains(camX,camY,Math.hypot(width/2,height/2)+135)){drawLand();return true;}
     ctx.save();ctx.translate(width/2-camX,height/2-camY);ctx.lineCap='round';ctx.lineJoin='round';
     ctx.fillStyle=palette.deep;ctx.fillRect(view.minX,view.minY,width,height);
     // A translucent water shelf follows the exact playable outline. Deep sea
@@ -46,7 +42,6 @@ export class IslandArt {
     // Paint the game's established ground within the dry interior. The beach
     // is an actual walkable strip, not a new collision outline made by art.
     ctx.save();traceIslandContour(ctx,shape.grass);ctx.clip();ctx.translate(camX-width/2,camY-height/2);drawLand();ctx.restore();
-    ctx.save();traceIslandContour(ctx,shape.grass);ctx.clip();this._routes(ctx,island,view,palette);ctx.restore();
     // Small facets break up the land/beach transition. Their size is constant
     // in world pixels, so a large island does not acquire giant brush marks.
     for(let gy=Math.floor(view.minY/19);gy<=Math.floor(view.maxY/19);gy++)for(let gx=Math.floor(view.minX/19);gx<=Math.floor(view.maxX/19);gx++){

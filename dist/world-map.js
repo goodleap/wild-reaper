@@ -165,7 +165,7 @@ export class WorldMap {
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';rounded(ctx,x,y,width,height,9);ctx.fillStyle='#101f1ce8';ctx.fill();ctx.strokeStyle='#a6b99b50';ctx.lineWidth=1;ctx.stroke();
     ctx.save();rounded(ctx,x+pad,y+pad,mapW,mapH,5);ctx.clip();ctx.fillStyle='#202c2e';ctx.fillRect(x+pad,y+pad,mapW,mapH);
     // Clip all geographical detail to cells physically visited in this world.
-    // Even the island silhouette and roads stay hidden behind unknown fog.
+    // Even the island silhouette stays hidden behind unknown fog.
     ctx.save();ctx.beginPath();
     const extentX=mapW*.5/scale,extentY=mapH*.5/scale,runs=this._mapRuns(island,{expanded,minGX:Math.floor((center.x-extentX)/cell),maxGX:Math.floor((center.x+extentX)/cell),minGY:Math.floor((center.y-extentY)/cell),maxGY:Math.floor((center.y+extentY)/cell)});
     for(const run of runs){const xx=mx(run.gx*cell),yy=my(run.gy*cell),size=cell*scale;ctx.rect(xx,yy,run.length*size,size);}
@@ -174,7 +174,7 @@ export class WorldMap {
     traceIslandContour(ctx,island.points);ctx.fillStyle='#507776';ctx.fill();
     traceIslandContour(ctx,island.contour(island.shallowWidth||100));ctx.fillStyle=palette.sand;ctx.fill();
     traceIslandContour(ctx,island.contour((island.shallowWidth||100)+35));ctx.fillStyle=palette.land;ctx.fill();
-    ctx.lineWidth=expanded?24:20;ctx.strokeStyle='#c8c09636';ctx.beginPath();for(const r of island.routes||[]){ctx.moveTo(r.ax,r.ay);ctx.lineTo(r.bx,r.by);}ctx.stroke();ctx.restore();ctx.restore();
+    ctx.restore();ctx.restore();
     if(!expanded){ctx.strokeStyle='#abc3b222';ctx.lineWidth=.7;ctx.setLineDash([2,4]);ctx.beginPath();ctx.arc(cx,cy,radius*.5,0,TAU);ctx.stroke();ctx.setLineDash([]);}
     ctx.fillStyle='#bed0b1';ctx.font=`600 ${expanded?15:8}px ${FONT}`;ctx.textAlign='center';ctx.fillText('N',cx,y+pad+(expanded?16:8));
     for(const [index,marker] of markers.entries()){
