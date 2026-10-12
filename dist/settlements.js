@@ -222,6 +222,7 @@ export class Settlements {
   _updateAngels(dt,p) {
     const g=this.game,player=g.player;let inAura=false;
     for(const site of this.sites)if(site.type==='angel') {
+      site.castFace=Math.max(0,(site.castFace||0)-dt);
       site.healing=false;
       const nearby=distance(p,site)<=ANGEL_RULES.guardRadius&&!g.terrain.firstBlocker(site.x,site.y,p.x,p.y,0);
       if(nearby){inAura=true;site.healing=player.hp<player.maxHp;}
@@ -234,13 +235,14 @@ export class Settlements {
       for(const enemy of g.enemies)if(canHit(enemy)){const d=Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y);if(d<nearest){target=enemy;nearest=d;}}
       if(!target)continue;
       site._attack=ANGEL_RULES.attackInterval;
+      site.castFace=.25;
       const impact={x:target.x,y:target.y+groundOffset(target)},origin={x:site.x,y:site.y-19.8,groundY:site.y};
       const damage=ANGEL_RULES.damage*(1+Math.max(0,g.regionIndex||0)*.25);
       for(const enemy of g.enemies)if(canHit(enemy)&&Math.hypot(enemy.x-impact.x,enemy.y+groundOffset(enemy)-impact.y)<=ANGEL_RULES.strikeRadius)
         g._hurtEnemy(enemy,damage,0,origin,'angel');
-      // Short, local discharge: at five casts/second at most two live strikes
-      // overlap per guardian. It never creates a screen-wide storm or flash.
-      g._effect(impact.x,impact.y,'angelStrike',.34,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:site.x,sourceY:site.y,angelId:site.id});
+      // A long sky strike with a short lifetime: five casts/second still show
+      // one live main bolt per guardian, without a global flash or shake.
+      g._effect(impact.x,impact.y,'angelStrike',.18,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:site.x,sourceY:site.y,angelId:site.id});
     }
     // Overlapping havens never multiply healing; the aura stops at its real
     // world-space boundary and heals no one through a building foundation.

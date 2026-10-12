@@ -10,6 +10,25 @@ function capsule(obstacle){
   const length=obstacle.type==='log'?obstacle.halfLength||0:0,ux=Math.cos(obstacle.angle||0),uy=Math.sin(obstacle.angle||0);
   return {obstacle,x:obstacle.x,y:obstacle.y,r:obstacle.r||0,length,ux,uy,ax:obstacle.x-ux*length,ay:obstacle.y-uy*length,bx:obstacle.x+ux*length,by:obstacle.y+uy*length};
 }
+function wallJunctions(walls){
+  const points=[],seen=new Set();
+  // Ray endpoints and circular-cap tangents do not include the inside corner
+  // formed where two thick walls overlap. Without these actual face crossings
+  // a polygon edge cuts across visible floor as a small triangular black wedge.
+  for(let i=0;i<walls.length;i++)for(let j=i+1;j<walls.length;j++){
+    const a=walls[i],b=walls[j],ab=a.obstacle.bounds,bb=b.obstacle.bounds;
+    if(!a.length||!b.length||ab.maxX<bb.minX||ab.minX>bb.maxX||ab.maxY<bb.minY||ab.minY>bb.maxY)continue;
+    const cross=a.ux*b.uy-a.uy*b.ux;if(Math.abs(cross)<1e-8)continue;
+    for(const sideA of [-1,1])for(const sideB of [-1,1]){
+      const ax=a.ax-a.uy*a.r*sideA,ay=a.ay+a.ux*a.r*sideA,bx=b.ax-b.uy*b.r*sideB,by=b.ay+b.ux*b.r*sideB;
+      const dx=bx-ax,dy=by-ay,t=(dx*b.uy-dy*b.ux)/cross,u=(dx*a.uy-dy*a.ux)/cross;
+      if(t<-.00001||t>a.length*2+.00001||u<-.00001||u>b.length*2+.00001)continue;
+      const x=ax+a.ux*t,y=ay+a.uy*t,key=`${Math.round(x*10000)},${Math.round(y*10000)}`;
+      if(!seen.has(key)){seen.add(key);points.push({x,y});}
+    }
+  }
+  return points;
+}
 function circleHit(ox,oy,dx,dy,cx,cy,r){
   const x=cx-ox,y=cy-oy,projection=x*dx+y*dy,discriminant=r*r-(x*x+y*y-projection*projection);
   if(discriminant<0)return Infinity;
@@ -50,7 +69,7 @@ export class DungeonVision {
     if(!record||record.terrain!==state.terrain){
       const b=state.bounds,cols=Math.ceil((b.maxX-b.minX)/TILE),rows=Math.ceil((b.maxY-b.minY)/TILE);
       const walls=state.terrain.query(b.minX,b.minY,b.maxX,b.maxY).map(capsule);
-      record={terrain:state.terrain,cols,rows,seen:new Uint8Array(cols*rows),walls,pieces:[],known:[],knownByWall:new Map(),rects:[],dirty:false,discoverKey:null,count:0};
+      record={terrain:state.terrain,cols,rows,seen:new Uint8Array(cols*rows),walls,junctions:wallJunctions(walls),pieces:[],known:[],knownByWall:new Map(),rects:[],dirty:false,discoverKey:null,count:0};
       for(const wall of walls){
         const count=Math.max(1,Math.ceil(wall.length*2/TILE));
         for(let i=0;i<count;i++){
@@ -76,6 +95,7 @@ export class DungeonVision {
     const angles=[],add=a=>{for(const delta of [-EPSILON,0,EPSILON])angles.push(((a+delta)%TAU+TAU)%TAU);};
     for(let i=0;i<96;i++)angles.push(i*TAU/96);
     for(const [x,y] of [[b.minX,b.minY],[b.maxX,b.minY],[b.maxX,b.maxY],[b.minX,b.maxY]])add(Math.atan2(y-origin.y,x-origin.x));
+    for(const point of record.junctions)if(within(point.x,point.y,b))add(Math.atan2(point.y-origin.y,point.x-origin.x));
     for(const wall of walls){
       for(const [x,y] of [[wall.ax,wall.ay],[wall.bx,wall.by]]){
         const angle=Math.atan2(y-origin.y,x-origin.x),distance=Math.hypot(x-origin.x,y-origin.y);

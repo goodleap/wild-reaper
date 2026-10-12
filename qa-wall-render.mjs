@@ -42,7 +42,7 @@ for(const variant of ['castle-wall','hut-wall'])for(const angle of [0,Math.PI/2]
   const stub={dungeon:{active:{}},knownWallSegments:()=>parts,isVisible:()=>true};
   const plan=art.plan(prop,{x:-200,y:-200},stub,0).sort((a,b)=>vertical?a.rect.y-b.rect.y:a.rect.x-b.rect.x);
   for(let i=1;i<plan.length;i++)assert.ok(vertical?plan[i-1].rect.y+plan[i-1].rect.height<=plan[i].rect.y+.000001:plan[i-1].rect.x+plan[i-1].rect.width<=plan[i].rect.x+.000001);
-  if(vertical){assert.ok(plan[0].rect.y<-90);assert.ok(plan.at(-1).rect.y+plan.at(-1).rect.height>=90);}
+  if(vertical){assert.ok(plan[0].rect.y<=-90-(variant==='hut-wall'?25:35));assert.ok(plan.at(-1).rect.y+plan.at(-1).rect.height>=90+(variant==='hut-wall'?0:14),'Visible castle endpoint clips must cover its physical rounded foot.');}
   let previousAlpha=null,maxDelta=0;
   for(let y=-200;y<=200;y++){const alpha=wallOcclusionOpacity(prop,{x:0,y:y-19.8});if(previousAlpha!==null)maxDelta=Math.max(maxDelta,Math.abs(alpha-previousAlpha));previousAlpha=alpha;}
   assert.ok(maxDelta<.045,'Walking behind a wall fades continuously rather than switching to 40% alpha.');

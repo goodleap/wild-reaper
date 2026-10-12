@@ -95,7 +95,7 @@ export class Game {
     this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
     const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
-    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
+    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
     this.skillLevel=1;this.crystals=0;this.crystalsNext=crystalCost(1);this.gold=0;this.coins=[];
     this.enemies = []; this.bullets = []; this.enemyBullets=[];this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
@@ -167,6 +167,7 @@ export class Game {
       return dx*dx+dy*dy<=e.r*e.r;
     });
     p.skillCooldown=this.debug?0:p.skillCooldownMax;
+    p.castFace=.25;
     // This separate snapshot keeps every strike visible after enemies die or
     // the generic particle cap trims hit effects during a crowded screen clear.
     this.storm={x:p.x,y:p.y,viewWidth:this.viewWidth,viewHeight:this.viewHeight,life:STORM_DURATION,maxLife:STORM_DURATION,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
@@ -329,7 +330,8 @@ export class Game {
   _hurtPlayer(amount) {
     const p=this.player;if(p.invuln>0||this.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
     amount=this.relics?.modifyIncomingDamage(amount)??amount;
-    p.hp=Math.max(0,p.hp-amount);p.invuln=.8;this._emit('hurt');
+    const previousHp=p.hp;
+    p.hp=Math.max(0,p.hp-amount);p.invuln=.8;if(p.hp<previousHp)p.hurtFace=.24;this._emit('hurt');
     this._effect(p.x,p.y,'ring',.3,42,'#e48d78');
     if(p.hp<=0)this.status='dead';return true;
   }
@@ -536,6 +538,7 @@ export class Game {
     this.relics.update(dt);
     if(!inDungeon){this.regions.update(dt);this._updatePressure(dt);}
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debug?0:Math.max(0,p.skillCooldown-dt);
+    p.hurtFace=Math.max(0,(p.hurtFace||0)-dt);p.castFace=Math.max(0,(p.castFace||0)-dt);
     this.environment?.update(dt);
     if(this.status==='dead')return;
     if(this.storm) { this.storm.life-=dt; if(this.storm.life<=0) this.storm=null; }
@@ -571,6 +574,7 @@ export class Game {
     }
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
+      if(e.type==='beetle'){e._walkStartX=e.x;e._walkStartY=e.y;}
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
@@ -599,6 +603,13 @@ export class Game {
           if(n.type!=='boss'&&!n.charge&&n.guardActive!==false)this._moveEntity(n,-dx/d*force,-dy/d*force);
         }
       }
+    }
+    // Beetle feet and heading follow resolved movement, including detours and
+    // separation. Paused, blocked and dormant beetles never crawl in place.
+    for(const e of this.enemies)if(e.type==='beetle'&&e.hp>0){
+      const oldX=e._walkStartX??e.x,oldY=e._walkStartY??e.y;
+      updateLocomotion(e,oldX,oldY,dt);
+      if(e.moving)e.visualFacing=Math.atan2(e.y-oldY,e.x-oldX);
     }
     if(input.skill && p.skillCooldown<=0) this._castStorm();
     for(const e of this._nearby(p.x,p.y,85)) {

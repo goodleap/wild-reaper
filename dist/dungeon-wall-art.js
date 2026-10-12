@@ -16,8 +16,7 @@ function pixelRect(rect,transform){
 
 function wallGeometry(prop){
   const vertical=Math.abs(Math.sin(prop.angle||0))>.5,half=prop.halfLength||0,r=prop.r||14,hut=prop.variant==='hut-wall';
-  const baseLength=half>75?360:90,scale=half*2/baseLength;
-  return {vertical,half,r,hut,projection:hut?25:vertical?35*scale:35,pad:hut?r+5:vertical?r+5:Math.max(r+5,18*scale)};
+  return {vertical,half,r,hut,projection:hut?25:35,pad:r+5};
 }
 // Spatial fading has no binary threshold when the player crosses a wall's
 // raised face. Full-depth sorting still decides which actor is in front.
@@ -60,7 +59,7 @@ export class DungeonWallArt {
       const first=Math.abs(a-start)<.01,last=Math.abs(b-end)<.01;
       let rect;
       if(g.vertical){
-        const top=a-g.projection-(first?5:0),bottom=last?b+5:b-g.projection;
+        const top=a-g.projection-(first?5:0),bottom=last?b+(g.hut?5:g.r+2):b-g.projection;
         rect={x:prop.x-g.pad,y:top,width:g.pad*2,height:Math.max(0,bottom-top)};
       }else{
         const left=a-(first?g.pad:0),right=b+(last?g.pad:0);

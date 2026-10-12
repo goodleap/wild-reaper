@@ -4,6 +4,7 @@ import { SceneryArt } from './scenery-art.js';
 import { CombatArt } from './combat-art.js';
 import { getStormGeometry, lightningPath, stormBrightness, stormImpactBrightness } from './storm-geometry.js';
 import { MonsterArt } from './monster-art.js';
+import { HumanoidArt } from './humanoid-art.js';
 import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
 import { SuperArt } from './super-art.js';
@@ -28,6 +29,7 @@ const decorativeShadowShapes=[];
 const sceneryArt=new SceneryArt(()=>document.createElement('canvas'));
 const combatArt=new CombatArt(()=>document.createElement('canvas'));
 const monsterArt=new MonsterArt(()=>document.createElement('canvas'));
+const humanoidArt=new HumanoidArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
 const hutArt=new HutArt(()=>document.createElement('canvas'));
 const superArt=new SuperArt(()=>document.createElement('canvas'));
@@ -363,14 +365,14 @@ const ACTOR_VISUALS={
   player:{radius:15,foot:18,halfWidth:29,top:35,shadowWidth:14,shadowLength:24},
   slime:{radius:16,foot:14,halfWidth:22,top:20,shadowWidth:14,shadowLength:17},
   bat:{radius:11,foot:20,halfWidth:31,top:27,shadowWidth:18,shadowLength:16},
-  beetle:{radius:18,foot:18,halfWidth:25,top:22,shadowWidth:14,shadowLength:18},
+  beetle:{radius:18,foot:18,halfWidth:30,top:27,shadowWidth:16,shadowLength:18},
   brute:{radius:26,foot:23,halfWidth:33,top:32,shadowWidth:23,shadowLength:27},
   boar:{radius:22,foot:20,halfWidth:36,top:29,shadowWidth:23,shadowLength:25},
   spore:{radius:20,foot:18,halfWidth:27,top:34,shadowWidth:18,shadowLength:21},
   boss:{radius:49,foot:41,halfWidth:60,top:68,shadowWidth:39,shadowLength:44}
 };
 // All three humanoids share the traveler's body envelope and grounded shadow.
-const HERO_VISUALS={traveler:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:ACTOR_VISUALS.player};
+const HERO_VISUALS={traveler:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:{...ACTOR_VISUALS.player,top:40,halfWidth:39}};
 function actorVisual(entity,isPlayer=false,scaleOverride){
   const type=isPlayer?'player':entity.type,shape=isPlayer?(HERO_VISUALS[entity.heroId||'traveler']||HERO_VISUALS.traveler):(ACTOR_VISUALS[type]||ACTOR_VISUALS.slime);
   const scale=scaleOverride??(isPlayer?1.1:entity.r/shape.radius);
@@ -457,7 +459,10 @@ function drawScene(actors,props,mainPlayer,adventureProps=[]){
   const vision=game?.dungeon?.active?game.dungeon.vision:null;
   for(const item of sceneDrawList(actors,props,adventureProps)){
     const wall=item.kind==='terrain'&&['castle-wall','hut-wall'].includes(item.prop.variant);
-    ctx.save();if(vision&&!wall)vision.clipVisible(ctx);
+    // The player's own feet define this view. A floor-level clip would chop
+    // their hood off against the north wall; depth-sorted walls still occlude.
+    const self=item.kind==='actor'&&item.actor.entity===mainPlayer;
+    ctx.save();if(vision&&!wall&&!self)vision.clipVisible(ctx);
     if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else drawActor(item.actor);
     ctx.restore();
   }
@@ -469,7 +474,7 @@ function terrainCapsulePath(target,halfLength,radius){
 }
 function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
-    if(prop.visual===false||(prop.structureId&&prop.variant!=='castle-wall'&&prop.variant!=='hut-wall'))continue;
+    if(prop.visual===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.structureId)continue;
     const {x,y,r,type,scale=1}=prop;
     if(type==='log'){
       const offset=r*.7,angle=prop.angle||0,dx=Math.cos(angle),dy=Math.sin(angle),radius=r*1.08;
@@ -711,8 +716,8 @@ function drawRescueGround(){
 function drawCompanion(actor){
   const e=actor.entity,captive=e.isCaptive,storm=e.heroId==='stormcaller',color=storm?'#c6c3ed':'#d9c28c';
   if(!captive){ctx.save();ctx.strokeStyle=color;ctx.lineWidth=1.3;ctx.globalAlpha=.55;ctx.beginPath();ctx.ellipse(e.x,actor.footY,20,10,0,0,TAU);ctx.stroke();ctx.restore();}
-  ctx.save();ctx.translate(actor.x,actor.y);ctx.scale(actor.scale,actor.scale);ctx.scale(Math.cos(e.facing||0)<-.1?-1:1,1);ctx.lineCap='round';ctx.lineJoin='round';
-  const pose=humanoidPose(e);if(storm)drawStormcaller(pose);else drawWarden(pose);
+  ctx.save();ctx.translate(actor.x,actor.y);ctx.scale(actor.scale,actor.scale);ctx.lineCap='round';ctx.lineJoin='round';
+  const pose=humanoidPose(e);humanoidArt.draw(ctx,storm?'stormcaller':'warden',{pose,entity:e,time:game?._clock??clock,reduced,pixelRatio:dpr});
   if(captive&&e.state==='trapped'){
     // A low thorn restraint leaves the companion's face and class silhouette clear.
     for(const side of [-1,1]){line(side*24,-3,side*22,20,'#4c5139',4);line(side*24,-1,side*30,-7,'#8f8353',1.5);line(side*22,10,side*29,6,'#8f8353',1.5);}
@@ -732,40 +737,13 @@ function humanoidPose(entity={},intro=false,t=0){
     bodyY:reduced?0:moving?-Math.abs(step)*1.15:intro?Math.sin(t*2)*.65:0,
     arm:reduced?0:step*1.8,cloth:reduced?0:moving?step*1.7:intro?Math.sin(t*3)*2:0};
 }
-function heroBoots(pose){
-  // Short trouser legs and exposed boots make each alternating foot readable.
-  for(const side of [-1,1]){
-    const lift=side<0?pose.leftLift:pose.rightLift,x=side*6-side*pose.step*1.6;
-    line(side*5.5,9+pose.bodyY,x,14-lift,'#526044',4.6);
-    ellipse(x,14.8-lift,4.2,3.2,'#383e2b');
-    line(x-2,14.2-lift,x+1.8,14.2-lift,'#737857',.8);
-  }
-}
 function player(x,y,t,scale=1,facing=0,invuln=0,entity={}){
-  const pose=humanoidPose(entity,!game,t);ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(invuln>0&&Math.floor(t*18)%2===0)ctx.globalAlpha=.65;ctx.scale(Math.cos(facing)<-.1?-1:1,1);ctx.lineCap='round';ctx.lineJoin='round';
-  // Original cream hood, green cloak and empty hands, with exposed walking feet.
-  ctx.save();ctx.translate(0,pose.bodyY);ctx.strokeStyle='#253c2a';ctx.lineWidth=1.6;ctx.fillStyle='#567b49';ctx.beginPath();ctx.moveTo(-10,-4);ctx.quadraticCurveTo(-17,6,-16,13);ctx.quadraticCurveTo(0,18,15,12);ctx.lineTo(9,-7);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
-  heroBoots(pose);ctx.translate(0,pose.bodyY);ctx.strokeStyle='#253c2a';ctx.lineWidth=1.6;ctx.fillStyle='#adc19a';ctx.beginPath();ctx.moveTo(-7,-6);ctx.lineTo(8,-6);ctx.lineTo(10,10);ctx.quadraticCurveTo(0,14,-9,10);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#e4dfb8';ctx.beginPath();ctx.moveTo(-14,-8);ctx.quadraticCurveTo(-17,-26,0,-32);ctx.quadraticCurveTo(17,-28,16,-8);ctx.quadraticCurveTo(10,1,-12,-2);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#32452f';ctx.beginPath();ctx.ellipse(2,-12,10,9,0,0,TAU);ctx.fill();ellipse(-2,-12,1.5,2,'#ecf6c8');ellipse(6,-12,1.5,2,'#ecf6c8');ctx.strokeStyle='#b5ab82';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-13,-11);ctx.quadraticCurveTo(-7,-27,3,-28);ctx.stroke();
-  ctx.fillStyle='#70964f';ctx.beginPath();ctx.moveTo(-12,-2);ctx.lineTo(11,-3);ctx.lineTo(9,3);ctx.lineTo(-11,4);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(-8,1);ctx.quadraticCurveTo(-18,4,-24,1+pose.cloth);ctx.lineTo(-21,8);ctx.quadraticCurveTo(-13,9,-8,5);ctx.fill();ellipse(17,3+pose.arm,3,3,'#d8d1a7');line(-6,8,8,8,'#788a5b',2);diamond(1,8,2.2,'#e2c276');ctx.restore();
+  const time=game?._clock??t,pose=humanoidPose(entity,!game,time);
+  ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+  if(invuln>0&&Math.floor(time*18)%2===0)ctx.globalAlpha=.65;
+  humanoidArt.draw(ctx,'traveler',{pose,entity,time,reduced,pixelRatio:dpr});ctx.restore();
 }
-function drawWarden(pose){
-  heroBoots(pose);ctx.save();ctx.translate(0,pose.bodyY);ctx.strokeStyle='#2d422d';ctx.lineWidth=1.6;ctx.fillStyle='#425d3d';ctx.beginPath();ctx.moveTo(-10,-7);ctx.lineTo(10,-7);ctx.lineTo(13,10);ctx.quadraticCurveTo(0,15,-13,10);ctx.closePath();ctx.fill();ctx.stroke();
-  // Light shoulder armor keeps the same body width as the traveler.
-  for(const side of [-1,1]){const swing=side*pose.arm;ellipse(side*12,-2,5.8,5.2,'#a48c5c');ellipse(side*12,-4,5.5,3,'#bcab79');line(side*14,1,side*16,7+swing,'#6d7450',4);}
-  ctx.fillStyle='#927d52';ctx.beginPath();ctx.moveTo(-8,-7);ctx.lineTo(8,-7);ctx.lineTo(10,9);ctx.quadraticCurveTo(0,13,-10,9);ctx.closePath();ctx.fill();ctx.stroke();for(const xx of [-5,0,5])line(xx,-4,xx,8,'#bfab74',1.6);line(-9,6,9,6,'#596747',2.6);diamond(0,6,2.6,'#dbc785');
-  ellipse(0,-14,11,11,'#3d5139');ctx.fillStyle='#a29464';ctx.beginPath();ctx.moveTo(-14,-15);ctx.lineTo(-11,-26);ctx.quadraticCurveTo(0,-31,11,-26);ctx.lineTo(14,-15);ctx.quadraticCurveTo(0,-21,-14,-15);ctx.fill();ctx.stroke();ellipse(-4,-13,1.6,2,'#efe8b4');ellipse(4,-13,1.6,2,'#efe8b4');line(0,-28,0,-19,'#d2c387',2.5);line(-9,-7,9,-7,'#7b8b58',3);
-  ctx.save();ctx.translate(0,-pose.arm);ctx.fillStyle='#8a794e';ctx.beginPath();ctx.moveTo(-23,-1);ctx.lineTo(-14,-3);ctx.lineTo(-12,8);ctx.quadraticCurveTo(-15,13,-18,14);ctx.quadraticCurveTo(-24,8,-23,-1);ctx.fill();ctx.stroke();line(-18,0,-18,10,'#d3bd7c',1.6);line(-22,4,-14,4,'#b4c17e',1.6);ctx.restore();ellipse(17,8+pose.arm,3,3,'#b5aa7c');ctx.restore();
-}
-function drawStormcaller(pose){
-  heroBoots(pose);ctx.save();ctx.translate(0,pose.bodyY);ctx.strokeStyle='#3f425c';ctx.lineWidth=1.6;ctx.fillStyle='#706794';ctx.beginPath();ctx.moveTo(-9,-6);ctx.lineTo(9,-6);ctx.lineTo(13,10);ctx.quadraticCurveTo(0,15,-13,10);ctx.closePath();ctx.fill();ctx.stroke();
-  // A shorter robe exposes both boots; the low pointed hat retains the identity.
-  ctx.fillStyle='#a5a8cd';ctx.beginPath();ctx.moveTo(-3,-5);ctx.lineTo(3,-5);ctx.lineTo(4,10);ctx.lineTo(-4,10);ctx.closePath();ctx.fill();line(-10,10,10,10,'#b5b8d2',1.4);diamond(0,5,2.6,'#d3dcf1');
-  line(-10,-1,-15,5-pose.arm,'#8e86b1',4.5);ellipse(-15,6-pose.arm,2.8,2.8,'#c1bdcf');ellipse(0,-13,10.5,11,'#3d445d');ellipse(-4,-13,1.5,2,'#e3ebff');ellipse(4,-13,1.5,2,'#e3ebff');
-  ctx.fillStyle='#7468a1';ctx.beginPath();ctx.moveTo(-14,-20);ctx.lineTo(-7,-26);ctx.lineTo(2,-33);ctx.lineTo(8,-28);ctx.lineTo(14,-20);ctx.closePath();ctx.fill();ctx.stroke();ellipse(0,-20,17,3.6,'#8a7bb4');line(-8,-23,10,-23,'#b3b0d0',1.7);diamond(2,-28,2.2,'#d2daf3');
-  ctx.save();ctx.translate(0,pose.arm);line(20,-26,20,14,'#8e91b1',2.4);line(11,-1,18,2,'#8e86b1',4.5);ellipse(18,3,3,3,'#c1bdcf');diamond(20,-28,4.4,'#b7dffa');line(17.5,-29,21,-26.5,'#e9f5ff',1.1);ctx.restore();ctx.restore();
-}
-function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(ACTOR_VISUALS[type]?.radius||16);ctx.scale(s,s);const bob=reduced?0:Math.sin(t*(type==='bat'?14:5)+(e.id||0))*(type==='bat'?3:1.5);ctx.translate(0,bob);const hit=e.hit>0;
+function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(ACTOR_VISUALS[type]?.radius||16);ctx.scale(s,s);const bob=reduced?0:type==='beetle'?(e.moving?-Math.abs(Math.sin(e.walkPhase||0))*.45:0):Math.sin(t*(type==='bat'?14:5)+(e.id||0))*(type==='bat'?3:1.5);ctx.translate(0,bob);const hit=e.hit>0;
   // A brief foot-anchored compression and lean makes a landed hit tangible.
   // It is presentation only: collision, damage and movement remain unchanged.
   if(hit&&!reduced){const recoil=Math.sin(Math.PI*clamp(e.hit/.12,0,1))*(type==='boss'?.035:.11)*(.65+(e.hitStrength||0)*.35),foot=ACTOR_VISUALS[type]?.foot||14;ctx.translate(0,foot);ctx.transform(1,0,-Math.cos(e.hitAngle||0)*recoil*.55,1,0,0);ctx.scale(1+recoil,1-recoil*.7);ctx.translate(0,-foot);}
@@ -915,14 +893,9 @@ function ambient(intro,camX=0,camY=0){
 }
 // Houses, town NPCs and dungeon walls share the same ground depth order as actors.
 function drawTownNpc(actor){
-  const e=actor.entity,angel=e.townKind==='angel',pose=humanoidPose({});ctx.save();ctx.translate(e.x,e.y);ctx.scale(actor.scale,actor.scale);ctx.lineJoin='round';ctx.lineCap='round';
-  if(angel){for(const side of [-1,1]){ctx.save();ctx.scale(side,1);ctx.fillStyle='#d9e0ce';ctx.strokeStyle='#929e9c';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(8,-6);ctx.quadraticCurveTo(15,-20,25,-23);ctx.quadraticCurveTo(27,-8,20,1);ctx.quadraticCurveTo(13,6,8,3);ctx.closePath();ctx.fill();ctx.stroke();for(let i=0;i<3;i++)line(12+i*4,-3,22-i,-17+i*4,'#a5b5ae',1);ctx.restore();}}
-  else{ctx.fillStyle='#806f48';ctx.strokeStyle='#4d4934';ctx.lineWidth=1.4;ctx.fillRect(-20,-9,12,21);ctx.strokeRect(-20,-9,12,21);line(-18,-12,-12,-12,'#b4a273',4);line(-18,-1,-10,-1,'#c5b483',2);}
-  heroBoots(pose);ctx.fillStyle=angel?'#e2e4cc':'#997d4b';ctx.strokeStyle=angel?'#909b83':'#504e31';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-9,-7);ctx.lineTo(9,-7);ctx.lineTo(13,11);ctx.quadraticCurveTo(0,16,-13,11);ctx.closePath();ctx.fill();ctx.stroke();line(-10,1,-15,7,angel?'#cfd8be':'#aa8c58',4);line(10,1,15,7,angel?'#cfd8be':'#aa8c58',4);ellipse(-15,8,3,3,'#cfc4a0');ellipse(15,8,3,3,'#cfc4a0');
-  ellipse(0,-14,11,11,angel?'#68746b':'#4d543a');ellipse(-4,-13,1.4,2,'#f0edc8');ellipse(4,-13,1.4,2,'#f0edc8');
-  ctx.fillStyle=angel?'#ece4bd':'#987d4f';ctx.beginPath();ctx.moveTo(-13,-17);ctx.quadraticCurveTo(-15,-32,1,-30);ctx.quadraticCurveTo(15,-31,13,-17);ctx.quadraticCurveTo(2,-27,-13,-17);ctx.fill();ctx.stroke();
-  if(angel){ctx.strokeStyle='#e7d896';ctx.lineWidth=1.8;ctx.beginPath();ctx.ellipse(0,-37,10,3.2,0,0,TAU);ctx.stroke();line(-1,-6,-1,9,'#bebd94',2);diamond(0,-3,3,'#ebd990');}
-  else{ellipse(0,-23,16,3.2,'#b79c66');line(-8,5,9,5,'#655a35',2.5);diamond(1,5,3,'#d9c383');}
+  const e=actor.entity,angel=e.townKind==='angel',pose=humanoidPose(e);
+  ctx.save();ctx.translate(e.x,e.y);ctx.scale(actor.scale,actor.scale);
+  humanoidArt.draw(ctx,angel?'angel':'merchant',{pose,entity:e,time:game?._clock??clock,reduced,pixelRatio:dpr});
   ctx.restore();ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle=angel?'#f0e8c6':'#e5d3a0';ctx.fillText(e.name,e.x,e.y-53);ctx.restore();
 }
 function drawSmallHut(site){
@@ -983,8 +956,9 @@ function renderIntro(){
 }
 function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<600||game.enemies.length>95||game.effects.length>90;const p=game.player,camX=p.x,camY=p.y;let sx=0,sy=0;if(shake>0&&!reduced){sx=(hash(game._clock,23)-.5)*shake;sy=(hash(game._clock,67)-.5)*shake;}
   const offsetX=width/2-camX+sx,offsetY=height/2-camY+sy;
+  combatOptions.screenTopWorldY=-offsetY;combatOptions.viewWidth=width;
   background(camX-sx,camY-sy,false);
-  const actors=game.enemies.filter(sceneVisible).map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally&&sceneVisible(ally))actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:900001};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])if(site.type==='rescue'&&site.state==='ready')actors.push(actorVisual({x:site.x,y:site.y-19.8,r:15,heroId:site.kind,kind:site.kind,name:site.kind==='warden'?'守林人':'唤雷者',isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
+  const actors=game.enemies.filter(sceneVisible).map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally&&sceneVisible(ally))actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:site.id,castFace:site.castFace||0,facing:0};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])if(site.type==='rescue'&&site.state==='ready')actors.push(actorVisual({x:site.x,y:site.y-19.8,r:15,heroId:site.kind,kind:site.kind,name:site.kind==='warden'?'守林人':'唤雷者',isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
   const terrain=terrainInView(camX,camY),adventureProps=adventureSceneProps(camX,camY);
   const vision=game.dungeon?.active?game.dungeon.vision:null;
   if(vision){

@@ -23,9 +23,10 @@ healing.terrain=new Terrain({obstacles:[{x:25,y:0,r:12}]});feet(healing,55,0);he
 const combat=arena(),guardian=angel(combat);feet(combat,0,0);const first=enemy(combat,75,0,40),splash=enemy(combat,112,0),far=enemy(combat,215,0),outside=enemy(combat,ANGEL_RULES.guardRadius+.01,0),sleeping=enemy(combat,40,0);sleeping.guardActive=false;
 combat.settlements.update(.025);assert(first.hp<=0);assert.equal(combat.kills,1);assert.equal(combat.player.xp,first.xp,'angel kills use the ordinary kill and experience path');assert(combat.gems.length>0,'normal crystal loot remains available');
 assert.equal(splash.hp,300-ANGEL_RULES.damage);assert.equal(splash.hitSource,'angel');assert.equal(far.hp,300);assert.equal(outside.hp,300);assert.equal(sleeping.hp,300,'dormant guarded objectives cannot be cleared remotely');
-const strike=combat.effects.find(e=>e.type==='angelStrike');assert(strike);assert.equal(strike.x,75);assert.equal(strike.y,0);assert.equal(strike.sourceX,guardian.x);assert.equal(strike.sourceY,guardian.y);assert.equal(strike.r,ANGEL_RULES.strikeRadius);
+const strike=combat.effects.find(e=>e.type==='angelStrike');assert(strike);assert.equal(strike.x,75);assert.equal(strike.y,0);assert.equal(strike.sourceX,guardian.x);assert.equal(strike.sourceY,guardian.y);assert.equal(strike.r,ANGEL_RULES.strikeRadius);assert.equal(strike.maxLife,.18);assert.equal(guardian.castFace,.25,'a real attack starts the focused face');
 combat.settlements.update(.199);assert.equal(splash.hp,185,'rapid guardian strikes still respect their full cooldown');combat.settlements.update(.00101);assert.equal(splash.hp,70);assert.equal(outside.hp,300);
-const fixed={x:guardian.x,y:guardian.y};feet(combat,1500,1500);combat.settlements.update(5);assert.equal(splash.hp,70,'offscreen angels do not farm distant monsters');assert.deepEqual({x:guardian.x,y:guardian.y},fixed,'the guardian never follows the player or a target');
+combat.status='paused';combat.settlements.update(.1);assert.equal(guardian.castFace,.25,'pausing freezes the cast expression');combat.status='playing';
+const fixed={x:guardian.x,y:guardian.y};feet(combat,1500,1500);combat.settlements.update(5);assert.equal(splash.hp,70,'offscreen angels do not farm distant monsters');assert.deepEqual({x:guardian.x,y:guardian.y},fixed,'the guardian never follows the player or a target');assert.equal(guardian.castFace,0,'the focused face fades when no target remains');
 // The same 150-unit boundary is inclusive for both healing and offensive reach.
 const boundary=arena();angel(boundary);feet(boundary,ANGEL_RULES.guardRadius,0);boundary.player.hp=40;
 const edgeEnemy=enemy(boundary,ANGEL_RULES.guardRadius,0);boundary.settlements.update(1);
@@ -50,7 +51,7 @@ for(let frame=0;frame<60;frame++){
   livePeak=Math.max(livePeak,cadence.effects.filter(effect=>effect.type==='angelStrike').length);
 }
 assert.equal(durable.hp,10000-5*ANGEL_RULES.damage,'the guardian delivers five strikes during a one-second 60 Hz window');
-assert(livePeak<=2,'short local effects keep high-frequency strike rendering bounded');assert.equal(cadence.storm,null);
+assert(livePeak<=1,'the brief sky-strike lifetime bounds each guardian to one simultaneous bolt');assert.equal(cadence.storm,null);
 const spawning=enemy(cadence,0,30);spawning.rescueSpawnGrace=.8;cadence.settlements.update(.2);assert.equal(spawning.hp,300,'guardians respect rescue spawn safety');
 const wall=arena();angel(wall);feet(wall,0,0);wall.terrain=new Terrain({obstacles:[{x:50,y:0,r:20}]});const shielded=enemy(wall,100,0);wall.settlements.update(5);assert.equal(shielded.hp,300,'nearby lightning cannot strike through a building wall');
 const inCastle=enemy(wall,0,45);inCastle.dungeonId='castle';wall.settlements.update(5);assert.equal(inCastle.hp,300,'castle enemies are excluded even if their numeric coordinates overlap the haven');

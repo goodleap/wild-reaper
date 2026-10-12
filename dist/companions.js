@@ -113,6 +113,7 @@ export class Companions {
     if(camp.siteId&&!g.relicSites?.complete(camp.siteId,true))return false;
     this.active={id:++g._id,kind:camp.kind,name:camp.name,heroId:camp.kind,x:camp.x,y:camp.y-groundOffset(g.player,true),r:15,isCompanion:true,remaining:RESCUE_RULES.companionDuration,maxDuration:RESCUE_RULES.companionDuration,facing:g.player.facing,moving:false,speed:250,_attack:.8,_echoes:[],_stuckFor:0};
     this._resetFollowing(this.active);
+    this.active.rescuedFace=.65;
     this.rescuedCount++;g.rescuePower++;g._refreshStats();
     this.nextAt=g.time+RESCUE_RULES.companionDuration+RESCUE_RULES.interval;
     g._emit('companionJoined',{name:camp.name,kind:camp.kind,bonusLevel:g.rescuePower,bonusPercent:8,duration:RESCUE_RULES.companionDuration});
@@ -205,6 +206,7 @@ export class Companions {
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
     if(this.active) {
       const active=this.active;
+      active.castFace=Math.max(0,(active.castFace||0)-dt);active.rescuedFace=Math.max(0,(active.rescuedFace||0)-dt);
       active.remaining=Math.max(0,active.remaining-dt);
       if(active.remaining<=0){this._leave();return;}
       this._follow(active,dt);active._attack-=dt;
@@ -227,12 +229,13 @@ export class Companions {
     const damage=105*(1+Math.floor(g.time/60)*.12);
     for(let i=0;i<5;i++) {
       const enemy=g._nearest(origin.x,origin.y,i?190:430,excluded,origin);if(!enemy)break;
+      if(!hits)active.castFacing=Math.atan2(enemy.y-active.y,enemy.x-active.x);
       excluded.add(enemy.id);hits++;
       g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:enemy.x,y2:enemy.y,evolved:true,branch:'chain',chainIndex:i,ally:true});
       g._hitEnemy(enemy,damage,0,origin,'companionLightning');origin=enemy;
     }
     if(!hits)return false;
-    active._attack=3.8;return true;
+    active._attack=3.8;active.castFace=.25;return true;
   }
   _quake(x,y,r,damage,echo,seed) {
     const g=this.game;
@@ -246,7 +249,7 @@ export class Companions {
     const damage=90*(1+Math.floor(g.time/60)*.12);
     this._quake(foot.x,foot.y,185,damage,false,active.id);
     active._echoes.push({x:foot.x,y:foot.y,r:215,damage:damage*.65,life:.35,regionIndex:g.regionIndex});
-    active._attack=4.8;return true;
+    active._attack=4.8;active.castFace=.25;return true;
   }
   resolve() {
     const g=this.game;if(g.status!=='playing')return;

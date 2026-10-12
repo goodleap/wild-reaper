@@ -57,16 +57,19 @@ export class AngelArt {
     if(cast>0&&!reduced){ctx.globalAlpha=cast*.28;ctx.strokeStyle='#fff3cf';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(0,-3,18,7,0,0,TAU);ctx.stroke();}
     ctx.restore();return true;
   }
-  _strike(e){
+  _strike(e,{screenTopWorldY,viewWidth=1100}={}){
     if(this.strikes.has(e))return this.strikes.get(e);
     const seed=Number(e.seed)||Math.round(e.x*13+e.y*7),end={x:e.x,y:e.y-3};
-    // Same fractal forks as the hero's storm, compressed into a local discharge
-    // above the hit instead of a long beam arriving from the top of the screen.
-    const start={x:e.x+(noise(seed,0)-.5)*34,y:e.y-66-noise(seed,1)*18};
+    // Like the hero's thunder, the stroke enters from above the viewport. Its
+    // world-space snapshot stays fixed for this short cast, with enough margin
+    // for camera travel; moving the camera never regenerates a jittering bolt.
+    const top=Number.isFinite(screenTopWorldY)?screenTopWorldY:e.y-350;
+    const start={x:e.x+(noise(seed,0)-.5)*Math.min(160,Math.max(1,viewWidth)*.32),y:Math.min(top-64,end.y-170)};
     const main=lightningPath(start,end,seed,5,.16),branches=[],arcs=[];
     for(let i=0;i<2;i++){
       const origin=main[9+i*9],side=i%2?1:-1;
-      branches.push(lightningPath(origin,{x:origin.x+side*(15+noise(seed,i+18)*13),y:origin.y+12+noise(seed,i+24)*11},seed+i*23+3,3,.24));
+      const length=30+noise(seed,i+18)*48;
+      branches.push(lightningPath(origin,{x:origin.x+side*length*.72,y:origin.y+length*(.55+noise(seed,i+24)*.55)},seed+i*23+3,3,.24));
     }
     for(let i=0;i<4;i++){
       const a=i*TAU/4+noise(seed,i+60)*.3,r=(e.r||60)*(.35+noise(seed,i+70)*.25);
@@ -74,10 +77,10 @@ export class AngelArt {
     }
     const result={main,branches,arcs};this.strikes.set(e,result);this.geometryBuilds++;return result;
   }
-  drawStrike(ctx,e,{reduced=false,dense=false}={}){
+  drawStrike(ctx,e,{reduced=false,dense=false,screenTopWorldY,viewWidth}={}){
     if(e.type!=='angelStrike')return false;
     if(!(e.life>0&&e.maxLife>0))return true;
-    const shape=this._strike(e),brightness=stormBrightness(e,reduced),impactAlpha=stormImpactBrightness(e,reduced);
+    const shape=this._strike(e,{screenTopWorldY,viewWidth}),brightness=stormBrightness(e,reduced),impactAlpha=stormImpactBrightness(e,reduced);
     ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.shadowBlur=0;ctx.beginPath();trace(ctx,shape.main);
     // Hero storm stroke profile, recolored in pale gold-white. No blur filters,
     // fullscreen overlays, per-frame randomness or per-target gradients.

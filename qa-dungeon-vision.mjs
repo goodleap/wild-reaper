@@ -102,6 +102,32 @@ for(const radius of [12,14]){
   }
 }
 
+// A closed room's free inner corners are truly visible from every position
+// inside it. Wall-face crossings must be vertices of the visibility polygon;
+// cap-tangent rays alone used to cut a 3px black triangle out of these corners.
+let cornerPoints=0;
+for(const [size,radius] of [[180,14],[200,12]]){
+  const room=scene([
+    {...wall('north',0,-size,size,0),r:radius},
+    {...wall('south',0,size,size,0),r:radius},
+    {...wall('west',-size,0,size),r:radius},
+    {...wall('east',size,0,size),r:radius}
+  ]);
+  room.game.viewWidth=room.game.viewHeight=1000;
+  const positions=[[-70,30],[65,-48],[-20,75],[75,66],[-size+radius+23,-size+radius+29]];
+  for(let i=1;i<=16;i++)positions.push([-70+i*.25,30+i*.25]);
+  for(const [px,py] of positions){
+    room.game.player.x=px;room.game.player.y=py-19.8;room.vision.update();
+    for(const sx of [-1,1])for(const sy of [-1,1])for(let dx=.25;dx<12;dx+=.5)for(let dy=.25;dy<12;dy+=.5){
+      const point={x:sx*(size-radius-dx),y:sy*(size-radius-dy)};
+      assert.equal(room.vision.isVisible(point),true);
+      assert.equal(inside(point,room.vision.polygon),true,`Visible inner corner must not be clipped at player ${px},${py}; point ${point.x},${point.y}`);
+      cornerPoints++;
+    }
+  }
+}
+assert.ok(cornerPoints>90000);
+
 // A full 5x5 maze is a finite workload even with an unusually large viewport.
 const mazeWalls=[];
 for(let i=0;i<=5;i++)for(let j=0;j<5;j++){
@@ -116,4 +142,4 @@ assert.ok(dense.vision.stats.rays<1800,'Polygon work remains bounded by nearby f
 assert.ok(dense.vision.stats.exploredTiles<=75*75);
 assert.ok(dense.vision.polygon.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
 assert.ok(elapsed<5000,`80 worst-case view updates should not take ${elapsed.toFixed(0)}ms`);
-console.log(`Dungeon vision QA passed: door LOS, opaque rooms, static memory, immutable redraw, finite bounds (${Math.round(elapsed)}ms / 80 stress updates).`);
+console.log(`Dungeon vision QA passed: door LOS, opaque rooms, static memory, immutable redraw, inner-corner coverage, finite bounds (${Math.round(elapsed)}ms / 80 stress updates).`);

@@ -28,20 +28,25 @@ assert.equal(canvases.length,2,'DPR is capped at the game display density');asse
 assert.deepEqual(aura({pixelRatio:2,time:5,reduced:true}),aura({pixelRatio:2,time:50,reduced:true}));
 const wrong=recordingContext();assert.equal(art.drawAura(wrong.ctx,{type:'merchant'}),false);assert.equal(wrong.calls.length,0);
 
-const effect={type:'angelStrike',x:100,y:200,r:60,seed:913,life:.34,maxLife:.34};
-const shape=art._strike(effect),end=shape.main.at(-1),start=shape.main[0];
+const effect={type:'angelStrike',x:100,y:200,r:60,seed:913,life:.18,maxLife:.18};
+const viewport={screenTopWorldY:-160,viewWidth:390};
+const shape=art._strike(effect,viewport),end=shape.main.at(-1),start=shape.main[0];
 assert.deepEqual(shape.main,lightningPath(start,end,effect.seed,5,.16),'angel lightning shares the protagonist fractal discharge geometry');
-assert(start.y>effect.y-90,'the local discharge never originates high above the scene');
-for(const point of [...shape.main,...shape.branches.flat(),...shape.arcs.flat()]){
-  assert(Math.hypot(point.x-effect.x,point.y-effect.y)<100,'all forks and arcs stay near the impact');
-}
+assert(start.y<viewport.screenTopWorldY-40,'the thunder visibly enters from above the phone viewport');
+assert(end.y-start.y>350,'the main bolt is a long sky stroke, not a short contact spark');
+for(const point of shape.arcs.flat())assert(Math.hypot(point.x-effect.x,point.y-effect.y)<45,'ground arcs remain localized at the actual impact');
+const moved=art._strike(effect,{screenTopWorldY:-190,viewWidth:390});assert.equal(moved,shape,'camera movement never rebuilds an active world-space strike');
+assert(moved.main[0].y<-190,'the initial overhang covers camera movement during the short effect');
+const desktop={...effect,seed:914},desktopShape=art._strike(desktop,{screenTopWorldY:-420,viewWidth:1100});
+assert(desktopShape.main[0].y<-420,'desktop thunder also starts outside the actual viewport');
+
 assert.equal(shape.branches.length,2);assert.equal(shape.arcs.length,4);assert.equal(art._strike(effect),shape);
 const savedRandom=Math.random;Math.random=()=>{throw new Error('painting must not consume gameplay randomness');};
-function strike(options){const recording=recordingContext();assert(art.drawStrike(recording.ctx,effect,options));assert.equal(recording.ctx.globalAlpha,.7);assert.equal(recording.ctx.stack.length,0);return recording.calls;}
+function strike(options){const recording=recordingContext();assert(art.drawStrike(recording.ctx,effect,{...viewport,...options}));assert.equal(recording.ctx.globalAlpha,.7);assert.equal(recording.ctx.stack.length,0);return recording.calls;}
 try{
-  const full=strike({});assert.deepEqual(strike({}),full,'paused lightning retains its geometry');assert.equal(art.cacheStats.geometryBuilds,1);
-  assert(!full.some(c=>['fillRect','createRadialGradient','drawImage'].includes(c[0])),'rapid local strikes have no fullscreen exposure or per-frame raster work');
+  const full=strike({});assert.deepEqual(strike({}),full,'paused lightning retains its geometry');assert.equal(art.cacheStats.geometryBuilds,2);
+  assert(!full.some(c=>['fillRect','createRadialGradient','drawImage'].includes(c[0])),'rapid sky strikes have no fullscreen exposure or per-frame raster work');
   assert(strike({dense:true}).length<full.length);assert(strike({reduced:true}).length<full.length);
 }finally{Math.random=savedRandom;}
 const expired=recordingContext();assert(art.drawStrike(expired.ctx,{...effect,life:0}));assert.equal(expired.calls.length,0);
-console.log('Angel art: shared hiDPI aura cache, bounded memory, independent proportional foot ring, deterministic paused/reduced drawing, protagonist-shared local lightning and reduced dense-work budget passed.');
+console.log('Angel art: shared hiDPI aura cache, bounded memory, independent proportional foot ring, deterministic paused/reduced drawing, protagonist-shared long sky lightning and reduced dense-work budget passed.');
