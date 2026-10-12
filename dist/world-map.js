@@ -8,9 +8,9 @@ const RELICS=new Set(['hunt','rescue','rune']);
 const COMPLETED=new Set(['cleared','completed','claimed','spent','failed']);
 const FONT='"PingFang SC",system-ui,sans-serif';
 const positive=(value,fallback)=>Number.isFinite(value)&&value>0?value:fallback;
-export function minimapBounds(width,height){
+export function minimapBounds(width,height,insets={}){
   const compact=width<600||height<430,size=compact?104:128,margin=compact?10:16;
-  return {x:width-size-margin,y:margin,width:size,height:size,margin};
+  return {x:width-size-margin-(insets.right||0),y:margin+(insets.top||0),width:size,height:size,margin};
 }
 export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',portal:'传送门',exit:'荒野出口',chest:'宝箱',boss:'首领'});
 export function landmarkLabel(marker){return marker.name||LANDMARK_NAMES[marker.type]||'遗迹';}
