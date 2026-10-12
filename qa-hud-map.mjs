@@ -157,21 +157,14 @@ keyup('KeyW');key('KeyW');tick();assert.notEqual(run('JSON.stringify([game.playe
 pointer('pointerdown',83);pointer('pointermove',83,170,200);const beforeTouch=run('game.player.x');tick();assert(run('game.player.x')>beforeTouch,'a new touch gesture controls the new scene normally');
 pointer('pointerup',83);const afterTouch=run('game.player.x');tick();assert.equal(run('game.player.x'),afterTouch);
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('blockedTransitionKeys.size'),0);
-// The build panel uses real UI buttons, including rerender/focus and modal
-// restrictions, rather than only testing the engine equipment setter.
+// Pause and the independent character panel share one detail view. Equipment
+// controls, tab state, gestures and reward guards are covered by
+// qa-character-hud.mjs with a DOM that parses the new dynamic panel markup.
 nodes['start-button'].onclick();nodes['pause-button'].onclick();
-assert(run('paused'));assert(nodes['build-content'].children[0].innerHTML.includes('角色等级'));assert(nodes['build-content'].children[0].innerHTML.includes('攻击力'));
-assert.equal(document.getElementById('equip-arrow').disabled,true,'a lone equipped weapon cannot be removed');
-run("game.build.increment('orbit');game.levels.rapid=3;game.build.selectBranch('arrow','pierce');game._refreshWeapons();renderCombatBuild();");
-const equippedBefore=run('JSON.stringify({level:game.build.getWeapon("arrow").level,branch:game.build.getWeapon("arrow").branch})');
-assert.equal(document.getElementById('equip-arrow').disabled,false);document.getElementById('equip-arrow').onclick();
-assert.equal(run('game.build.isEquipped("arrow")'),false);assert.equal(document.activeElement.id,'equip-arrow');
-assert.equal(document.getElementById('equip-orbit').disabled,true);assert.equal(document.getElementById('equip-arrow').textContent,'装备');
-assert.equal(run('JSON.stringify({level:game.build.getWeapon("arrow").level,branch:game.build.getWeapon("arrow").branch})'),equippedBefore);
-document.getElementById('equip-arrow').onclick();assert.equal(run('game.build.isEquipped("arrow")'),true);
-run("game.status='upgrade';renderCombatBuild();");assert(document.getElementById('equip-arrow').disabled&&document.getElementById('equip-orbit').disabled);
-document.getElementById('equip-arrow').onclick();assert.equal(run('game.build.isEquipped("arrow")'),true,'a stale button cannot change equipment while a reward is pending');
-run("game.status='playing';renderCombatBuild();");nodes['resume-button'].onclick();assert.equal(run('paused'),false);assert.equal(document.activeElement.id,'game-canvas');
+assert(run('paused'));nodes['pause-character-button'].onclick();
+assert(run('paused&&characterOpen'));assert(nodes['character-content'].innerHTML.includes('攻击'));
+nodes['character-done'].onclick();assert(run('paused&&!characterOpen'));
+nodes['resume-button'].onclick();assert.equal(run('paused'),false);assert.equal(document.activeElement.id,'game-canvas');
 nodes['quit-button'].onclick();assert.equal(run('game'),null);
 
 // Drive the real RAF entry point at distinct display rates. Paused gameplay

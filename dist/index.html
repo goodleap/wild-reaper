@@ -9,6 +9,7 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./upgrade-cards.css">
+  <link rel="stylesheet" href="./character-hud.css">
 </head>
 <body>
   <div class="app">
@@ -20,13 +21,32 @@
         <div class="terrain-label"><span id="terrain-code">01 / THE WHISPERING WOODS</span><span id="terrain-name">低语之森</span></div>
 
         <div id="hud" class="hud hidden">
-          <div class="vitals"><div class="vitals-label"><span class="hp-heart">♥</span><span id="hp-label">100 / 100</span><span id="level-label">LV. 1</span></div><div class="health-track"><i id="health-fill"></i></div><div class="xp-track" aria-label="角色经验"><i id="xp-fill"></i></div><div class="growth-label"><span id="xp-caption">经验 0 / 40</span><span class="gold-counter" title="金币用于商人交易">◉ <b id="gold-label">0</b></span></div><div class="crystal-track" aria-label="灵晶强化进度"><i id="crystal-fill"></i></div><div id="crystal-label" class="crystal-caption">灵晶 0 / 40</div></div>
+          <div id="character-hud" class="character-hud" role="group" aria-label="主角信息">
+            <div class="character-hud-heading"><span id="level-label">LV. 1</span><span class="gold-counter" title="金币用于商人交易">◉ <b id="gold-label">0</b></span><span class="character-hud-expand" aria-hidden="true">↗</span></div>
+            <div class="vitals">
+              <div class="character-meter health-row"><span class="hp-heart" aria-hidden="true">♥</span><div class="health-track" aria-label="生命"><i id="health-fill"></i></div><span id="hp-label" class="character-meter-value">100 / 100</span></div>
+              <div class="character-meter experience-row"><span class="character-meter-label">经验</span><div class="xp-track" aria-label="角色经验"><i id="xp-fill"></i></div><span id="xp-caption" class="character-meter-value">0 / 40</span></div>
+              <div class="character-meter crystal-row"><span class="character-meter-label">灵晶</span><div class="crystal-track" aria-label="灵晶强化进度"><i id="crystal-fill"></i></div><span id="crystal-label" class="character-meter-value">0 / 40</span></div>
+            </div>
+            <div class="character-hud-loadouts"><div class="loadout combat-loadout" id="loadout" role="group" aria-label="已装备武器"></div><div id="super-loadout" class="super-loadout combat-loadout hidden" role="group" aria-label="已掌握技能"></div></div>
+            <div class="character-hud-status">
+              <div id="buff-status" class="buff-status hidden" role="group" aria-label="临时增益">
+                <span id="fury-buff" class="buff-badge fury-buff hidden" title="狂暴"><span class="buff-icon" aria-hidden="true">ϟ</span><span class="buff-name sr-only">狂暴</span><span class="buff-time"><span id="fury-time">0</span>s</span></span>
+                <span id="magnet-buff" class="buff-badge magnet-buff hidden" title="磁力"><span class="buff-icon" aria-hidden="true">⊂</span><span class="buff-name sr-only">磁力</span><span class="buff-time"><span id="magnet-time">0</span>s</span></span>
+              </div>
+              <div id="companion-status" class="companion-status hidden" role="group" aria-label="助战伙伴"><div id="companion-detail" class="companion-detail hidden"><div class="companion-heading"><span id="companion-icon" aria-hidden="true">ϟ</span><span id="companion-name" class="sr-only">旅人助战</span><span id="companion-time">60s</span></div><div class="companion-track"><i id="companion-fill"></i></div></div><span id="rescue-power" class="rescue-power hidden">援助 Lv.1 · 基础伤害 +8%</span></div>
+            </div>
+            <div id="relic-loadout" class="relic-loadout hidden" aria-hidden="true"></div>
+            <button id="character-button" class="character-button" type="button" aria-label="查看主角属性、武器、技能和状态，时间暂停" aria-controls="character-overlay" aria-expanded="false" title="查看主角详情"></button>
+          </div>
           <div class="timer-block"><span class="hud-caption" id="phase-label">存活时间</span><div class="run-stats"><strong id="timer">00:00</strong><span class="kills-block" title="击败怪物"><span aria-hidden="true">✧</span> <strong id="kills">0</strong><span class="sr-only"> 次击败</span></span></div><span class="timer-goal" id="wave-label">游侠 · 第 1 波</span></div>
           <div class="combat-actions"><div class="pause-control"><button id="pause-button" class="icon-button pause-button" aria-label="暂停游戏" title="暂停 (Esc)">Ⅱ</button><span id="debug-fps" class="debug-fps hidden" aria-label="渲染帧率">-- FPS</span></div><button id="map-button" class="map-button" type="button" aria-label="展开探索地图，时间暂停" aria-controls="map-overlay" aria-expanded="false" title="展开地图 (M)"></button></div>
         </div>
 
+        <div id="combat-notices" class="combat-notices">
         <div id="boss-bar" class="boss-bar hidden"><div><span id="boss-name">荒野领主</span><span id="boss-hp">100%</span></div><div class="boss-track"><i id="boss-fill"></i></div></div>
         <div id="encounter-status" class="encounter-status hidden" role="group" aria-label="林间事件"><span id="encounter-icon" class="encounter-icon" aria-hidden="true">◇</span><div><strong id="encounter-name">林间狩猎</strong><span id="encounter-goal">区域内击败怪物</span></div><span id="encounter-time">40秒</span></div>
+        </div>
         <div id="toast" class="toast" role="status"></div>
 
         <div class="intro" id="intro">
@@ -37,19 +57,14 @@
             <p class="intro-description">怪潮已至，魔法在手。<br>探索三座岛屿，穿越传送门，寻找城堡秘藏。</p>
             <div class="intro-tags"><span><svg viewBox="0 0 16 16"><path d="m9 1-6 8h5l-1 6 6-9H8Z"/></svg>自动攻击</span><span><svg viewBox="0 0 16 16"><path d="m8 1 6 7-6 7-6-7Z"/></svg>随机升级</span><span><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 2"/></svg>无尽生存</span></div>
             <div class="start-row"><button id="start-button" class="primary-button"><span>进入荒野</span><span class="button-arrow">↗</span></button><fieldset class="difficulty-control"><legend>挑战难度</legend><div class="difficulty-options"><label class="difficulty-option"><input id="difficulty-normal" type="radio" name="difficulty" value="normal" checked><span>标准试炼</span></label><label class="difficulty-option"><input id="difficulty-casual" type="radio" name="difficulty" value="casual"><span>轻松漫游</span></label></div></fieldset></div>
-            <div class="best-line"><span class="trophy">♜</span><span id="best-label">新的冒险，等你书写。</span><small id="game-version" class="game-version" aria-label="游戏版本">v0.0.49</small></div>
+            <div class="best-line"><span class="trophy">♜</span><span id="best-label">新的冒险，等你书写。</span><small id="game-version" class="game-version" aria-label="游戏版本">v0.0.50</small></div>
           </div>
           <div class="hero-caption"><span class="tiny-star">✦</span><span><span id="hero-preview-name">旅人</span><small id="hero-preview-tagline">微光随行 · 荒野相逢</small></span><span class="hero-line"></span></div>
           <div class="intro-bottom"><span><i class="live-dot"></i> 无需下载，即刻开战</span><span>探索你的生存流派 <span>↘</span></span></div>
         </div>
 
-        <div id="buff-status" class="buff-status hidden" role="group" aria-label="临时增益">
-          <span id="fury-buff" class="buff-badge fury-buff hidden"><span class="buff-icon" aria-hidden="true">ϟ</span><span>狂暴</span><span class="buff-time"><span id="fury-time">0</span>秒</span></span>
-          <span id="magnet-buff" class="buff-badge magnet-buff hidden"><span class="buff-icon" aria-hidden="true">⊂</span><span>磁力</span><span class="buff-time"><span id="magnet-time">0</span>秒</span></span>
-        </div>
-
         <div id="portal-action" class="portal-action hidden"><button id="portal-button" type="button"><span id="portal-button-label">进入下一片荒野</span><span aria-hidden="true">↗</span></button><small id="interaction-note">触碰入口自动互动</small></div>
-        <div class="game-bottom hidden" id="game-bottom"><div class="equipment-stack"><div id="companion-status" class="companion-status hidden" role="group" aria-label="营救与伙伴"><div id="companion-detail" class="companion-detail hidden"><div class="companion-heading"><span id="companion-icon" aria-hidden="true">ϟ</span><span id="companion-name">旅人助战</span><span id="companion-time">60秒</span></div><div class="companion-track"><i id="companion-fill"></i></div></div><span id="rescue-power" class="rescue-power hidden">援助 Lv.1 · 基础伤害 +8%</span></div><div class="loadout combat-loadout" id="loadout" role="group" aria-label="已装备武器"></div><div id="super-loadout" class="super-loadout combat-loadout hidden" role="group" aria-label="已掌握技能"></div><div id="relic-loadout" class="relic-loadout hidden" aria-label="已获得遗物"></div></div><button class="skill-box" id="skill-button" aria-label="释放天雷轰击" title="天雷轰击 · 空格 · 冷却 15 秒"><span class="skill-key">SPACE</span><span id="skill-label">天雷轰击 · 就绪</span><div class="skill-track"><i id="skill-fill"></i></div></button></div>
+        <div class="game-bottom hidden" id="game-bottom"><button class="skill-box" id="skill-button" aria-label="释放天雷轰击" title="天雷轰击 · 空格 · 冷却 15 秒"><span class="skill-key">SPACE</span><span id="skill-label">天雷轰击 · 就绪</span><div class="skill-track"><i id="skill-fill"></i></div></button></div>
         <div id="joystick" class="joystick hidden"><div id="joystick-thumb"></div></div>
         <button class="touch-skill hidden" id="touch-skill" aria-label="释放天雷轰击"><span id="skill-symbol">ϟ</span><small id="touch-skill-label">天雷</small></button>
 
@@ -57,15 +72,22 @@
         <div class="modal-layer hidden" id="relic-overlay"><div class="upgrade-panel relic-panel" role="dialog" aria-modal="true" aria-labelledby="relic-title"><div class="eyebrow centered">✦ &nbsp; RELIC DISCOVERED</div><h2 id="relic-title">领主留下的珍藏</h2><p id="relic-description">选择一件遗物，继续深入荒野。</p><div id="relic-cards" class="upgrade-cards relic-cards"></div><span class="modal-footnote">时间已暂停 · 遗物整局生效 · 选择后前往下一区域</span><button id="relic-pause" class="secondary-button relic-pause" type="button">暂停 / 返回</button></div></div>
         <div class="modal-layer hidden" id="super-overlay"><div class="upgrade-panel super-panel" role="dialog" aria-modal="true" aria-labelledby="super-title"><div class="eyebrow centered">✦ &nbsp; SUPER SKILL</div><h2 id="super-title">领主留下的秘藏</h2><p id="super-description">选择一项超级技能。</p><div id="super-cards" class="upgrade-cards"></div><span class="modal-footnote">自动攻击 · 伤害为基础值 · 可用灵晶强化</span><button id="super-pause" class="secondary-button relic-pause" type="button">暂停 / 返回</button></div></div>
         <div class="modal-layer hidden" id="shop-overlay"><div class="upgrade-panel shop-panel" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div class="eyebrow centered">THE WANDERING MERCHANT</div><h2 id="shop-title">荒野商人的货摊</h2><p>为下一段冒险，备上一点希望。<span class="shop-wallet">金币 <b id="shop-gold">0</b> ◉</span></p><div id="shop-items" class="shop-items"></div><span class="modal-footnote" id="shop-feedback" role="status">购买一件后游商离开 · 交易期间时间暂停</span><div class="shop-actions"><button id="shop-close" class="primary-button" type="button">继续冒险 <span>→</span></button><button id="shop-pause" class="secondary-button" type="button">暂停 / 返回</button></div></div></div>
-        <div class="modal-layer hidden" id="pause-overlay"><div class="dialog-panel pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="eyebrow centered">TAKE A BREATH</div><h2 id="pause-title">在此，稍作停留。</h2><p>荒野会等你。准备好了就继续。</p><div class="pause-tools"><button id="pause-sound-button" class="secondary-button" type="button" aria-label="开启音效" aria-pressed="false">音效：关</button><button id="pause-help-button" class="secondary-button" type="button">玩法说明</button></div><details id="combat-build" class="combat-build"><summary>战斗构筑 <span>属性 · 武器 · 技能</span></summary><div id="build-content" class="build-content"></div></details><button class="primary-button wide" id="resume-button">继续冒险 <span>→</span></button><button class="secondary-button wide" id="quit-button">结束本局，返回首页</button></div></div>
+        <div class="modal-layer hidden" id="pause-overlay"><div class="dialog-panel pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="eyebrow centered">TAKE A BREATH</div><h2 id="pause-title">在此，稍作停留。</h2><p>荒野会等你。准备好了就继续。</p><div class="pause-tools"><button id="pause-sound-button" class="secondary-button" type="button" aria-label="开启音效" aria-pressed="false">音效：关</button><button id="pause-help-button" class="secondary-button" type="button">玩法说明</button></div><button id="pause-character-button" class="secondary-button wide pause-character-button" type="button">主角详情 <span>属性 · 武器 · 技能 · 状态</span></button><button class="primary-button wide" id="resume-button">继续冒险 <span>→</span></button><button class="secondary-button wide" id="quit-button">结束本局，返回首页</button></div></div>
         <div class="modal-layer hidden" id="end-overlay"><div class="dialog-panel end-panel" role="dialog" aria-modal="true" aria-labelledby="end-title"><div class="end-emblem" id="end-emblem">✦</div><div class="eyebrow centered" id="end-kicker">THE JOURNEY CONTINUES</div><h2 id="end-title">荒野记住了你。</h2><p id="end-description">每一次出发，都比上一次更强。</p><div class="end-stats"><div><strong id="end-time">00:00</strong><span>存活时间</span></div><div><strong id="end-kills">0</strong><span>击败怪物</span></div><div><strong id="end-level">1</strong><span>最终等级</span></div></div><button id="restart-button" class="primary-button wide">再次出发 <span>↗</span></button><button id="home-button" class="secondary-button wide">返回首页</button></div></div>
         <div class="modal-layer hidden" id="map-overlay"><div class="map-panel" role="dialog" aria-modal="true" aria-labelledby="map-title" aria-describedby="map-note"><button id="close-map" class="close-button" aria-label="关闭地图，返回之前的界面">×</button><div class="eyebrow">FIELD MAP</div><h2 id="map-title">附近地标</h2><p id="map-note">时间已暂停 · 仅显示附近已发现的建筑</p><div class="expanded-map-body"><canvas id="expanded-map-canvas" width="420" height="420" aria-label="已探索地形和已发现建筑的位置图"></canvas><div class="map-details"><ul id="map-landmarks" class="map-landmarks" aria-label="已发现地标"></ul><div id="map-legend" class="map-legend"></div></div></div><button id="map-done" class="secondary-button" type="button">返回 <kbd>M / Esc</kbd></button></div></div>
+        <div class="modal-layer hidden" id="character-overlay"><section class="character-panel" role="dialog" aria-modal="true" aria-labelledby="character-title" aria-describedby="character-note">
+          <button id="close-character" class="close-button" type="button" aria-label="关闭主角详情，返回之前的界面">×</button>
+          <div class="eyebrow">TRAVELER</div><h2 id="character-title">主角详情</h2><p id="character-note">时间已暂停 · 查看当前生效属性与战斗构筑</p>
+          <nav class="character-tabs" role="tablist" aria-label="主角详情分类"><button id="character-tab-attributes" class="character-tab" type="button" role="tab" data-character-tab="attributes" aria-controls="character-content" aria-selected="true" tabindex="0">属性</button><button id="character-tab-weapons" class="character-tab" type="button" role="tab" data-character-tab="weapons" aria-controls="character-content" aria-selected="false" tabindex="-1">武器</button><button id="character-tab-skills" class="character-tab" type="button" role="tab" data-character-tab="skills" aria-controls="character-content" aria-selected="false" tabindex="-1">技能</button><button id="character-tab-status" class="character-tab" type="button" role="tab" data-character-tab="status" aria-controls="character-content" aria-selected="false" tabindex="-1">状态</button></nav>
+          <div id="character-content" class="character-content" role="tabpanel" aria-labelledby="character-tab-attributes" tabindex="0"></div>
+          <button id="character-done" class="secondary-button" type="button">返回 <kbd>Esc</kbd></button>
+        </section></div>
         <div class="modal-layer hidden" id="help-overlay"><div class="dialog-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title"><button id="close-help" class="close-button" aria-label="关闭玩法说明">×</button><div class="eyebrow centered">FIELD GUIDE</div><h2 id="help-title">你的荒野生存指南</h2><div class="help-list">
           <div><b>01</b><p><strong>移动与攻击</strong><span>WASD / 方向键移动，手机拖动屏幕。绕过大树、巨石与倒木；武器自动攻击；室内墙壁阻挡视线与攻击。</span></p></div>
-          <div><b>02</b><p><strong>收集与进化</strong><span>击杀经验提升角色等级与基础属性。灵晶积满后选择属性、武器或技能强化；武器和技能各有等级，不受角色等级限制。金币用于交易。暂停菜单可查看战斗构筑。</span></p></div>
+          <div><b>02</b><p><strong>收集与进化</strong><span>击杀经验提升角色等级与基础属性。灵晶积满后选择属性、武器或技能强化；武器和技能各有等级，不受角色等级限制。金币用于交易。点击左上角查看主角属性、武器、技能与状态。</span></p></div>
           <div><b>03</b><p><strong>天雷与暂停</strong><span>天雷轰击是开局自带的手动超级技能：空格 / 天雷按钮轰击屏内可见怪物与领主，可用灵晶升级。Esc / P 暂停；右上角地图或 M 查看探索记录。</span></p></div>
           <div><b>04</b><p><strong>识别危险</strong><span>野猪沿红金直线冲锋，侧移躲避，诱它撞障碍可使其眩晕。孢子怪发射慢速紫弹，可借树石掩护。</span></p></div>
-          <div><b>05</b><p><strong>探索与补给</strong><span>触碰或打破补给箱，击败守卫后触碰宝箱领取奖励。药草、磁铁与狂暴即拾即用；增益倒计时显示在生命条下方或装备栏上方。</span></p></div>
+          <div><b>05</b><p><strong>探索与补给</strong><span>触碰或打破补给箱，击败守卫后触碰宝箱领取奖励。药草、磁铁与狂暴即拾即用；左上角显示当前增益与伙伴的剩余时间。</span></p></div>
           <div><b>06</b><p><strong>随机事件与遗迹</strong><span>宝物精限时追逐，主要奖励金币；精英守卫宝箱靠近后触发。触碰遗迹入口开启挑战：狩猎擂台击败 24 名守卫，获得灵晶与狂暴；没有倒计时，建筑和挑战进度会保留。</span></p></div>
           <div><b>07</b><p><strong>战斗联动</strong><span>环刃施加流血，冲击波消耗流血增加 25% 本次伤害；雷电施加感电，下一次飞矢或环刃命中向邻近敌人传导一次。</span></p></div>
           <div><b>08</b><p><strong>利用环境</strong><span>水潭与海岸浅水淹没身体下部，地面单位减速 26%；深海无法进入。飞行单位不受水潭与藤蔓减速，飞行怪物仍受毒雾伤害。攻击爆炸蘑菇触发 0.9 秒预警，范围内敌我均受伤，及时离开橙圈。</span></p></div>
