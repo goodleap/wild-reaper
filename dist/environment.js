@@ -1,5 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { RegionalMechanisms, isGrounded } from './regional-mechanisms.js';
+import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, WATER_SHAPES } from './water-geometry.js';
 export { isGrounded } from './regional-mechanisms.js';
 
 const CELL=520,TAU=Math.PI*2;
@@ -9,7 +10,9 @@ const WEAPON_SOURCES=new Set(['arrow','orbit','pulse','echo','lightning','storm'
 export const ENVIRONMENT_BALANCE=Object.freeze({maxProps:20,maxMuds:12,mushroomFuse:.9,blastRadius:82,mudMultiplier:.74,safeRadius:240,despawnDistance:1800});
 const BODY_HEIGHTS=Object.freeze({slime:[34,16],beetle:[40,18],brute:[55,26],boar:[49,22],spore:[52,20],boss:[109,49]});
 const humanoid=entity=>!!(entity.isCompanion||entity.isCaptive||entity.isTownNpc);
-const mudDistance=(mud,x,y)=>mud.rx>0&&mud.ry>0?Math.hypot((x-mud.x)/mud.rx,(y-mud.y)/mud.ry):Infinity;
+const intersects=(a,b)=>a.maxX>=b.minX&&a.minX<=b.maxX&&a.maxY>=b.minY&&a.minY<=b.maxY;
+const boundsDistance=(b,p)=>Math.hypot(Math.max(b.minX-p.x,0,p.x-b.maxX),Math.max(b.minY-p.y,0,p.y-b.maxY));
+export const WATER_SIZES=Object.freeze([.65,1,1.6,2.5,3.6]);
 
 // This fixed-size filter remembers armed locations for the whole run. A false
 // positive can only omit a mushroom; leaving and revisiting never farms it.
@@ -31,7 +34,7 @@ export class Environment {
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
     this.region=['forest','marsh','ruins'].includes(game.region?.id)?game.region.id:'forest';
     this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
-    this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();
+    this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();
     if(generation)this._refresh(true);
     this.mechanisms=new RegionalMechanisms(this,{generation});
   }
@@ -75,36 +78,86 @@ export class Environment {
     }
     return result;
   }
+  _mudCandidate(tx,ty){
+    const key=`${tx},${ty}`;if(this._waterCandidates.has(key))return this._waterCandidates.get(key);
+    const remember=mud=>{this._waterCandidates.set(key,mud);while(this._waterCandidates.size>192)this._waterCandidates.delete(this._waterCandidates.keys().next().value);return mud;};
+    const seed=this._hash(tx+911,ty+947),chance=this.region==='marsh'?.52:this.region==='ruins'?.16:.36;if(seed>chance)return remember(null);
+    const sizeRoll=this._hash(tx+971,ty+977),scale=WATER_SIZES[sizeRoll<.36?0:sizeRoll<.72?1:sizeRoll<.89?2:sizeRoll<.97?3:4];
+    const family=Math.floor(this._hash(tx+991,ty+997)*(this.region==='marsh'?5:4)),shape=WATER_SHAPES[family];
+    const x=tx*CELL+260+(this._hash(tx+1013,ty+419)-.5)*120,y=ty*CELL+260+(this._hash(tx+503,ty+1013)-.5)*120;
+    const rx=80*scale,ry=(shape==='elongated'?34:shape==='rounded'?50:47)*scale,angle=[-.28,0,.28][Math.floor(this._hash(tx+1091,ty+1097)*3)];
+    const mud={id:`mud:${tx},${ty}`,type:'mud',x,y,rx,ry,seed,shape,angle,island:this.region==='marsh'&&scale>=2.5&&family>=3,scale};
+    // Water may surround an ordinary bank rock or tree. Requiring an empty
+    // circle the size of a lake would reject essentially every large lake.
+    if(Math.hypot(x,y)<=ENVIRONMENT_BALANCE.safeRadius+Math.max(rx,ry)+8)return remember(null);
+    return remember(mud);
+  }
+  _mudObjectiveClear(mud){
+    const g=this.game,clear=(x,y,r)=>!waterIntersectsCircle(mud,x,y,r);
+    if(g.settlements?.sites?.some(s=>!clear(s.x,s.y-(s.depth||0)*.5,Math.hypot((s.width||30)*.5,(s.depth||20)*.5)+65)))return false;
+    if(g.relicSites?.sites?.some(s=>!clear(s.x,s.y,(s.r||100)+45)))return false;
+    if(g.regions?.portals?.some(p=>!clear(p.x,p.y,130)||!clear(p.x,p.y+115,95)))return false;
+    if(g.companions?.camp&&!clear(g.companions.camp.x,g.companions.camp.y,170))return false;
+    if(g.adventure?.props.some(o=>!clear(o.x,o.y,(o.r||18)+12)))return false;
+    if(g.adventure?.treasure&&!clear(g.adventure.treasure.x,g.adventure.treasure.y,(g.adventure.treasure.r||27)+20))return false;
+    return true;
+  }
   _mudAt(tx,ty){
-    const seed=this._hash(tx+911,ty+947),chance=this.region==='marsh'?.52:this.region==='ruins'?.16:.36;if(seed>chance)return null;
-    const rx=68+this._hash(tx+971,ty+977)*18,ry=38+this._hash(tx+991,ty+997)*12;
-    const point=this._point(tx,ty,1013,rx+8);
-    return point&&this._objectiveClear(point.x,point.y,rx+8)?{id:`mud:${tx},${ty}`,type:'mud',...point,rx,ry,seed}:null;
+    const mud=this._mudCandidate(tx,ty);if(!mud)return null;
+    const b=waterBounds(mud,40);
+    // Neighbour arbitration is based only on permanent seed data, not on
+    // load order. Larger waters win and leave an 80-unit dry walking gap.
+    for(let xx=tx-1;xx<=tx+1;xx++)for(let yy=ty-1;yy<=ty+1;yy++){
+      if(xx===tx&&yy===ty)continue;
+      const other=this._mudCandidate(xx,yy);if(!other)continue;
+      const wins=other.scale>mud.scale||(other.scale===mud.scale&&(other.seed>mud.seed||(other.seed===mud.seed&&other.id>mud.id)));
+      if(wins&&intersects(b,waterBounds(other,40)))return null;
+    }
+    return this._mudObjectiveClear(mud)?mud:null;
   }
   _refresh(initial=false){
     const g=this.game,p=this._foot(),halfW=Math.min(900,g.viewWidth*.5)+260,halfH=Math.min(650,g.viewHeight*.5)+260;
     const nearby=o=>Math.abs(o.x-p.x)<halfW+200&&Math.abs(o.y-p.y)<halfH+200;
     this.props=this.props.filter(o=>o.state!=='spent'&&(o.state==='armed'||nearby(o))).slice(0,ENVIRONMENT_BALANCE.maxProps);
-    this.muds=this.muds.filter(nearby).slice(0,ENVIRONMENT_BALANCE.maxMuds);
-    const propIds=new Set(this.props.map(o=>o.id)),mudIds=new Set(this.muds.map(o=>o.id)),props=[],muds=[];
+    const propIds=new Set(this.props.map(o=>o.id)),props=[];
     for(let tx=Math.floor((p.x-halfW)/CELL);tx<=Math.floor((p.x+halfW)/CELL);tx++)
       for(let ty=Math.floor((p.y-halfH)/CELL);ty<=Math.floor((p.y+halfH)/CELL);ty++){
         for(const o of this._mushroomsAt(tx,ty))if(!propIds.has(o.id)&&(initial||!this._visible(o.x,o.y,48)))props.push(o);
-        const mud=this._mudAt(tx,ty);
-        if(mud&&!mudIds.has(mud.id)&&(initial||!this._visible(mud.x,mud.y,mud.rx)))muds.push(mud);
       }
-    props.sort((a,b)=>distance(a,p)-distance(b,p));muds.sort((a,b)=>distance(a,p)-distance(b,p));
+    props.sort((a,b)=>distance(a,p)-distance(b,p));
     this.props.push(...props.slice(0,Math.max(0,ENVIRONMENT_BALANCE.maxProps-this.props.length)));
-    this.muds.push(...muds.slice(0,Math.max(0,ENVIRONMENT_BALANCE.maxMuds-this.muds.length)));
+    this._refreshWater(initial,p);
+  }
+  _refreshWater(initial,p){
+    const g=this.game,last=this._waterView;
+    // A resized viewport or scene teleport reveals ground immediately, not
+    // through the normal walking prefetch band. Fill it as one initial view.
+    initial=initial||!last||last.width!==g.viewWidth||last.height!==g.viewHeight||Math.hypot(last.x-g.player.x,last.y-g.player.y)>320;
+    this._waterView={x:g.player.x,y:g.player.y,width:g.viewWidth,height:g.viewHeight};
+    const view={minX:g.player.x-g.viewWidth*.5,minY:g.player.y-g.viewHeight*.5,maxX:g.player.x+g.viewWidth*.5,maxY:g.player.y+g.viewHeight*.5};
+    const load={minX:view.minX-340,minY:view.minY-340,maxX:view.maxX+340,maxY:view.maxY+340};
+    const retained=this.muds.filter(m=>intersects(waterBounds(m,35),load)),ids=new Set(retained.map(m=>m.id)),candidates=[];
+    // A large water can cross into view while its owning cell is still well
+    // outside it. Query by maximum extent and retain by its whole footprint.
+    for(let tx=Math.floor((load.minX-330)/CELL);tx<=Math.floor((load.maxX+330)/CELL);tx++)for(let ty=Math.floor((load.minY-330)/CELL);ty<=Math.floor((load.maxY+330)/CELL);ty++){
+      const id=`mud:${tx},${ty}`;if(ids.has(id))continue;
+      const mud=this._mudAt(tx,ty);if(!mud)continue;const b=waterBounds(mud,35);
+      if(intersects(b,load)&&(initial||!intersects(b,view)))candidates.push(mud);
+    }
+    // Never evict a visible shoreline to make room for an offscreen center.
+    // The cap remains fixed; the generous prefetch band covers normal motion.
+    const visible=retained.filter(m=>intersects(waterBounds(m,35),view));
+    const rest=[...retained.filter(m=>!intersects(waterBounds(m,35),view)),...candidates];
+    rest.sort((a,b)=>boundsDistance(waterBounds(a),p)-boundsDistance(waterBounds(b),p));
+    this.muds=[...visible,...rest.slice(0,Math.max(0,ENVIRONMENT_BALANCE.maxMuds-visible.length))];
   }
   getImmersion(entity,isPlayer=entity===this.game.player){
     if(!isGrounded(entity))return null;
-    const point=this._foot(entity,isPlayer);let mud=null,nearest=1;
+    const point=this._foot(entity,isPlayer);let mud=null,depth=0;
     // Choose the deepest overlapping pool instead of adding their depths.
     // Only the sprite sinks: movement, collision and ordering keep their feet.
-    for(const patch of this.muds){const d=mudDistance(patch,point.x,point.y);if(d<nearest){nearest=d;mud=patch;}}
+    for(const patch of this.muds){const d=waterDepth(patch,point.x,point.y);if(d>depth){depth=d;mud=patch;}}
     if(!mud)return null;
-    const t=Math.min(1,(1-nearest)/.6),depth=t*t*(3-2*t);
     const human=isPlayer||humanoid(entity),body=BODY_HEIGHTS[entity.type]||[34,16];
     const radius=Number.isFinite(entity.r)&&entity.r>0?entity.r:15;
     const maxSink=human?16:Math.min(18,body[0]*radius/body[1]*.35);
@@ -113,7 +166,7 @@ export class Environment {
   movementMultiplier(entity,isPlayer=entity===this.game.player){
     if(!isGrounded(entity))return 1;
     const point=this._foot(entity,isPlayer);
-    const mud=this.muds.some(m=>mudDistance(m,point.x,point.y)<=1)?ENVIRONMENT_BALANCE.mudMultiplier:1;
+    const mud=this.muds.some(m=>containsWater(m,point.x,point.y))?ENVIRONMENT_BALANCE.mudMultiplier:1;
     return Math.min(mud,this.mechanisms.movementMultiplier(entity,isPlayer));
   }
   isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r);}

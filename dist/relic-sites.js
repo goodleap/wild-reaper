@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { waterIntersectsCircle } from './water-geometry.js';
 import { canStartObjective } from './event-scheduling.js';
 
 const TAU=Math.PI*2;
@@ -46,7 +47,7 @@ export class RelicSites {
     // existing pools. A dry center alone can still leave actors submerged on
     // the platform edge. Existing water is never removed to fit a building.
     const footprint=site.r+30;
-    if(g.environment?.muds?.some(mud=>mud.rx>0&&mud.ry>0&&((site.x-mud.x)/(mud.rx+footprint))**2+((site.y-mud.y)/(mud.ry+footprint))**2<=1))return false;
+    if(g.environment?.muds?.some(mud=>waterIntersectsCircle(mud,site.x,site.y,footprint)))return false;
     if(g.environment?.isHazardFree?.(site.x,site.y,site.type==='hunt'?70:105)===false)return false;
     if(site.type==='rescue'&&g.environment?.props.some(o=>o.state!=='spent'&&distance(o,site)<(o.blastRadius||82)+113))return false;
     return g.terrain.isFree(site.door.x,site.door.y,30);

@@ -14,15 +14,16 @@ const FRAMES={slime:1,bat:5,beetle:3,brute:3,boar:5,spore:3,ancient:3,bloom:3};
 const BOX={slime:[48,40,24,23],bat:[66,52,33,30],beetle:[64,54,32,30],brute:[72,62,36,35],boar:[80,58,40,33],spore:[60,60,30,38],ancient:[128,120,64,73],bloom:[128,120,64,73]};
 
 export class MonsterArt {
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;}
+  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.beetleFacing=new WeakMap();this.pixels=0;this.builds=0;}
   get diagnostics(){return {entries:this.cache.size,size:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
   get cacheStats(){return this.diagnostics;}
   _sprite(kind,pose,hit,flip){const key=`${kind}:${pose}:${hit?1:0}:${flip}`;let image=this.cache.get(key);if(image)return image;const [w,h,ox,oy]=BOX[kind],canvas=this.makeCanvas();canvas.width=w*2;canvas.height=h*2;const c=canvas.getContext('2d');c.scale(2,2);c.translate(ox,oy);c.lineJoin='round';c.lineCap='round';const phase=FRAMES[kind]===1?0:pose/(FRAMES[kind]-1)*2-1;
-    if(kind==='slime')this._slime(c);else if(kind==='bat')this._bat(c,phase);else if(kind==='beetle')this._beetle(c,phase,flip*TAU/8);else if(kind==='brute')this._brute(c,phase);else if(kind==='boar')this._boar(c,phase,flip);else if(kind==='spore')this._spore(c,phase);else if(kind==='bloom')this._bloom(c,phase);else this._ancient(c,phase);
+    if(kind==='slime')this._slime(c);else if(kind==='bat')this._bat(c,phase);else if(kind==='beetle')this._beetle(c,phase,flip);else if(kind==='brute')this._brute(c,phase);else if(kind==='boar')this._boar(c,phase,flip);else if(kind==='spore')this._spore(c,phase);else if(kind==='bloom')this._bloom(c,phase);else this._ancient(c,phase);
     if(hit){c.globalCompositeOperation='source-atop';c.globalAlpha=.43;c.fillStyle='#fff5d5';c.fillRect(-ox,-oy,w,h);c.globalCompositeOperation='source-over';c.globalAlpha=1;}
     image={canvas,w,h,ox,oy,pixels:canvas.width*canvas.height};while(this.pixels+image.pixels>PIXEL_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);}this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
   }
-  draw(c,e,{time=0,reduced=false,dense=false,playerX=e.x+1}={}){const kind=e.type==='boss'?(e.bossKind==='bloom'?'bloom':'ancient'):e.type;if(!BOX[kind])return false;const n=FRAMES[kind],still=reduced||(kind==='boar'&&e.charge&&e.charge.phase!=='rush'),wave=still?0:kind==='beetle'?Math.sin(Number.isFinite(e.walkPhase)?e.walkPhase:0):Math.sin(time*(kind==='bat'?18:(kind==='ancient'||kind==='bloom')?4:10)+(e.id||0));const pose=n===1?0:clamp(Math.round((wave+1)*(n-1)*.5),0,n-1),flip=kind==='beetle'?((Math.round((Number.isFinite(e.visualFacing)?e.visualFacing:0)/(TAU/8))%8)+8)%8:kind==='boar'&&(e.charge?.dx??(playerX-e.x))<0?-1:1,image=this._sprite(kind,pose,e.hit>0,flip);c.drawImage(image.canvas,-image.ox,-image.oy,image.w,image.h);
+  _beetleSide(e){const dx=Math.cos(Number.isFinite(e.visualFacing)?e.visualFacing:0);if(Math.abs(dx)>.12)this.beetleFacing.set(e,dx<0?-1:1);return this.beetleFacing.get(e)||1;}
+  draw(c,e,{time=0,reduced=false,dense=false,playerX=e.x+1}={}){const kind=e.type==='boss'?(e.bossKind==='bloom'?'bloom':'ancient'):e.type;if(!BOX[kind])return false;const n=FRAMES[kind],still=reduced||(kind==='boar'&&e.charge&&e.charge.phase!=='rush'),wave=still?0:kind==='beetle'?Math.sin(Number.isFinite(e.walkPhase)?e.walkPhase:0):Math.sin(time*(kind==='bat'?18:(kind==='ancient'||kind==='bloom')?4:10)+(e.id||0));const pose=n===1?0:clamp(Math.round((wave+1)*(n-1)*.5),0,n-1),flip=kind==='beetle'?this._beetleSide(e):kind==='boar'&&(e.charge?.dx??(playerX-e.x))<0?-1:1,image=this._sprite(kind,pose,e.hit>0,flip);c.drawImage(image.canvas,-image.ox,-image.oy,image.w,image.h);
     if(kind==='boar'&&e.charge?.phase==='windup'){c.save();c.scale(flip,1);oval(c,18,-5,3.6,3.2,'#e991433b');oval(c,18,-5,1.8,1.8,'#fff1b5');line(c,[[15,-8],[20,-7]],'#eeb565',1);c.restore();}
     if(kind==='boar'&&e.charge?.phase==='stunned'){for(let i=0;i<3;i++){const a=i*TAU/3+(reduced?0:time*1.5);star(c,Math.cos(a)*17,-30+Math.sin(a)*4,2.7,'#f3d690');}}
     if(kind==='spore'&&e.cast){const progress=clamp(1-e.cast.life/e.cast.maxLife,0,1),x=Math.cos(e.cast.angle)*18,y=7+Math.sin(e.cast.angle)*10;oval(c,x,y,4.5+progress*3,4.5+progress*3,'#dab5e733');oval(c,x,y,2.3+progress*2,2.3+progress*2,'#e8ccf1');star(c,x-.4,y-.6,2+progress*1.5,'#fff0fa');if(!dense)for(let i=0;i<3;i++){const a=i*TAU/3+(reduced?0:time*2);oval(c,x+Math.cos(a)*7,y+Math.sin(a)*5,1,1,'#e5baed');}}
@@ -47,41 +48,48 @@ export class MonsterArt {
     for(let i=0;i<11;i++){const x=-5+hash(i,75)*10,y=-8+hash(i,47)*16;line(c,[[x,y],[x+.5,y+2]],i%2?'#cad0c936':'#253b4666',.6);}
     for(const x of [-3,3]){oval(c,x,-2,1.65,2.1,'#f1d49b');oval(c,x+.4,-2,.7,1.3,'#393d3c');}poly(c,[[-2,5],[-.6,7],[0,4]],'#e6dfc2');poly(c,[[1,4],[2,6.5],[3,4]],'#e6dfc2');line(c,[[-4,10],[-5,12]],'#b1a79a',1);line(c,[[4,10],[5,12]],'#b1a79a',1);
   }
-  _beetle(c,p,angle=0){
-    // A horizontal insect, seen obliquely from above. Turn the entire body and
-    // all six legs together; flatten in world Y so it never stands upright.
-    c.save();c.translate(0,-4);c.scale(1,.75);c.rotate(angle);
-    // Transform the fixed upper-right world light into this facing's local
-    // coordinates. Baking each direction avoids rotating a painted highlight.
-    const cos=Math.cos(angle),sin=Math.sin(angle),lx=cos*16+sin*(-24),ly=-sin*16+cos*(-24),length=Math.hypot(lx,ly);
-    const light=(colors)=>grad(c,-lx,-ly,lx,ly,colors);
-    for(const side of [-1,1])for(let i=0;i<3;i++){
-      // Alternating tripods: front/rear on one side, middle on the other.
-      const stride=p*side*(i===1?-1:1),x=-13+i*9,footX=x+(i-1)*4+stride*3.4,footY=side*(20.5-Math.max(0,stride)*1.5),kneeX=x+(i-1)*2+stride*1.8;
-      line(c,[[x,side*7],[kneeX,side*14.8],[footX,footY],[footX-2,footY+side*.6]],'#344332',3);
-      line(c,[[x+.25,side*7.1],[kneeX+.3,side*14.3],[footX+.2,footY]],side*ly>0?'#b9a168':'#827c4e',1.15);
-      oval(c,kneeX,side*14.8,1.6,1.55,side*ly>0?'#b19b61':'#6c7048');
-    }
-    // Abdominal rim and two textured wing cases, with a lengthwise seam.
-    oval(c,-7,1.2,16.4,11.7,'#344635');oval(c,-7,0,16,11.2,light(['#6d633d','#a28b4d','#d0b970']));
-    c.save();c.beginPath();c.ellipse(-7,0,15.6,10.9,0,0,TAU);c.clip();
-    poly(c,[[-24,-.9],[-13,-1.2],[-3,-.7],[9,-1],[9,1.25],[-5,.8],[-16,1.1],[-24,.7]],'#435239');
-    for(const side of [-1,1]){
-      c.strokeStyle=side*ly>0?'#eedca77d':'#42533a66';c.lineWidth=.9;c.beginPath();c.moveTo(-21,side*3.2);c.bezierCurveTo(-15,side*9.2,-3,side*9.4,5,side*4);c.stroke();
-      for(let i=0;i<16;i++){const x=-20+hash(i,12)*25,y=side*(2+hash(i,29)*7);line(c,[[x,y],[x+1.1,y+.1]],i%3?'#394d363b':'#f0e3ac55',.7);}
-    }
-    const hx=-7+lx/length*6.5,hy=ly/length*4.2;
-    oval(c,hx,hy,5.4,2.5,'#f6e8b15e',Math.atan2(ly,lx)+Math.PI/2);oval(c,hx+lx/length,hy+ly/length,2.1,1,'#fff0c147');c.restore();
-    // Green thorax, distinct forward head, short hooked mandibles and feelers.
-    oval(c,7.2,0,7.3,9,'#344b36');oval(c,7.4,-.2,6.6,8.3,light(['#3e5840','#70874f','#abb471']));
-    line(c,[[4.5,-7],[3.7,-2],[4.4,3],[5.5,7]],'#374e377d',.9);
-    oval(c,16.3,0,6.7,6.3,'#344734');oval(c,16.3,-.25,6.1,5.7,light(['#455b3e','#7f9052','#b5b875']));
-    for(const side of [-1,1]){
-      line(c,[[18,side*3.7],[23,side*8.9],[27.5,side*10.8]],'#354c36',1.9);
-      line(c,[[18.2,side*3.8],[23.2,side*8.8],[27.3,side*10.7]],side*ly>0?'#c3ba79':'#89945d',.8);oval(c,27.4,side*10.75,.95,1,'#8e9e64');
-      poly(c,[[20.8,side*2.6],[25.1,side*3.8],[25.8,side*.7],[23.5,side*1.6]],light(['#79784f','#b9ac70','#e1cc8d']),'#3a4c35',.7);
-      oval(c,17.7,side*4.3,1.45,1.5,'#e5d59a');oval(c,18.05,side*4.25,.65,.9,'#354636');oval(c,18.25,side*4.5,.25,.35,'#fff0c3');
-    }
+  _beetle(c,p,flip=1){
+    // The same ground-level side view as the boar: a domed shell above the
+    // visible abdomen, with near feet below it and the far legs mostly hidden.
+    // Vertical travel retains this profile instead of rotating the body flat.
+    c.save();c.scale(flip,1);
+    const light=colors=>grad(c,-24*flip,16,24*flip,-24,colors);
+    const leg=(i,far=false)=>{
+      const stride=p*(i===1?-1:1)*(far?-1:1),hipX=-13+i*11+(far?2:0),hipY=far?3:5.5;
+      const kneeX=hipX+(i-1)*4+stride*1.4,kneeY=far?8.4:11.4;
+      const footX=hipX+(i-1)*7+stride*3,footY=(far?14.4:17.1)-Math.max(0,stride)*(far?1.2:2.4);
+      line(c,[[hipX,hipY],[kneeX,kneeY],[footX,footY],[footX+2.2,footY+.1]],far?'#354533':'#30422f',far?2.5:3.1);
+      line(c,[[hipX+.1,hipY],[kneeX+.25,kneeY-.35],[footX+.35,footY-.45]],far?'#66774a':light(['#69774b','#a99b61','#cec185']),far?.85:1.25);
+      oval(c,kneeX,kneeY,far?1.2:1.6,far?1.15:1.5,far?'#596c43':'#9b9960');
+      if(!far)line(c,[[footX,footY+.1],[footX+2.2,footY+.1]],'#a6a16b',.8);
+    };
+    for(let i=0;i<3;i++)leg(i,true);
+    // Side abdomen remains visible beneath the wing-case rim. Broad plates
+    // read at the normal 60px width; tiny noise is restricted to cached paint.
+    oval(c,-7,3.8,17.4,7.4,'#30472f');oval(c,-7,3.2,16.5,6.7,light(['#3b5638','#73804b','#a8a465']));
+    for(let i=0;i<5;i++){const x=-20+i*6.1;line(c,[[x,.7],[x-1,4.5],[x+.4,7.8]],'#334d337e',1.1);line(c,[[x+1,2],[x+.35,5.8]],'#c3b87958',.65);}
+    const shell=()=>{c.beginPath();c.moveTo(-25,1.6);c.bezierCurveTo(-27,-6.5,-21,-15.5,-10,-17);c.bezierCurveTo(1,-19,10,-11.4,11,-3.3);c.quadraticCurveTo(5,3.2,-9,3.4);c.quadraticCurveTo(-19,3.5,-25,1.6);c.closePath();};
+    shell();c.fillStyle=light(['#74613b','#ab8d4f','#d6bc78']);c.fill();c.strokeStyle='#394b33';c.lineWidth=1.4;c.stroke();
+    c.save();shell();c.clip();
+    // A single near wing case, not a top-view pair split down the centre.
+    c.fillStyle='#534e2c44';c.beginPath();c.moveTo(-26,-2);c.quadraticCurveTo(-7,3,12,-7);c.lineTo(13,7);c.lineTo(-27,8);c.closePath();c.fill();
+    for(let i=0;i<4;i++){const x=-20+i*7;c.strokeStyle=i%2?'#f0d89438':'#64593342';c.lineWidth=.9;c.beginPath();c.moveTo(x,-12+Math.abs(i-1)*1.8);c.quadraticCurveTo(x+5,-6,x+3,.9);c.stroke();}
+    for(let i=0;i<27;i++){const x=-23+hash(i,12)*30,y=-15+hash(i,29)*16;line(c,[[x,y],[x+.8,y+.4]],i%3?'#514b2e32':'#f3e4b34b',.6);}
+    const hx=-7+flip*7;
+    oval(c,hx,-12.1,6.3,2.1,'#fff0b85c',-.2*flip);oval(c,hx+flip*2,-12.7,2.3,.7,'#fff2cd75',-.2*flip);
+    c.restore();line(c,[[-24,1.1],[-14,3],[-2,2.5],[8,-1]],'#d3b979',1.15);
+    // Overlapping thorax and forward head break the turtle-like shell outline.
+    oval(c,8,-2.7,6.9,7.5,'#344931');oval(c,8.4,-3.2,6.15,6.75,light(['#4b613d','#829451','#b6ba75']));
+    line(c,[[5,-8],[5.2,-3],[7,1.8]],'#d0c98775',.8);
+    // The far feeler is subdued; the front feeler and eye are crisp profile
+    // features. Both stay ahead of the head rather than fanning symmetrically.
+    line(c,[[17,-3],[23,-10],[28,-11.5]],'#61764b',1.2);oval(c,28,-11.5,.8,.8,'#92a66d');
+    c.fillStyle=light(['#435b38','#819153','#b5b66f']);c.strokeStyle='#334a31';c.lineWidth=1.1;c.beginPath();c.moveTo(11,-5);c.quadraticCurveTo(19,-8,22,-1);c.lineTo(23.5,3);c.quadraticCurveTo(22,7,16,6.1);c.quadraticCurveTo(10,4,11,-5);c.fill();c.stroke();
+    poly(c,[[21.5,2.6],[27.8,3.5],[29,1],[28,6.3],[22,6]],light(['#7a744c','#b8a974','#e4cc94']),'#3a4d34',.75);
+    poly(c,[[21,5],[26.5,6.4],[28.3,5.1],[26.5,8.2],[21,7]],'#a19963','#3a4d34',.65);
+    line(c,[[19,-2],[24.5,-6],[29.4,-5.2]],'#3e5637',1.8);line(c,[[19.2,-2.3],[24.6,-6.3],[29.4,-5.5]],'#b5b87b',.75);oval(c,29.4,-5.3,.85,.85,'#b4c082');
+    oval(c,17,-1.5,2.5,2.55,'#334831');oval(c,17.2,-1.7,1.8,1.9,'#ddce90');oval(c,17.6,-1.6,.85,1.3,'#344331');oval(c,17.2+flip*.45,-2.3,.45,.55,'#fff2be');
+    for(let i=0;i<3;i++)leg(i,false);
     c.restore();
   }
   _brute(c,p){

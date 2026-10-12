@@ -1,4 +1,5 @@
 import { Terrain, groundOffset } from './terrain.js';
+import { waterIntersectsCircle } from './water-geometry.js';
 import { RELICS } from './relics.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive } from './event-scheduling.js';
 
@@ -37,7 +38,7 @@ export class Settlements {
     const env=this.game.environment;if(!env)return true;
     if(env.isHazardFree?.(x,y,r)===false)return false;
     if(env.props?.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+12))return false;
-    return !env.muds?.some(o=>((x-o.x)/(o.rx+r+12))**2+((y-o.y)/(o.ry+r+12))**2<1);
+    return !env.muds?.some(o=>waterIntersectsCircle(o,x,y,r+12));
   }
   _validSite(site,{nearSpawn=false}={}) {
     const g=this.game,center=this._bodyCenter(site),clearance=site.width*.5+70;

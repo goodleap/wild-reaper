@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { waterIntersectsCircle } from './water-geometry.js';
 
 const TAU=Math.PI*2,CELL=520,MAX_SUPPLIES=18,MAX_PICKUPS=24;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -39,7 +40,7 @@ export class Adventure {
     const environment=this.game.environment;if(!environment)return true;
     if(environment.isHazardFree?.(x,y,r)===false)return false;
     if(environment.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8))return false;
-    return !environment.muds.some(m=>((x-m.x)/(m.rx+r+8))**2+((y-m.y)/(m.ry+r+8))**2<=1);
+    return !environment.muds.some(m=>waterIntersectsCircle(m,x,y,r+8));
   }
   _safePoint(x,y,r=28){
     if(this._free(x,y,r))return {x,y};

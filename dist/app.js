@@ -7,6 +7,7 @@ import { MonsterArt } from './monster-art.js';
 import { HumanoidArt } from './humanoid-art.js';
 import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
+import { WaterArt } from './water-art.js';
 import { SuperArt } from './super-art.js';
 import { PropArt } from './prop-art.js';
 import { EncounterArt } from './encounter-art.js';
@@ -31,6 +32,7 @@ const combatArt=new CombatArt(()=>document.createElement('canvas'));
 const monsterArt=new MonsterArt(()=>document.createElement('canvas'));
 const humanoidArt=new HumanoidArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
+const waterArt=new WaterArt(()=>document.createElement('canvas'));
 const hutArt=new HutArt(()=>document.createElement('canvas'));
 const superArt=new SuperArt(()=>document.createElement('canvas'));
 const propArt=new PropArt(()=>document.createElement('canvas'));
@@ -446,7 +448,7 @@ function drawActors(actors){for(const actor of sortActors(actors))drawActor(acto
 // Solid terrain shares one world-space source with movement collision. The
 // old decorative trees are retained only on the title screen.
 function terrainInView(camX,camY){
-  return game?.terrain?.query(camX-width/2-180,camY-height/2-180,camX+width/2+180,camY+height/2+180)||[];
+  return game?.terrain?.query(camX-width/2-260,camY-height/2-260,camX+width/2+260,camY+height/2+260)||[];
 }
 function sceneVisible(entity){if(!game?.dungeon?.active||!game.dungeon.vision)return true;const actor=entity.type&&ACTOR_VISUALS[entity.type]||entity.isCompanion;const y=entity.groundY??(entity.y+(actor?groundOffset(entity,!!entity.isCompanion):0));return game.dungeon.vision.isVisible(entity.x,y,actor?entity.r||0:0);}
 function sceneDrawList(actors,props,adventureProps=[]){
@@ -483,8 +485,8 @@ function drawTerrainShadowPaths(mask,props){
       mask.arc(bx,by,radius,angle-Math.PI/2,angle+Math.PI/2);mask.lineTo(ax-dy*radius,ay+dx*radius);
       mask.arc(ax,ay,radius,angle+Math.PI/2,angle+Math.PI*1.5);mask.closePath();
     }else{
-      const dead=prop.variant==='dead-tree',pillar=prop.variant==='pillar',offset=type==='tree'?35*scale:pillar?r*.9:r*.48,cx=x+SUN.x*offset,cy=y+SUN.y*offset;
-      const rx=type==='tree'?(dead?18:39)*scale:r*.88,ry=type==='tree'?51*scale:pillar?r*1.75:r*1.07;
+      const dead=prop.variant==='dead-tree',pillar=prop.variant==='pillar',visual=prop.visual||{},offset=visual.shadowOffset??(type==='tree'&&visual.shadowLength?visual.shadowLength*.68:type==='tree'?35*scale:pillar?r*.9:r*.48),cx=x+SUN.x*offset,cy=y+SUN.y*offset;
+      const rx=visual.shadowWidth??(type==='tree'?(dead?18:39)*scale:r*.88),ry=visual.shadowLength??(type==='tree'?51*scale:pillar?r*1.75:r*1.07);
       mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();
     }
   }
@@ -493,7 +495,8 @@ function treeCanopyOpacity(prop,mainPlayer){
   if(!mainPlayer)return 1;
   const scale=prop.scale||1,playerFoot=mainPlayer.y+ACTOR_VISUALS.player.foot*1.1;
   if(playerFoot>=(prop.sortY??prop.y))return 1;
-  const distance=Math.hypot((mainPlayer.x-prop.x)/(68*scale+14),(mainPlayer.y-7-(prop.y-67*scale))/(46*scale+23));
+  const visual=prop.visual||{},cx=prop.x+(visual.canopyX??0),cy=prop.y+(visual.canopyY??-67*scale);
+  const distance=Math.hypot((mainPlayer.x-cx)/((visual.canopyRx??68*scale)+14),(mainPlayer.y-7-cy)/((visual.canopyRy??46*scale)+23));
   return 1-.65*clamp((1.12-distance)/.38,0,1);
 }
 function drawTerrainTree(prop,mainPlayer){sceneryArt.drawTree(ctx,prop,treeCanopyOpacity(prop,mainPlayer));}
@@ -543,8 +546,7 @@ function drawAdventureProp(prop){if(prop.isHutFurniture){hutArt.drawProp(ctx,pro
 }
 function drawMudGround(){
   for(const mud of game.environment?.muds||[]){
-    const {x,y,rx,ry}=mud;if(Math.abs(x-game.player.x)>width/2+rx+24||Math.abs(y-game.player.y)>height/2+ry+22)continue;
-    regionalArt.drawMud(ctx,mud,{region:game.region.id,time:game._clock,reduced,dense:combatOptions.dense});
+    waterArt.draw(ctx,mud,{...combatOptions,region:game.region.id});
   }
 }
 function drawEnvironmentWarnings(){
@@ -957,6 +959,7 @@ function renderIntro(){
 function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<600||game.enemies.length>95||game.effects.length>90;const p=game.player,camX=p.x,camY=p.y;let sx=0,sy=0;if(shake>0&&!reduced){sx=(hash(game._clock,23)-.5)*shake;sy=(hash(game._clock,67)-.5)*shake;}
   const offsetX=width/2-camX+sx,offsetY=height/2-camY+sy;
   combatOptions.screenTopWorldY=-offsetY;combatOptions.viewWidth=width;
+  combatOptions.viewBounds={minX:-offsetX,minY:-offsetY,maxX:width-offsetX,maxY:height-offsetY};
   background(camX-sx,camY-sy,false);
   const actors=game.enemies.filter(sceneVisible).map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally&&sceneVisible(ally))actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:site.id,castFace:site.castFace||0,facing:0};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])if(site.type==='rescue'&&site.state==='ready')actors.push(actorVisual({x:site.x,y:site.y-19.8,r:15,heroId:site.kind,kind:site.kind,name:site.kind==='warden'?'守林人':'唤雷者',isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
   const terrain=terrainInView(camX,camY),adventureProps=adventureSceneProps(camX,camY);

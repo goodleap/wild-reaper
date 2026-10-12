@@ -13,9 +13,9 @@ function paint(c,fill,stroke=null,w=1){if(fill){c.fillStyle=fill;c.fill();}if(st
 function material(c,flip,colors,x=17,top=-28,bottom=15){const g=c.createLinearGradient(-x*flip,bottom,x*flip,top);colors.forEach((v,i)=>g.addColorStop(i/(colors.length-1),v));return g;}
 function gem(c,x,y,r,colors=['#77745a','#d9c17b','#fff1b9'],flip=1){poly(c,[[x,y-r],[x+r*.75,y],[x,y+r],[x-r*.75,y]],colors[1],colors[0],.7);poly(c,[[x,y-r],[x+r*.75*flip,y],[x,y]],colors[2]);poly(c,[[x,y],[x,y+r],[x-r*.75*flip,y]],colors[0]);}
 function coatPath(c,w=12){c.beginPath();c.moveTo(-8,-7);c.quadraticCurveTo(0,-9,8,-7);c.lineTo(w,10);c.quadraticCurveTo(0,15,-w,10);c.closePath();}
-function hoodPath(c){c.beginPath();c.moveTo(-14,-8);c.bezierCurveTo(-17,-22,-10,-30,0,-32);c.bezierCurveTo(12,-33,17,-22,16,-9);c.quadraticCurveTo(12,-1,-11,-2);c.closePath();}
+function hoodPath(c){c.beginPath();c.moveTo(-11,-8);c.lineTo(-11,-22);c.quadraticCurveTo(-10,-27,-4,-30);c.lineTo(3,-34);c.quadraticCurveTo(10,-30,11,-22);c.lineTo(12,-10);c.lineTo(6,-6);c.lineTo(-5,-5);c.closePath();}
 const PALETTES={
-  traveler:{cloth:['#617547','#9baf79','#c8d3a4'],arm:['#55703f','#85a45e','#b4c682'],outline:'#334832',skin:['#9f9671','#d4c8a0','#ece2bd'],face:'#2f4030',eye:'#eef6cb'},
+  traveler:{cloth:['#253a40','#405c61','#748d8f'],arm:['#283c42','#425e64','#778d8d'],outline:'#1c3035',skin:['#7d695a','#b39b80','#c8b295'],face:'#ad957b',eye:'#352e2a'},
   warden:{cloth:['#5b6340','#8f8052','#c1ac76'],arm:['#495e3a','#718653','#a4ac70'],outline:'#374831',skin:['#908662','#bfb185','#e0d1a0'],face:'#344638',eye:'#f2ebbf'},
   stormcaller:{cloth:['#49435e','#796e9d','#aaa0c4'],arm:['#58516f','#8a80aa','#b1a6cc'],outline:'#373c4d',skin:['#9292ac','#c3bfda','#e1dceb'],face:'#353d54',eye:'#eaf0ff'},
   merchant:{cloth:['#665237','#997c4d','#ccb37b'],arm:['#756040','#ac8c57','#d5b977'],outline:'#444632',skin:['#a3946d','#d2c09a','#eee0b8'],face:'#414832',eye:'#f3eccb'},
@@ -61,7 +61,9 @@ export class HumanoidArt {
     this._part(c,kind,'left',flip,ratio,0,-p.arm*.65);
     this._part(c,kind,'body',flip,ratio);
     if(kind==='traveler'){
-      c.save();c.scale(flip,1);c.beginPath();c.moveTo(-8,0);c.quadraticCurveTo(-17,2,-23,1+p.cloth);c.lineTo(-21,6.5);c.quadraticCurveTo(-13,8,-8,4);c.closePath();paint(c,'#76934e','#3f5a35',.7);line(c,[[-11,2],[-17,4],[-21,3+p.cloth*.5]],'#b2bc77',.8);c.restore();
+      // The short lower fold follows the walking pose, but no scarf or loose
+      // triangular tail floats beside the character's head.
+      c.save();c.scale(flip,1);c.beginPath();c.moveTo(-11,4);c.lineTo(-13.5+p.cloth*.28,12.8);c.lineTo(-7,13.8);c.lineTo(-5,7);c.closePath();paint(c,'#334e55','#243a40',.6);line(c,[[-10,7],[-10.8+p.cloth*.2,12]],'#6c85876b',.65);c.restore();
     }
     if(kind==='stormcaller'){
       // Grip is the pivot. The elbow bends around it, instead of attaching a
@@ -75,7 +77,7 @@ export class HumanoidArt {
     c.restore();return true;
   }
   _boots(c,p,flip,kind){
-    const leather=kind==='stormcaller'?['#36364a','#5c576d','#8b8596']:kind==='angel'?['#667464','#98a189','#c9c8ab']:['#303a2b','#555d40','#87906a'];
+    const leather=kind==='traveler'?['#292c2a','#535347','#86816b']:kind==='stormcaller'?['#36364a','#5c576d','#8b8596']:kind==='angel'?['#667464','#98a189','#c9c8ab']:['#303a2b','#555d40','#87906a'];
     for(const side of [-1,1]){const lift=side<0?p.leftLift:p.rightLift,x=(side*6-side*p.step*1.6)*flip;
       line(c,[[side*5.5*flip,8+p.bodyY],[x,14-lift]],leather[1],4.6);
       c.beginPath();c.moveTo(x-3.4,12-lift);c.quadraticCurveTo(x,10.6-lift,x+3.2,12-lift);c.lineTo(x+4.2,15.4-lift);c.quadraticCurveTo(x+1,18.3-lift,x-4,16.1-lift);c.closePath();paint(c,leather[1],leather[0],.9);
@@ -84,8 +86,9 @@ export class HumanoidArt {
   }
   _back(c,kind,flip){
     if(kind==='traveler'){
-      c.beginPath();c.moveTo(-10,-5);c.quadraticCurveTo(-17,3,-16,12.5);c.quadraticCurveTo(-3,19,15,12);c.lineTo(9,-7);c.closePath();paint(c,material(c,flip,['#304c35','#547447','#87a362'],17,-7,15),'#2c432f',1.1);
-      line(c,[[-11,0],[-13,8],[-10,13]],'#263f3066',1.2);line(c,[[6,-2],[11,10],[5,14]],'#b1bd766b',.9);
+      c.beginPath();c.moveTo(-8,-12);c.lineTo(-15,-7);c.lineTo(-16,-2);c.lineTo(-12,4);c.lineTo(-14,13);c.quadraticCurveTo(-7,16,-2,13.5);c.lineTo(3,13);c.quadraticCurveTo(9,15.5,14,12.5);c.lineTo(11,3);c.lineTo(15,-4);c.lineTo(13,-8);c.lineTo(7,-12);c.closePath();
+      paint(c,material(c,flip,['#20343a','#3b535b','#617a80'],17,-13,15),'#1d3036',1.1);
+      line(c,[[-12,-5],[-10,4],[-12,12]],'#182c337d',1.1);line(c,[[11*flip,-6],[10*flip,5],[12*flip,12]],'#97afb062',.9);
     }else if(kind==='angel'){
       for(const side of [-1,1]){
         const points=[[side*8,-6],[side*13,-17],[side*26,-26],[side*27,-19],[side*24,-7],[side*19,3],[side*9,5]];
@@ -107,14 +110,26 @@ export class HumanoidArt {
     }
   }
   _body(c,kind,flip){
+    if(kind==='traveler'){
+      const p=PALETTES[kind];
+      // One continuous hooded coat: shoulders carry its weight, while the two
+      // calf-length front panels leave a small grounded gap over the boots.
+      c.beginPath();c.moveTo(-7,-10);c.lineTo(-14,-7);c.lineTo(-13,0);c.lineTo(-10,5);c.lineTo(-12,13);c.lineTo(-4,14);c.lineTo(0,10.5);c.lineTo(5,13.5);c.lineTo(12,12.5);c.lineTo(10,4);c.lineTo(13,-1);c.lineTo(14,-7);c.lineTo(7,-10);c.closePath();paint(c,material(c,flip,p.cloth,16,-13,15),p.outline,1.1);
+      poly(c,[[-5,-8],[1,-5],[3,10],[0,11],[-4,13],[-6,9]],'#23383dcc');
+      poly(c,[[-9,-7],[-3,-7],[0,-3],[-4,2],[-7,12],[-11,12],[-8,3]],'#45636a');
+      poly(c,[[4,-8],[9,-7],[8,2],[10,11],[6,12],[4,3]],material(c,flip,['#344b52','#506c70','#789192'],14,-10,13));
+      line(c,[[-8,-1],[-7,5],[-9,11]],'#20343b99',1);line(c,[[7*flip,-6],[6.5*flip,3],[9*flip,10]],'#91aaab66',.8);
+      line(c,[[-10,12],[-5,12.8]],'#81979666',.65);line(c,[[5,12],[10,11.5]],'#91a3a366',.65);
+      // A subdued fastener identifies the crossing cloth, not a belt splitting
+      // a big separate head from a tiny tunic.
+      line(c,[[-3,-6],[2,-5]],'#7d8d86',1.4);oval(c,2,-5,1.3,1.4,'#9c997e');line(c,[[1.4,-5.7],[2.5,-5.7]],'#c4bea0',.5);
+      return;
+    }
     const p=PALETTES[kind];coatPath(c,kind==='traveler'?10:12);paint(c,material(c,flip,p.cloth,14,-8,13),p.outline,1.15);
     // A few broad fold planes survive at game size; there is no noisy fabric grain.
     poly(c,[[-6,-4],[-3,3],[-6,11],[-9,10]],'#152d242b');poly(c,[[5,-5],[8,9],[4,12],[3,4]],kind==='angel'?'#ffffff55':'#efebca22');
     line(c,[[-6,2],[-7,9]],kind==='stormcaller'?'#c5b7d440':'#e6e7b83b',.75);
-    if(kind==='traveler'){
-      poly(c,[[-12,-4],[9,-5],[12,-1],[9,4],[-10,4]],material(c,flip,['#3e6037','#6f954d','#b2bd73'],13,-6,5),'#3a5434',.8);
-      poly(c,[[-7,-2],[7,-3],[3,1],[-9,1]],'#b6c68744');line(c,[[-8,8],[8,8]],'#536343',2.7);line(c,[[-7,7.6],[8,7.6]],'#aab283',.6);gem(c,1,8,2.3,undefined,flip);
-    }else if(kind==='stormcaller'){
+    if(kind==='stormcaller'){
       poly(c,[[-3,-7],[2,-7],[4,11],[-4,11]],material(c,flip,['#767492','#aaaace','#d7d4e6'],6,-7,12),'#55536d',.65);line(c,[[-10,10],[0,12],[10,10]],'#c7b8d4',1.3);line(c,[[-9,8],[-5,9]],'#b9a5ca',.65);line(c,[[5,9],[9,8]],'#b9a5ca',.65);gem(c,0,3,2.7,['#737392','#bdc9e6','#f0f1ff'],flip);
       poly(c,[[-10,-6],[0,-3],[10,-6],[7,-1],[0,0],[-7,-1]],'#514b69','#383d4c',.65);line(c,[[-8,-5],[0,-2],[8,-5]],'#b4a5c8',.7);
     }else if(kind==='warden'){
@@ -133,12 +148,20 @@ export class HumanoidArt {
   _head(c,kind,flip){
     const p=PALETTES[kind];
     if(kind==='traveler'){
-      hoodPath(c);paint(c,material(c,flip,['#a99f76','#d5d0a6','#f6edc8'],16,-33,-1),p.outline,1.25);
-      c.save();hoodPath(c);c.clip();c.beginPath();c.moveTo(-14,-5);c.quadraticCurveTo(-13,-27,0,-30);c.quadraticCurveTo(-9,-16,-6,-3);c.closePath();paint(c,'#8b85644d');
-      line(c,[[7*flip,-29],[12*flip,-23],[13.5*flip,-14]],'#fff6d59c',1.4);c.restore();
-      oval(c,1,-12.5,11,9.3,'#7c8260');oval(c,1.5,-12.2,9.8,8.2,material(c,flip,['#24392d','#354a35','#516444'],10,-19,-3));
-      c.beginPath();c.moveTo(-9,-15);c.quadraticCurveTo(1,-24,12,-15);c.quadraticCurveTo(1,-19,-9,-15);paint(c,'#22372eaa');
-      line(c,[[-10,-11],[-8,-5],[0,-3],[9,-5]],'#efe3b77d',.8);
+      // The angular hood is smaller than the shoulder span and shares the coat
+      // palette; its fabric falls down over the collar instead of forming a rim.
+      hoodPath(c);paint(c,material(c,flip,['#263c43','#46616a','#7c9498'],13,-34,-5),p.outline,1.15);
+      poly(c,[[-10,-22],[-4,-29],[3,-34],[0,-26],[-6,-18],[-7,-10],[-10,-8]],'#263f485c');
+      line(c,[[3,-32],[8,-27],[10,-19]],flip>0?'#a3b6b578':'#6a858d66',.85);
+      if(flip<0)line(c,[[-8,-25],[-9,-19],[-8,-12]],'#a3b6b578',.85);
+      c.beginPath();c.moveTo(-6.5,-22);c.quadraticCurveTo(0,-27,7.5,-23);c.lineTo(8,-15);c.quadraticCurveTo(6,-9,1,-8);c.quadraticCurveTo(-5,-10,-6.5,-15);c.closePath();paint(c,'#192b30','#68818a',.65);
+      c.beginPath();c.moveTo(-4.5,-21);c.quadraticCurveTo(1,-24,5.5,-21.5);c.lineTo(6.3,-16);c.quadraticCurveTo(5.5,-12,1.1,-10.5);c.quadraticCurveTo(-3,-11.6,-4.1,-15);c.closePath();paint(c,material(c,flip,['#817462','#a38e76','#c3ae91'],7,-24,-10));
+      // A shaded brow and a quiet cheek plane make this a small human face,
+      // rather than a dark circular void with luminous monster eyes.
+      c.beginPath();c.moveTo(-5,-21);c.quadraticCurveTo(0,-25,6,-22);c.lineTo(6,-18.5);c.quadraticCurveTo(1,-20,-4.5,-18);c.closePath();paint(c,'#4b4b4366');
+      line(c,[[4*flip,-16],[3.5*flip,-13.5]],'#c7b39755',.65);
+      poly(c,[[-10,-13],[-5,-10],[1,-9],[8,-13],[12,-9],[7,-5],[0,-3],[-8,-7]],material(c,flip,['#263c43','#435e66','#6b858b'],13,-15,-3),null);
+      line(c,[[-8,-10],[-2,-7],[5,-8]],'#8da3a466',.8);
     }else{
       oval(c,0,-13.2,10.6,11,material(c,flip,[p.face,p.face,kind==='angel'?'#809381':kind==='stormcaller'?'#596179':'#64745a'],11,-22,-4));
       // The cap casts a small soft-edged painted plane rather than a blur filter.
@@ -170,7 +193,15 @@ export class HumanoidArt {
   _right(c,kind,flip){this._arm(c,kind,flip,1);}
   _arm(c,kind,flip,side){
     const p=PALETTES[kind],handX=side*16,handY=kind==='traveler'?4.5:8;
-    if(kind==='traveler'&&side<0)return;
+    if(kind==='traveler'){
+      // Small relaxed hands emerge from long sleeves. Their warm muted skin
+      // stays distinct from both the blue cloth and the dark leather boots.
+      const hx=side*14.6,hy=7.6;
+      c.beginPath();c.moveTo(side*11,-6);c.lineTo(side*15,-3);c.lineTo(side*16,3.6);c.lineTo(side*12.6,5.8);c.lineTo(side*10.5,0);c.closePath();paint(c,material(c,flip,p.arm,17,-8,9),p.outline,.9);
+      line(c,[[side*13,-2],[side*14.5,2.8]],side*flip>0?'#91a6a8':'#4f6c73',.8);
+      line(c,[[side*12.8,4.1],[side*15.5,3]],'#8c9f9d',.7);
+      oval(c,hx,hy-1.2,2.4,2.7,material(c,flip,p.skin,17,-6,10));line(c,[[hx-.6,hy-2.1],[hx+.8,hy-2.4]],'#d1bca0',.7);return;
+    }
     line(c,[[side*9,-3],[side*13,1],[handX,handY]],p.outline,6);
     line(c,[[side*9,-3],[side*13,1],[handX,handY]],material(c,flip,p.arm,17,-7,11),4.6);
     line(c,[[side*11,-2],[side*14,2]],side*flip>0?p.arm[2]:p.arm[1],.85);
@@ -190,14 +221,14 @@ export class HumanoidArt {
     poly(c,[[12,-34],[12,-28],flip>0?[16,-29]:[7,-30]],'#f3fcff');poly(c,[flip>0?[7,-30]:[16,-29],[12,-28],[12,-25]],'#9ca4c9');line(c,[[8,-25],[12,-24],[15,-27]],'#c5b490',1.3);
   }
   _face(c,kind,state){
-    const p=PALETTES[kind],xs=kind==='traveler'?[-2.5,5.5]:[-4,4],y=kind==='traveler'?-12:-12.6;
+    const p=PALETTES[kind],xs=kind==='traveler'?[-1.8,4.1]:[-4,4],y=kind==='traveler'?-17.3:-12.6;
     for(let i=0;i<2;i++){
       const x=xs[i];
       if(state==='hurt')line(c,[[x+(i?1.5:-1.5),y-1.6],[x+(i?-.9:.9),y],[x+(i?1.5:-1.5),y+1.4]],p.eye,1.2);
       else if(state==='blink')line(c,[[x-1.4,y+.2],[x+1.4,y+.2]],p.eye,1);
       else if(state==='focus')line(c,[[x-1.5,y+(i?-.6:.3)],[x+1.5,y+(i?.3:-.6)]],p.eye,1.5);
       else if(state==='glad'){c.beginPath();c.moveTo(x-1.5,y+.8);c.quadraticCurveTo(x,y-1.5,x+1.5,y+.8);c.strokeStyle=p.eye;c.lineWidth=1.1;c.stroke();}
-      else oval(c,x,y,1.4,1.95,p.eye);
+      else oval(c,x,y,kind==='traveler'?1.02:1.4,kind==='traveler'?1.2:1.95,p.eye);
     }
   }
 }

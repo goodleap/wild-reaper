@@ -1,6 +1,33 @@
 const CELL=520, TAU=Math.PI*2, EPS=.02;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
+// Shared measured outlines keep art, fading and sunlight on the same footprint.
+// All heights are relative to the root; trees only collide at their trunks.
+export const TREE_PROFILES=Object.freeze([
+  {name:'wide',x:0,y:-76,rx:74,ry:42,trunkWidth:1.08,trunkHeight:.91},
+  {name:'slender',x:0,y:-101,rx:39,ry:50,trunkWidth:.74,trunkHeight:1.20},
+  {name:'leaning',x:16,y:-90,rx:55,ry:48,trunkWidth:.92,trunkHeight:1.06},
+  {name:'sapling',x:0,y:-68,rx:32,ry:31,trunkWidth:.58,trunkHeight:.81},
+  {name:'weathered',x:-9,y:-84,rx:63,ry:47,trunkWidth:1.22,trunkHeight:1.07}
+].map(Object.freeze));
+export const DEAD_TREE_PROFILES=Object.freeze([
+  {x:0,y:-73,rx:48,ry:36,trunkWidth:1.08,trunkHeight:1},
+  {x:0,y:-92,rx:30,ry:43,trunkWidth:.74,trunkHeight:1.25},
+  {x:16,y:-81,rx:54,ry:39,trunkWidth:.92,trunkHeight:1.1},
+  {x:0,y:-53,rx:26,ry:27,trunkWidth:.58,trunkHeight:.7},
+  {x:-3,y:-61,rx:49,ry:32,trunkWidth:1.22,trunkHeight:.86}
+].map(Object.freeze));
+export function sceneryVisual(prop){
+  const s=prop.scale||1;
+  if(prop.type==='tree'){
+    const p=(prop.variant==='dead-tree'?DEAD_TREE_PROFILES:TREE_PROFILES)[prop.treeForm||0],cw=prop.crownWidth||1,ch=prop.crownHeight||1;
+    return Object.freeze({halfWidth:(Math.abs(p.x)+p.rx*cw+8)*s,top:Math.max(140*(prop.treeForm===4?1:0),-p.y+p.ry*ch+7)*s,bottom:24*s,canopyX:p.x*s,canopyY:p.y*s,canopyRx:(p.rx*cw+4)*s,canopyRy:(p.ry*ch+3)*s,shadowWidth:(p.rx*.62)*s,shadowLength:Math.max(32,(-p.y+p.ry)*.42)*s});
+  }
+  if(prop.type==='log')return Object.freeze({halfWidth:Math.abs(Math.cos(prop.angle||0))*(prop.halfLength+prop.r)+28,top:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,bottom:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,shadowWidth:prop.r,shadowLength:prop.r*1.7});
+  const r=prop.r,top=prop.variant==='pillar'?([3.05,3.75,2.6,3.35,2.05][prop.rockForm||0])*r:([1.42,.75,1.7,1.5,1.25][prop.rockForm||0])*r;
+  return Object.freeze({halfWidth:r*1.14,top:top+4,bottom:r*1.12,shadowWidth:r*.92,shadowLength:r*(prop.variant==='pillar'?1.8:.72)});
+}
+
 
 export function groundOffset(entity,isPlayer=false) {
   if(isPlayer) return 19.8;
@@ -59,19 +86,23 @@ export class Terrain {
     if(this._cache.has(key)){const value=this._cache.get(key);this._cache.delete(key);this._cache.set(key,value);return value;}
     const items=[],n=this._hash(tx+31,ty+17),marsh=this.region==='marsh',ruins=this.region==='ruins';
     if(n>.62){
-      const scale=.65+n*.4;
+      const size=this._hash(tx+91,ty+43),scale=size<.86?.70+size*.64:1.28+(size-.86)/.14*.22;
+      const treeForm=Math.floor(this._hash(tx+57,ty+101)*5),crownWidth=.93+this._hash(tx+37,ty+89)*.14,crownHeight=.96+this._hash(tx+13,ty+109)*.08;
       const visual=ruins?{region:this.region,variant:'pillar'}:marsh?{region:this.region,variant:'dead-tree'}:{};
-      items.push(obstacle({id:`${ruins?'pillar':'tree'}:${key}`,type:ruins?'rock':'tree',x:tx*CELL+110,y:ty*CELL+50,r:24*scale,scale,seed:n,...visual}));
+      const prop={id:`${ruins?'pillar':'tree'}:${key}`,type:ruins?'rock':'tree',x:tx*CELL+110,y:ty*CELL+50,r:24*scale*(ruins?1:TREE_PROFILES[treeForm].trunkWidth),scale,seed:n,treeForm,rockForm:treeForm,crownWidth,crownHeight,...visual};
+      items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
     }
-    // One extra prop lives in the roomy opposite quarter of every cell.
-    // Adjacent props retain a wide passage even for the largest enemy.
-    const x=tx*CELL+240+this._hash(tx+71,ty+13)*90,y=ty*CELL+245+this._hash(tx+19,ty+81)*85,seed=this._hash(tx+41,ty+63);
+    // Keep the two occupied quarters and boss-width passages. Sizes vary by
+    // an independent seed, so shape, location and growth do not repeat together.
+    const x=tx*CELL+240+this._hash(tx+71,ty+13)*90,y=ty*CELL+245+this._hash(tx+19,ty+81)*85,seed=this._hash(tx+41,ty+63),size=this._hash(tx+113,ty+59);
     if(seed>.49){
       const visual=ruins?{region:this.region,variant:'wall'}:marsh?{region:this.region,variant:'sunken-log'}:{};
-      items.push(obstacle({id:`log:${key}`,type:'log',x,y,r:14+this._hash(tx+29,ty+47)*4,halfLength:48+seed*18,angle:this._hash(tx+83,ty+23)*TAU,scale:1,seed,...visual}));
+      const prop={id:`log:${key}`,type:'log',x,y,r:12+size*10,halfLength:35+size*43,angle:this._hash(tx+83,ty+23)*TAU,scale:1,seed,logForm:Math.floor(this._hash(tx+59,ty+29)*3),...visual};
+      items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
     }else{
-      const r=31+seed*24,visual=ruins?{region:this.region,variant:'slab'}:marsh?{region:this.region,variant:'moss-rock'}:{};
-      items.push(obstacle({id:`rock:${key}`,type:'rock',x,y,r,scale:r/36,seed,...visual}));
+      const scale=size<.9?.60+size*.91:1.45+(size-.9)*3.5,r=36*scale,rockForm=Math.floor(this._hash(tx+97,ty+137)*5),visual=ruins?{region:this.region,variant:'slab'}:marsh?{region:this.region,variant:'moss-rock'}:{};
+      const prop={id:`rock:${key}`,type:'rock',x,y,r,scale,seed,rockForm,...visual};
+      items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
     }
     const clear=items.filter(o=>{const q=this.closestPoint(o,0,0);return Math.hypot(q.x,q.y)>190+o.r;});
     this._cache.set(key,clear);

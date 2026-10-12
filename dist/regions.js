@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { waterIntersectsCircle } from './water-geometry.js';
 
 export const REGIONS=Object.freeze([
   Object.freeze({id:'forest',name:'低语之森',shortName:'密林',colors:{ground:'#263e30',light:'#35503a',dark:'#182b22',accent:'#a9d991',mist:'#c1d6a9',grass:'#648052',stone:'#788170'},enemyWeights:{slime:1,beetle:1,bat:1,brute:1,boar:1,spore:1}}),
@@ -40,8 +41,8 @@ export class Regions {
   _safePoint(origin={x:0,y:0},forward=false) {
     const g=this.game,p=feet(g);
     // Reserve both the gate's approach and its guardian's footing. Expanding
-    // each water ellipse leaves the existing swamp untouched.
-    const dry=(x,y,r)=>!g.environment?.muds?.some(mud=>((x-mud.x)/(mud.rx+r))**2+((y-mud.y)/(mud.ry+r))**2<1);
+    // each actual water contour leaves the existing swamp untouched.
+    const dry=(x,y,r)=>!g.environment?.muds?.some(mud=>waterIntersectsCircle(mud,x,y,r));
     const safe=(x,y)=>g.terrain.isFree(x,y,forward?112:40)&&dry(x,y,forward?112:45)&&
       (!forward||dry(x,y+115,66))&&g.relicSites?.isSafePoint(x,y,forward?180:60)!==false&&
       g.settlements?.isSafePoint(x,y,forward?150:45)!==false&&g.environment?.isHazardFree?.(x,y,forward?90:45)!==false&&
