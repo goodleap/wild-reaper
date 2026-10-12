@@ -107,15 +107,26 @@ export class HumanoidArt {
     if(kind==='traveler'){
       c.beginPath();c.moveTo(-10,-4);c.quadraticCurveTo(-17,6,-16,13);c.quadraticCurveTo(0,18,15,12);c.lineTo(9,-7);c.closePath();paint(c,'#567b49','#253c2a',1.6);
     }else if(kind==='angel'){
+      // Broad curved feathers form a stepped fan, not two pointed leaf shapes.
+      // The complete span still fits the existing 64 px cached back layer.
       for(const side of [-1,1]){
-        const points=[[side*8,-6],[side*13,-17],[side*26,-26],[side*27,-19],[side*24,-7],[side*19,3],[side*9,5]];
-        poly(c,points,material(c,flip,['#839f97','#c2d1c4','#edf0d8'],27,-27,5),'#6c8980',1);
-        for(let i=0;i<4;i++){
-          const x=side*(11+i*3.1),top=-10-i*3.4;
-          c.beginPath();c.moveTo(x,top);c.quadraticCurveTo(side*(19+i*1.8),top-9,side*(26-i*.7),-23+i*4.1);c.quadraticCurveTo(side*(22-i*.9),-3+i*1.2,side*(12+i*1.8),2+i*.5);c.quadraticCurveTo(x-2*side,top+6,x,top);c.closePath();
-          paint(c,material(c,flip,['#94ada3','#d2ddcd','#f7f5e4'],27,-28,7),'#91a89c',.55);
-          line(c,[[side*(13+i*2.6),-1+i*.5],[side*(19+i*1.5),-12+i*.1]],'#ffffff66',.65);
+        const featherFill=material(c,flip,['#9fb1a8','#e0e6d6','#fffbed'],31,-29,11);
+        const feathers=[
+          [10,-3,10,-21,21,-27,30,-28,31,-22,20,-1,12,5],
+          [11,-4,16,-15,22,-15,29,-18,31,-11,23,4,13,8],
+          [10,-2,16,-8,20,-6,26,-7,27,1,20,10,12,10],
+          [9,0,13,-3,17,1,20,2,22,8,15,12,9,9]
+        ];
+        for(const f of feathers){
+          c.beginPath();c.moveTo(side*f[0],f[1]);c.bezierCurveTo(side*f[2],f[3],side*f[4],f[5],side*f[6],f[7]);c.bezierCurveTo(side*f[8],f[9],side*f[10],f[11],side*f[12],f[13]);c.quadraticCurveTo(side*8,7,side*f[0],f[1]);c.closePath();
+          paint(c,featherFill,'#84998e',.85);
         }
+        // A rounded shoulder and only two quiet shaft highlights keep the
+        // feathers readable at normal scale without fine-line visual noise.
+        c.beginPath();c.moveTo(side*9,3);c.quadraticCurveTo(side*7,-10,side*16,-19);c.quadraticCurveTo(side*20,-23,side*25,-24);c.quadraticCurveTo(side*17,-17,side*15,-7);c.quadraticCurveTo(side*14,0,side*9,3);c.closePath();
+        paint(c,material(c,flip,['#b3c2b4','#e6e9da','#fffbee'],27,-27,8),'#a2b2a2',.65);
+        c.beginPath();c.moveTo(side*14,-6);c.quadraticCurveTo(side*19,-15,side*27,-24);c.strokeStyle='#fffef2bb';c.lineWidth=.85;c.stroke();
+        c.beginPath();c.moveTo(side*15,1);c.quadraticCurveTo(side*21,-4,side*25,-12);c.strokeStyle='#fffef2aa';c.lineWidth=.7;c.stroke();
       }
     }else if(kind==='merchant'){
       poly(c,[[-21,-10],[-9,-12],[-7,12],[-20,12],[-23,8]],material(c,flip,['#534d35','#85724b','#bba06b'],22,-12,12),'#414632',1.1);
@@ -158,8 +169,8 @@ export class HumanoidArt {
       c.beginPath();c.moveTo(-13,-11);c.quadraticCurveTo(-7,-27,3,-28);c.strokeStyle='#b5ab82';c.lineWidth=1;c.stroke();
     }else{
       oval(c,0,-13.2,10.6,11,material(c,flip,[p.face,p.face,kind==='angel'?'#809381':kind==='stormcaller'?'#596179':'#64745a'],11,-22,-4));
-      // The cap casts a small soft-edged painted plane rather than a blur filter.
-      c.beginPath();c.moveTo(-10,-16);c.quadraticCurveTo(0,-24,10,-16);c.lineTo(9,-13);c.quadraticCurveTo(0,-17,-9,-13);c.closePath();paint(c,'#14252a40');
+      // Caps cast a painted shadow; the angel has an exposed forehead instead.
+      if(kind!=='angel'){c.beginPath();c.moveTo(-10,-16);c.quadraticCurveTo(0,-24,10,-16);c.lineTo(9,-13);c.quadraticCurveTo(0,-17,-9,-13);c.closePath();paint(c,'#14252a40');}
       if(kind==='stormcaller'){
         // A bent cone with a genuine overhanging brim: +4 px versus the old
         // hat, while the face and body remain the traveler's size.
@@ -177,9 +188,15 @@ export class HumanoidArt {
         c.beginPath();c.moveTo(-12,-23);c.quadraticCurveTo(0,-26,12,-23);c.lineTo(13,-20);c.quadraticCurveTo(0,-22,-13,-20);c.closePath();paint(c,'#5f5d3b');
         oval(c,0,-20,16,3.5,material(c,flip,['#867048','#b89d65','#ddc991'],17,-25,-18));line(c,[[-12,-18.5],[0,-17.5],[12,-19]],'#c9b67b',.8);
       }else{
-        c.beginPath();c.moveTo(-12,-16);c.quadraticCurveTo(-15,-30,-1,-31);c.quadraticCurveTo(13,-31,13,-17);c.lineTo(9,-20);c.quadraticCurveTo(5,-22,3,-26);c.quadraticCurveTo(-2,-20,-12,-16);c.closePath();paint(c,material(c,flip,['#b8ac7b','#e2d5a1','#fff2c9'],15,-32,-15),'#8b9778',1);
-        line(c,[[2,-28],[-3,-24],[-8,-22]],'#fff4cf8c',.9);line(c,[[7,-28],[10,-22]],'#fff5d2bb',1);
-        c.beginPath();c.ellipse(0,-37,10,2.8,0,0,TAU);c.strokeStyle='#8e966b';c.lineWidth=2.5;c.stroke();c.strokeStyle='#efdda1';c.lineWidth=1.5;c.stroke();line(c,[[0,-39.8],[5,-39.4],[8,-38.6]],'#fff5d0',.9);
+        // Uneven short locks, a side part and an open forehead read as hair;
+        // the floating halo remains separate from the head silhouette.
+        c.beginPath();c.moveTo(-11,-12);c.quadraticCurveTo(-15,-21,-10,-27);c.quadraticCurveTo(-9,-29,-6,-29);c.quadraticCurveTo(-4,-32,1,-30);c.quadraticCurveTo(6,-31,9,-27);c.quadraticCurveTo(13,-24,12,-17);c.lineTo(10,-12);c.lineTo(9,-18);c.quadraticCurveTo(9,-22,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.lineTo(-10,-13);c.closePath();
+        paint(c,material(c,flip,['#ad975d','#dcc788','#fff0bb'],14,-32,-12),'#7d8965',.9);
+        c.beginPath();c.moveTo(3,-28);c.quadraticCurveTo(-2,-28,-7,-24);c.strokeStyle='#fff1c5';c.lineWidth=1.15;c.stroke();
+        c.beginPath();c.moveTo(5,-27);c.quadraticCurveTo(9,-25,10,-21);c.strokeStyle='#fff1c599';c.lineWidth=.85;c.stroke();
+        line(c,[[-9,-24],[-11,-21]],'#b39f66',.8);
+        c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,0,TAU);c.strokeStyle='#b5a365';c.lineWidth=1.7;c.stroke();c.strokeStyle='#f6e4a4';c.lineWidth=.85;c.stroke();
+        c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,Math.PI*1.15,Math.PI*1.85);c.strokeStyle='#fff8d5';c.lineWidth=.9;c.stroke();
       }
     }
   }

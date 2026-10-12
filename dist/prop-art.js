@@ -19,13 +19,24 @@ function chest(c,royal,state){
   for(let i=0;i<3;i++){const y=-20+i*7;c.fillStyle=i%2?light:wood;c.fillRect(-23,y,43,5.7);path(c,[[-22,y+6],[19,y+6]],dark,.7);}
   for(let i=0;i<26;i++){const x=-22+hash(i,7)*42,y=-21+hash(i,11)*20;path(c,[[x,y],[Math.min(19,x+2+hash(i,4)*6),y-.3]],i%3?'#2c382b36':'#f2d59839',.5);}
   if(open){
-    // Upright empty lid and a clearly dark interior indicate a claimed reward.
-    poly(c,[[-24,-25],[-22,-45],[-17,-49],[18,-49],[24,-43],[23,-25]],light,'#344032',1.3);
-    poly(c,[[-19,-29],[-17,-44],[16,-44],[19,-29]],dark);
-    poly(c,[[-16,-32],[-15,-41],[14,-41],[16,-32]],wood);
-    path(c,[[-19,-46],[18,-46]],trim,2);
-    poly(c,[[-23,-25],[20,-25],[25,-20],[19,-16],[-23,-16]],'#26342b');
-    path(c,[[-23,-17],[18,-17],[25,-21]],trim,1.8);
+    // The lid folds back above the rear hinge. Its tall inner face and broad,
+    // empty cavity stay legible at game scale, with no loot left inside.
+    poly(c,[[-19,-33],[-24,-57],[-21,-64],[-16,-67],[20,-67],[26,-62],[29,-35]],dark,'#29362c',1.5);
+    poly(c,[[-19,-34],[-22,-57],[-19,-63],[19,-63],[23,-58],[26,-35]],light);
+    poly(c,[[-14,-38],[-17,-56],[-15,-59],[15,-59],[18,-55],[21,-38]],royal?'#423448':'#51402e','#554d3a',.8);
+    poly(c,[[-12,-40],[-14,-55],[14,-55],[17,-40]],royal?'#655064':'#766044');
+    path(c,[[-20,-61],[-16,-64],[19,-64],[23,-60]],trim,2);
+    path(c,[[-14,-50],[15,-50]],'#2c312c75',.8);
+    path(c,[[-13,-44],[17,-44]],'#efe0b035',.65);
+    // Perspective rim: the dark back wall is distinct from the recessed floor.
+    poly(c,[[-24,-22],[-19,-35],[27,-35],[22,-19]],trim,'#394030',1);
+    poly(c,[[-21,-23],[-17,-32],[23,-32],[18,-20]],'#17251e');
+    poly(c,[[-17,-32],[23,-32],[19,-24],[-16,-24]],royal?'#342a3a':'#3b3528');
+    poly(c,[[-20,-22],[-16,-26],[19,-26],[17,-20]],'#15231d');
+    path(c,[[-24,-22],[-24,-16],[20,-16],[27,-27],[27,-35]],dark,2);
+    path(c,[[-23,-17],[20,-17],[26,-28]],trim,2.1);
+    path(c,[[-22,-18.7],[19,-18.7]],'#e3d2a780',.8);
+    for(const x of [-13,18]){poly(c,[[x-3,-36],[x+3,-36],[x+3,-33],[x-3,-33]],trim);path(c,[[x-2,-34],[x+2,-34]],'#554d3a',.7);}
   }else{
     const top=c.createLinearGradient(-15,-19,14,-38);top.addColorStop(0,dark);top.addColorStop(.52,wood);top.addColorStop(1,light);
     c.fillStyle=top;c.strokeStyle='#35412f';c.lineWidth=1.2;c.beginPath();c.moveTo(-24,-22);c.bezierCurveTo(-25,-32,-22,-38,-15,-39);c.lineTo(14,-39);c.bezierCurveTo(22,-38,24,-30,23,-22);c.closePath();c.fill();c.stroke();
@@ -36,7 +47,7 @@ function chest(c,royal,state){
   // Metal bands wrap over the barrel lid; small rivets catch upper-right light.
   for(const x of [-16,14]){
     c.fillStyle=trim;c.fillRect(x-1.8,-21,3.6,22);path(c,[[x-1,-20],[x-1,0]],'#514d39',.7);path(c,[[x+1,-20],[x+1,0]],'#e9d5a5b3',.6);
-    if(open){poly(c,[[x-2,-46],[x+1,-46],[x+2,-28],[x-2,-28]],trim);}else{c.strokeStyle=trim;c.lineWidth=3.4;c.beginPath();c.moveTo(x,-23);c.quadraticCurveTo(x+1,-33,x-2,-38);c.stroke();path(c,[[x,-35],[x+1,-27]],'#eee0b6b5',.7);}
+    if(open){const dx=x<0?-3:3;poly(c,[[x+dx-1.8,-62],[x+dx+1.6,-62],[x+3,-37],[x-.6,-37]],trim);path(c,[[x+dx+.8,-60],[x+2,-39]],'#e9d5a58c',.7);}else{c.strokeStyle=trim;c.lineWidth=3.4;c.beginPath();c.moveTo(x,-23);c.quadraticCurveTo(x+1,-33,x-2,-38);c.stroke();path(c,[[x,-35],[x+1,-27]],'#eee0b6b5',.7);}
     oval(c,x,-17,.9,.9,'#484c36');oval(c,x+.25,-17.35,.4,.4,'#f3e5ba');oval(c,x,-3,.9,.9,'#484c36');
   }
   path(c,[[-23,1],[20,1],[27,-5]],trim,2);path(c,[[-22,-.7],[19,-.7]],'#e7d59d80',.7);
@@ -163,7 +174,7 @@ export class PropArt {
   _frame(key){
     let image=this.cache.get(key);if(image)return image;
     const isPortal=key.startsWith('portal'),isChest=key.startsWith('chest'),small=key.startsWith('pickup')||key.startsWith('bullet')||key.startsWith('blade');
-    const w=isPortal?84:isChest?76:small?40:64,h=isPortal?96:isChest?64:small?44:48,ox=w*.5,oy=isPortal?88:isChest?54:small?22:40;
+    const w=isPortal?84:isChest?76:small?40:64,h=isPortal?96:isChest?82:small?44:48,ox=w*.5,oy=isPortal?88:isChest?72:small?22:40;
     const canvas=this.makeCanvas();canvas.width=w*2;canvas.height=h*2;const c=canvas.getContext('2d');c.setTransform(2,0,0,2,ox*2,oy*2);c.lineJoin='round';c.lineCap='round';
     if(isPortal)portal(c,key==='portal:locked'?3:key==='portal:ruins'?2:key==='portal:marsh'?1:0);
     else if(isChest){const royal=key.includes(':royal:'),state=key.endsWith(':open')?'open':key.endsWith(':ready')?'ready':key.endsWith(':locked')?'locked':'closed';chest(c,royal,state);}
@@ -187,7 +198,7 @@ export class PropArt {
       else key=open?'chest:ordinary:open':ready?'chest:ordinary:ready':locked?'chest:ordinary:locked':'chest:ordinary:closed';
     }else return false;
     const image=this._frame(key);c.drawImage(image.canvas,prop.x-image.ox*scale,prop.y-image.oy*scale,image.w*scale,image.h*scale);
-    if((prop.state==='unlocked'||prop.isDungeonTreasure&&prop.state!=='locked'&&prop.state!=='claimed')&&!options.dense){
+    if((prop.state==='unlocked'||prop.isDungeonTreasure&&prop.state!=='locked'&&prop.state!=='claimed'&&prop.state!=='opened')&&!options.dense){
       const t=options.reduced?0:options.time||0;c.save();c.globalAlpha*=options.reduced?.65:.55+Math.sin(t*2.5)*.25;spark(c,prop.x+16*scale,prop.y-32*scale,2.1,prop.royal?'#f3daf7':'#fff0ae');spark(c,prop.x-11*scale,prop.y-35*scale,1.2,'#fff0cd');c.restore();
     }
     if(prop.type==='portal'&&prop.state!=='locked'&&!options.dense){const t=options.reduced?0:options.time||0;c.save();c.globalAlpha*=.45;for(let i=0;i<3;i++){const a=i*TAU/3+t*.25;spark(c,prop.x+Math.cos(a)*13,prop.y-39+Math.sin(a)*25,1.7,'#e2e6d0');}c.restore();}

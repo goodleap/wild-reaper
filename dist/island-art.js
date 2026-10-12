@@ -1,20 +1,20 @@
-// Coast geometry comes from Islands: the surf marks the walkable outer edge,
+// Coast geometry comes from Islands: depth colors mark the walkable edge,
 // the inner 100 units are shallow water, and the next 35 units are dry beach.
 // Textures are sampled only in visible world-space cells. No island bitmap.
 const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const PALETTES={
-  forest:{deep:'#193e48',sea:'#25535a',shallow:'#537e71',sand:'#97996d',grain:'#d8cc98',surf:'#c3dec8'},
-  marsh:{deep:'#213e48',sea:'#30555a',shallow:'#57796b',sand:'#858e69',grain:'#bbc49a',surf:'#bfd6c0'},
-  ruins:{deep:'#243e51',sea:'#345967',shallow:'#668a85',sand:'#aaa995',grain:'#d5d1b5',surf:'#d6e1d1'},
+  forest:{deep:'#193e48',sea:'#25535a',shallow:'#537e71',sand:'#97996d',grain:'#d8cc98'},
+  marsh:{deep:'#213e48',sea:'#30555a',shallow:'#57796b',sand:'#858e69',grain:'#bbc49a'},
+  ruins:{deep:'#243e51',sea:'#345967',shallow:'#668a85',sand:'#aaa995',grain:'#d5d1b5'},
 };
 export function traceIslandContour(ctx,points){ctx.beginPath();for(let i=0;i<points.length;i++)ctx[i?'lineTo':'moveTo'](points[i].x,points[i].y);ctx.closePath();}
 function fragments(points,spacing){const result=[];for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);for(let t=0;t<length;t+=spacing)result.push({x:a.x+dx*t/length,y:a.y+dy*t/length,tx:dx/length,ty:dy/length,seed:i*719+Math.round(t)});}return result;}
 function stroke(c,x,y,tx,ty,length,color,width=1){c.beginPath();c.moveTo(x,y);c.lineTo(x+tx*length,y+ty*length);c.strokeStyle=color;c.lineWidth=width;c.stroke();}
 export class IslandArt {
   constructor(){this.cache=new WeakMap();}
-  _shape(island){let shape=this.cache.get(island);if(!shape){shape={outer:island.points,shallow:island.contour(island.shallowWidth||100),grass:island.contour((island.shallowWidth||100)+35),foam:fragments(island.contour(9),25),shore:fragments(island.contour((island.shallowWidth||100)-4),18),beach:fragments(island.contour((island.shallowWidth||100)+17),16),fringe:fragments(island.contour((island.shallowWidth||100)+35),9)};this.cache.set(island,shape);}return shape;}
-  draw(ctx,island,{camX=0,camY=0,width=1100,height=700,time=0,reduced=false,dense=false}={},drawLand=()=>{}){
+  _shape(island){let shape=this.cache.get(island);if(!shape){shape={outer:island.points,shallow:island.contour(island.shallowWidth||100),grass:island.contour((island.shallowWidth||100)+35),fringe:fragments(island.contour((island.shallowWidth||100)+35),9)};this.cache.set(island,shape);}return shape;}
+  draw(ctx,island,{camX=0,camY=0,width=1100,height=700,time=0,reduced=false}={},drawLand=()=>{}){
     if(!island?.points?.length)return false;
     const shape=this._shape(island),palette=PALETTES[island.region]||PALETTES.forest,clock=reduced?0:time;
     const view={minX:camX-width/2,minY:camY-height/2,maxX:camX+width/2,maxY:camY+height/2};
@@ -51,12 +51,6 @@ export class IslandArt {
     }
     const visible=p=>p.x>=view.minX-35&&p.x<=view.maxX+35&&p.y>=view.minY-35&&p.y<=view.maxY+35;
     for(const p of shape.fringe){if(!visible(p))continue;const seed=hash(p.seed+27,island.seed),nx=-p.ty,ny=p.tx,xx=p.x-nx*(2+seed*5),yy=p.y-ny*(2+seed*5);ctx.save();ctx.globalAlpha=.5+seed*.3;ctx.beginPath();ctx.ellipse(xx,yy,3+seed*6,1.1+seed*2.4,Math.atan2(p.ty,p.tx),0,TAU);ctx.fillStyle=island.region==='marsh'?'#465846':island.region==='ruins'?'#626b57':'#415439';ctx.fill();stroke(ctx,xx,yy,p.tx,p.ty,2+seed*5,palette.grain,.5);ctx.restore();}
-    for(const p of shape.beach){if(!visible(p))continue;const seed=hash(p.seed,island.seed);if(seed>.64)continue;ctx.globalAlpha=.14+seed*.2;stroke(ctx,p.x,p.y,p.tx,p.ty,3+seed*8,palette.grain,.7+seed*1.8);ctx.globalAlpha=1;}
-    for(const [kind,points] of [[0,shape.foam],[1,shape.shore]])for(let i=0;i<points.length;i++){
-      const p=points[i];if(!visible(p)||(dense&&i%2))continue;const seed=hash(p.seed+17,island.seed),phase=clock*.65+seed*TAU,drift=kind?Math.sin(phase)*2.8:Math.sin(phase)*1.2;
-      const xx=p.x-p.ty*drift,yy=p.y+p.tx*drift;ctx.globalAlpha=(kind?.27:.17)+Math.sin(phase)*.055;stroke(ctx,xx,yy,p.tx,p.ty,5+seed*(kind?10:13),palette.surf,kind?1.25:.9);
-      if(kind&&seed>.48){ctx.globalAlpha=.12;stroke(ctx,xx-p.ty*4,yy+p.tx*4,p.tx,p.ty,4+seed*7,palette.surf,.7);}ctx.globalAlpha=1;
-    }
     ctx.restore();return true;
   }
 }

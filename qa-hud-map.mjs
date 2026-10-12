@@ -121,4 +121,45 @@ keyup('KeyW');key('KeyW');tick();assert.notEqual(run('JSON.stringify([game.playe
 pointer('pointerdown',83);pointer('pointermove',83,170,200);const beforeTouch=run('game.player.x');tick();assert(run('game.player.x')>beforeTouch,'a new touch gesture controls the new scene normally');
 pointer('pointerup',83);const afterTouch=run('game.player.x');tick();assert.equal(run('game.player.x'),afterTouch);
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('blockedTransitionKeys.size'),0);
-console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity and clean re-press behavior passed.');
+// Drive the real RAF entry point at distinct display rates. Paused gameplay
+// still renders, and its clamped simulation delta must not distort telemetry.
+const fpsNode=nodes['debug-fps'];
+assert(!fpsNode.classList.contains('hidden'),'debug mode exposes the FPS readout');
+let fpsText=fpsNode.textContent,fpsWrites=[];
+Object.defineProperty(fpsNode,'textContent',{get:()=>fpsText,set:value=>{fpsText=String(value);fpsWrites.push(fpsText);},configurable:true});
+nodes['start-button'].onclick();nodes['pause-button'].onclick();assert(run('paused'));
+const fpsRunTime=run('game.runTime');
+let fpsNow=100000;
+const sampleRate=rate=>{
+  // A new game is a real reset boundary, not a direct call to telemetry internals.
+  nodes['restart-button'].onclick();assert.equal(fpsNode.textContent,'-- FPS');nodes['pause-button'].onclick();
+  fpsWrites=[];fpsNow+=10000;run(`frame(${fpsNow})`);
+  const interval=1000/rate,halfFrames=rate/2;
+  for(let i=1;i<halfFrames;i++)run(`frame(${fpsNow+i*interval})`);
+  assert.deepEqual(fpsWrites,[],'FPS text is not rewritten before the half-second window');
+  run(`frame(${fpsNow+500})`);assert.equal(fpsNode.textContent,`${rate} FPS`);
+  for(let i=halfFrames+1;i<=rate;i++)run(`frame(${fpsNow+i*interval})`);
+  assert.equal(fpsNode.textContent,`${rate} FPS`);assert(fpsWrites.length<=2,'FPS text updates at most twice per second');
+  assert.equal(run('game.runTime'),fpsRunTime,'FPS continues while pause keeps simulation frozen');
+};
+sampleRate(60);sampleRate(120);sampleRate(10);
+// Background time cannot enter the first foreground sample, even if the
+// browser sends a throttled RAF while the document is hidden.
+document.hidden=true;listeners['document:visibilitychange']();assert.equal(fpsNode.textContent,'-- FPS');
+run(`frame(${fpsNow+60000})`);assert.equal(fpsNode.textContent,'-- FPS');
+document.hidden=false;listeners['document:visibilitychange']();fpsNow+=120000;
+run(`frame(${fpsNow})`);assert.equal(fpsNode.textContent,'-- FPS');
+for(let i=1;i<=30;i++)run(`frame(${fpsNow+i*1000/60})`);
+assert.equal(fpsNode.textContent,'60 FPS','returning from a background tab starts a fresh sample');
+// Normal URLs neither expose nor look up/update telemetry in initialization,
+// a real frame or visibility changes. Explicit false debug values behave alike.
+for(const search of ['','?debug=0','?debug=false']){
+  let fpsLookups=0;fpsNode.classList.add('hidden');fpsWrites=[];
+  const normalDocument={...document,getElementById:id=>{if(id==='debug-fps')fpsLookups++;return document.getElementById(id);}};
+  const normalSandbox={...sandbox,document:normalDocument,window:{...sandbox.window,location:{search}}};
+  vm.createContext(normalSandbox);vm.runInContext(source,normalSandbox);
+  vm.runInContext('renderIntro=()=>{};frame(1000);frame(1600);',normalSandbox);
+  listeners['document:visibilitychange']();
+  assert(fpsNode.classList.contains('hidden'));assert.equal(fpsLookups,0);assert.deepEqual(fpsWrites,[]);
+}
+console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity, clean re-press behavior and debug-only FPS at 10/60/120 Hz with visibility resets passed.');

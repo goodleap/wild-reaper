@@ -24,6 +24,7 @@ export function sceneryVisual(prop){
     return Object.freeze({halfWidth:(Math.abs(p.x)+p.rx*cw+8)*s,top:Math.max(140*(prop.treeForm===4?1:0),-p.y+p.ry*ch+7)*s,bottom:24*s,canopyX:p.x*s,canopyY:p.y*s,canopyRx:(p.rx*cw+4)*s,canopyRy:(p.ry*ch+3)*s,shadowWidth:(p.rx*.62)*s,shadowLength:Math.max(32,(-p.y+p.ry)*.42)*s});
   }
   if(prop.type==='log')return Object.freeze({halfWidth:Math.abs(Math.cos(prop.angle||0))*(prop.halfLength+prop.r)+28,top:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,bottom:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,shadowWidth:prop.r,shadowLength:prop.r*1.7});
+  if(prop.rockForm===3&&prop.variant!=='pillar')return Object.freeze({halfWidth:prop.r*1.02+2,top:prop.r*.9+2,bottom:prop.r*.96+2,shadowWidth:prop.r*.85,shadowLength:prop.r*.35,shadowOffset:prop.r*.13});
   const r=prop.r,top=prop.variant==='pillar'?([3.05,3.75,2.6,3.35,2.05][prop.rockForm||0])*r:([1.42,.75,1.7,1.5,1.25][prop.rockForm||0])*r;
   return Object.freeze({halfWidth:r*1.14,top:top+4,bottom:r*1.12,shadowWidth:r*.92,shadowLength:r*(prop.variant==='pillar'?1.8:.72)});
 }
