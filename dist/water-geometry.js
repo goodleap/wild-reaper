@@ -64,6 +64,25 @@ function edgeDistanceSquared(points,x,y){
   }
   return best;
 }
+function pointSegmentDistanceSquared(x,y,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,length=dx*dx+dy*dy,t=length?clamp(((x-ax)*dx+(y-ay)*dy)/length,0,1):0;
+  return (x-ax-t*dx)**2+(y-ay-t*dy)**2;
+}
+function segmentDistanceSquared(ax,ay,bx,by,cx,cy,dx,dy){
+  const ux=bx-ax,uy=by-ay,vx=dx-cx,vy=dy-cy,den=ux*vy-uy*vx;
+  if(Math.abs(den)>1e-10){
+    const t=((cx-ax)*vy-(cy-ay)*vx)/den,s=((cx-ax)*uy-(cy-ay)*ux)/den;
+    if(t>=0&&t<=1&&s>=0&&s<=1)return 0;
+  }
+  return Math.min(pointSegmentDistanceSquared(ax,ay,cx,cy,dx,dy),pointSegmentDistanceSquared(bx,by,cx,cy,dx,dy),pointSegmentDistanceSquared(cx,cy,ax,ay,bx,by),pointSegmentDistanceSquared(dx,dy,ax,ay,bx,by));
+}
+function ellipseDistanceSquared(m,x,y){
+  x=Math.abs(x);y=Math.abs(y);if((x/m.rx)**2+(y/m.ry)**2<=1)return 0;
+  const aa=m.rx*m.rx,bb=m.ry*m.ry,at=t=>(m.rx*x/(t+aa))**2+(m.ry*y/(t+bb))**2;
+  let lo=0,hi=Math.max(m.rx*x,m.ry*y,1);while(at(hi)>1)hi*=2;
+  for(let i=0;i<30;i++){const mid=(lo+hi)*.5;if(at(mid)>1)lo=mid;else hi=mid;}
+  return (x-aa*x/(hi+aa))**2+(y-bb*y/(hi+bb))**2;
+}
 function inBounds(g,x,y,r=0){const b=g.bounds;return x>=b.minX-r&&x<=b.maxX+r&&y>=b.minY-r&&y<=b.maxY+r;}
 export function containsWater(m,x,y){
   if(!valid(m))return false;
@@ -88,14 +107,31 @@ export function waterIntersectsCircle(m,x,y,r=0){
   if(!valid(m)||!Number.isFinite(r)||r<0)return false;
   x-=m.x;y-=m.y;const g=geometry(m);if(!inBounds(g,x,y,r))return false;
   if(!m.shape){
-    x=Math.abs(x);y=Math.abs(y);if((x/m.rx)**2+(y/m.ry)**2<=1)return true;
     // Closest point on an axis-aligned ellipse, including its rounded banks.
-    const aa=m.rx*m.rx,bb=m.ry*m.ry,at=t=>(m.rx*x/(t+aa))**2+(m.ry*y/(t+bb))**2;
-    let lo=0,hi=Math.max(m.rx*x,m.ry*y,1);while(at(hi)>1)hi*=2;
-    for(let i=0;i<30;i++){const mid=(lo+hi)*.5;if(at(mid)>1)lo=mid;else hi=mid;}
-    return Math.hypot(x-aa*x/(hi+aa),y-bb*y/(hi+bb))<=r+1e-6;
+    return ellipseDistanceSquared(m,x,y)<=(r+1e-6)**2;
   }
   if(inRing(g.outer,x,y)&&!g.holes.some(h=>inRing(h,x,y)))return true;
   if(edgeDistanceSquared(g.outer,x,y)<=r*r)return true;
   return g.holes.some(h=>edgeDistanceSquared(h,x,y)<=r*r);
+}
+
+// Entire rotated log footprint, including its round ends. Sampling only its
+// midpoint or endpoints misses a shoreline crossing the middle of a long log.
+export function waterIntersectsCapsule(m,ax,ay,bx,by,r=0){
+  if(!valid(m)||![ax,ay,bx,by,r].every(Number.isFinite)||r<0)return false;
+  const g=geometry(m),b=g.bounds;ax-=m.x;ay-=m.y;bx-=m.x;by-=m.y;
+  if(Math.max(ax,bx)+r<b.minX||Math.min(ax,bx)-r>b.maxX||Math.max(ay,by)+r<b.minY||Math.min(ay,by)-r>b.maxY)return false;
+  if(!m.shape){
+    const dx=bx-ax,dy=by-ay;
+    // Distance to a convex ellipse is convex along this segment. The bounded
+    // minimization retains exact legacy ellipses instead of a polygon proxy.
+    let lo=0,hi=1;
+    for(let i=0;i<42;i++){const a=(2*lo+hi)/3,c=(lo+2*hi)/3;if(ellipseDistanceSquared(m,ax+dx*a,ay+dy*a)<=ellipseDistanceSquared(m,ax+dx*c,ay+dy*c))hi=c;else lo=a;}
+    const t=(lo+hi)*.5;
+    return Math.min(ellipseDistanceSquared(m,ax,ay),ellipseDistanceSquared(m,bx,by),ellipseDistanceSquared(m,ax+dx*t,ay+dy*t))<=(r+1e-6)**2;
+  }
+  const wet=(x,y)=>inRing(g.outer,x,y)&&!g.holes.some(h=>inRing(h,x,y));
+  if(wet(ax,ay)||wet(bx,by))return true;
+  const crosses=ring=>{for(let i=0,j=ring.length-1;i<ring.length;j=i++)if(segmentDistanceSquared(ax,ay,bx,by,ring[j].x,ring[j].y,ring[i].x,ring[i].y)<=r*r)return true;return false;};
+  return crosses(g.outer)||g.holes.some(crosses);
 }

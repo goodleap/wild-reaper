@@ -1,6 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { RegionalMechanisms, isGrounded } from './regional-mechanisms.js';
-import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, WATER_SHAPES } from './water-geometry.js';
+import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, waterIntersectsCapsule, WATER_SHAPES } from './water-geometry.js';
 export { isGrounded } from './regional-mechanisms.js';
 
 const CELL=520,TAU=Math.PI*2;
@@ -13,6 +13,17 @@ const humanoid=entity=>!!(entity.isCompanion||entity.isCaptive||entity.isTownNpc
 const intersects=(a,b)=>a.maxX>=b.minX&&a.minX<=b.maxX&&a.maxY>=b.minY&&a.minY<=b.maxY;
 const boundsDistance=(b,p)=>Math.hypot(Math.max(b.minX-p.x,0,p.x-b.maxX),Math.max(b.minY-p.y,0,p.y-b.maxY));
 export const WATER_SIZES=Object.freeze([.65,1,1.6,2.5,3.6]);
+const WATER_ANGLES=Object.freeze([-.28,0,.28]);
+const WATER_PLACEMENTS=Object.freeze([[.78,.82],[.22,.82],[.78,.22],[.50,.88],[.88,.52],[.12,.55],[.50,.18],[.30,.48],[.75,.55],[.20,.16],[.48,.54],[.88,.88]]);
+export const WATER_BANK_CLEARANCE=8;
+// Measured ground geometry, excluding raised branches and treetops. Slender
+// trees have narrow collision trunks but longer visible roots at their feet.
+export function waterObstacleFootprint(o,padding=WATER_BANK_CLEARANCE){
+  const scale=o.scale||1,root=[28,27,26,20,32][o.treeForm]||32;
+  const r=(o.type==='tree'?Math.max(o.r,root*scale):o.type==='log'?o.r*1.3:o.r*1.2)+padding;
+  const length=o.type==='log'?o.halfLength||0:0,dx=Math.cos(o.angle||0)*length,dy=Math.sin(o.angle||0)*length;
+  return {ax:o.x-dx,ay:o.y-dy,bx:o.x+dx,by:o.y+dy,r};
+}
 
 // This fixed-size filter remembers armed locations for the whole run. A false
 // positive can only omit a mushroom; leaving and revisiting never farms it.
@@ -85,12 +96,33 @@ export class Environment {
     const sizeRoll=this._hash(tx+971,ty+977),scale=WATER_SIZES[sizeRoll<.36?0:sizeRoll<.72?1:sizeRoll<.89?2:sizeRoll<.97?3:4];
     const family=Math.floor(this._hash(tx+991,ty+997)*(this.region==='marsh'?5:4)),shape=WATER_SHAPES[family];
     const x=tx*CELL+260+(this._hash(tx+1013,ty+419)-.5)*120,y=ty*CELL+260+(this._hash(tx+503,ty+1013)-.5)*120;
-    const rx=80*scale,ry=(shape==='elongated'?34:shape==='rounded'?50:47)*scale,angle=[-.28,0,.28][Math.floor(this._hash(tx+1091,ty+1097)*3)];
+    const rx=80*scale,ry=(shape==='elongated'?34:shape==='rounded'?50:47)*scale,angleIndex=Math.floor(this._hash(tx+1091,ty+1097)*3),angle=WATER_ANGLES[angleIndex];
     const mud={id:`mud:${tx},${ty}`,type:'mud',x,y,rx,ry,seed,shape,angle,island:this.region==='marsh'&&scale>=2.5&&family>=3,scale};
-    // Water may surround an ordinary bank rock or tree. Requiring an empty
-    // circle the size of a lake would reject essentially every large lake.
-    if(Math.hypot(x,y)<=ENVIRONMENT_BALANCE.safeRadius+Math.max(rx,ry)+8)return remember(null);
-    return remember(mud);
+    const terrain=this.game.terrain,structures=new Set(terrain._structures||[]);
+    const clear=()=>{
+      if(Math.hypot(mud.x,mud.y)<=ENVIRONMENT_BALANCE.safeRadius+Math.max(rx,ry)+8)return false;
+      // Query physical bounds with a skirt covering the measured roots/stone
+      // edges beyond collision. A log uses its entire rotated round-ended
+      // body, not a circle at the center or a handful of shoreline samples.
+      const b=waterBounds(mud,40),obstacles=terrain.query(b.minX,b.minY,b.maxX,b.maxY);
+      for(const o of obstacles){
+        if(structures.has(o)||o.structureId)continue;
+        const f=waterObstacleFootprint(o);
+        if(o.type==='log'?waterIntersectsCapsule(mud,f.ax,f.ay,f.bx,f.by,f.r):waterIntersectsCircle(mud,o.x,o.y,f.r))return false;
+      }
+      return true;
+    };
+    if(clear())return remember(mud);
+    // Retry only permanent terrain in this same owner cell. Finite alternate
+    // positions/orientations retain full-size lakes; dynamic sites may later
+    // suppress this location but can never migrate its stable water identity.
+    const start=Math.floor(this._hash(tx+1171,ty+1193)*WATER_PLACEMENTS.length);
+    const jitterX=(this._hash(tx+1229,ty+1259)-.5)*28,jitterY=(this._hash(tx+1283,ty+1301)-.5)*28;
+    for(let i=0;i<WATER_PLACEMENTS.length;i++){
+      const point=WATER_PLACEMENTS[(start+i)%WATER_PLACEMENTS.length];mud.x=tx*CELL+point[0]*CELL+jitterX;mud.y=ty*CELL+point[1]*CELL+jitterY;
+      for(let turn=0;turn<3;turn++){mud.angle=WATER_ANGLES[(angleIndex+turn)%3];if(clear())return remember(mud);}
+    }
+    return remember(null);
   }
   _mudObjectiveClear(mud){
     const g=this.game,clear=(x,y,r)=>!waterIntersectsCircle(mud,x,y,r);
@@ -107,7 +139,9 @@ export class Environment {
     const b=waterBounds(mud,40);
     // Neighbour arbitration is based only on permanent seed data, not on
     // load order. Larger waters win and leave an 80-unit dry walking gap.
-    for(let xx=tx-1;xx<=tx+1;xx++)for(let yy=ty-1;yy<=ty+1;yy++){
+    // Retried lake centers may sit near opposite owner-cell edges, so a large
+    // shoreline plus its dry gap can also meet a water two cells away.
+    for(let xx=tx-2;xx<=tx+2;xx++)for(let yy=ty-2;yy<=ty+2;yy++){
       if(xx===tx&&yy===ty)continue;
       const other=this._mudCandidate(xx,yy);if(!other)continue;
       const wins=other.scale>mud.scale||(other.scale===mud.scale&&(other.seed>mud.seed||(other.seed===mud.seed&&other.id>mud.id)));

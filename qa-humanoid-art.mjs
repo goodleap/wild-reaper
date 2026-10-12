@@ -44,13 +44,13 @@ try{
   assert.deepEqual(draw('angel',{time:5,reduced:true}).calls,draw('angel',{time:8,reduced:true}).calls,'reduced motion keeps idle facial work steady');
   const still=draw('traveler',{time:2,reduced:true}).calls,walking=draw('traveler',{time:2,reduced:true,pose:{step:1,leftLift:3.2,rightLift:0,bodyY:-1.15,arm:1.8,cloth:1.7}}).calls;
   assert.notDeepEqual(walking,still,'caller-provided grounded movement still animates boots and cloth');
-  const darkInk=color=>/^#[0-9a-f]{6}$/i.test(color)&&[1,3,5].every(i=>parseInt(color.slice(i,i+2),16)<90);
-  assert(still.filter(call=>call[0]==='fill').slice(-2).every(call=>darkInk(call[1])),'the human face has two dark eyes instead of luminous monster eyes');
-  assert(draw('traveler',{entity:{hurtFace:.2},time:2}).calls.filter(call=>call[0]==='stroke').slice(-2).every(call=>darkInk(call[1])),'hurt eyes keep the same understated human ink');
+  assert.deepEqual(still.filter(call=>call[0]==='ellipse').slice(-2).map(call=>call.slice(1,5)),[[-2,-12,1.5,2],[6,-12,1.5,2]],'the familiar two eyes retain their original position and size');
+  assert.equal(still.filter(call=>call[0]==='fill'&&call[1]==='#ecf6c8').length,2,'the original pale eye color remains intact');
+  assert.equal(draw('traveler',{entity:{hurtFace:.2},time:2}).calls.filter(call=>call[0]==='stroke'&&call[1]==='#ecf6c8').length,2,'the restored eyes still squeeze briefly on a real hit');
   for(const facing of [0,Math.PI]){
     const head=art.cache.get(`traveler:head:${facing?'-1':'1'}`).canvas.record;
-    const skin=head.gradients.find(g=>g.stops.length===3&&g.stops.every(([,color])=>parseInt(color.slice(1,3),16)>parseInt(color.slice(5,7),16)));
-    assert(skin,'a muted warm face remains visible under the blue hood in both facings');
+    assert.equal(head.gradients.length,0,'the original soft hood uses its established flat palette');
+    for(const color of ['#e4dfb8','#32452f'])assert(head.calls.some(call=>call[0]==='fill'&&call[1]===color),'cream hood and green shadow face are preserved in both facings');
   }
   const footLines=walking.filter(call=>call[0]==='lineTo'&&call[2]>9);
   assert(footLines.some(call=>Math.abs(call[2]-10.8)<.001),'raised boot follows the existing 3.2 px foot lift');
@@ -68,4 +68,4 @@ assert.equal(humanoidFaceState({id:0},0),'blink');
 assert.equal(humanoidFaceState({id:0},.2),'normal');
 assert.equal(humanoidFaceState({id:0},0,true),'normal');
 const rejected=recordingContext();assert.equal(art.draw(rejected.c,'dragon'),false);assert.equal(rejected.calls.length,0);
-console.log('Humanoid art: stable world light in both facings; bounded DPR cache; grounded cloak gait; warm human face with dark expressive eyes; deterministic paused/reduced output; independent damage/cast/rescue expressions and caller state preservation passed.');
+console.log('Humanoid art: restored original cream hood, green face and pale expressive eyes; grounded gait; stable NPC world light; bounded DPR cache; deterministic paused/reduced output; independent damage/cast/rescue expressions and caller state preservation passed.');

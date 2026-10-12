@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
-import { Environment, ENVIRONMENT_BALANCE, WATER_SIZES } from './dist/environment.js';
-import { WATER_SHAPES, containsWater, waterDepth, waterBounds, waterIntersectsCircle, getWaterContours, traceWaterPath } from './dist/water-geometry.js';
+import { Environment, ENVIRONMENT_BALANCE, WATER_SIZES, waterObstacleFootprint } from './dist/environment.js';
+import { WATER_SHAPES, containsWater, waterDepth, waterBounds, waterIntersectsCircle, waterIntersectsCapsule, getWaterContours, traceWaterPath } from './dist/water-geometry.js';
 import { ImmersionArt } from './dist/immersion-art.js';
 
 const world=()=>{
@@ -93,4 +93,53 @@ for(let step=0;step<120;step++){
   }
   assert(flowing.muds.length<=ENVIRONMENT_BALANCE.maxMuds);
 }
-console.log(`Water diversity: ${accepted.length} stable marsh patches, all 5 shapes/sizes, exact shared shoreline/dry islands, flying immunity, dry objectives/routes, and full-footprint bounded streaming passed.`);
+
+// The long diagonal crosses water between its midpoint and end. Neither an
+// endpoint-only nor center-circle obstacle check can detect this regression.
+const crossing={x:0,y:0,rx:40,ry:28};
+for(const q of [{x:-150,y:-90},{x:-50,y:-10},{x:50,y:70}])assert(!containsWater(crossing,q.x,q.y));
+assert(waterIntersectsCapsule(crossing,-150,-90,50,70,3));
+assert(waterIntersectsCapsule(crossing,-90,32,90,32,4),'the complete round side touches the shoreline');
+assert(!waterIntersectsCapsule(crossing,-90,32.01,90,32.01,4),'a separated capsule does not claim an empty shore');
+assert(!waterIntersectsCapsule(island,islandCenter.x-5,islandCenter.y,islandCenter.x+5,islandCenter.y,10),'a complete small capsule fits on a real dry island');
+assert(waterIntersectsCapsule(island,islandCenter.x-80,islandCenter.y,islandCenter.x+80,islandCenter.y,4),'extending beyond a dry island reaches water');
+const slender=waterObstacleFootprint({type:'tree',x:0,y:0,r:17.76,treeForm:1,scale:1.5});
+assert(slender.r>=48.5,'large slender-tree roots are larger than their narrow trunk collision');
+
+// Use actual populated Terrain, not the empty arena used above. Scan multiple
+// world seeds in each biome and sample every retained obstacle's body all the
+// way along the axis, including radial edges and both round end caps.
+let naturalCount=0,largestCount=0,footprintSamples=0;
+for(const region of ['forest','marsh','ruins'])for(const seed of [0,1,7]){
+  const g={region:{id:region},regionIndex:seed,terrain:new Terrain({region,seed}),player:{x:0,y:0,r:15},viewWidth:1100,viewHeight:650};
+  const e=new Environment(g,{generation:false}),seen=[],sizeCounts=new Map();
+  for(let x=-10;x<=10;x++)for(let y=-10;y<=10;y++){
+    const mud=e._mudAt(x,y);if(!mud)continue;seen.push({x,y,mud:structuredClone(mud)});naturalCount++;sizeCounts.set(mud.scale,(sizeCounts.get(mud.scale)||0)+1);
+    if(mud.scale===3.6)largestCount++;
+    const b=waterBounds(mud,60);
+    for(const o of g.terrain.query(b.minX,b.minY,b.maxX,b.maxY)){
+      const f=waterObstacleFootprint(o);
+      assert(!waterIntersectsCapsule(mud,f.ax,f.ay,f.bx,f.by,f.r),`full ${o.type} footprint stays dry in ${region}:${seed}:${mud.id}`);
+      const length=Math.hypot(f.bx-f.ax,f.by-f.ay),steps=Math.max(1,Math.ceil(length/5));
+      for(let step=0;step<=steps;step++){
+        const x=f.ax+(f.bx-f.ax)*step/steps,y=f.ay+(f.by-f.ay)*step/steps;
+        assert(!containsWater(mud,x,y));
+        for(let j=0;j<24;j++){
+          const a=j*Math.PI/12;assert(!containsWater(mud,x+Math.cos(a)*(f.r-.01),y+Math.sin(a)*(f.r-.01)),'sampled round sides/end caps never enter the visible water contour');footprintSamples++;
+        }
+      }
+    }
+  }
+  assert.deepEqual([...sizeCounts.keys()].sort((a,b)=>a-b),WATER_SIZES,`${region}:${seed} retains small through largest natural waters`);
+  // A changed visit order and evicted caches must not reroll either placement
+  // or its orientation, even when a large pool needed several terrain retries.
+  e._waterCandidates.clear();g.terrain._cache.clear();
+  for(const entry of seen.reverse())assert.deepEqual(e._mudAt(entry.x,entry.y),entry.mud,'cache eviction/reverse visitation preserves the complete water shape');
+  assert(e._waterCandidates.size<=192);assert(g.terrain.cacheSize<=192);
+  const sample=seen.find(entry=>entry.mud.scale===3.6),before=e._mudCandidate(sample.x,sample.y);
+  g.terrain.setStructures([{type:'rock',x:before.x,y:before.y,r:400,structureId:'qa-new-building'}],'qa-water');
+  e._waterCandidates.clear();assert.deepEqual(e._mudCandidate(sample.x,sample.y),before,'dynamic buildings never relocate the underlying seeded water');
+  g.settlements={sites:[{x:before.x,y:before.y,width:240,depth:90}]};assert.equal(e._mudAt(sample.x,sample.y),null,'the later building suppresses, rather than relocates, that fixed water candidate');
+}
+assert(largestCount>=30,'obstacle avoidance preserves a useful frequency of full-size large waters');
+console.log(`Water diversity: ${accepted.length} empty-arena patches; ${naturalCount} real-terrain waters including ${largestCount} largest lakes, ${footprintSamples} dry capsule-edge samples, all shapes/sizes, unchanged seeded revisits, dry objectives/routes and bounded shoreline streaming passed.`);
