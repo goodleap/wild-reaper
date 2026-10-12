@@ -4,6 +4,7 @@ import { Terrain, groundOffset } from './dist/terrain.js';
 import { Environment, ENVIRONMENT_BALANCE, WATER_SIZES, waterObstacleFootprint } from './dist/environment.js';
 import { WATER_SHAPES, containsWater, waterDepth, waterBounds, waterIntersectsCircle, waterIntersectsCapsule, getWaterContours, traceWaterPath } from './dist/water-geometry.js';
 import { ImmersionArt } from './dist/immersion-art.js';
+import { placementAllowed } from './dist/placement-rules.js';
 
 const world=()=>{
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,encounters:false,companions:false,settlements:false});
@@ -66,10 +67,11 @@ assert(env._waterCandidates.size<=192,'exploring a large world retains only a bo
 const large=accepted.find(m=>m.scale===3.6&&!m.island),origin={x:large.x,y:large.y};
 const coords=large.id.match(/mud:(-?\d+),(-?\d+)/);
 seeded.adventure={props:[{x:large.x,y:large.y,r:18}],treasure:null};
-assert.equal(env._mudAt(+coords[1],+coords[2]),null,'an existing objective keeps its dry footprint');
-seeded.adventure.props=[];assert.deepEqual(env._mudAt(+coords[1],+coords[2]),large,'suppression never moves a fixed water identity');
-seeded.settlements.sites=[{x:origin.x,y:origin.y,width:54,depth:28}];assert(!env._mudObjectiveClear(large));seeded.settlements.sites=[];
-seeded.regions.portals=[{x:origin.x,y:origin.y-115}];assert(!env._mudObjectiveClear(large),'a portal also reserves its guardian footing');seeded.regions.portals=[];
+assert.deepEqual(env._mudAt(+coords[1],+coords[2]),large,'objectives cannot erase fixed seeded water');
+env.generation=true;assert.equal(placementAllowed(seeded,'loot',{x:large.x,y:large.y,r:18}),false,'new crates must reject the stable unloaded water instead');env.generation=false;
+seeded.adventure.props=[];assert.deepEqual(env._mudAt(+coords[1],+coords[2]),large,'consuming a crate never reveals newly generated water');
+seeded.settlements.sites=[{x:origin.x,y:origin.y,width:54,depth:28}];assert.deepEqual(env._mudAt(+coords[1],+coords[2]),large);seeded.settlements.sites=[];
+seeded.regions.portals=[{x:origin.x,y:origin.y-115}];assert.deepEqual(env._mudAt(+coords[1],+coords[2]),large,'portal state cannot move or erase water');seeded.regions.portals=[];
 
 // A shoreline crossing the view remains loaded even when its center is far
 // offscreen; filling the cache with closer centers must not evict that shore.
@@ -133,13 +135,13 @@ for(const region of ['forest','marsh','ruins'])for(const seed of [0,1,7]){
   assert.deepEqual([...sizeCounts.keys()].sort((a,b)=>a-b),WATER_SIZES,`${region}:${seed} retains small through largest natural waters`);
   // A changed visit order and evicted caches must not reroll either placement
   // or its orientation, even when a large pool needed several terrain retries.
-  e._waterCandidates.clear();g.terrain._cache.clear();
+  e._waterCandidates.clear();e._waterLayout.clear();g.terrain._cache.clear();
   for(const entry of seen.reverse())assert.deepEqual(e._mudAt(entry.x,entry.y),entry.mud,'cache eviction/reverse visitation preserves the complete water shape');
-  assert(e._waterCandidates.size<=192);assert(g.terrain.cacheSize<=192);
+  assert(e._waterCandidates.size<=192);assert(e._waterLayout.size<=192);assert(g.terrain.cacheSize<=192);
   const sample=seen.find(entry=>entry.mud.scale===3.6),before=e._mudCandidate(sample.x,sample.y);
   g.terrain.setStructures([{type:'rock',x:before.x,y:before.y,r:400,structureId:'qa-new-building'}],'qa-water');
-  e._waterCandidates.clear();assert.deepEqual(e._mudCandidate(sample.x,sample.y),before,'dynamic buildings never relocate the underlying seeded water');
-  g.settlements={sites:[{x:before.x,y:before.y,width:240,depth:90}]};assert.equal(e._mudAt(sample.x,sample.y),null,'the later building suppresses, rather than relocates, that fixed water candidate');
+  e._waterCandidates.clear();e._waterLayout.clear();assert.deepEqual(e._mudCandidate(sample.x,sample.y),before,'dynamic buildings never relocate the underlying seeded water');
+  g.settlements={sites:[{x:before.x,y:before.y,width:240,depth:90}]};assert.deepEqual(e._mudAt(sample.x,sample.y),sample.mud,'a later building cannot suppress or relocate fixed water');
 }
 assert(largestCount>=30,'obstacle avoidance preserves a useful frequency of full-size large waters');
 console.log(`Water diversity: ${accepted.length} empty-arena patches; ${naturalCount} real-terrain waters including ${largestCount} largest lakes, ${footprintSamples} dry capsule-edge samples, all shapes/sizes, unchanged seeded revisits, dry objectives/routes and bounded shoreline streaming passed.`);

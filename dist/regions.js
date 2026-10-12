@@ -1,5 +1,5 @@
 import { groundOffset } from './terrain.js';
-import { waterIntersectsCircle } from './water-geometry.js';
+import { placementAllowed } from './placement-rules.js';
 
 export const REGIONS=Object.freeze([
   Object.freeze({id:'forest',name:'低语之森',shortName:'密林',colors:{ground:'#263e30',light:'#35503a',dark:'#182b22',accent:'#a9d991',mist:'#c1d6a9',grass:'#648052',stone:'#788170'},enemyWeights:{slime:1,beetle:1,bat:1,brute:1,boar:1,spore:1}}),
@@ -45,6 +45,7 @@ export class Regions {
   _endpoint(target,{origin=null,back=false}={}) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
     const point=plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
+    if(!point)return null;
     const connectionId=worldConnectionId(index,target),active=this.unlockedConnections.has(connectionId);
     return {id:`portal:${index}:${target}`,...point,r:32,interactRadius:PORTAL_RULES.interactRadius,state:active?'active':'locked',direction:back?'back':'forward',connectionId,nextRegionIndex:target,nextRegion:regionFor(target),targetPortalId:`portal:${target}:${index}`,discovered:back&&active,rewardClaimed:this.claimedConnections.has(connectionId)};
   }
@@ -69,27 +70,26 @@ export class Regions {
     g._initializeRegionalBoss?.(boss);g._moveEntity(boss,0,0);
   }
   _safePoint(origin={x:0,y:0},forward=false,planned=false,target=0) {
-    const g=this.game,p=feet(g);
-    // Reserve both the gate's approach and its guardian's footing. Expanding
-    // each actual water contour leaves the existing swamp untouched.
-    const dry=(x,y,r)=>!g.environment?.muds?.some(mud=>waterIntersectsCircle(mud,x,y,r));
-    const safe=(x,y)=>(!g.terrain.island||g.terrain.island.isDry(x,y,forward?200:45))&&g.terrain.isFree(x,y,forward?112:40)&&dry(x,y,forward?112:45)&&
-      (!forward||dry(x,y+115,66))&&g.relicSites?.isSafePoint(x,y,forward?180:60)!==false&&
+    const g=this.game;
+    // Reserve the full gate, connected approach and guardian footprint against
+    // the deterministic layout, even when its neighboring chunks are unloaded.
+    const safe=(x,y)=>placementAllowed(g,'structure',{x,y,r:forward?112:45})&&
+      (!forward||placementAllowed(g,'structure',{ax:x,ay:y,bx:x,by:y+115,r:66}))&&g.relicSites?.isSafePoint(x,y,forward?180:60)!==false&&
       g.settlements?.isSafePoint(x,y,forward?150:45)!==false&&g.environment?.isHazardFree?.(x,y,forward?90:45)!==false&&
       !g.environment?.props.some(o=>distance(o,{x,y})<(o.blastRadius||82)+80)&&
       !g.adventure?.props.some(o=>distance(o,{x,y})<100)&&
       (!g.adventure?.treasure||distance(g.adventure.treasure,{x,y})>220)&&
       (!g.companions?.camp||distance(g.companions.camp,{x,y})>350)&&
       this.portals.every(portal=>distance(portal,{x,y})>(forward?600:110));
-    if(planned&&safe(origin.x,origin.y)&&g.terrain.isFree(origin.x,origin.y+115,66))return {x:origin.x,y:origin.y};
+    if(planned&&safe(origin.x,origin.y))return {x:origin.x,y:origin.y};
     const radii=planned?[32,64,96]:forward?[1120,1270,1420,1570,1720,1870,2020,2170]:[90,150,220,300,400];
     for(const radius of radii)for(let i=0;i<48;i++) {
       const a=(g.regionIndex*.93)+(planned?0:target*Math.PI*.82)+i*Math.PI/24,x=Math.round(origin.x+Math.cos(a)*radius),y=Math.round(origin.y+Math.sin(a)*radius);
-      if(safe(x,y)&&(!forward||g.terrain.isFree(x,y+115,66)))return {x,y};
+      if(safe(x,y))return {x,y};
     }
-    // Procedural maps have many clear candidates. The fallback is only needed
-    // by deliberately sealed test terrains, and must still be reachable.
-    return {...p};
+    // Exhausted bounded searches omit this gate; a player-position fallback
+    // could place a foundation on water or duplicate another portal.
+    return null;
   }
   initialize(fromPortal=null,fromRegionIndex=null) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex);this.portals=[];g.portal=null;
@@ -98,9 +98,9 @@ export class Regions {
     if(!this.guarded&&!fromPortal)return;
     if(fromPortal)this.unlockedConnections.add(worldConnectionId(index,fromRegionIndex));
     const targets=[(index+1)%3,(index+2)%3];
-    for(const target of targets)this.portals.push(this._endpoint(target,{back:fromPortal&&target===fromRegionIndex}));
+    for(const target of targets){const endpoint=this._endpoint(target,{back:fromPortal&&target===fromRegionIndex});if(endpoint)this.portals.push(endpoint);}
     if(fromPortal)fromPortal.targetPortalId=`portal:${index}:${normalizeWorldIndex(fromRegionIndex)}`;
-    g.portal=this.portals.find(portal=>portal.state==='locked')||this.portals[0];
+    g.portal=this.portals.find(portal=>portal.state==='locked')||this.portals[0]||null;
     if(this.guarded)for(const portal of this.portals)if(portal.state==='locked')this._spawnGuardian(portal);
     g.settlements?.ensureAngels?.();
   }
@@ -147,8 +147,8 @@ export class Regions {
     if(!portal&&!this.guarded) {
       const target=(normalizeWorldIndex(g.regionIndex)+1)%3;
       portal=this._endpoint(target,{origin:{x:enemy.x,y:enemy.y+groundOffset(enemy)}});
-      this.portals.push(portal);g.portal=portal;
-      this.portals.push(this._endpoint((target+1)%3));
+      if(portal){this.portals.push(portal);g.portal=portal;}
+      const second=this._endpoint((target+1)%3);if(second)this.portals.push(second);
     }
     if(!portal||this.unlockedConnections.has(portal.connectionId))return null;
     this._lastBossId=enemy.id;this.unlockedConnections.add(portal.connectionId);

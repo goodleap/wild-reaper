@@ -117,13 +117,15 @@ export class Game {
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     this._moveEntity(this.player,0,0,true);
     for(let i=0;i<4;i++) this._spawnEnemy('slime', adventure?undefined:330+i*24);
-    this.adventure=adventure?new Adventure(this):null;
+    this.adventure=null;
     this.encounters=encounters?new Encounters(this):null;
     this.combatStatus=new CombatStatus(this);
     // Reserve the nearby debug entrance before environmental hazards choose
     // their positions. The ordinary world keeps its original generation order.
     if(this.debug&&settlements)this.settlements=new Settlements(this);
     this.environment=environment?new Environment(this):null;
+    // Natural water is fixed before smaller supplies choose their habitat.
+    this.adventure=adventure?new Adventure(this):null;
     this.relics=new Relics(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
     this.companions=new Companions(this,{generation:companions});
     this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
@@ -553,9 +555,9 @@ export class Game {
       this.companions.camp=null;this.companions.generation=this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();
       this._moveEntity(p,0,0,true);
+      if(this._features.environment)this.environment=new Environment(this);
       if(this._features.adventure)this.adventure=new Adventure(this);
       if(this._features.encounters)this.encounters=new Encounters(this);
-      if(this._features.environment)this.environment=new Environment(this);
       this.settlements=new Settlements(this,{generation:this._features.settlements});
       this.regions.initialize(portal,fromIndex);
       this.relicSites=new RelicSites(this,{generation:!!(this._features.adventure&&(this._features.encounters||this._features.companions))});

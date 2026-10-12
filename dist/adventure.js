@@ -1,5 +1,5 @@
 import { groundOffset } from './terrain.js';
-import { waterIntersectsCircle } from './water-geometry.js';
+import { placementAllowed } from './placement-rules.js';
 
 const TAU=Math.PI*2,CELL=520,MAX_SUPPLIES=18,MAX_PICKUPS=24;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -38,16 +38,20 @@ export class Adventure {
     if(this.game.regions?.isSafePoint(x,y,r)===false)return false;
     if(this.game.relicSites?.isSafePoint(x,y,r)===false)return false;
     if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
+    if(!placementAllowed(this.game,'loot',{x,y,r},{checkTerrain:false}))return false;
     const environment=this.game.environment;if(!environment)return true;
     if(environment.isHazardFree?.(x,y,r)===false)return false;
     if(environment.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8))return false;
-    return !environment.muds.some(m=>waterIntersectsCircle(m,x,y,r+8));
+    return true;
   }
-  _safePoint(x,y,r=28){
-    if(this._free(x,y,r))return {x,y};
+  _safePoint(x,y,r=28,{generated=false}={}){
+    // Dropped rewards retain the movement-safe placement used during combat;
+    // generated supplies and treasure also require a suitable static surface.
+    const free=(px,py)=>generated?placementAllowed(this.game,'loot',{x:px,y:py,r}):this._free(px,py,r);
+    if(free(x,y))return {x,y};
     for(let radius=24;radius<=144;radius+=24)for(let i=0;i<12;i++){
       const a=i*TAU/12,nx=x+Math.cos(a)*radius,ny=y+Math.sin(a)*radius;
-      if(this._free(nx,ny,r))return {x:nx,y:ny};
+      if(free(nx,ny))return {x:nx,y:ny};
     }
     return null;
   }
@@ -58,7 +62,7 @@ export class Adventure {
     const id=`supply:${tx},${ty}`;
     if(this._consumed.has(id))return null;
     const x=starter?220:tx*CELL+145+this._hash(tx+131,ty+197)*225,y=starter?160:ty*CELL+145+this._hash(tx+199,ty+83)*225;
-    const point=this._safePoint(x,y,38);
+    const point=this._safePoint(x,y,38,{generated:true});
     if(!point||Math.hypot(point.x,point.y)<145||!this._environmentFree(point.x,point.y,18))return null;
     return {id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:42,maxHp:42,hit:0,seed,drop:starter?'herb':TYPES[Math.floor(this._hash(tx+233,ty+271)*TYPES.length)]};
   }
@@ -124,12 +128,17 @@ export class Adventure {
   spawnTreasure(x,y){
     if(this.treasure)return null;
     const g=this.game,p=this._foot();let point=null;
-    if(Number.isFinite(x)&&Number.isFinite(y))point=this._safePoint(x,y,90);
+    if(Number.isFinite(x)&&Number.isFinite(y)){
+      // An explicit request for hazardous/wet ground is rejected in place;
+      // nearby retries only resolve the remaining footprint/solid clearance.
+      if(!this._environmentFree(x,y,40))return null;
+      point=this._safePoint(x,y,90,{generated:true});
+    }
     else{
       const start=this._hash(this._treasureCount+1,Math.floor(g.time))*TAU;
       for(let i=0;i<24;i++){
         const a=start+i*TAU/24,r=g.terrain.island?Math.max(420,1/Math.max(Math.abs(Math.cos(a))/(g.viewWidth*.5+100),Math.abs(Math.sin(a))/(g.viewHeight*.5+100)))+(i%3)*50:420+(i%3)*50,candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
-        if((!g.terrain.island||!this._visible(candidate.x,candidate.y,70))&&this._free(candidate.x,candidate.y,90)&&this._environmentFree(candidate.x,candidate.y,40)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}
+        if((!g.terrain.island||!this._visible(candidate.x,candidate.y,70))&&placementAllowed(g,'loot',{...candidate,r:90})&&this._environmentFree(candidate.x,candidate.y,40)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}
       }
     }
     if(!point||!this._environmentFree(point.x,point.y,40))return null;

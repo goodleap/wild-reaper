@@ -1,3 +1,4 @@
+import { COAST_RULES } from './placement-rules.js';
 // Coast geometry comes from Islands: depth colors mark the walkable edge,
 // the inner 100 units are shallow water, and the next 35 units are dry beach.
 // Textures are sampled only in visible world-space cells. No island bitmap.
@@ -13,12 +14,13 @@ function fragments(points,spacing){const result=[];for(let i=0;i<points.length;i
 function stroke(c,x,y,tx,ty,length,color,width=1){c.beginPath();c.moveTo(x,y);c.lineTo(x+tx*length,y+ty*length);c.strokeStyle=color;c.lineWidth=width;c.stroke();}
 export class IslandArt {
   constructor(){this.cache=new WeakMap();}
-  _shape(island){let shape=this.cache.get(island);if(!shape){shape={outer:island.points,shallow:island.contour(island.shallowWidth||100),grass:island.contour((island.shallowWidth||100)+35),fringe:fragments(island.contour((island.shallowWidth||100)+35),9)};this.cache.set(island,shape);}return shape;}
+  _shape(island){let shape=this.cache.get(island);if(!shape){const shallow=island.shallowWidth??COAST_RULES.shallowWidth,inland=shallow+COAST_RULES.beachWidth;shape={outer:island.points,shallow:island.contour(shallow),grass:island.contour(inland),fringe:fragments(island.contour(inland),9)};this.cache.set(island,shape);}return shape;}
   draw(ctx,island,{camX=0,camY=0,width=1100,height=700,time=0,reduced=false}={},drawLand=()=>{}){
     if(!island?.points?.length)return false;
     const shape=this._shape(island),palette=PALETTES[island.region]||PALETTES.forest,clock=reduced?0:time;
     const view={minX:camX-width/2,minY:camY-height/2,maxX:camX+width/2,maxY:camY+height/2};
-    if(island.contains(camX,camY,Math.hypot(width/2,height/2)+135)){drawLand();return true;}
+    const shallow=island.shallowWidth??COAST_RULES.shallowWidth,inland=shallow+COAST_RULES.beachWidth;
+    if(island.contains(camX,camY,Math.hypot(width/2,height/2)+inland)){drawLand();return true;}
     ctx.save();ctx.translate(width/2-camX,height/2-camY);ctx.lineCap='round';ctx.lineJoin='round';
     ctx.fillStyle=palette.deep;ctx.fillRect(view.minX,view.minY,width,height);
     // A translucent water shelf follows the exact playable outline. Deep sea
@@ -46,7 +48,7 @@ export class IslandArt {
     // in world pixels, so a large island does not acquire giant brush marks.
     for(let gy=Math.floor(view.minY/19);gy<=Math.floor(view.maxY/19);gy++)for(let gx=Math.floor(view.minX/19);gx<=Math.floor(view.maxX/19);gx++){
       const seed=hash(gx+17,gy+island.seed),xx=gx*19+seed*18,yy=gy*19+hash(gx-31,gy)*18;
-      if(!island.contains(xx,yy,101)||island.contains(xx,yy,139))continue;
+      if(!island.contains(xx,yy,shallow+1)||island.contains(xx,yy,inland+4))continue;
       ctx.fillStyle=palette.grain;ctx.globalAlpha=.3;ctx.fillRect(xx,yy,1.4+seed*2,.8);ctx.globalAlpha=.22;stroke(ctx,xx+5,yy+3,1,.18,3+seed*4,'#3d5049',.8);ctx.globalAlpha=1;
     }
     const visible=p=>p.x>=view.minX-35&&p.x<=view.maxX+35&&p.y>=view.minY-35&&p.y<=view.maxY+35;

@@ -1,5 +1,5 @@
 import { groundOffset } from './terrain.js';
-import { waterIntersectsCircle } from './water-geometry.js';
+import { placementAllowed } from './placement-rules.js';
 import { canStartObjective } from './event-scheduling.js';
 
 const TAU=Math.PI*2;
@@ -36,22 +36,18 @@ export class RelicSites {
   }
   _valid(site) {
     const g=this.game,clearance=site.type==='hunt'?245:site.type==='rescue'?135:100;
-    if(g.terrain.island&&!g.terrain.island.isDry(site.x,site.y,clearance))return false;
-    if(!g.terrain.isFree(site.x,site.y,clearance))return false;
+    // A dry center is insufficient: include the stone rim and the front door.
+    if(!placementAllowed(g,'structure',{x:site.x,y:site.y,r:Math.max(clearance,site.r+30)}))return false;
+    if(!placementAllowed(g,'structure',{x:site.door.x,y:site.door.y,r:30}))return false;
     if(g.settlements?.isSafePoint(site.x,site.y,clearance)===false)return false;
     if(this.sites.some(other=>distance(site,other)<clearance+other.r+130))return false;
     const portals=g.regions?.portals||g.regionWorld?.portals||(g.portal?[g.portal]:[]);
     if(portals.some(portal=>distance(site,portal)<clearance+210))return false;
     if(g.adventure?.props.some(prop=>distance(site,prop)<clearance+(prop.r||18)))return false;
     if(g.adventure?.treasure&&distance(site,g.adventure.treasure)<clearance+110)return false;
-    // Reserve the complete ground platform, including its stone rim, against
-    // existing pools. A dry center alone can still leave actors submerged on
-    // the platform edge. Existing water is never removed to fit a building.
-    const footprint=site.r+30;
-    if(g.environment?.muds?.some(mud=>waterIntersectsCircle(mud,site.x,site.y,footprint)))return false;
     if(g.environment?.isHazardFree?.(site.x,site.y,site.type==='hunt'?70:105)===false)return false;
     if(site.type==='rescue'&&g.environment?.props.some(o=>o.state!=='spent'&&distance(o,site)<(o.blastRadius||82)+113))return false;
-    return g.terrain.isFree(site.door.x,site.door.y,30);
+    return true;
   }
   _generate() {
     const g=this.game,regionIndex=g.regionIndex||0,rotation=hash(regionIndex+71,23)*TAU;

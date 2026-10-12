@@ -1,3 +1,4 @@
+import { groundFootprint, surfaceAllows } from './placement-rules.js';
 const CELL=520, TAU=Math.PI*2, EPS=.02;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -110,9 +111,8 @@ export class Terrain {
       if(!this.island)return true;
       // Reserve roots, the stone base and the full rotated log body. Raised
       // branches may overhang a shore; their artwork does not block the route.
-      const root=([28,27,26,20,32][o.treeForm]||32)*(o.scale||1);
-      const r=(o.type==='tree'?Math.max(o.r,root):o.type==='log'?o.r*1.3:o.r*1.2)+8,a=axis(o);
-      return this.island.naturalCapsuleFree(a.ax,a.ay,a.bx,a.by,r);
+      const footprint=groundFootprint(o),kind=o.type==='tree'?'vegetation':o.type==='log'?'debris':'stone';
+      return surfaceAllows(this.island,kind,footprint)&&!this.island.isReservedCapsule(footprint.ax,footprint.ay,footprint.bx,footprint.by,footprint.r);
     });
     this._cache.set(key,clear);
     while(this._cache.size>this.cacheLimit)this._cache.delete(this._cache.keys().next().value);

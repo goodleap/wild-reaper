@@ -287,8 +287,9 @@ assert(!readProp(),'a dynamic objective suppresses the occupied fixed mushroom l
 stable.adventure.props=[];const restoredProp=readProp();assert(restoredProp);
 assert.equal(restoredProp.x,stableProp.x);assert.equal(restoredProp.y,stableProp.y,'removing a crate restores the same mushroom location without migrating its ID');
 stable.adventure.props.push({id:'dynamic-crate',x:stableMud.x,y:stableMud.y,r:18});
-assert.equal(readMud(),null,'a dynamic objective suppresses an occupied fixed mud location');
+assert.deepEqual(readMud(),stableMud,'a dynamic objective cannot suppress the fixed natural water geometry');
+assert.equal(stable.adventure._environmentFree(stableMud.x,stableMud.y,18),false,'new supplies must reject occupied water instead of hiding it');
 stable.adventure.props=[];const restoredMud=readMud();assert(restoredMud);
-assert.equal(restoredMud.x,stableMud.x);assert.equal(restoredMud.y,stableMud.y,'removing the dynamic objective restores the same mud geometry');
+assert.equal(restoredMud.x,stableMud.x);assert.equal(restoredMud.y,stableMud.y,'removing the dynamic objective leaves the same mud geometry');
 
 console.log('Protagonist and interaction mechanics: fixed starting state, open skill slots, bleed/shock reactions, mud, delayed mushrooms, bounded world state and interrupted Boss attacks passed.');

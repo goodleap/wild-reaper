@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { placementAllowed } from './placement-rules.js';
 
 export const OBJECTIVE_RULES=Object.freeze({bossWarning:25,campEngage:240,houseEngage:480});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -27,6 +28,8 @@ export function canStartObjective(g,options) {
 }
 
 export function objectivePointSafe(g,point,radius=0,{skipCamp=false,skipEncounter=false}={}) {
+  // Objective spacing also respects stable water, including unloaded chunks.
+  if(!placementAllowed(g,'structure',{x:point.x,y:point.y,r:radius},{checkTerrain:false}))return false;
   // Ignored objectives no longer veto generation, but still reserve their own
   // ground so a new fight does not land on top of a waiting rescue or house.
   const camp=g.companions?.camp,encounter=g.encounters?.active;

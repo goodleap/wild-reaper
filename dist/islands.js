@@ -1,3 +1,4 @@
+import { COAST_RULES } from './placement-rules.js';
 // Deterministic island outlines are shared by coast paint, collision, spawning
 // and natural terrain generation. The radius varies smoothly: no hidden
 // rectangular world wall and no narrow pixel-scale bays trapping a creature.
@@ -14,7 +15,7 @@ function segmentDistanceSq(ax,ay,bx,by,cx,cy,dx,dy){
 export class Island {
   constructor({region='forest',seed=0}={}){
     this.region=['forest','marsh','ruins'].includes(region)?region:'forest';this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
-    this.worldId=['forest','marsh','ruins'].indexOf(this.region);this.shallowWidth=100;this.routeRadius=80;
+    this.worldId=['forest','marsh','ruins'].indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.routeRadius=80;
     const profile=this.region==='marsh'?{x:4450,y:3950,phase:1.6,bays:.14}:this.region==='ruins'?{x:4250,y:4050,phase:3.5,bays:.115}:{x:4350,y:4100,phase:.2,bays:.08};
     const phase=profile.phase+(hash(this.seed+11)-.5)*.36;
     this.points=Object.freeze(Array.from({length:COUNT},(_,i)=>{
@@ -49,6 +50,7 @@ export class Island {
   isDry(x,y,r=0){return this.contains(x,y,r+this.shallowWidth);}
   depthAt(x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return 0;if(Math.hypot(x,y)+this.shallowWidth<=this._innerRadius)return 0;if(!this._inside(x,y))return 1;const t=clamp(1-this._nearest(x,y).distance/this.shallowWidth,0,1);return t*t*(3-2*t);}
   containsCapsule(ax,ay,bx,by,r=0,inset=0){
+    if(![ax,ay,bx,by,r,inset].every(Number.isFinite)||r<0||inset<0)return false;
     const clearance=r+inset;if(!this.contains(ax,ay,clearance)||!this.contains(bx,by,clearance))return false;
     if(Math.max(Math.hypot(ax,ay),Math.hypot(bx,by))+clearance<=this._innerRadius)return true;
     return !this._edges.some(e=>segmentDistanceSq(ax,ay,bx,by,e.a.x,e.a.y,e.b.x,e.b.y)<(clearance+1e-7)**2);

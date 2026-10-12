@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { groundFootprint, surfaceAllows, placementAllowed } from './placement-rules.js';
 import { RegionalMechanisms, isGrounded } from './regional-mechanisms.js';
 import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, waterIntersectsCapsule, getWaterContours, WATER_SHAPES } from './water-geometry.js';
 export { isGrounded } from './regional-mechanisms.js';
@@ -18,12 +19,7 @@ const WATER_PLACEMENTS=Object.freeze([[.78,.82],[.22,.82],[.78,.22],[.50,.88],[.
 export const WATER_BANK_CLEARANCE=8;
 // Measured ground geometry, excluding raised branches and treetops. Slender
 // trees have narrow collision trunks but longer visible roots at their feet.
-export function waterObstacleFootprint(o,padding=WATER_BANK_CLEARANCE){
-  const scale=o.scale||1,root=[28,27,26,20,32][o.treeForm]||32;
-  const r=(o.type==='tree'?Math.max(o.r,root*scale):o.type==='log'?o.r*1.3:o.r*1.2)+padding;
-  const length=o.type==='log'?o.halfLength||0:0,dx=Math.cos(o.angle||0)*length,dy=Math.sin(o.angle||0)*length;
-  return {ax:o.x-dx,ay:o.y-dy,bx:o.x+dx,by:o.y+dy,r};
-}
+export const waterObstacleFootprint=(o,padding=WATER_BANK_CLEARANCE)=>groundFootprint(o,padding);
 
 // This fixed-size filter remembers armed locations for the whole run. A false
 // positive can only omit a mushroom; leaving and revisiting never farms it.
@@ -46,7 +42,7 @@ export class Environment {
     this.region=['forest','marsh','ruins'].includes(game.region?.id)?game.region.id:'forest';
     this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
-    this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();
+    this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();
     if(generation)this._refresh(true);
     this.mechanisms=new RegionalMechanisms(this,{generation});
   }
@@ -63,13 +59,13 @@ export class Environment {
     if(adventure?.treasure&&distance(adventure.treasure,{x,y})<r+(adventure.treasure.r||27)+15)return false;
     return true;
   }
-  _point(tx,ty,seed,r){
+  _point(tx,ty,seed,r,kind='vegetation',footprintRadius=25){
     // Every retry depends only on the owning cell. No random walk or growing
     // world cache is needed, and obstacle checks preserve open walking routes.
     for(let i=0;i<7;i++){
       const x=tx*CELL+80+this._hash(tx+seed+i*17,ty+419)*360;
       const y=ty*CELL+80+this._hash(tx+503,ty+seed+i*29)*360;
-      if(this._terrainClear(x,y,r))return {x,y};
+      if(this._terrainClear(x,y,r)&&placementAllowed(this.game,kind,{x,y,r:footprintRadius},{environment:this,checkTerrain:false}))return {x,y};
     }
     return null;
   }
@@ -86,7 +82,7 @@ export class Environment {
     // Occasional pairs show the delayed chain reaction without filling paths.
     if(seed<.14){
       const angle=this._hash(tx+853,ty+877)*TAU,next={x:point.x+Math.cos(angle)*88,y:point.y+Math.sin(angle)*88};
-      if(this._terrainClear(next.x,next.y,this.game.terrain.island?ENVIRONMENT_BALANCE.blastRadius:35)){const second=make(next,1);if(second)result.push(second);}
+      if(this._terrainClear(next.x,next.y,this.game.terrain.island?ENVIRONMENT_BALANCE.blastRadius:35)&&placementAllowed(this.game,'vegetation',{...next,r:25},{environment:this,checkTerrain:false})){const second=make(next,1);if(second)result.push(second);}
     }
     return result;
   }
@@ -110,7 +106,7 @@ export class Environment {
         const ring=getWaterContours(mud).outer;
         // Test every complete shoreline edge plus its visible bank. A lake
         // center on land does not prove a long inlet or rounded end is dry.
-        for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length];if(!island.containsCapsule(a.x,a.y,b.x,b.y,8,island.shallowWidth))return false;}
+        if(!surfaceAllows(island,'water',{points:ring,padding:WATER_BANK_CLEARANCE}))return false;
         if(waterIntersectsCircle(mud,0,0,268)||Object.values(island.plan).some(p=>waterIntersectsCircle(mud,p.x,p.y,p.r+8)))return false;
         if(island.routes.some(p=>waterIntersectsCapsule(mud,p.ax,p.ay,p.bx,p.by,p.r+8)))return false;
       }
@@ -124,8 +120,8 @@ export class Environment {
     };
     if(clear())return remember(mud);
     // Retry only permanent terrain in this same owner cell. Finite alternate
-    // positions/orientations retain full-size lakes; dynamic sites may later
-    // suppress this location but can never migrate its stable water identity.
+    // positions/orientations retain full-size lakes. Later props must fit this
+    // fixed layout; adding or consuming them never changes a natural lake.
     const start=Math.floor(this._hash(tx+1171,ty+1193)*WATER_PLACEMENTS.length);
     const jitterX=(this._hash(tx+1229,ty+1259)-.5)*28,jitterY=(this._hash(tx+1283,ty+1301)-.5)*28;
     for(let i=0;i<WATER_PLACEMENTS.length;i++){
@@ -134,18 +130,10 @@ export class Environment {
     }
     return remember(null);
   }
-  _mudObjectiveClear(mud){
-    const g=this.game,clear=(x,y,r)=>!waterIntersectsCircle(mud,x,y,r);
-    if(g.settlements?.sites?.some(s=>!clear(s.x,s.y-(s.depth||0)*.5,Math.hypot((s.width||30)*.5,(s.depth||20)*.5)+65)))return false;
-    if(g.relicSites?.sites?.some(s=>!clear(s.x,s.y,(s.r||100)+45)))return false;
-    if(g.regions?.portals?.some(p=>!clear(p.x,p.y,130)||!clear(p.x,p.y+115,95)))return false;
-    if(g.companions?.camp&&!clear(g.companions.camp.x,g.companions.camp.y,170))return false;
-    if(g.adventure?.props.some(o=>!clear(o.x,o.y,(o.r||18)+12)))return false;
-    if(g.adventure?.treasure&&!clear(g.adventure.treasure.x,g.adventure.treasure.y,(g.adventure.treasure.r||27)+20))return false;
-    return true;
-  }
   _mudAt(tx,ty){
-    const mud=this._mudCandidate(tx,ty);if(!mud)return null;
+    const key=`${tx},${ty}`;if(this._waterLayout.has(key))return this._waterLayout.get(key);
+    const remember=value=>{this._waterLayout.set(key,value);while(this._waterLayout.size>192)this._waterLayout.delete(this._waterLayout.keys().next().value);return value;};
+    const mud=this._mudCandidate(tx,ty);if(!mud)return remember(null);
     const b=waterBounds(mud,40);
     // Neighbour arbitration is based only on permanent seed data, not on
     // load order. Larger waters win and leave an 80-unit dry walking gap.
@@ -155,9 +143,21 @@ export class Environment {
       if(xx===tx&&yy===ty)continue;
       const other=this._mudCandidate(xx,yy);if(!other)continue;
       const wins=other.scale>mud.scale||(other.scale===mud.scale&&(other.seed>mud.seed||(other.seed===mud.seed&&other.id>mud.id)));
-      if(wins&&intersects(b,waterBounds(other,40)))return null;
+      if(wins&&intersects(b,waterBounds(other,40)))return remember(null);
     }
-    return this._mudObjectiveClear(mud)?mud:null;
+    return remember(mud);
+  }
+  // Placement queries the stable neighbouring layout, not the visible cache.
+  // Natural water has no dependency on plants, crates or dynamic objectives,
+  // so loading order and consuming a reward cannot uncover a new lake.
+  watersInBounds(bounds){
+    if(!bounds||!['minX','minY','maxX','maxY'].every(k=>Number.isFinite(bounds[k]))||bounds.minX>bounds.maxX||bounds.minY>bounds.maxY)return [];
+    const waters=[],ids=new Set(),add=m=>{if(m&&intersects(waterBounds(m),bounds)&&!ids.has(m.id||m)){ids.add(m.id||m);waters.push(m);}};
+    if(this.generation){
+      for(let tx=Math.floor((bounds.minX-330)/CELL);tx<=Math.floor((bounds.maxX+330)/CELL);tx++)for(let ty=Math.floor((bounds.minY-330)/CELL);ty<=Math.floor((bounds.maxY+330)/CELL);ty++)add(this._mudAt(tx,ty));
+    }
+    for(const mud of this.muds)add(mud);
+    return waters;
   }
   _refresh(initial=false){
     const g=this.game,p=this._foot(),halfW=Math.min(900,g.viewWidth*.5)+260,halfH=Math.min(650,g.viewHeight*.5)+260;

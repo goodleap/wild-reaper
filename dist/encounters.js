@@ -22,7 +22,7 @@ export class Encounters {
     const g=this.game,p=this._foot(),chest=g.adventure?.treasure,hunt=type==='hunt',clearance=hunt?245:42;
     // A stone arena belongs on clear ground, not under an existing solid tree.
     // Search a few nearby rings without removing terrain or moving its props.
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&g.terrain.island?.isDry(candidate.x,candidate.y,clearance)!==false&&(allowReserved||!g.terrain.island?.isReserved(candidate.x,candidate.y,clearance))&&objectivePointSafe(g,candidate,hunt?245:210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?245:90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
+    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&(allowReserved||!g.terrain.island?.isReserved(candidate.x,candidate.y,clearance))&&objectivePointSafe(g,candidate,hunt?245:210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?245:90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
       !g.adventure?.props.some(o=>distance(o,candidate)<(hunt?245+(o.r||18):70))&&
       (!chest||distance(chest,candidate)>(hunt?290:180));
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;

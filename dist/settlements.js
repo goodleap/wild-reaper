@@ -1,5 +1,5 @@
 import { Terrain, groundOffset } from './terrain.js';
-import { waterIntersectsCircle } from './water-geometry.js';
+import { placementAllowed } from './placement-rules.js';
 import { RELICS } from './relics.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive } from './event-scheduling.js';
 
@@ -34,15 +34,18 @@ export class Settlements {
     return result;
   }
   _setStructures(){this.game.terrain.setStructures?.(this.sites.flatMap(site=>this._obstacles(site)),'settlements');}
-  _hazardFree(x,y,r=22) {
+  _hazardFree(x,y,r=22,{checkPlacement=true}={}) {
+    if(checkPlacement&&!placementAllowed(this.game,'structure',{x,y,r},{checkTerrain:false}))return false;
     const env=this.game.environment;if(!env)return true;
     if(env.isHazardFree?.(x,y,r)===false)return false;
     if(env.props?.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+12))return false;
-    return !env.muds?.some(o=>waterIntersectsCircle(o,x,y,r+12));
+    return true;
   }
   _validSite(site,{nearSpawn=false}={}) {
     const g=this.game,center=this._bodyCenter(site),clearance=site.width*.5+70;
-    if(g.terrain.island&&!g.terrain.island.isDry(center.x,center.y,clearance))return false;
+    // Validate the entire foundation and usable front approach once. The
+    // rounded collision grid below remains independent of the water query.
+    if(!placementAllowed(g,'structure',{x:site.x,y:site.y+(58-site.depth)/2,width:site.width+94,height:site.depth+152},{checkTerrain:false}))return false;
     if(distance(center,this._foot())<clearance+(nearSpawn?40:190))return false;
     if(this.sites.some(s=>distance(center,this._bodyCenter(s))<clearance+s.width*.5+110))return false;
     if(g.adventure?.props.some(o=>distance(o,center)<clearance+35))return false;
@@ -54,16 +57,17 @@ export class Settlements {
     // demanding a huge empty circle, which is unsuitable for forest terrain.
     for(let x=site.x-site.width*.5-24;x<=site.x+site.width*.5+24;x+=24)
       for(let y=site.y-site.depth-24;y<=site.y+82;y+=24)
-        if(!g.terrain.isFree(x,y,23)||!this._hazardFree(x,y,23))return false;
-    if(!g.terrain.isFree(site.door.x,site.door.y,30)||!this._hazardFree(site.door.x,site.door.y,40))return false;
+        if(!g.terrain.isFree(x,y,23)||!this._hazardFree(x,y,23,{checkPlacement:false}))return false;
+    if(!g.terrain.isFree(site.door.x,site.door.y,30)||!this._hazardFree(site.door.x,site.door.y,40,{checkPlacement:false}))return false;
     if(nearSpawn) {
       // Debug placement reserves a direct, walkable approach without removing
       // terrain or moving the player. Check the new foundation as well as the
       // existing world, including the case where a door faces away from spawn.
       const from=this._foot(),to=site.door,r=g.player.r+6;
       if(g.terrain.firstBlocker(from.x,from.y,to.x,to.y,r)||new Terrain({obstacles:this._obstacles(site)}).firstBlocker(from.x,from.y,to.x,to.y,r))return false;
+      if(!placementAllowed(g,'structure',{ax:from.x,ay:from.y,bx:to.x,by:to.y,r},{checkTerrain:false}))return false;
       const steps=Math.ceil(distance(from,to)/20);
-      for(let i=0;i<=steps;i++)if(!this._hazardFree(from.x+(to.x-from.x)*i/steps,from.y+(to.y-from.y)*i/steps,r))return false;
+      for(let i=0;i<=steps;i++)if(!this._hazardFree(from.x+(to.x-from.x)*i/steps,from.y+(to.y-from.y)*i/steps,r,{checkPlacement:false}))return false;
     }
     return true;
   }
