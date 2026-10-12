@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { performance } from 'node:perf_hooks';
 
 // Exercise the shipped app's controls and frame with a deliberately small DOM.
 // These are interaction/state tests, not a browser layout or touch-device test.
@@ -61,7 +62,7 @@ function parseInto(markup,root){
 const root=new Element('root');parseInto(html,root);
 Object.assign(document,{body:root.querySelector('body'),getElementById:id=>root.querySelector(`#${id}`),createElement:tag=>new Element(tag),querySelectorAll:selector=>root.querySelectorAll(selector),addEventListener:(type,handler)=>{(documentListeners[type]??=[]).push(handler);}});
 const $=id=>{const node=document.getElementById(id);assert(node,`missing #${id}`);return node;};
-const sandbox={...modules,document,window:{location:{search:''},devicePixelRatio:1,addEventListener:(type,handler)=>{(windowListeners[type]??=[]).push(handler);}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:query=>({matches:query.includes('pointer: coarse')}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
+const sandbox={...modules,document,performance,window:{location:{search:''},devicePixelRatio:1,addEventListener:(type,handler)=>{(windowListeners[type]??=[]).push(handler);}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:query=>({matches:query.includes('pointer: coarse')}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 const run=script=>vm.runInContext(script,sandbox);
 function fire(node,type,extra={}){

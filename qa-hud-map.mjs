@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { performance } from 'node:perf_hooks';
 // Exercise real UI handlers with a minimal DOM. No browser, preview server, or
 // rendering package is required for pause/input/fog-of-war invariants.
 const html=fs.readFileSync(new URL('./dist/index.html',import.meta.url),'utf8');
@@ -32,7 +33,7 @@ class Element{
 for(const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g))nodes[match[3]]=new Element(match[3],match[1].toUpperCase(),match[2].match(/class="([^"]*)"/)?.[1]||'');
 const findDescendant=(node,id)=>node.id===id?node:node.children.map(child=>findDescendant(child,id)).find(Boolean);
 Object.assign(document,{getElementById:id=>{const node=nodes[id]||Object.values(nodes).map(root=>findDescendant(root,id)).find(Boolean);assert(node,id);return node;},body:new Element(),createElement:tag=>new Element('',tag.toUpperCase()),querySelectorAll:()=>Object.values(nodes).filter(node=>node.classList.contains('modal-layer')),addEventListener:(type,handler)=>listeners[`document:${type}`]=handler});
-const sandbox={...modules,document,window:{location:{search:'?debug'},devicePixelRatio:1,addEventListener:(type,handler)=>listeners[`window:${type}`]=handler},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
+const sandbox={...modules,document,performance,window:{location:{search:'?debug'},devicePixelRatio:1,addEventListener:(type,handler)=>listeners[`window:${type}`]=handler},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 const run=script=>vm.runInContext(script,sandbox);
 const key=(code,repeat=false)=>listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat,target:nodes['game-canvas'],preventDefault(){}});
@@ -167,18 +168,18 @@ nodes['character-done'].onclick();assert(run('paused&&!characterOpen'));
 nodes['resume-button'].onclick();assert.equal(run('paused'),false);assert.equal(document.activeElement.id,'game-canvas');
 nodes['quit-button'].onclick();assert.equal(run('game'),null);
 
-// Drive the real RAF entry point at distinct display rates. Paused gameplay
-// still renders, and its clamped simulation delta must not distort telemetry.
+// Drive real live-play RAF callbacks at distinct display rates. The readout
+// counts rendered frames; clamped simulation deltas cannot distort telemetry.
 const fpsNode=nodes['debug-fps'];
 assert(!fpsNode.classList.contains('hidden'),'debug mode exposes the FPS readout');
 let fpsText=fpsNode.textContent,fpsWrites=[];
 Object.defineProperty(fpsNode,'textContent',{get:()=>fpsText,set:value=>{fpsText=String(value);fpsWrites.push(fpsText);},configurable:true});
-nodes['start-button'].onclick();nodes['pause-button'].onclick();assert(run('paused'));
-const fpsRunTime=run('game.runTime');
+nodes['start-button'].onclick();
 let fpsNow=100000;
 const sampleRate=rate=>{
   // A new game is a real reset boundary, not a direct call to telemetry internals.
-  nodes['restart-button'].onclick();assert.equal(fpsNode.textContent,'-- FPS');nodes['pause-button'].onclick();
+  nodes['restart-button'].onclick();assert.equal(fpsNode.textContent,'-- FPS');
+  run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
   fpsWrites=[];fpsNow+=10000;run(`frame(${fpsNow})`);
   const interval=1000/rate,halfFrames=rate/2;
   for(let i=1;i<halfFrames;i++)run(`frame(${fpsNow+i*interval})`);
@@ -186,9 +187,15 @@ const sampleRate=rate=>{
   run(`frame(${fpsNow+500})`);assert.equal(fpsNode.textContent,`${rate} FPS`);
   for(let i=halfFrames+1;i<=rate;i++)run(`frame(${fpsNow+i*interval})`);
   assert.equal(fpsNode.textContent,`${rate} FPS`);assert(fpsWrites.length<=2,'FPS text updates at most twice per second');
-  assert.equal(run('game.runTime'),fpsRunTime,'FPS continues while pause keeps simulation frozen');
+  assert.equal(run('paused'),false);assert(run('game.runTime')>0,'FPS samples come from actual live gameplay');
 };
 sampleRate(60);sampleRate(120);sampleRate(10);
+// Frozen scenes keep sampling RAF cadence but must not display an apparent
+// performance failure merely because retaining the canvas skips submissions.
+nodes['pause-button'].onclick();assert(run('paused'));
+const fpsRunTime=run('game.runTime');fpsNow+=2000;run(`frame(${fpsNow})`);
+for(let i=1;i<=60;i++)run(`frame(${fpsNow+i*1000/60})`);
+assert.equal(fpsNode.textContent,'已暂停');assert.equal(run('game.runTime'),fpsRunTime);
 // Background time cannot enter the first foreground sample, even if the
 // browser sends a throttled RAF while the document is hidden.
 document.hidden=true;listeners['document:visibilitychange']();assert.equal(fpsNode.textContent,'-- FPS');
@@ -196,7 +203,7 @@ run(`frame(${fpsNow+60000})`);assert.equal(fpsNode.textContent,'-- FPS');
 document.hidden=false;listeners['document:visibilitychange']();fpsNow+=120000;
 run(`frame(${fpsNow})`);assert.equal(fpsNode.textContent,'-- FPS');
 for(let i=1;i<=30;i++)run(`frame(${fpsNow+i*1000/60})`);
-assert.equal(fpsNode.textContent,'60 FPS','returning from a background tab starts a fresh sample');
+assert.equal(fpsNode.textContent,'已暂停','returning from a background tab starts a fresh sample while preserving pause');
 // Normal URLs neither expose nor look up/update telemetry in initialization,
 // a real frame or visibility changes. Explicit false debug values behave alike.
 for(const search of ['','?debug=0','?debug=false']){
@@ -208,4 +215,4 @@ for(const search of ['','?debug=0','?debug=false']){
   listeners['document:visibilitychange']();
   assert(fpsNode.classList.contains('hidden'));assert.equal(fpsLookups,0);assert.deepEqual(fpsWrites,[]);
 }
-console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity, clean re-press behavior and debug-only FPS at 10/60/120 Hz with visibility resets passed.');
+console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity, clean re-press behavior and debug-only live FPS at 10/60/120 Hz with paused labeling and visibility resets passed.');

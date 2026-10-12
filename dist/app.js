@@ -20,6 +20,7 @@ import { characterPanelHTML } from './character-panel.js';
 import { groundOffset, rockShadowParts } from './terrain.js';
 import { isGrounded, obstacleHeight } from './height-rules.js';
 import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-map.js';
+import { backingResolution, RenderSchedule, FrameMetrics } from './render-performance.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
@@ -53,18 +54,31 @@ const timeLabel = (n)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(Mat
 function isDebugMode(search){const value=new URLSearchParams(search).get('debug');return value!==null&&['','1','true'].includes(value.toLowerCase());}
 const debugMode=isDebugMode(window.location?.search||'');
 const debugFpsNode=debugMode?$('debug-fps'):null;
-let fpsLast=null,fpsFrames=0,fpsElapsed=0;
-if(debugFpsNode)debugFpsNode.classList.remove('hidden');
-function resetDebugFps(){fpsLast=null;fpsFrames=0;fpsElapsed=0;if(debugFpsNode)debugFpsNode.textContent='-- FPS';}
-function updateDebugFps(now){
+const debugPerformanceNode=debugFpsNode?document.createElement('span'):null;
+const frameMetrics=debugMode?new FrameMetrics():null;
+const renderSchedule=new RenderSchedule();
+if(debugFpsNode){
+  debugFpsNode.classList.remove('hidden');
+  debugFpsNode.title='每秒提交绘制帧数；暂停时复用最后一帧';
+  debugPerformanceNode.id='debug-performance';debugPerformanceNode.className='debug-performance';
+  debugPerformanceNode.setAttribute('aria-label','性能：RAF 回调间隔；U 逻辑 CPU；D 绘制提交 CPU，均为毫秒，不含 GPU；渲染倍率与像素数');
+  // Stay inside the narrow pause column without adding a gameplay overlay.
+  $('pause-button').parentElement?.append(debugPerformanceNode);
+}
+function resetDebugFps(){frameMetrics?.reset();if(debugFpsNode)debugFpsNode.textContent='-- FPS';if(debugPerformanceNode)debugPerformanceNode.textContent='';}
+function updateDebugFps(now,rendered,updateMs,renderMs,state){
   if(!debugFpsNode)return;
-  if(document.hidden){resetDebugFps();return;}
-  if(fpsLast!==null&&now>fpsLast){fpsElapsed+=now-fpsLast;fpsFrames++;}
-  fpsLast=now;
-  if(fpsElapsed>=500){debugFpsNode.textContent=`${Math.round(fpsFrames*1000/fpsElapsed)} FPS`;fpsFrames=0;fpsElapsed=0;}
+  if(document.hidden){frameMetrics.reset();return;}
+  const sample=frameMetrics.sample(now,{rendered,updateMs,renderMs});if(!sample)return;
+  debugFpsNode.textContent=renderSchedule.isLive(state)?`${sample.fps} FPS`:'已暂停';
+  debugPerformanceNode.textContent=`Δ${sample.rafMs.toFixed(1)}ms
+U${sample.updateMs.toFixed(1)}ms
+D${sample.renderMs.toFixed(1)}ms
+${dpr.toFixed(2)}×${(canvas.width*canvas.height/1e6).toFixed(1)}M`;
+  debugPerformanceNode.title=`RAF 回调间隔 ${sample.rafMs.toFixed(2)} ms；逻辑 CPU ${sample.updateMs.toFixed(2)} ms；绘制提交 CPU ${sample.renderMs.toFixed(2)} ms（不含 GPU）；画布 ${canvas.width} × ${canvas.height}`;
 }
 if(debugMode){$('game-version').textContent+=' · DEBUG';$('game-version').setAttribute('aria-label','游戏版本，调试模式');}
-let width=1100,height=700,dpr=1,game=null,paused=false,helpOpen=false,mapOpen=false,characterOpen=false,runEnded=false;
+let width=1100,height=700,dpr=1,scaleX=1,scaleY=1,nativeDpr=0,game=null,paused=false,helpOpen=false,mapOpen=false,characterOpen=false,runEnded=false;
 let mapReturnFocus=null,characterReturnFocus=null,characterTab='attributes',characterPointer=null;
 const characterTabs=['attributes','weapons','skills','status'];
 let sceneInputRevision=0;const blockedTransitionKeys=new Set();
@@ -82,7 +96,16 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse=matchMedia('(pointer: coarse)').matches;
 const combatOptions={reduced,dense:false,time:0,pixelRatio:1};
 const hudInsets={top:0,right:0};
-function resize(){const style=window.getComputedStyle?.(arena);for(const side of ['top','right'])hudInsets[side]=parseFloat(style?.getPropertyValue(`--safe-${side}`))||0;const r=arena.getBoundingClientRect();width=r.width;height=r.height;dpr=Math.min(window.devicePixelRatio||1,2);combatOptions.pixelRatio=dpr;canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);arena.classList.toggle('compact-hud',width<600||height<430);arena.classList.toggle('narrow-hud',width<600);arena.classList.toggle('short-hud',height<430);if(game){game.viewWidth=width;game.viewHeight=height;}if(game){lastLoadout='';lastSupers='';updateWeaponHUD();updateSuperHUD();}if(mapOpen)renderExpandedMap();}
+function resize(){
+  const style=window.getComputedStyle?.(arena);for(const side of ['top','right'])hudInsets[side]=parseFloat(style?.getPropertyValue(`--safe-${side}`))||0;
+  const r=arena.getBoundingClientRect();width=Math.max(1,r.width);height=Math.max(1,r.height);nativeDpr=window.devicePixelRatio||1;
+  const buffer=backingResolution(width,height,nativeDpr);dpr=buffer.pixelRatio;scaleX=buffer.scaleX;scaleY=buffer.scaleY;combatOptions.pixelRatio=dpr;
+  if(canvas.width!==buffer.width)canvas.width=buffer.width;if(canvas.height!==buffer.height)canvas.height=buffer.height;
+  renderSchedule.invalidate();
+  arena.classList.toggle('compact-hud',width<600||height<430);arena.classList.toggle('narrow-hud',width<600);arena.classList.toggle('short-hud',height<430);
+  if(game){game.viewWidth=width;game.viewHeight=height;lastLoadout='';lastSupers='';updateWeaponHUD();updateSuperHUD();}
+  if(mapOpen)renderExpandedMap();
+}
 new ResizeObserver(resize).observe(arena);resize();
 
 function syncSound(){document.body.classList.toggle('sound-enabled',soundOn);$('sound-button').setAttribute('aria-label',soundOn?'关闭音效':'开启音效');$('sound-button').title=soundOn?'关闭音效':'开启音效';$('sound-button').setAttribute('aria-pressed',String(soundOn));$('pause-sound-button').setAttribute('aria-pressed',String(soundOn));$('pause-sound-button').setAttribute('aria-label',soundOn?'关闭音效':'开启音效');$('pause-sound-button').textContent=soundOn?'音效：开':'音效：关';}
@@ -348,7 +371,7 @@ function updateCompanionHUD(){
   if(ally){$('companion-icon').textContent=ally.kind==='stormcaller'?'ϟ':'◈';$('companion-name').textContent=`${ally.name} · ${ally.kind==='stormcaller'?'雷电':'地震'}`;$('companion-time').textContent=`${Math.ceil(ally.remaining)}s`;$('companion-fill').style.width=`${100*clamp(ally.remaining/ally.maxDuration,0,1)}%`;$('companion-status').classList.toggle('storm-companion',ally.kind==='stormcaller');}
   $('rescue-power').textContent=`援助 Lv.${power} · 基础伤害 +${power*8}%`;
 }
-function updateHUD(){if(!game)return;arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;$('level-label').textContent=`LV. ${p.level}`;$('xp-caption').textContent=`${hudNumber(p.xp)} / ${hudNumber(p.xpNext)}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`${hudNumber(game.crystals||0)} / ${hudNumber(game.crystalsNext||0)}`;$('gold-label').textContent=hudNumber(game.gold||0);$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=width<600?`第 ${game.wave} 波`:waveProgressLabel();$('kills').textContent=game.kills;$('skill-button').title=`天雷轰击 · 超级技能 Lv.${game.build.getSkill('storm').level} · 空格 · 冷却 ${p.skillCooldownMax} 秒`;$('skill-label').textContent=p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪';$('skill-fill').style.width=`${100*clamp((p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1),0,1)}%`;$('touch-skill').classList.toggle('cooldown',p.skillCooldown>0);$('skill-button').disabled=p.skillCooldown>0;$('touch-skill').disabled=p.skillCooldown>0;$('skill-symbol').textContent=p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ';$('touch-skill-label').textContent=p.skillCooldown>0?'冷却中':'天雷';$('touch-skill').setAttribute('aria-label',p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击');const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',boss?.bossKind==='bloom');if(boss){$('boss-name').textContent=boss.dungeonBoss?'王城守望者 · 最终首领':`${boss.bossKind==='bloom'?'孢冠领主':'荒野领主'} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}
+function updateHUD(){if(!game)return;renderSchedule.invalidate();arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;$('level-label').textContent=`LV. ${p.level}`;$('xp-caption').textContent=`${hudNumber(p.xp)} / ${hudNumber(p.xpNext)}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`${hudNumber(game.crystals||0)} / ${hudNumber(game.crystalsNext||0)}`;$('gold-label').textContent=hudNumber(game.gold||0);$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=width<600?`第 ${game.wave} 波`:waveProgressLabel();$('kills').textContent=game.kills;$('skill-button').title=`天雷轰击 · 超级技能 Lv.${game.build.getSkill('storm').level} · 空格 · 冷却 ${p.skillCooldownMax} 秒`;$('skill-label').textContent=p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪';$('skill-fill').style.width=`${100*clamp((p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1),0,1)}%`;$('touch-skill').classList.toggle('cooldown',p.skillCooldown>0);$('skill-button').disabled=p.skillCooldown>0;$('touch-skill').disabled=p.skillCooldown>0;$('skill-symbol').textContent=p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ';$('touch-skill-label').textContent=p.skillCooldown>0?'冷却中':'天雷';$('touch-skill').setAttribute('aria-label',p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击');const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',boss?.bossKind==='bloom');if(boss){$('boss-name').textContent=boss.dungeonBoss?'王城守望者 · 最终首领':`${boss.bossKind==='bloom'?'孢冠领主':'荒野领主'} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}
 
 $('upgrade-pause').onclick=pause;$('super-pause').onclick=pause;$('shop-pause').onclick=pause;$('shop-close').onclick=closeShop;
 $('map-button').onclick=openMap;$('close-map').onclick=closeMap;$('map-done').onclick=closeMap;
@@ -389,7 +412,7 @@ for(const type of ['selectstart','dragstart'])document.addEventListener(type,e=>
 arena.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;if(e.code==='Escape'||e.code==='KeyP'){if(e.repeat)return;if(helpOpen){e.preventDefault();closeHelp();return;}if(characterOpen){e.preventDefault();closeCharacter();return;}if(mapOpen){e.preventDefault();closeMap();return;}if(game&&['playing','relic','upgrade','super','shop'].includes(game.status)){e.preventDefault();paused?resume():pause();}return;}if(e.code==='KeyC'){if(!game||runEnded||helpOpen)return;e.preventDefault();if(!e.repeat)characterOpen?closeCharacter():openCharacter();return;}if(e.code==='KeyM'){if(!game||runEnded||helpOpen)return;e.preventDefault();if(!e.repeat)mapOpen?closeMap():openMap();return;}if(['BUTTON','SUMMARY'].includes(e.target.tagName)&&['Space','Enter'].includes(e.code))return;if(!game||game.status!=='playing'||paused||helpOpen||mapOpen||characterOpen)return;if(game.sceneTransition.active||blockedTransitionKeys.has(e.code)){blockedTransitionKeys.add(e.code);e.preventDefault();return;}if(e.code==='KeyE'){e.preventDefault();if(!e.repeat)requestPortal();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code)){e.preventDefault();keys.add(e.code);if(e.code==='Space'&&!e.repeat)requestSkill();}});
 window.addEventListener('keyup',e=>{keys.delete(e.code);blockedTransitionKeys.delete(e.code);});
-window.addEventListener('blur',()=>{clearInput();if(game?.status==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(debugMode)resetDebugFps();if(document.hidden&&game?.status==='playing')pause();});
+window.addEventListener('blur',()=>{clearInput();if(game?.status==='playing')pause();});document.addEventListener('visibilitychange',()=>{last=0;clearInput();renderSchedule.invalidate();if(debugMode)resetDebugFps();if(document.hidden&&game?.status==='playing')pause();});
 canvas.addEventListener('pointerdown',e=>{if(!game||game.status!=='playing'||game.sceneTransition.active||paused||helpOpen||mapOpen||characterOpen||touch)return;e.preventDefault();const r=canvas.getBoundingClientRect();touch={id:e.pointerId,x:e.clientX-r.left,y:e.clientY-r.top,dx:0,dy:0};canvas.setPointerCapture(e.pointerId);$('joystick').style.left=`${touch.x}px`;$('joystick').style.top=`${touch.y}px`;show('joystick');initAudio();});
 canvas.addEventListener('pointermove',e=>{if(!touch||touch.id!==e.pointerId)return;const r=canvas.getBoundingClientRect();let dx=e.clientX-r.left-touch.x,dy=e.clientY-r.top-touch.y;const d=Math.hypot(dx,dy),m=Math.min(d,40)/(d||1);touch.dx=dx*m/40;touch.dy=dy*m/40;$('joystick-thumb').style.transform=`translate(${dx*m}px,${dy*m}px)`;});
 function releaseTouch(e){if(touch?.id===e.pointerId){touch=null;show('joystick',false);}}
@@ -520,11 +543,11 @@ function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[],adventureProps=[
     light.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);light.globalAlpha=1;light.globalCompositeOperation='source-over';drawLight(light);
     // Composite matching pixel grids without a transformed destructive fill.
     light.setTransform(1,0,0,1,0,0);light.globalAlpha=1;light.globalCompositeOperation='destination-out';light.drawImage(actorShadowCanvas,0,0);light.globalCompositeOperation='source-over';
-    ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.save();ctx.setTransform(scaleX,0,0,scaleY,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
     ctx.drawImage(sunlightCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
   }
   paintMask(false);
-  ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.globalAlpha=.3;ctx.globalCompositeOperation='source-over';
+  ctx.save();ctx.setTransform(scaleX,0,0,scaleY,0,0);ctx.globalAlpha=.3;ctx.globalCompositeOperation='source-over';
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.drawImage(actorShadowCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
 }
@@ -1166,5 +1189,38 @@ function syncSceneInput(){
   clearInput();shake=0;
 }
 function bossFeedbackVisible(){return game.enemies.some(enemy=>enemy.type==='boss'&&enemy.hp>0&&sceneVisible(enemy));}
-function frame(now){if(debugMode)updateDebugFps(now);const dt=Math.min((now-(last||now))/1000,.04);last=now;if(!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!game?.sceneTransition.active)clock+=dt;ctx.setTransform(dpr,0,0,dpr,0,0);if(game){if(!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!runEnded){input.x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+(touch?.dx||0);input.y=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+(touch?.dy||0);input.skill=skillRequested;input.interact=portalRequested;skillRequested=false;portalRequested=false;game.update(dt,input);syncSceneInput();if(!game.sceneTransition.active)worldMap.discover(game,{viewportWidth:width,viewportHeight:height});let hitSound=false;for(const e of game.events){if(e.type==='superCast'||e.type==='superImpact')playSuperFeedback(e);if(e.type==='shoot')tone(700,.045,'triangle',.012,330);if(e.type==='kill')hitSound=true;if(e.type==='hurt'){shake=8;tone(150,.1,'triangle',.055,70);}if(e.type==='skill'){updateHUD();shake=reduced?0:5;tone(85,.48,'triangle',.065,32);tone(720,.25,'sawtooth',.02,90);}if(e.type==='level')tone(650,.24,'sine',.05,1200);if(e.type==='evolution'){tone(620,.3,'sine',.045,1240);}if(e.type==='companionJoined')tone(540,.3,'sine',.035,1080);if(e.type==='encounterComplete')tone(540,.22,'sine',.03,880);if(e.type==='mushroomArmed')tone(480,.08,'sine',.012,650);if(e.type==='mushroomBlast')tone(120,.14,'triangle',.025,55);if(e.type==='bloomWindup'&&bossFeedbackVisible())tone(270,.28,'sine',.025,390);if(e.type==='bloomShot'&&bossFeedbackVisible())tone(400,.13,'triangle',.025,220);if(e.type==='bloomBurst'&&bossFeedbackVisible())tone(170,.3,'triangle',.035,70);if(e.type==='bossWindup'&&bossFeedbackVisible())tone(145,.24,'sine',.025,210);if(e.type==='bossSlam'&&bossFeedbackVisible()){shake=reduced?0:Math.max(shake,3);tone(90,.28,'triangle',.045,40);}if(e.type==='bossKill'){shake=reduced?0:Math.max(shake,4);tone(95,.35,'triangle',.045,40);}if(e.type==='boss'&&bossFeedbackVisible())tone(130,.5,'triangle',.07,75);if(e.type==='heal')tone(600,.1,'sine',.015,900);}if(hitSound)tone(170,.04,'triangle',.018,95);announceCombatEvents(game.events);game.events.length=0;if(game.status==='upgrade')openUpgrades();if(game.status==='relic')openRelics();if(game.status==='super')openSuperChoices();if(game.status==='shop')openShop();if(game.status==='dead')endGame();}renderGame();hudTick+=dt;if(hudTick>.07){updateHUD();hudTick=0;}if(game.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen)shake=Math.max(0,shake-dt*40);}else renderIntro();requestAnimationFrame(frame);}
+function frameState(){return {game,scene:game?.dungeon?.active??game?.regionIndex??null,status:game?.status??'intro',paused,helpOpen,mapOpen,characterOpen,runEnded,hidden:!!document.hidden};}
+const cpuNow=()=>globalThis.performance?.now?.()??Date.now();
+function updateGameFrame(dt){input.x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+(touch?.dx||0);input.y=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+(touch?.dy||0);input.skill=skillRequested;input.interact=portalRequested;skillRequested=false;portalRequested=false;game.update(dt,input);syncSceneInput();if(!game.sceneTransition.active)worldMap.discover(game,{viewportWidth:width,viewportHeight:height});let hitSound=false;for(const e of game.events){if(e.type==='superCast'||e.type==='superImpact')playSuperFeedback(e);if(e.type==='shoot')tone(700,.045,'triangle',.012,330);if(e.type==='kill')hitSound=true;if(e.type==='hurt'){shake=8;tone(150,.1,'triangle',.055,70);}if(e.type==='skill'){updateHUD();shake=reduced?0:5;tone(85,.48,'triangle',.065,32);tone(720,.25,'sawtooth',.02,90);}if(e.type==='level')tone(650,.24,'sine',.05,1200);if(e.type==='evolution'){tone(620,.3,'sine',.045,1240);}if(e.type==='companionJoined')tone(540,.3,'sine',.035,1080);if(e.type==='encounterComplete')tone(540,.22,'sine',.03,880);if(e.type==='mushroomArmed')tone(480,.08,'sine',.012,650);if(e.type==='mushroomBlast')tone(120,.14,'triangle',.025,55);if(e.type==='bloomWindup'&&bossFeedbackVisible())tone(270,.28,'sine',.025,390);if(e.type==='bloomShot'&&bossFeedbackVisible())tone(400,.13,'triangle',.025,220);if(e.type==='bloomBurst'&&bossFeedbackVisible())tone(170,.3,'triangle',.035,70);if(e.type==='bossWindup'&&bossFeedbackVisible())tone(145,.24,'sine',.025,210);if(e.type==='bossSlam'&&bossFeedbackVisible()){shake=reduced?0:Math.max(shake,3);tone(90,.28,'triangle',.045,40);}if(e.type==='bossKill'){shake=reduced?0:Math.max(shake,4);tone(95,.35,'triangle',.045,40);}if(e.type==='boss'&&bossFeedbackVisible())tone(130,.5,'triangle',.07,75);if(e.type==='heal')tone(600,.1,'sine',.015,900);}if(hitSound)tone(170,.04,'triangle',.018,95);announceCombatEvents(game.events);game.events.length=0;}
+function frame(now){
+  // A DPR-only monitor/zoom change may not resize the CSS content box.
+  if(nativeDpr!==(window.devicePixelRatio||1))resize();
+  const dt=Math.max(0,Math.min((now-(last||now))/1000,.04));last=now;
+  let state=frameState(),updateMs=0,renderMs=0,rendered=false;
+  const live=renderSchedule.isLive(state);
+  if(live){
+    if(!game?.sceneTransition.active)clock+=dt;
+    if(game){const began=debugMode?cpuNow():0;updateGameFrame(dt);if(debugMode)updateMs=cpuNow()-began;}
+  }
+  state=frameState();
+  if(renderSchedule.shouldRender(state)){
+    if(game&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!runEnded){
+      if(game.status==='upgrade')openUpgrades();if(game.status==='relic')openRelics();if(game.status==='super')openSuperChoices();if(game.status==='shop')openShop();if(game.status==='dead')endGame();
+    }
+    const began=debugMode?cpuNow():0;
+    ctx.setTransform(scaleX,0,0,scaleY,0,0);
+    if(game)renderGame();else renderIntro();
+    if(debugMode)renderMs=cpuNow()-began;rendered=true;
+    if(game){
+      hudTick+=dt;
+      if(!renderSchedule.isLive(state)||hudTick>.07){updateHUD();hudTick=0;}
+      if(game.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen)shake=Math.max(0,shake-dt*40);
+    }
+    // UI callbacks and resize can invalidate a frozen scene once. Committing
+    // after HUD refresh retains that freshly drawn frame until a real change.
+    state=frameState();renderSchedule.commit(state);
+  }
+  if(debugMode)updateDebugFps(now,rendered,updateMs,renderMs,state);
+  requestAnimationFrame(frame);
+}
 requestAnimationFrame(frame);
