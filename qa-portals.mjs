@@ -117,8 +117,8 @@ assert(usePortal(travel));assert.equal(travel.portal,nextGate,'revisiting uses t
 
 const route=arena(),routeIds=[route.region.id],terrainSignatures=[];
 for(let i=0;i<3;i++) {route.time=180+i*180;openPortal(route);claim(route);assert(usePortal(route));routeIds.push(route.region.id);terrainSignatures.push(JSON.stringify(route.terrain.query(200,-900,1100,900).map(o=>[o.type,o.x,o.y,o.r])));}
-assert.deepEqual(routeIds,['forest','marsh','ruins','forest']);assert.equal(new Set(terrainSignatures).size,3);assert.equal(route.regions.states.size,3);
-for(let index=2;index>=0;index--){const back=route.regions.portals.find(p=>p.direction==='back');assert(back);assert(usePortal(route,back));assert.equal(route.regionIndex,index);}
+assert.deepEqual(routeIds,['forest','marsh','ruins','forest']);assert.equal(new Set(terrainSignatures).size,3);assert.equal(route.regions.states.size,2);assert.equal(route.regionIndex,0);assert.equal(route.regions.unlockedConnections.size,3);assert(route.regions.endlessUnlocked);
+for(const index of [2,1,0]){const back=route.regions.portals.find(p=>p.nextRegionIndex===index);assert(back);assert.equal(back.state,'active');assert(usePortal(route,back));assert.equal(route.regionIndex,index);assert(route.regions.states.size<=2);}
 assert.equal(route.portal.state,'active','all visited regions remain returnable');
 
 const xpChoice=arena();openPortal(xpChoice);xpChoice.crystalsNext=40;xpChoice.crystals=41;const savedXp=xpChoice.player.xp;

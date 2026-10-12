@@ -1,5 +1,7 @@
 import { STORM_DURATION } from './storm-geometry.js';
 import { Terrain, groundOffset } from './terrain.js';
+import { Island } from './islands.js';
+import { waterIntersectsCircle } from './water-geometry.js';
 import { Adventure } from './adventure.js';
 import { Encounters } from './encounters.js';
 import { initBoss, updateBloomBoss, resolveBloomBoss, clearBossAttacks } from './bosses.js';
@@ -83,8 +85,9 @@ const ENDLESS_UPGRADES = [
 ];
 
 export class Game {
-  constructor({difficulty='normal',hero='traveler',terrain=new Terrain(),adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false}={}) {
-    this.terrain=terrain;
+  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false}={}) {
+    this.terrain=terrain??new Terrain({island:new Island({region:'forest',seed:0})});
+    this._islandWorlds=!!this.terrain.island;
     this.debug=debug===true;
     this.regionIndex=0;this.region=regionFor(0);this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
@@ -113,7 +116,7 @@ export class Game {
     this._refreshStats();this._refreshWeapons();
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     this._moveEntity(this.player,0,0,true);
-    for(let i=0;i<4;i++) this._spawnEnemy('slime', 330 + i * 24);
+    for(let i=0;i<4;i++) this._spawnEnemy('slime', adventure?undefined:330+i*24);
     this.adventure=adventure?new Adventure(this):null;
     this.encounters=encounters?new Encounters(this):null;
     this.combatStatus=new CombatStatus(this);
@@ -186,23 +189,61 @@ export class Game {
     }
     return best;
   }
+  _difficultyTime() {
+    // Exploration has a ceiling. The endless clock begins only after all three
+    // inter-world connections have actually been defeated, not merely visited.
+    if(!this._features.adventure||!this._islandWorlds)return this.time;
+    const base=Math.min(2,this.regionIndex)*90+(this.regions?.defeatedConnectionsCount||0)*45+Math.min(this.time,600)*.18;
+    return base+(this.regions?.endlessUnlocked?Math.max(0,this.time-this.regions.endlessStartedAt):0);
+  }
+  _waveTier() {
+    if(!this._features.adventure||!this._islandWorlds)return null;
+    const exploration=Math.min(2,this.regionIndex)*2+(this.regions?.defeatedConnectionsCount||0)*2+Math.min(3,Math.floor(this.time/180));
+    return exploration+(this.regions?.endlessUnlocked?Math.floor(Math.max(0,this.time-this.regions.endlessStartedAt)/50):0);
+  }
+  _findSpawnPoint(type='slime',angle,radius) {
+    const r=({slime:16,beetle:18,bat:11,brute:26,boar:22,spore:20,boss:49})[type]||18,p=this.player;
+    const halfW=Math.max(390,this.viewWidth*.5+65),halfH=Math.max(290,this.viewHeight*.5+65);
+    const directed=Number.isFinite(angle),start=directed?angle:rand(0,TAU);
+    // A directed warning keeps its side even if the player runs to the coast.
+    // Never mirror the announced wave or project an ocean point onto the hero.
+    const turns=directed?[0,.075,-.075,.15,-.15]:Array.from({length:32},(_,i)=>i*TAU/32);
+    for(const turn of turns) {
+      const a=start+turn,ux=Math.cos(a),uy=Math.sin(a);
+      const edge=1/Math.max(Math.abs(ux)/halfW,Math.abs(uy)/halfH);
+      for(const extra of [0,80,180,300]) {
+        const d=Math.max(radius||0,edge)+extra,x=p.x+ux*d,y=p.y+uy*d,footY=y+groundOffset({type,r});
+        if(this._inView({x,y,r},36)||!this.terrain.isFree(x,footY,r+4)||this.terrain.island?.isDry(x,footY,r+4)===false)continue;
+        if(this.environment?.muds.some(m=>waterIntersectsCircle(m,x,footY,r+5)))continue;
+        if(this.environment?.isHazardFree?.(x,footY,r+4)===false)continue;
+        return {x,y};
+      }
+    }
+    return null;
+  }
   _spawnEnemy(type, radius, angle) {
-    const p=this.player, t=this.time, a=Number.isFinite(angle)?angle:rand(0,TAU);
+    const p=this.player,t=this._difficultyTime(),a=Number.isFinite(angle)?angle:rand(0,TAU);
     const halfW=Math.max(390,this.viewWidth*.5+65),halfH=Math.max(290,this.viewHeight*.5+65);
     const edge=1/Math.max(Math.abs(Math.cos(a))/halfW,Math.abs(Math.sin(a))/halfH);
-    const distance=radius || edge;
+    const distance=radius||edge;
     const defs={slime:[16,26,85,9,4],beetle:[18,43,100,12,6],bat:[11,24,145,7,4],brute:[26,115,60,17,13],boar:[22,80,75,14,7],spore:[20,65,55,12,7],boss:[49,this.easy?1700:2300,49,22,160]};
     const [r,hp,speed,damage,xp]=defs[type];
-    const lateMinutes=Math.max(0,t-150)/60, bossIndex=Math.max(1,this.bossCount);
-    // Density and movement stay bounded; health and contact damage keep rising.
+    // Radius 1 is the authored-encounter factory: its owner immediately sets a
+    // prevalidated door/room/guardian position. Ordinary spawns must be offscreen.
+    const islandSpawn=this.terrain.island&&radius!==1;
+    const point=islandSpawn?this._findSpawnPoint(type,Number.isFinite(angle)?angle:undefined,radius):{x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance};
+    if(!point)return null;
+    const lateMinutes=Math.max(0,t-150)/60,bossIndex=Math.max(1,this.bossCount);
     const endurance=Math.max(0,t-300)/60;
     const health=hp*(type==='boss'?1+(bossIndex-1)*.65+sq(bossIndex-1)*.12:1+Math.min(t,300)*.0018+endurance*.13+Math.pow(endurance,1.25)*.05);
     const danger=type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.18;
-    const enemy={id:++this._id,x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),orbitHit:0,attackCooldown:0,slamCooldown:0,slamRecovery:0,slam:null,charge:null,chargeCooldown:1.5,cast:null,castCooldown:1};
-    this._moveEntity(enemy,0,0);
-    if(!radius)for(let i=0;i<6&&this._inView(enemy);i++) {
-      enemy.x=p.x+Math.cos(a)*(distance+85*(i+1));enemy.y=p.y+Math.sin(a)*(distance+85*(i+1));
+    const enemy={id:++this._id,...point,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),orbitHit:0,attackCooldown:0,slamCooldown:0,slamRecovery:0,slam:null,charge:null,chargeCooldown:1.5,cast:null,castCooldown:1};
+    if(!islandSpawn) {
       this._moveEntity(enemy,0,0);
+      if(!radius)for(let i=0;i<6&&this._inView(enemy);i++) {
+        enemy.x=p.x+Math.cos(a)*(distance+85*(i+1));enemy.y=p.y+Math.sin(a)*(distance+85*(i+1));
+        this._moveEntity(enemy,0,0);
+      }
     }
     if(type==='boss')initBoss(enemy);
     this.enemies.push(enemy);return enemy;
@@ -289,16 +330,27 @@ export class Game {
     entity.x=moved.x;entity.y=moved.y-offset;return moved;
   }
   _moveEnemy(e,dt,target=null) {
-    const x=e.x,y=e.y+groundOffset(e,!!e.isCompanion),tx=target?.x??this.player.x,ty=target?.y??this.player.y+groundOffset(this.player,true);
-    const dx=tx-x,dy=ty-y,d=Math.hypot(dx,dy)||1;
-    let nx=dx/d,ny=dy/d,detouring=false;
+    const x=e.x,y=e.y+groundOffset(e,!!e.isCompanion),rawX=target?.x??this.player.x,rawY=target?.y??this.player.y+groundOffset(this.player,true);
     e._navTimer=(e._navTimer||0)-dt;
     if(e._navTimer<=0) {
-      e._navTimer=.16+(e.id%4)*.025;
+      e._navTimer=.16+(e.id%4)*.025;e._coastTarget=null;
+      const island=this.terrain.island;
+      // Bays interrupt a straight pursuit even with no solid tree in the way.
+      // The island is star-shaped: a short inland waypoint keeps both legs on
+      // land, and ordinary obstacle steering still handles trees along it.
+      if(island&&!island.containsCapsule(x,y,rawX,rawY,e.r+3)) {
+        for(const factor of [.85,.6,.3,0]) {
+          const q={x:(x+rawX)*.5*factor,y:(y+rawY)*.5*factor};
+          if(island.containsCapsule(x,y,q.x,q.y,e.r)&&island.containsCapsule(q.x,q.y,rawX,rawY,e.r)){e._coastTarget=q;break;}
+        }
+      }
+      const tx=e._coastTarget?.x??rawX,ty=e._coastTarget?.y??rawY;
       const obstacle=this.terrain.firstBlocker(x,y,tx,ty,e.r+3);
       if(obstacle?.id!==e._navObstacle?.id)e._navSide=0;
       e._navObstacle=obstacle;
     }
+    const tx=e._coastTarget?.x??rawX,ty=e._coastTarget?.y??rawY,dx=tx-x,dy=ty-y,d=Math.hypot(dx,dy)||1;
+    let nx=dx/d,ny=dy/d,detouring=false;
     const obstacle=e._navObstacle;
     if(obstacle) {
       const q=this.terrain.closestPoint(obstacle,x,y),ox=x-q.x,oy=y-q.y,od=Math.hypot(ox,oy)||1;
@@ -496,7 +548,7 @@ export class Game {
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);
     if(!this.regions.restoreWorld(this.regionIndex)) {
-      this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex});this.enemies=[];this.gems=[];this.coins=[];
+      this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex,island:new Island({region:this.region.id,seed:this.regionIndex})});this.enemies=[];this.gems=[];this.coins=[];
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.discoveredMap=new Set();
       this.companions.camp=null;this.companions.generation=this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();
@@ -518,6 +570,12 @@ export class Game {
       p.x=point.x;p.y=point.y-groundOffset(p,true);
     }
     this._moveEntity(p,0,0,true);resetLocomotion(p);
+    this._islandWorlds=!!this.terrain.island;
+    // A paired gate can be kilometres from the world origin. Populate its
+    // visible scene during the fade cut without advancing any hazard timers.
+    if(this.environment?.generation)this.environment._refresh(true);
+    if(this.environment?.mechanisms.generation)this.environment.mechanisms._refresh(true);
+    if(this.adventure?.generation)this.adventure._refreshSupplies(true);
     const active=this.companions.active;if(active){active._echoes=[];active.x=p.x;active.y=p.y;this.companions._resetFollowing(active);this.companions._safeReturn(active);}
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
     this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});return true;
@@ -560,14 +618,14 @@ export class Game {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
       const bossActive=this.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false);
-      const rate=Math.min(4.5,BALANCE.spawnBase+this.time*.008)*(this.easy?.78:1)*(bossActive?.38:1);
+      const rate=Math.min(4.5,BALANCE.spawnBase+this._difficultyTime()*.008)*(this.easy?.78:1)*(bossActive?.38:1);
       this._spawn=1/rate;
       if(this.enemies.length<180) {
         const enemy=this._spawnEnemy(regionEnemyType(this,Math.random()));
-        this.elites.maybePromote(enemy);
+        if(enemy)this.elites.maybePromote(enemy);
       }
     }
-    if(!inDungeon&&!this.regions.guarded&&!this.portal&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
+    if(!inDungeon&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');

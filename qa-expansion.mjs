@@ -189,7 +189,7 @@ assert(capacity.c.spawn('hunt',100,19.8));assert.equal(capacity.g.enemies.length
 
 // Scheduled Bosses alternate their behavior while sharing the one-Boss limit.
 const schedule=arena(),kinds=[];
-for(let round=1;round<=4;round++) {
+for(let round=1;round<=3;round++) {
   schedule.nextBossAt=schedule.time;schedule.update(0);
   const bosses=schedule.enemies.filter(e=>e.type==='boss'&&e.hp>0);
   assert.equal(bosses.length,1);const boss=bosses[0];kinds.push(boss.bossKind);
@@ -200,7 +200,10 @@ for(let round=1;round<=4;round++) {
   schedule._hurtEnemy(boss,boss.hp+1);schedule.enemies=[];
   schedule.player.x=schedule.portal.x;schedule.player.y=schedule.portal.y-groundOffset(schedule.player,true);schedule.regions.flushReward();assert(schedule.chooseSuper(schedule.getSuperChoices()[0].id));assert(schedule.enterPortal());schedule.regionGrace=0;
 }
-assert.deepEqual(kinds,['ancient','bloom','ancient','bloom'],'even rounds introduce the new lord without replacing the first fight');
+assert.deepEqual(kinds,['ancient','bloom','ancient'],'even rounds introduce the new lord without replacing the first fight');
+assert.equal(schedule.regions.unlockedConnections.size,3,'the three finite world connections are unlocked once');
+schedule.nextBossAt=schedule.time;schedule.update(0);assert(!schedule.enemies.some(e=>e.type==='boss'&&e.hp>0),'an activated world connection cannot refresh a fourth regional boss reward');
+const fourthPattern=arena();fourthPattern.bossCount=4;assert.equal(monster(fourthPattern,'boss').bossKind,'bloom','the fourth boss index still selects the bloom behavior independently of world generation');
 
 function warning(kind='fan',options={}) {
   const g=arena(options);g.bossCount=2;

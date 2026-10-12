@@ -1,6 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { RegionalMechanisms, isGrounded } from './regional-mechanisms.js';
-import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, waterIntersectsCapsule, WATER_SHAPES } from './water-geometry.js';
+import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, waterIntersectsCapsule, getWaterContours, WATER_SHAPES } from './water-geometry.js';
 export { isGrounded } from './regional-mechanisms.js';
 
 const CELL=520,TAU=Math.PI*2;
@@ -45,6 +45,7 @@ export class Environment {
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
     this.region=['forest','marsh','ruins'].includes(game.region?.id)?game.region.id:'forest';
     this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
+    this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();
     if(generation)this._refresh(true);
     this.mechanisms=new RegionalMechanisms(this,{generation});
@@ -52,7 +53,7 @@ export class Environment {
   _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer||humanoid(entity))};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<=g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<=g.viewHeight*.5+margin;}
-  _terrainClear(x,y,r){return Math.hypot(x,y)>=ENVIRONMENT_BALANCE.safeRadius+r&&this.game.terrain.isFree(x,y,r);}
+  _terrainClear(x,y,r){const terrain=this.game.terrain;return Math.hypot(x,y)>=ENVIRONMENT_BALANCE.safeRadius+r&&(!terrain.island||terrain.island.naturalCircleFree(x,y,r))&&terrain.isFree(x,y,r);}
   _objectiveClear(x,y,r){
     const adventure=this.game.adventure;
     if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
@@ -74,7 +75,7 @@ export class Environment {
   }
   _mushroomsAt(tx,ty,{ignoreObjectives=false}={}){
     const seed=this._hash(tx+683,ty+727),chance=this.region==='marsh'?.61:this.region==='ruins'?.48:.57;if(seed>chance)return [];
-    const point=this._point(tx,ty,751,35);if(!point)return [];
+    const point=this._point(tx,ty,751,this.game.terrain.island?ENVIRONMENT_BALANCE.blastRadius:35);if(!point)return [];
     const make=(point,index)=>{
       const id=`mushroom:${tx},${ty}:${index}`;
       // Objectives may suppress a location, but can never move its stable ID
@@ -85,7 +86,7 @@ export class Environment {
     // Occasional pairs show the delayed chain reaction without filling paths.
     if(seed<.14){
       const angle=this._hash(tx+853,ty+877)*TAU,next={x:point.x+Math.cos(angle)*88,y:point.y+Math.sin(angle)*88};
-      if(this._terrainClear(next.x,next.y,35)){const second=make(next,1);if(second)result.push(second);}
+      if(this._terrainClear(next.x,next.y,this.game.terrain.island?ENVIRONMENT_BALANCE.blastRadius:35)){const second=make(next,1);if(second)result.push(second);}
     }
     return result;
   }
@@ -104,6 +105,15 @@ export class Environment {
       // Query physical bounds with a skirt covering the measured roots/stone
       // edges beyond collision. A log uses its entire rotated round-ended
       // body, not a circle at the center or a handful of shoreline samples.
+      const island=terrain.island;
+      if(island){
+        const ring=getWaterContours(mud).outer;
+        // Test every complete shoreline edge plus its visible bank. A lake
+        // center on land does not prove a long inlet or rounded end is dry.
+        for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length];if(!island.containsCapsule(a.x,a.y,b.x,b.y,8,island.shallowWidth))return false;}
+        if(waterIntersectsCircle(mud,0,0,268)||Object.values(island.plan).some(p=>waterIntersectsCircle(mud,p.x,p.y,p.r+8)))return false;
+        if(island.routes.some(p=>waterIntersectsCapsule(mud,p.ax,p.ay,p.bx,p.by,p.r+8)))return false;
+      }
       const b=waterBounds(mud,40),obstacles=terrain.query(b.minX,b.minY,b.maxX,b.maxY);
       for(const o of obstacles){
         if(structures.has(o)||o.structureId)continue;
@@ -187,7 +197,7 @@ export class Environment {
   }
   getImmersion(entity,isPlayer=entity===this.game.player){
     if(!isGrounded(entity))return null;
-    const point=this._foot(entity,isPlayer);let mud=null,depth=0;
+    const point=this._foot(entity,isPlayer),island=this.game.terrain.island;let depth=island?.depthAt(point.x,point.y)||0,mud=depth>0?this._shore:null;
     // Choose the deepest overlapping pool instead of adding their depths.
     // Only the sprite sinks: movement, collision and ordering keep their feet.
     for(const patch of this.muds){const d=waterDepth(patch,point.x,point.y);if(d>depth){depth=d;mud=patch;}}
@@ -201,7 +211,8 @@ export class Environment {
     if(!isGrounded(entity))return 1;
     const point=this._foot(entity,isPlayer);
     const mud=this.muds.some(m=>containsWater(m,point.x,point.y))?ENVIRONMENT_BALANCE.mudMultiplier:1;
-    return Math.min(mud,this.mechanisms.movementMultiplier(entity,isPlayer));
+    const shoreDepth=this.game.terrain.island?.depthAt(point.x,point.y)||0,shore=1-shoreDepth*.35;
+    return Math.min(mud,shore,this.mechanisms.movementMultiplier(entity,isPlayer));
   }
   isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r);}
   nearestDestructible(range=280){return this.mechanisms.nearestDestructible(range);}

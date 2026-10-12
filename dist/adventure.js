@@ -32,8 +32,9 @@ export class Adventure {
   magnetRange(base=this.game.stats.magnet){return this.magnetTime>0?Math.max(base,320):base;}
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<g.viewHeight*.5+margin;}
-  _free(x,y,r=36){return this.game.terrain.isFree(x,y,r);}
+  _free(x,y,r=36){return this.game.terrain.isFree(x,y,r)&&this.game.terrain.island?.isDry(x,y,r)!==false;}
   _environmentFree(x,y,r=0){
+    if(this.game.terrain.island?.isReserved(x,y,r))return false;
     if(this.game.regions?.isSafePoint(x,y,r)===false)return false;
     if(this.game.relicSites?.isSafePoint(x,y,r)===false)return false;
     if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
@@ -127,8 +128,8 @@ export class Adventure {
     else{
       const start=this._hash(this._treasureCount+1,Math.floor(g.time))*TAU;
       for(let i=0;i<24;i++){
-        const a=start+i*TAU/24,r=420+(i%3)*50,candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
-        if(this._free(candidate.x,candidate.y,90)&&this._environmentFree(candidate.x,candidate.y,40)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}
+        const a=start+i*TAU/24,r=g.terrain.island?Math.max(420,1/Math.max(Math.abs(Math.cos(a))/(g.viewWidth*.5+100),Math.abs(Math.sin(a))/(g.viewHeight*.5+100)))+(i%3)*50:420+(i%3)*50,candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
+        if((!g.terrain.island||!this._visible(candidate.x,candidate.y,70))&&this._free(candidate.x,candidate.y,90)&&this._environmentFree(candidate.x,candidate.y,40)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}
       }
     }
     if(!point||!this._environmentFree(point.x,point.y,40))return null;

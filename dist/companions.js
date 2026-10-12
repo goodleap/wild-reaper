@@ -30,14 +30,14 @@ export class Companions {
   }
   _point(x,y) {
     const g=this.game,p=this._foot();
-    const safe=q=>g.terrain.isFree(q.x,q.y,125)&&this._hazardFree(q.x,q.y,105)&&objectivePointSafe(g,q,125,{skipCamp:true})&&
+    const safe=q=>g.terrain.isFree(q.x,q.y,125)&&g.terrain.island?.isDry(q.x,q.y,125)!==false&&!g.terrain.island?.isReserved(q.x,q.y,125)&&this._hazardFree(q.x,q.y,105)&&objectivePointSafe(g,q,125,{skipCamp:true})&&
       !g.adventure?.props.some(o=>distance(o,q)<135)&&
       (!g.adventure?.treasure||distance(g.adventure.treasure,q)>240)&&
       (!g.portal||distance(g.portal,q)>180);
     if(Number.isFinite(x)&&Number.isFinite(y))return safe({x,y})?{x,y}:null;
     const start=Math.random()*TAU;
     for(let i=0;i<48;i++) {
-      const angle=start+i*TAU/24,radius=320+Math.floor(i/24)*100;
+      const angle=start+i*TAU/24,base=320+Math.floor(i/24)*100,radius=g.terrain.island?Math.max(base,1/Math.max(Math.abs(Math.cos(angle))/(g.viewWidth*.5+170),Math.abs(Math.sin(angle))/(g.viewHeight*.5+170))):base;
       const point={x:p.x+Math.cos(angle)*radius,y:p.y+Math.sin(angle)*radius};
       if(safe(point))return point;
     }
@@ -49,7 +49,7 @@ export class Companions {
     // creating any defenders; an obstructed ruin never uses an unsafe fallback.
     for(const depth of [52,130,208,286])for(const side of [-1,1])for(const lateral of [150,228,306]) {
       const point={x:site.x+side*lateral,y:site.door.y+depth};
-      if(distance(point,p)<RESCUE_RULES.spawnDistance||!g.terrain.isFree(point.x,point.y,r+5)||!this._hazardFree(point.x,point.y,r))continue;
+      if(distance(point,p)<RESCUE_RULES.spawnDistance||!g.terrain.isFree(point.x,point.y,r+5)||g.terrain.island?.isDry(point.x,point.y,r+5)===false||!this._hazardFree(point.x,point.y,r))continue;
       if(g.enemies.some(e=>e.hp>0&&distance(point,{x:e.x,y:e.y+groundOffset(e)})<r+e.r+12))continue;
       if(points.some(other=>distance(point,other)<r*2+14))continue;
       points.push(point);if(points.length===count)return points;

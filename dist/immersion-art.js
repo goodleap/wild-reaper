@@ -13,7 +13,10 @@ export class ImmersionArt {
     if(view&&(x+extent<view.left||x-extent>view.right||y+8<view.top||y-8>view.bottom))return;
     const time=options.reduced?0:(Number.isFinite(options.time)?options.time:0);
     const phase=((time*.7+x*.013+y*.017)%1+1)%1,alpha=clamp(depth*1.8,0,1);
-    ctx.save();traceWaterPath(ctx,mud);ctx.clip();
+    ctx.save();
+    if(mud.type==='shore'&&mud.island){
+      ctx.beginPath();for(const points of [mud.island.points,mud.island.contour(mud.island.shallowWidth||100)]){for(let i=0;i<points.length;i++)ctx[i?'lineTo':'moveTo'](points[i].x,points[i].y);ctx.closePath();}ctx.clip('evenodd');
+    }else {traceWaterPath(ctx,mud);ctx.clip();}
     ctx.globalAlpha*=alpha;ctx.lineCap='round';ctx.lineWidth=1;
     // Only the front lip crosses the body, leaving the dry torso readable.
     ctx.strokeStyle='#263e35';ctx.beginPath();ctx.ellipse(x,y-.1,width,2.1,0,.03,Math.PI-.03);ctx.stroke();

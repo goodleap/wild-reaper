@@ -41,7 +41,7 @@ export class RegionalMechanisms {
     // A removed chest therefore cannot relocate a previously seen mechanism.
     for(let i=0;i<6;i++){
       const x=tx*CELL+95+env._hash(tx+1481+i*31,ty+1483)*330,y=ty*CELL+95+env._hash(tx+1487,ty+1489+i*23)*330;
-      if(Math.hypot(x,y)<REGIONAL_MECHANISM_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+18))continue;
+      if(Math.hypot(x,y)<REGIONAL_MECHANISM_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+18)||(this.game.terrain.island&&!this.game.terrain.island.naturalCircleFree(x,y,r+18)))continue;
       return {id:`${type}:${tx},${ty}`,type,x,y,r,seed,sortY:y,aimY:y,hp:type==='vine'?1:undefined,state:'idle',remaining:2+seed*2,maxRemaining:2+seed*2,warning:0,charge:0};
     }
     return null;

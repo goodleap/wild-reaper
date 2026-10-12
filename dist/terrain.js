@@ -64,12 +64,12 @@ function obstacle(spec,index=0) {
 }
 
 export class Terrain {
-  constructor({obstacles,cacheLimit=192,region='forest',seed=0}={}) {
+  constructor({obstacles,cacheLimit=192,region='forest',seed=0,island=null}={}) {
     this.region=['forest','marsh','ruins'].includes(region)?region:'forest';
     this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
     this.cacheLimit=Math.max(16,Math.min(512,cacheLimit));this._cache=new Map();
     this._fixed=obstacles===undefined?null:obstacles.map((o,i)=>obstacle(o,i));
-    this._structures=[];this._structureOwners=new Map();
+    this._structures=[];this._structureOwners=new Map();this.island=island;
   }
   get cacheSize(){return this._cache.size;}
   // Each world system replaces only its own bounded collision layer. A gate
@@ -104,7 +104,15 @@ export class Terrain {
       const prop={id:`rock:${key}`,type:'rock',x,y,r,scale,seed,rockForm,...visual};
       items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
     }
-    const clear=items.filter(o=>{const q=this.closestPoint(o,0,0);return Math.hypot(q.x,q.y)>190+o.r;});
+    const clear=items.filter(o=>{
+      const q=this.closestPoint(o,0,0);if(Math.hypot(q.x,q.y)<=190+o.r)return false;
+      if(!this.island)return true;
+      // Reserve roots, the stone base and the full rotated log body. Raised
+      // branches may overhang a shore; their artwork does not block the route.
+      const root=([28,27,26,20,32][o.treeForm]||32)*(o.scale||1);
+      const r=(o.type==='tree'?Math.max(o.r,root):o.type==='log'?o.r*1.3:o.r*1.2)+8,a=axis(o);
+      return this.island.naturalCapsuleFree(a.ax,a.ay,a.bx,a.by,r);
+    });
     this._cache.set(key,clear);
     while(this._cache.size>this.cacheLimit)this._cache.delete(this._cache.keys().next().value);
     return clear;
@@ -120,7 +128,10 @@ export class Terrain {
     return result;
   }
   closestPoint(o,x,y) {const a=axis(o);return pointOnSegment(x,y,a.ax,a.ay,a.bx,a.by);}
+  isDry(x,y,r=0) {return !this.island||this.island.isDry(x,y,r);}
+  isNaturalFree(x,y,r=0) {return (!this.island||this.island.naturalCircleFree(x,y,r))&&this.isFree(x,y,r);}
   isFree(x,y,r=0) {
+    if(this.island&&!this.island.contains(x,y,r))return false;
     return !this.query(x-r,y-r,x+r,y+r).some(o=>{const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
   }
   _resolve(x,y,r,items,fromX=x,fromY=y) {
@@ -146,9 +157,11 @@ export class Terrain {
   resolveCircle(x,y,r) {
     if(this.isFree(x,y,r))return {x,y,blocked:false};
     const originalX=x,originalY=y;let blocked=false;
+    if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked=coast.blocked;}
     for(let pass=0;pass<8;pass++) {
       const resolved=this._resolve(x,y,r,this.query(x-r-110,y-r-110,x+r+110,y+r+110));
       x=resolved.x;y=resolved.y;blocked||=resolved.blocked;
+      if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked||=coast.blocked;}
       if(this.isFree(x,y,r))return {x,y,blocked};
     }
     // Only relevant to overlapping injected obstacles; procedural props are sparse.
@@ -163,9 +176,10 @@ export class Terrain {
     const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(3,Math.min(6,r*.45))));
     const sx=dx/steps,sy=dy/steps;let blocked=start.blocked;
     const items=this.query(Math.min(x,x+dx)-r-110,Math.min(y,y+dy)-r-110,Math.max(x,x+dx)+r+110,Math.max(y,y+dy)+r+110);
-    if(!items.length)return {x:x+dx,y:y+dy,blocked};
+    if(!items.length&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
     for(let i=0;i<steps;i++) {
-      const next=this._resolve(x+sx,y+sy,r,items,x,y);blocked||=next.blocked;
+      let next=this._resolve(x+sx,y+sy,r,items,x,y);blocked||=next.blocked;
+      if(this.island){const coast=this.island.constrain(next.x,next.y,r);blocked||=coast.blocked;next=coast;}
       if(!items.some(o=>{const q=this.closestPoint(o,next.x,next.y);return Math.hypot(next.x-q.x,next.y-q.y)<r+o.r-.001;})){x=next.x;y=next.y;}
       else blocked=true;
     }

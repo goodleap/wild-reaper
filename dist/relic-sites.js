@@ -36,6 +36,7 @@ export class RelicSites {
   }
   _valid(site) {
     const g=this.game,clearance=site.type==='hunt'?245:site.type==='rescue'?135:100;
+    if(g.terrain.island&&!g.terrain.island.isDry(site.x,site.y,clearance))return false;
     if(!g.terrain.isFree(site.x,site.y,clearance))return false;
     if(g.settlements?.isSafePoint(site.x,site.y,clearance)===false)return false;
     if(this.sites.some(other=>distance(site,other)<clearance+other.r+130))return false;
@@ -58,9 +59,11 @@ export class RelicSites {
     for(const [index,type] of types.entries()) {
       if(type==='hunt'&&g._features?.encounters===false)continue;
       if(type==='rescue'&&g._features?.companions===false)continue;
-      for(let i=0;i<384;i++) {
+      const plan=g.terrain.island?.plan?.[type];
+      for(let i=0;i<(plan?33:384);i++) {
         const angle=rotation+index*2.3+(i%32)*TAU/32,radius=530+Math.floor(i/32)*100;
-        const x=Math.round(Math.cos(angle)*radius),y=Math.round(Math.sin(angle)*radius);
+        const offset=i===0?0:Math.ceil(i/8)*20,localAngle=(i%8)*TAU/8;
+        const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round(Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round(Math.sin(angle)*radius);
         const hunt=type==='hunt',rune=type==='rune';
         const site={id:`relic-site:${regionIndex}:${type}`,category:'relic',type,name:hunt?'林间狩猎':rune?'遗迹符文阵':'囚牢遗迹',x,y,r:hunt?210:rune?72:105,width:hunt?420:rune?96:128,depth:hunt?420:rune?82:66,sortY:y,door:{x,y:y+(hunt?190:rune?45:84)},interactRadius:RELIC_SITE_RULES.interactRadius,state:'ready',gateOpen:false,progress:0,goal:hunt?RELIC_SITE_RULES.huntGuards:rune?12:RELIC_SITE_RULES.rescueGuards,kind:regionIndex%2===0?'stormcaller':'warden',discovered:false,regionIndex,seed:hash(regionIndex+131,index+41)};
         if(this._valid(site)){

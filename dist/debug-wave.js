@@ -29,7 +29,7 @@ export function spawnDebugWave(game) {
     for(const jitter of [0,.035,-.035,.07,-.07]) {
       for(const radius of radii) {
         const a=angle+jitter,point={x:origin.x+Math.cos(a)*radius,y:origin.y+Math.sin(a)*radius};
-        if(!game.terrain.isFree(point.x,point.y,r+3))continue;
+        if(!game.terrain.isFree(point.x,point.y,r+3)||game.terrain.island?.isDry(point.x,point.y,r+3)===false)continue;
         // Preserve the castle approach and reject trapped starts; enemies may
         // still naturally flow around one another once ordinary AI takes over.
         if(gate&&segmentDistance(point,origin,gate)<r+45)continue;

@@ -18,17 +18,17 @@ export class Encounters {
   _canStart() {
     return canStartObjective(this.game,{skipEncounter:true});
   }
-  _point(x,y,type='treasure') {
+  _point(x,y,type='treasure',allowReserved=false) {
     const g=this.game,p=this._foot(),chest=g.adventure?.treasure,hunt=type==='hunt',clearance=hunt?245:42;
     // A stone arena belongs on clear ground, not under an existing solid tree.
     // Search a few nearby rings without removing terrain or moving its props.
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&objectivePointSafe(g,candidate,hunt?245:210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?245:90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
+    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&g.terrain.island?.isDry(candidate.x,candidate.y,clearance)!==false&&(allowReserved||!g.terrain.island?.isReserved(candidate.x,candidate.y,clearance))&&objectivePointSafe(g,candidate,hunt?245:210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?245:90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
       !g.adventure?.props.some(o=>distance(o,candidate)<(hunt?245+(o.r||18):70))&&
       (!chest||distance(chest,candidate)>(hunt?290:180));
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;
     const start=Math.random()*TAU,attempts=hunt?144:30;
     for(let i=0;i<attempts;i++) {
-      const a=start+i*TAU/(hunt?24:30),r=hunt?300+Math.floor(i/24)*100:280+(i%3)*50;
+      const a=start+i*TAU/(hunt?24:30),base=hunt?300+Math.floor(i/24)*100:280+(i%3)*50,r=g.terrain.island?Math.max(base,1/Math.max(Math.abs(Math.cos(a))/(g.viewWidth*.5+clearance+45),Math.abs(Math.sin(a))/(g.viewHeight*.5+clearance+45))):base;
       const candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
       if(free(candidate))return candidate;
     }
@@ -41,13 +41,13 @@ export class Encounters {
     const relic=type==='hunt'&&!!siteId,goal=relic?24:12;
     if(siteId&&!g.relicSites?.sites.some(s=>s.id===siteId&&s.type==='hunt'&&s.state==='ready'))return null;
     if(relic&&g.enemies.length+goal>180)return null;
-    const point=this._point(x,y,type);if(!point)return null;
+    const point=this._point(x,y,type,!!siteId);if(!point)return null;
     const life=type==='hunt'?40:35;
     const active={id:`encounter:${++this._id}`,type,...point,r:210,life,maxLife:life,goal,progress:0,enemyId:null,state:'active',siteId,category:relic?'relic':'random'};
     if(type==='treasure') {
       const enemy=g._spawnEnemy('beetle',1);if(!enemy)return null;
       enemy.eventRole='treasure';enemy.eventId=active.id;
-      enemy.r=18;enemy.hp=enemy.maxHp=160*(1+Math.min(g.time,600)*.001);
+      enemy.r=18;enemy.hp=enemy.maxHp=160*(1+Math.min(g._difficultyTime?.()??g.time,600)*.001);
       enemy.speed=(g.easy?106:118);enemy.damage=0;enemy.xp=16;
       enemy.x=point.x;enemy.y=point.y-groundOffset(enemy);
       enemy._escapeAngle=Math.random()*TAU;

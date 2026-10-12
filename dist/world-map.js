@@ -1,6 +1,7 @@
 import { groundOffset } from './terrain.js';
+import { traceIslandContour } from './island-art.js';
 
-export const WORLD_MAP_RULES=Object.freeze({range:900,discoveryRadius:340});
+export const WORLD_MAP_RULES=Object.freeze({range:900,discoveryRadius:340,explorationCell:100});
 const TAU=Math.PI*2;
 const BUILDINGS=new Set(['supply','occupied','castle','angel']);
 const RELICS=new Set(['hunt','rescue','rune']);
@@ -13,7 +14,7 @@ export function minimapBounds(width,height){
 }
 export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',portal:'传送门',exit:'荒野出口',chest:'宝箱',boss:'首领'});
 export function landmarkLabel(marker){return marker.name||LANDMARK_NAMES[marker.type]||'遗迹';}
-export function landmarkState(marker){if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?'已激活 · 可往返':'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
+export function landmarkState(marker){if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
 // Discovery lives on each region-owned landmark. A map instance never keeps a
@@ -39,10 +40,12 @@ function segment(ctx,x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x
 function diamond(ctx,x,y,r){ctx.beginPath();ctx.moveTo(x,y-r);ctx.lineTo(x+r,y);ctx.lineTo(x,y+r);ctx.lineTo(x-r,y);ctx.closePath();}
 
 export class WorldMap {
+  constructor(){this._explorationRuns=new WeakMap();}
   discover(game,{viewportWidth,viewportHeight}={}) {
     if(!game?.player||game.status!=='playing'||game.paused||game.dungeon?.active)return 0;
     const p=feet(game),halfW=positive(viewportWidth,positive(game.viewWidth,680))*.5;
     const halfH=positive(viewportHeight,positive(game.viewHeight,680))*.5;
+    this._discoverGround(game,p,halfW,halfH);
     let count=0;
     for(const {site} of landmarks(game)) {
       if(site.discovered||Math.hypot(site.x-p.x,site.y-p.y)>WORLD_MAP_RULES.discoveryRadius)continue;
@@ -67,7 +70,7 @@ export class WorldMap {
       if(distance>range)continue;
       const active=type==='portal'&&site.state==='active';
       const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored);
-      result.push({id:site.id,type,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,name:site.name||''});
+      result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,name:type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||''});
     }
     // Bright active gates remain readable when a sanctuary is nearby.
     return result.sort((a,b)=>Number(a.active)-Number(b.active));
@@ -76,6 +79,7 @@ export class WorldMap {
   draw(ctx,game,{x=0,y=0,width=128,height=128,range=WORLD_MAP_RULES.range,expanded=false}={}) {
     if(!game?.player)return null;
     width=positive(width,128);height=positive(height,128);range=positive(range,WORLD_MAP_RULES.range);
+    if(!game.dungeon?.active&&game.terrain?.island)return this._drawIslandMap(ctx,game,{x,y,width,height,range,expanded});
     const markers=this.getMarkers(game,{range}),p=feet(game),pad=6;
     const mapW=width-pad*2,mapH=height-pad*2,cx=x+width*.5,cy=y+height*.5;
     const radius=Math.max(20,Math.min(mapW,mapH)*.5-(expanded?16:7)),scale=radius/range;
@@ -111,6 +115,74 @@ export class WorldMap {
     ctx.beginPath();ctx.moveTo(5.4,0);ctx.lineTo(-3.6,3.5);ctx.lineTo(-2.1,0);ctx.lineTo(-3.6,-3.5);ctx.closePath();
     ctx.fillStyle='#f4efd4';ctx.strokeStyle='#182a23';ctx.lineWidth=2.2;ctx.stroke();ctx.fill();ctx.restore();ctx.restore();
     ctx.restore();return {markers,center:{x:cx,y:cy},radius,scale};
+  }
+
+  _discoverGround(game,p,halfW,halfH) {
+    const island=game.terrain?.island;if(!island)return;
+    const cell=WORLD_MAP_RULES.explorationCell,r=WORLD_MAP_RULES.discoveryRadius;
+    island.explored??=new Set();
+    const b=island.bounds;
+    for(let gy=Math.floor((p.y-Math.min(halfH,r))/cell);gy<=Math.floor((p.y+Math.min(halfH,r))/cell);gy++)for(let gx=Math.floor((p.x-Math.min(halfW,r))/cell);gx<=Math.floor((p.x+Math.min(halfW,r))/cell);gx++){
+      const xx=(gx+.5)*cell,yy=(gy+.5)*cell;
+      if(xx<b.minX-cell||xx>b.maxX+cell||yy<b.minY-cell||yy>b.maxY+cell||Math.abs(xx-game.player.x)>halfW-cell*.5||Math.abs(yy-game.player.y)>halfH-cell*.5||Math.hypot(xx-p.x,yy-p.y)>r-cell*.4)continue;
+      island.explored.add(`${gx},${gy}`);
+    }
+  }
+
+  exploration(game) {
+    const island=game?.terrain?.island;if(!island)return 0;
+    const cell=WORLD_MAP_RULES.explorationCell,b=island.bounds;let known=0,total=0;
+    for(let gy=Math.floor(b.minY/cell);gy<=Math.floor(b.maxY/cell);gy++)for(let gx=Math.floor(b.minX/cell);gx<=Math.floor(b.maxX/cell);gx++)if(island.contains((gx+.5)*cell,(gy+.5)*cell)){total++;if(island.explored?.has(`${gx},${gy}`))known++;}
+    return total?Math.min(100,Math.round(known/total*100)):0;
+  }
+
+  _expandedMarkers(markers){
+    const guarded=new Set();for(const marker of markers)if(marker.type==='angel'&&marker.anchorId&&markers.some(gate=>gate.type==='portal'&&gate.active&&gate.id===marker.anchorId))guarded.add(marker.anchorId);
+    return markers.filter(marker=>!(marker.type==='angel'&&guarded.has(marker.anchorId))).map(marker=>marker.type==='portal'&&guarded.has(marker.id)?{...marker,angelGuard:true}:marker);
+  }
+
+  _mapRuns(island,{minGX=-Infinity,maxGX=Infinity,minGY=-Infinity,maxGY=Infinity,expanded=false}={}) {
+    const explored=island.explored;if(!explored?.size)return [];
+    if(expanded){const cached=this._explorationRuns.get(explored);if(cached?.size===explored.size)return cached.runs;
+      const rows=new Map();for(const key of explored){const [gx,gy]=key.split(',').map(Number);if(!rows.has(gy))rows.set(gy,[]);rows.get(gy).push(gx);}
+      const runs=[];for(const [gy,columns] of rows){columns.sort((a,b)=>a-b);let start=columns[0],last=start;for(let i=1;i<=columns.length;i++){const gx=columns[i];if(gx===last+1){last=gx;continue;}runs.push({gx:start,gy,length:last-start+1});start=last=gx;}}
+      this._explorationRuns.set(explored,{size:explored.size,runs});return runs;
+    }
+    // Minimap work is bounded by its visible grid, even after the whole island
+    // is explored. Adjacent cells become one non-overlapping clip rectangle.
+    const runs=[];for(let gy=minGY;gy<=maxGY;gy++){let start=null;for(let gx=minGX;gx<=maxGX+1;gx++){const known=gx<=maxGX&&explored.has(`${gx},${gy}`);if(known&&start===null)start=gx;if(!known&&start!==null){runs.push({gx:start,gy,length:gx-start});start=null;}}}return runs;
+  }
+
+  _drawIslandMap(ctx,game,{x,y,width,height,range,expanded}) {
+    const island=game.terrain.island,b=island.bounds,p=feet(game),pad=6,cell=WORLD_MAP_RULES.explorationCell;
+    const cx=x+width*.5,cy=y+height*.5,mapW=width-pad*2,mapH=height-pad*2;
+    const radius=Math.max(20,Math.min(mapW,mapH)*.5-(expanded?16:7));
+    const center=expanded?{x:(b.minX+b.maxX)*.5,y:(b.minY+b.maxY)*.5}:p;
+    const scale=expanded?Math.min((mapW-26)/(b.maxX-b.minX+240),(mapH-26)/(b.maxY-b.minY+240)):radius/range;
+    const mx=worldX=>cx+(worldX-center.x)*scale,my=worldY=>cy+(worldY-center.y)*scale;
+    const markerRange=expanded?Math.hypot(b.maxX-b.minX,b.maxY-b.minY)+500:range,discoveredMarkers=this.getMarkers(game,{range:markerRange}),markers=expanded?this._expandedMarkers(discoveredMarkers):discoveredMarkers;
+    const palette=island.region==='marsh'?{land:'#4a5e50',sand:'#7f896b',sea:'#294b51'}:island.region==='ruins'?{land:'#666d65',sand:'#969985',sea:'#345360'}:{land:'#476246',sand:'#919a6b',sea:'#264e54'};
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';rounded(ctx,x,y,width,height,9);ctx.fillStyle='#101f1ce8';ctx.fill();ctx.strokeStyle='#a6b99b50';ctx.lineWidth=1;ctx.stroke();
+    ctx.save();rounded(ctx,x+pad,y+pad,mapW,mapH,5);ctx.clip();ctx.fillStyle='#202c2e';ctx.fillRect(x+pad,y+pad,mapW,mapH);
+    // Clip all geographical detail to cells physically visited in this world.
+    // Even the island silhouette and roads stay hidden behind unknown fog.
+    ctx.save();ctx.beginPath();
+    const extentX=mapW*.5/scale,extentY=mapH*.5/scale,runs=this._mapRuns(island,{expanded,minGX:Math.floor((center.x-extentX)/cell),maxGX:Math.floor((center.x+extentX)/cell),minGY:Math.floor((center.y-extentY)/cell),maxGY:Math.floor((center.y+extentY)/cell)});
+    for(const run of runs){const xx=mx(run.gx*cell),yy=my(run.gy*cell),size=cell*scale;ctx.rect(xx,yy,run.length*size,size);}
+    ctx.clip();ctx.fillStyle=palette.sea;ctx.fillRect(x+pad,y+pad,mapW,mapH);
+    ctx.save();ctx.translate(cx-center.x*scale,cy-center.y*scale);ctx.scale(scale,scale);
+    traceIslandContour(ctx,island.points);ctx.fillStyle='#507776';ctx.fill();
+    traceIslandContour(ctx,island.contour(island.shallowWidth||100));ctx.fillStyle=palette.sand;ctx.fill();
+    traceIslandContour(ctx,island.contour((island.shallowWidth||100)+35));ctx.fillStyle=palette.land;ctx.fill();
+    ctx.lineWidth=expanded?24:20;ctx.strokeStyle='#c8c09636';ctx.beginPath();for(const r of island.routes||[]){ctx.moveTo(r.ax,r.ay);ctx.lineTo(r.bx,r.by);}ctx.stroke();ctx.restore();ctx.restore();
+    if(!expanded){ctx.strokeStyle='#abc3b222';ctx.lineWidth=.7;ctx.setLineDash([2,4]);ctx.beginPath();ctx.arc(cx,cy,radius*.5,0,TAU);ctx.stroke();ctx.setLineDash([]);}
+    ctx.fillStyle='#bed0b1';ctx.font=`600 ${expanded?15:8}px ${FONT}`;ctx.textAlign='center';ctx.fillText('N',cx,y+pad+(expanded?16:8));
+    for(const [index,marker] of markers.entries()){
+      const xx=mx(marker.x),yy=my(marker.y);if(expanded){ctx.save();ctx.translate(xx,yy);ctx.scale(1.35,1.35);this._drawMarker(ctx,marker,0,0);ctx.restore();}else this._drawMarker(ctx,marker,xx,yy);
+      if(expanded){const right=xx<x+width-38,tx=xx+(right?10:-10),ty=Math.max(y+pad+17,yy-7);ctx.font=`600 13px ${FONT}`;ctx.textAlign=right?'left':'right';ctx.lineWidth=3;ctx.strokeStyle='#142925';ctx.strokeText(String(index+1),tx,ty);ctx.fillStyle='#f1e9c6';ctx.fillText(String(index+1),tx,ty);}
+    }
+    const playerPoint={x:mx(p.x),y:my(p.y)};ctx.save();ctx.translate(playerPoint.x,playerPoint.y);if(expanded)ctx.scale(1.35,1.35);ctx.rotate(Number.isFinite(game.player.facing)?game.player.facing:0);ctx.beginPath();ctx.moveTo(5.4,0);ctx.lineTo(-3.6,3.5);ctx.lineTo(-2.1,0);ctx.lineTo(-3.6,-3.5);ctx.closePath();ctx.strokeStyle='#142720';ctx.lineWidth=2.2;ctx.stroke();ctx.fillStyle='#fff0c2';ctx.fill();ctx.restore();ctx.restore();ctx.restore();
+    return {markers,center:{x:cx,y:cy},worldCenter:center,player:playerPoint,radius,scale,explored:expanded?this.exploration(game):undefined};
   }
 
   _drawMarker(ctx,marker,x,y) {

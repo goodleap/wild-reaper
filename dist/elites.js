@@ -103,7 +103,7 @@ export class Elites {
     for(let i=0;i<18;i++) {
       const angle=seed+i*Math.PI/3,distance=58+Math.floor(i/6)*28;
       const sx=x+Math.cos(angle)*distance,sy=y+Math.sin(angle)*distance;
-      if(distanceSq(sx,sy,px,py)<=(75+r)**2||!game.terrain.isFree(sx,sy,r+2))continue;
+      if(distanceSq(sx,sy,px,py)<=(75+r)**2||!game.terrain.isFree(sx,sy,r+2)||game.terrain.island?.isDry(sx,sy,r+2)===false)continue;
       if(!game._inView({x:sx,y:sy-14,r}))continue;
       if(game.enemies.some(e=>e.hp>0&&distanceSq(sx,sy,e.x,e.y+groundOffset(e))<(r+e.r+5)**2))continue;
       return {x:sx,y:sy};

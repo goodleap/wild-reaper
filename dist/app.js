@@ -8,6 +8,7 @@ import { HumanoidArt } from './humanoid-art.js';
 import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
 import { WaterArt } from './water-art.js';
+import { IslandArt } from './island-art.js';
 import { SuperArt } from './super-art.js';
 import { PropArt } from './prop-art.js';
 import { EncounterArt } from './encounter-art.js';
@@ -33,6 +34,7 @@ const monsterArt=new MonsterArt(()=>document.createElement('canvas'));
 const humanoidArt=new HumanoidArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
 const waterArt=new WaterArt(()=>document.createElement('canvas'));
+const islandArt=new IslandArt();
 const hutArt=new HutArt(()=>document.createElement('canvas'));
 const superArt=new SuperArt(()=>document.createElement('canvas'));
 const propArt=new PropArt(()=>document.createElement('canvas'));
@@ -117,10 +119,10 @@ function renderExpandedMap(){
   const add=(name,detail,index)=>{const row=document.createElement('li'),title=document.createElement('strong'),note=document.createElement('span');title.textContent=(index?`${index}. `:'')+name;note.textContent=detail;row.append(title);row.append(note);list.append(row);};
   $('map-title').textContent=game.dungeon?.active?.name||game.region.name;
   const indoor=!!game.dungeon?.active,result=worldMap.draw(mapCtx,game,{width:side,height:side,expanded:true});
-  $('map-note').textContent=indoor?'时间已暂停 · 周围 900 范围 · 粗线为已探索墙体':'时间已暂停 · 周围 900 范围 · 仅显示已发现的建筑';
+  $('map-note').textContent=indoor?'时间已暂停 · 周围 900 范围 · 粗线为已探索墙体':game.terrain?.island?`时间已暂停 · 全岛地图 · 已探索 ${result.explored}%`:'时间已暂停 · 周围 900 范围 · 仅显示已发现的建筑';
   result.markers.forEach((marker,index)=>add(landmarkLabel(marker),`${landmarkState(marker)} · 距离 ${Math.round(marker.distance)}`,index+1));
-  if(!result.markers.length)add('附近尚无已发现地标',indoor?'沿门口继续探索，迷雾会随视野展开。':'靠近建筑后会记录位置；已完成的建筑仍会保留。');
-  $('map-legend').textContent=indoor?'箭头：你与朝向　门：出口　箱子：宝箱　菱形：已发现首领。墙体缺口为通路，暗处保留探索记忆。':'箭头：你与朝向　拱门：传送门　双翼：天使　屋顶：小屋　城垛：城堡　菱形：遗迹。绿门已激活，红门有首领驻守，灰色带勾为已完成。';
+  if(!result.markers.length)add(game.terrain?.island&&!indoor?'尚未发现岛上地标':'附近尚无已发现地标',indoor?'沿门口继续探索，迷雾会随视野展开。':'靠近建筑后会记录位置；已完成的建筑仍会保留。');
+  $('map-legend').textContent=indoor?'箭头：你与朝向　门：出口　箱子：宝箱　菱形：已发现首领。墙体缺口为通路，暗处保留探索记忆。':'箭头：你　拱门：传送门　双翼：天使　屋顶：小屋　城垛：城堡　菱形：遗迹。灰雾尚未探索；绿门可往返，红门有首领。';
 }
 function openUpgrades(){
   if(upgradeLevel===game.skillLevel)return;
@@ -214,7 +216,7 @@ function combatPhaseLabel(){
   if(wave.phase==='warning')return `${wave.directionLabel}来袭 · ${wave.seconds}s`;
   if(wave.phase==='siege')return `${wave.name} · 剩余 ${wave.remaining}`;
   if(wave.phase==='relief')return `收集战利品 · ${wave.seconds}s`;
-  return '荒野探索';
+  return game.regions.endlessUnlocked?'无尽怪潮':`岛屿探索 · 连通 ${game.regions.defeatedConnectionsCount??0}/3`;
 }
 function waveProgressLabel(){
   if(game.dungeon?.active){const room=game.dungeon.getPacing();return game.dungeon.active.kind==='hut'?'林间小屋':`已清理 ${room.clearedRooms} 间`; }
@@ -224,7 +226,8 @@ function waveProgressLabel(){
 function announceCombatEvents(events){
   for(const event of events)if(event.type==='evolution'&&!pendingEvolutions.some(item=>item.weaponId===event.weaponId)&&pendingEvolutions.length<3)pendingEvolutions.push(event);
   const boss=game.enemies.find(enemy=>enemy.type==='boss'&&sceneVisible(enemy));
-  if(events.some(event=>event.type==='dungeonBossKill'))notify('王城守望者已击败 · 靠近宝藏领取超级技能',3);
+  if(events.some(event=>event.type==='worldsConnected'))notify('三界已连通 · 无尽怪潮开启，所有传送门可永久往返',3);
+  else if(events.some(event=>event.type==='dungeonBossKill'))notify('王城守望者已击败 · 靠近宝藏领取超级技能',3);
   else if(events.some(event=>event.type==='dungeonCleared'))notify('王城宝藏已领取 · 超级技能、80金币与100灵晶',3);
   else if(events.some(event=>event.type==='dungeonEnter'))notify(game.dungeon?.active?.kind==='hut'?'走进小屋 · 探索屋内补给':'进入旧王城 · 走近门口，探索迷雾中的房间',2);
   else if(events.some(event=>event.type==='dungeonRoomCleared'))notify('房间已清理 · 拾取补给后继续深入',1);
@@ -235,7 +238,7 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='houseOpened'))notify('小屋宝藏已领取 · 金币与灵晶已入账',1);
   else if(events.some(event=>event.type==='dungeonChest'))notify('古堡宝箱已开启 · 金币、灵晶与恢复补给',1);
   else if(boss&&events.some(event=>event.type==='boss'))notify(boss?.bossKind==='bloom'?`第 ${game.bossCount} 位领主 · 孢冠苏醒，留意紫色预警`:`第 ${game.bossCount} 位荒野领主已苏醒 · 留意震地红圈`,3);
-  else if(events.some(event=>event.type==='bossKill'))notify(game.portal?'领主已击败 · 获得超级技能，传送门已激活':'领主已击败 · 无尽挑战继续',3);
+  else if(events.some(event=>event.type==='bossKill'))notify(game.portal?`领主已击败 · 超级技能已解锁，三界连通 ${game.regions.defeatedConnectionsCount??0}/3`:'领主已击败 · 无尽挑战继续',3);
   else if(boss&&events.some(event=>event.type==='bloomWindup'))notify(boss?.bloomAttack?.kind==='fan'?'孢冠扇射 · 绕至侧面，借树石掩护':'孢爆将至 · 离开紫色预警圈',3);
   else if(events.some(event=>event.type==='bossWindup')||game.enemies.some(enemy=>(enemy.slam?.life>0||enemy.bloomAttack?.life>0)&&sceneVisible(enemy)))return;
   else if(pendingEvolutions.length&&(Date.now()>=toastUntil||toastPriority<2)){const evolution=pendingEvolutions.shift();notify(`${evolution.name} · 武器已进化`,2);}
@@ -244,8 +247,8 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='rescueExpired'))notify('营救机会已错过 · 继续寻找其他旅人',1);
   else if(events.some(event=>event.type==='rescueAppeared'))notify('发现受困旅人 · 循指引清除围困怪物',1);
   else if(events.some(event=>event.type==='companionLeft')){const left=events.find(event=>event.type==='companionLeft');notify(`${left.name}暂别 · 援助之力保留至本局结束`,1);}
-  else if(events.some(event=>event.type==='regionEnter'))notify(`已抵达${game.region.name} · 继续深入荒野`,2);
-  else if(events.some(event=>event.type==='portalOpened'))notify('领主传送门已激活 · 可反复往返',2);
+  else if(events.some(event=>event.type==='regionEnter'))notify(`已抵达${game.region.name} · 探索岛屿，寻找野生传送门`,2);
+  else if(events.some(event=>event.type==='portalOpened'))notify(`传送门已激活 · 三界连通 ${game.regions.defeatedConnectionsCount??0}/3 · 可往返`,2);
   else if(events.some(event=>event.type==='encounterComplete'))notify('林间挑战完成 · 资源已入账，靠近拾取补给',2);
   else if(events.some(event=>event.type==='treasureOpened'))notify('守卫宝箱已开启 · 金币与灵晶已入账',2);
   else if(events.some(event=>event.type==='treasureUnlocked'))notify('守卫已击败 · 靠近宝箱领取奖励',2);
@@ -356,7 +359,11 @@ function drawMapLights(camX,camY,target=ctx){
   target.restore();
 }
 function drawIntroLights(target){const pad=Math.max(40,width*.08);target.save();target.globalAlpha=.075;target.fillStyle='#dee8a0';sunBeamPath(sunBeamGeometry(width*.74-SUN.x/SUN.y*pad,-pad,height+pad*2,width*.04,width*.07),target);target.fill();target.restore();}
-function background(camX,camY,intro){decorativeShadowShapes.length=0;if(!intro&&game?.dungeon?.active){drawDungeonBackground(camX,camY);return;}if(!intro&&game?.region?.id!=='forest'&&game?.region){drawRegionBackground(camX,camY);return;}ctx.fillStyle='#2b4130';ctx.fillRect(0,0,width,height);const hX=intro?(width<760?.62:.73)*width:width*.5,hY=intro?(width<760?.71:.52)*height:height*.5;if(intro)glow(hX,hY,width*.6,'#76995b30');
+function background(camX,camY,intro){
+  if(!intro&&!game?.dungeon?.active&&game?.terrain?.island){decorativeShadowShapes.length=0;islandArt.draw(ctx,game.terrain.island,{camX,camY,width,height,time:game._clock,reduced,dense:combatOptions.dense},()=>backgroundLand(camX,camY,false));return;}
+  backgroundLand(camX,camY,intro);
+}
+function backgroundLand(camX,camY,intro){decorativeShadowShapes.length=0;if(!intro&&game?.dungeon?.active){drawDungeonBackground(camX,camY);return;}if(!intro&&game?.region?.id!=='forest'&&game?.region){drawRegionBackground(camX,camY);return;}ctx.fillStyle='#2b4130';ctx.fillRect(0,0,width,height);const hX=intro?(width<760?.62:.73)*width:width*.5,hY=intro?(width<760?.71:.52)*height:height*.5;if(intro)glow(hX,hY,width*.6,'#76995b30');
   sceneryArt.drawGround(ctx,camX,camY,width,height);
   // Clusters are decorative ground cover; the central fighting space stays readable.
   if(intro){tree(width*.93,height*.14,1.7,.7);tree(width*.99,height*.48,1.2,.3);tree(width*.85,height*.97,1.5,.5);fern(width*.78,height*.88,2,.4);fern(width*.97,height*.8,1.7,.3);stone(hX-100,hY+72,1.5,.7);stone(hX+95,hY-96,1.3,.4);}

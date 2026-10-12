@@ -42,12 +42,13 @@ export class Settlements {
   }
   _validSite(site,{nearSpawn=false}={}) {
     const g=this.game,center=this._bodyCenter(site),clearance=site.width*.5+70;
+    if(g.terrain.island&&!g.terrain.island.isDry(center.x,center.y,clearance))return false;
     if(distance(center,this._foot())<clearance+(nearSpawn?40:190))return false;
     if(this.sites.some(s=>distance(center,this._bodyCenter(s))<clearance+s.width*.5+110))return false;
     if(g.adventure?.props.some(o=>distance(o,center)<clearance+35))return false;
     if(g.adventure?.treasure&&distance(g.adventure.treasure,center)<clearance+110)return false;
     if(g.companions?.camp&&distance(g.companions.camp,center)<clearance+170)return false;
-    if(g.portal&&distance(g.portal,center)<clearance+90)return false;
+    if((g.regions?.portals||(g.portal?[g.portal]:[])).some(portal=>distance(portal,center)<clearance+90))return false;
     if(g.encounters?.active&&Number.isFinite(g.encounters.active.x)&&distance(g.encounters.active,center)<clearance+160)return false;
     // Check the actual broad footprint and its front approach instead of
     // demanding a huge empty circle, which is unsuitable for forest terrain.
@@ -68,10 +69,11 @@ export class Settlements {
   }
   _createSite(def,index,{nearSpawn=false}={}) {
     const region=this.game.region?.id||'forest',seed=this._hash(index+83,17),rotation=(this.game.regionIndex||0)===0?0:this._hash(71,23)*TAU;
-    const spawn=nearSpawn?this._foot():null;
-    for(let i=0;i<(nearSpawn?128:192);i++) {
+    const spawn=nearSpawn?this._foot():null,plan=!nearSpawn&&this.game.terrain.island?.plan?.[def.type];
+    for(let i=0;i<(plan?33:nearSpawn?128:192);i++) {
       const ring=Math.floor(i/32),angle=(nearSpawn?-Math.PI/2:def.angle+rotation)+(i%32)*TAU/32,radius=nearSpawn?190+ring*40:def.radius+ring*100;
-      const x=Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
+      const offset=i===0?0:Math.ceil(i/8)*20,localAngle=(i%8)*TAU/8;
+      const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
       const site={...def,id:`site:${this.game.regionIndex||0}:${def.type}`,x,y,sortY:y,door:{x,y:y+(def.type==='merchant'?0:30)},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
       if(!this._validSite(site,{nearSpawn}))continue;
       if(site.type==='supply')site.name=region==='marsh'?'沼泽高脚屋':region==='ruins'?'遗迹石屋':'林间小屋';

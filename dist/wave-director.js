@@ -29,14 +29,19 @@ export class WaveDirector {
   _bossBlocks() {
     const g=this.game;
     return g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false)||
-      (!g.portal&&Number.isFinite(g.nextBossAt)&&(g.nextBossAt<=g.time||
+      (!g.regions?.guarded&&(!g.portal||g.portal.state==='locked')&&Number.isFinite(g.nextBossAt)&&(g.nextBossAt<=g.time||
         (g.pressurePhase==='steady'&&g.nextBossAt-g.time<WAVE_RULES.warning+WAVE_RULES.attackLimit+1)));
   }
   _warn() {
     const g=this.game;
+    const start=this.count%DIRECTIONS.length;
+    const available=Array.from({length:DIRECTIONS.length},(_,i)=>DIRECTIONS[(start+i)%DIRECTIONS.length]);
+    const direction=!g.terrain?.island?available[0]:available.find(d=>[-.4,0,.4].some(spread=>g._findSpawnPoint?.('brute',d.angle+spread)));
+    if(!direction){this._setPhase('steady',3);return;}
     this.count++;g.wave=this.count;this.pattern=(this.count-1)%PATTERNS.length;
-    this.direction=DIRECTIONS[(this.count-1)%DIRECTIONS.length];
-    this.total=Math.max(1,Math.round(Math.min(WAVE_RULES.maxWaveSize,WAVE_RULES.firstWaveSize+(this.count-1)*WAVE_RULES.waveSizeStep)*(g.easy?.8:1)));
+    this.direction=direction;
+    const tier=g._waveTier?.(),growth=tier==null?(this.count-1)*WAVE_RULES.waveSizeStep:tier*2;
+    this.total=Math.max(1,Math.round(Math.min(WAVE_RULES.maxWaveSize,WAVE_RULES.firstWaveSize+growth)*(g.easy?.8:1)));
     this.spawned=0;this.members.clear();this.killed.clear();this.cleared=false;this.timedOut=false;
     this._setPhase('warning',WAVE_RULES.warning);
     g._emit?.('wave',{wave:this.count,name:PATTERNS[this.pattern],direction:this.direction.id,directionLabel:this.direction.label,total:this.total});
@@ -51,11 +56,11 @@ export class WaveDirector {
     g._emit?.('siege',{wave:this.count,direction:this.direction.id,directionLabel:this.direction.label});
   }
   _type(index) {
-    const g=this.game;
-    if(this.pattern===0)return index%5===4&&g.time>=60?'brute':index%3===0?'beetle':'slime';
+    const g=this.game,t=g._difficultyTime?.()??g.time;
+    if(this.pattern===0)return index%5===4&&t>=60?'brute':index%3===0?'beetle':'slime';
     if(this.pattern===1)return index%3===2?'beetle':'bat';
-    if(index%5===0&&g.time>=30)return 'boar';
-    if(index%5===4&&g.time>=45)return 'spore';
+    if(index%5===0&&t>=30)return 'boar';
+    if(index%5===4&&t>=45)return 'spore';
     return index%3===1?'beetle':'slime';
   }
   _spawnBatch() {
@@ -68,7 +73,10 @@ export class WaveDirector {
       // Alternate ranks across a 69-degree entry corridor. The opposite side
       // stays open instead of surrounding the player with a random ring.
       const slot=(this.spawned*5)%11,spread=(slot-5)*.12;
-      const enemy=g._spawnEnemy(type,undefined,this.direction.angle+spread);
+      let enemy=g._spawnEnemy(type,undefined,this.direction.angle+spread);
+      if(!enemy&&g.terrain?.island)for(const alternate of [0,-.35,.35,-.6,.6]) {
+        enemy=g._spawnEnemy(type,undefined,this.direction.angle+alternate);if(enemy)break;
+      }
       if(!enemy||enemy.id==null)break;
       enemy.pressureWave=this.count;this.members.add(enemy.id);this.spawned++;
     }
