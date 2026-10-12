@@ -177,11 +177,13 @@ export class HumanoidArt {
       c.beginPath();c.moveTo(-13,-11);c.quadraticCurveTo(-7,-27,3,-28);c.strokeStyle='#b5ab82';c.lineWidth=1;c.stroke();
     }else{
       if(kind==='angel'){
-        // Shoulder-length gold locks sit behind an uncovered, warmly lit face.
-        c.beginPath();c.moveTo(-10,-25);c.quadraticCurveTo(0,-32,10,-25);c.quadraticCurveTo(14,-18,12.5,-10);c.quadraticCurveTo(12,-4,14,-2);c.quadraticCurveTo(10,1,6,-3);c.lineTo(-6,-3);c.quadraticCurveTo(-10,1,-14,-2);c.quadraticCurveTo(-12,-4,-12.5,-10);c.quadraticCurveTo(-14,-18,-10,-25);c.closePath();paint(c,material(c,flip,['#ab9259','#d7bd7d','#f3df9f'],15,-28,1),'#91865f',.8);
-        // Mirrored cheek curves ease into a broad, rounded chin. A horizontal
-        // tangent at the bottom removes the pointed tip without widening the face.
-        c.beginPath();c.moveTo(0,-23.5);c.bezierCurveTo(-7,-24,-10,-19.5,-9.3,-13.8);c.bezierCurveTo(-9,-9,-7,-6.2,-4.8,-4.7);c.bezierCurveTo(-3.4,-3.65,-1.8,-3.15,0,-3.15);c.bezierCurveTo(1.8,-3.15,3.4,-3.65,4.8,-4.7);c.bezierCurveTo(7,-6.2,9,-9,9.3,-13.8);c.bezierCurveTo(10,-19.5,7,-24,0,-23.5);c.closePath();paint(c,material(c,flip,p.skin,11,-22,-4),'#bd986344',.6);
+        // Loose gold locks flare softly at the shoulders, framing a compact
+        // face without two straight vertical borders beside the cheeks.
+        c.beginPath();c.moveTo(0,-29);c.bezierCurveTo(-9,-29,-14,-23,-13,-15);c.bezierCurveTo(-12,-9,-11,-5,-14,-2);c.quadraticCurveTo(-9,1,-5,-4);c.lineTo(5,-4);c.quadraticCurveTo(9,1,14,-2);c.bezierCurveTo(11,-5,12,-9,13,-15);c.bezierCurveTo(14,-23,9,-29,0,-29);c.closePath();paint(c,material(c,flip,['#b1965e','#dac285','#f5e3aa'],15,-29,0),'#9e906b',.7);
+        // A short oval with softly rounded cheeks and a shallow chin. The
+        // lower face is deliberately compact enough to read at game scale.
+        c.beginPath();c.moveTo(0,-21.4);c.bezierCurveTo(-7,-21.4,-10.3,-18.4,-9.8,-13.8);c.bezierCurveTo(-9.5,-9.2,-5.8,-5,0,-5);c.bezierCurveTo(5.8,-5,9.5,-9.2,9.8,-13.8);c.bezierCurveTo(10.3,-18.4,7,-21.4,0,-21.4);c.closePath();paint(c,material(c,flip,['#e3bb99','#f6d9ba','#fff0d8'],11,-22,-5),'#caa08033',.55);
+        oval(c,-5.7,-9.1,2,.7,'#db90772d');oval(c,5.7,-9.1,2,.7,'#db90772d');
       }else oval(c,0,-13.2,10.6,11,material(c,flip,[p.face,p.face,kind==='stormcaller'?'#596179':'#64745a'],11,-22,-4));
       // Caps cast a painted shadow; the angel has an exposed forehead instead.
       if(kind!=='angel'){c.beginPath();c.moveTo(-10,-16);c.quadraticCurveTo(0,-24,10,-16);c.lineTo(9,-13);c.quadraticCurveTo(0,-17,-9,-13);c.closePath();paint(c,'#14252a40');}
@@ -202,15 +204,14 @@ export class HumanoidArt {
         c.beginPath();c.moveTo(-12,-23);c.quadraticCurveTo(0,-26,12,-23);c.lineTo(13,-20);c.quadraticCurveTo(0,-22,-13,-20);c.closePath();paint(c,'#5f5d3b');
         oval(c,0,-20,16,3.5,material(c,flip,['#867048','#b89d65','#ddc991'],17,-25,-18));line(c,[[-12,-18.5],[0,-17.5],[12,-19]],'#c9b67b',.8);
       }else{
-        // Matched quarter-oval arcs form a centered dome. The side part stays
-        // inside this balanced outline, with a clear gap below the floating halo.
-        c.beginPath();c.moveTo(-11.5,-3.5);c.quadraticCurveTo(-14,-9,-13,-20);c.bezierCurveTo(-13,-26.4,-7.18,-31.6,0,-31.6);c.bezierCurveTo(7.18,-31.6,13,-26.4,13,-20);c.quadraticCurveTo(14,-9,11.5,-3.5);c.quadraticCurveTo(8,-2,7.1,-5);c.bezierCurveTo(6.5,-7.7,8,-11,8.2,-15);c.quadraticCurveTo(8.6,-22,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-8.6,-18);c.bezierCurveTo(-8.7,-14,-6.7,-10,-7.2,-6);c.quadraticCurveTo(-8,-2,-11.5,-3.5);c.closePath();
-        paint(c,material(c,flip,['#ad975d','#dcc788','#fff0bb'],14,-32,-12),'#7d8965',.9);
-        c.beginPath();c.moveTo(3,-28);c.quadraticCurveTo(-2,-28,-7,-24);c.strokeStyle='#fff1c5';c.lineWidth=1.15;c.stroke();
-        c.beginPath();c.moveTo(5,-27);c.quadraticCurveTo(9,-25,10,-21);c.strokeStyle='#fff1c599';c.lineWidth=.85;c.stroke();
-        line(c,[[-9,-24],[-11,-21]],'#b39f66',.8);
-        c.beginPath();c.moveTo(-10.6,-18);c.quadraticCurveTo(-9,-11,-9.2,-6);c.strokeStyle='#f1d895';c.lineWidth=.8;c.stroke();
-        c.beginPath();c.moveTo(10,-19);c.quadraticCurveTo(10.5,-10,9,-5);c.strokeStyle='#fff0b988';c.lineWidth=.75;c.stroke();
+        // The centered round crown flows into a swept fringe and curved cheek
+        // locks. The face stays open across its widest part, rather than long.
+        c.beginPath();c.moveTo(-13,-3);c.bezierCurveTo(-10,-6,-12.7,-11,-13,-17.5);c.bezierCurveTo(-13.5,-24.8,-7.2,-29.5,0,-29.5);c.bezierCurveTo(7.2,-29.5,13.5,-24.8,13,-17.5);c.bezierCurveTo(12.7,-11,10,-6,13,-3);c.quadraticCurveTo(9,-1.6,7.8,-5.2);c.bezierCurveTo(7.2,-8,9.5,-10.5,9.6,-14.5);c.quadraticCurveTo(10,-20.7,5,-23);c.quadraticCurveTo(2.5,-18.8,-3.5,-17.6);c.quadraticCurveTo(-2.6,-18.8,-2.2,-20.2);c.quadraticCurveTo(-5.5,-18,-9.3,-17);c.bezierCurveTo(-10.3,-12.7,-7.2,-9,-7.8,-5.2);c.quadraticCurveTo(-9,-1.6,-13,-3);c.closePath();
+        paint(c,material(c,flip,['#b39b63','#e1ca8c','#fff0bb'],14,-30,-8),'#9c946e',.75);
+        c.beginPath();c.moveTo(2,-26.8);c.quadraticCurveTo(-3,-26.8,-7.7,-22.8);c.strokeStyle='#fff3ca';c.lineWidth=1.1;c.stroke();
+        c.beginPath();c.moveTo(5,-25.8);c.quadraticCurveTo(10,-23.4,10.7,-19.8);c.strokeStyle='#fff2c699';c.lineWidth=.8;c.stroke();
+        c.beginPath();c.moveTo(-11,-17.5);c.bezierCurveTo(-12,-12,-8.7,-8.7,-9.8,-5.2);c.strokeStyle='#f5df9f';c.lineWidth=.85;c.stroke();
+        c.beginPath();c.moveTo(11.4,-17);c.bezierCurveTo(11.7,-12,8.8,-8.5,9.9,-5.2);c.strokeStyle='#fff1bb99';c.lineWidth=.8;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,0,TAU);c.strokeStyle='#b5a365';c.lineWidth=1.7;c.stroke();c.strokeStyle='#f6e4a4';c.lineWidth=.85;c.stroke();
         c.beginPath();c.ellipse(0,-36.8,9.5,2.2,0,Math.PI*1.15,Math.PI*1.85);c.strokeStyle='#fff8d5';c.lineWidth=.9;c.stroke();
       }
@@ -246,14 +247,20 @@ export class HumanoidArt {
     poly(c,[[12,-34],[12,-28],flip>0?[16,-29]:[7,-30]],'#f3fcff');poly(c,[flip>0?[7,-30]:[16,-29],[12,-28],[12,-25]],'#9ca4c9');line(c,[[8,-25],[12,-24],[15,-27]],'#c5b490',1.3);
   }
   _face(c,kind,state){
-    const p=PALETTES[kind],xs=kind==='traveler'?[-2,6]:kind==='angel'?[-3.6,3.6]:[-4,4],y=kind==='traveler'?-12:-12.6;
+    const p=PALETTES[kind],angel=kind==='angel',xs=kind==='traveler'?[-2,6]:angel?[-3.8,3.8]:[-4,4],y=kind==='traveler'?-12:angel?-11.5:-12.6;
     for(let i=0;i<2;i++){
       const x=xs[i];
       if(state==='hurt')line(c,[[x+(i?1.5:-1.5),y-1.6],[x+(i?-.9:.9),y],[x+(i?1.5:-1.5),y+1.4]],p.eye,1.2);
       else if(state==='blink')line(c,[[x-1.4,y+.2],[x+1.4,y+.2]],p.eye,1);
       else if(state==='focus')line(c,[[x-1.5,y+(i?-.6:.3)],[x+1.5,y+(i?.3:-.6)]],p.eye,1.5);
       else if(state==='glad'){c.beginPath();c.moveTo(x-1.5,y+.8);c.quadraticCurveTo(x,y-1.5,x+1.5,y+.8);c.strokeStyle=p.eye;c.lineWidth=1.1;c.stroke();}
-      else oval(c,x,y,kind==='traveler'?1.5:1.4,kind==='traveler'?2:1.95,p.eye);
+      else{
+        oval(c,x,y,kind==='traveler'?1.5:angel?1.15:1.4,kind==='traveler'?2:angel?1.55:1.95,p.eye);
+        if(angel){const side=i?1:-1;line(c,[[x+side*.8,y-.5],[x+side*1.7,y-1.35]],p.eye,.75);oval(c,x+.25,y-.5,.3,.36,'#fff4df');}
+      }
+    }
+    if(angel){
+      c.beginPath();c.moveTo(-1.4,-7.7);c.quadraticCurveTo(0,state==='hurt'?-8.6:state==='focus'?-7.7:-6.4,1.4,-7.7);c.strokeStyle='#b57e6c';c.lineWidth=.65;c.stroke();
     }
   }
 }
