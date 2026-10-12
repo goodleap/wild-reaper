@@ -122,6 +122,12 @@ assert.equal(scheduling.c.active,null,'random events leave preparation time befo
 scheduling.g.nextBossAt=Infinity;scheduling.c.update(0);
 assert(scheduling.c.active,'the same due event starts once the Boss restriction clears');
 
+const occupiedArena=expedition({terrain:new Terrain({obstacles:[{type:'tree',x:190,y:0,r:35}]})});
+assert(occupiedArena.g.terrain.isFree(0,0,42),'the center alone is walkable');
+assert.equal(occupiedArena.c.spawn('hunt',0,0),null,'an arena rejects a solid obstacle elsewhere on its floor');
+const relocatedArena=occupiedArena.c.spawn('hunt');
+assert(relocatedArena&&occupiedArena.g.terrain.isFree(relocatedArena.x,relocatedArena.y,245),'the arena can choose nearby clear ground');
+
 const hunt=expedition(),h=hunt.c.spawn('hunt',120,19.8);
 assert(h);assert.equal(hunt.g.enemies.length,0,'a hunt reuses the ordinary population');
 const killAt=(run,x,extras={})=>{

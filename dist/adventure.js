@@ -101,13 +101,12 @@ export class Adventure {
     this.pickups.push(pickup);return pickup;
   }
   _collect(pickup){
-    const g=this.game,p=g.player;
+    const g=this.game,p=g.player;if(pickup.life<=0)return false;let healed=0;
     if(pickup.type==='herb'){
-      if(p.hp>=p.maxHp)return false;
       const healing=g.relics?.modifyHerbHealing(25)??25;
-      const healed=Math.min(Math.max(0,Number.isFinite(healing)?healing:25),p.maxHp-p.hp);p.hp+=healed;
-      g._effect(p.x,p.y-28,'heal',.8,0,'#b9e89c',`+${Math.ceil(healed)}`);
-      if(healed>0)g.relics?.onHerb(healed);
+      healed=Math.min(Math.max(0,Number.isFinite(healing)?healing:25),Math.max(0,p.maxHp-p.hp));p.hp+=healed;
+      if(healed>0){g._effect(p.x,p.y-28,'heal',.8,0,'#b9e89c',`+${Math.ceil(healed)}`);g.relics?.onHerb(healed);}
+      else g._effect(p.x,p.y,'ring',.3,24,'#b9e89c');
     }else if(pickup.type==='magnet'){
       this.magnetTime=Math.max(this.magnetTime,pickup.duration);
       for(const gem of g.gems)if(Math.hypot(gem.x-p.x,gem.y-p.y)<480)gem.attracted=true;
@@ -116,7 +115,7 @@ export class Adventure {
       this.furyTime=Math.max(this.furyTime,pickup.duration);
       g._effect(p.x,p.y,'ring',.5,65,'#efb46b');
     }
-    g._emit(pickup.type);pickup.life=0;return true;
+    g._emit(pickup.type,pickup.type==='herb'?{healed}:{});pickup.life=0;return true;
   }
   spawnTreasure(x,y){
     if(this.treasure)return null;

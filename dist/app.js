@@ -5,6 +5,7 @@ import { MonsterArt } from './monster-art.js';
 import { RegionalArt } from './regional-art.js';
 import { SuperArt } from './super-art.js';
 import { PropArt } from './prop-art.js';
+import { EncounterArt } from './encounter-art.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
@@ -20,6 +21,7 @@ const monsterArt=new MonsterArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
 const superArt=new SuperArt(()=>document.createElement('canvas'));
 const propArt=new PropArt(()=>document.createElement('canvas'));
+const encounterArt=new EncounterArt(()=>document.createElement('canvas'));
 const arena = $('arena'), TAU = Math.PI * 2;
 // One world-space sunlight direction drives every beam and actor projection.
 const SUN_ANGLE=Math.atan2(325,840),SUN={x:-Math.sin(SUN_ANGLE),y:Math.cos(SUN_ANGLE)};
@@ -196,7 +198,7 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='encounterExpired'))notify('林间事件已结束 · 继续探索',1);
   else if(events.some(event=>event.type==='fury'))notify('狂暴涌动 · 火力暂时增强',1);
   else if(events.some(event=>event.type==='magnet'))notify('磁力涌动 · 灵晶持续汇聚',1);
-  else if(events.some(event=>event.type==='herb'))notify('拾取药草 · 恢复生命',1);
+  else if(events.some(event=>event.type==='herb'))notify(events.some(event=>event.type==='herb'&&event.healed>0)?'拾取药草 · 恢复生命':'拾取药草 · 生命已满',1);
   else if(events.some(event=>event.type==='treasure'))notify('林间出现守卫宝箱 · 可循金色指引挑战',1);
   else if(events.some(event=>event.type==='relief'))notify('攻势放缓 · 趁机拾取补给，调整位置',1);
 }
@@ -214,7 +216,7 @@ function updateEncounterHUD(){
   $('encounter-status').classList.toggle('treasure-event',!camp&&!hunt);$('encounter-status').classList.toggle('rescue-event',!!camp);$('encounter-status').classList.toggle('rescue-ready',camp?.state==='ready');$('encounter-status').classList.toggle('urgent',active.life<=10);
   $('encounter-icon').textContent=camp?(camp.kind==='stormcaller'?'ϟ':'◈'):hunt?'◎':'◇';
   $('encounter-name').textContent=camp?`营救${camp.name}`:hunt?'林间狩猎':'追逐宝物精';
-  $('encounter-goal').textContent=camp?(camp.state==='ready'?'围困已解除 · 靠近解救':`清除围困怪物 · ${Math.max(0,camp.guardTotal-camp.remainingGuards)} / ${camp.guardTotal}`):hunt?`${inside?'圈内击败':'进入猎区'} · ${active.progress} / ${active.goal}`:'击败金色宝物精 · 夺取补给';
+  $('encounter-goal').textContent=camp?(camp.state==='ready'?'围困已解除 · 靠近解救':`清除围困怪物 · ${Math.max(0,camp.guardTotal-camp.remainingGuards)} / ${camp.guardTotal}`):hunt?`${inside?'擂台击败':'进入擂台'} · ${active.progress} / ${active.goal}`:'击败金色宝物精 · 夺取补给';
   $('encounter-time').textContent=`${Math.max(0,Math.ceil(active.life))}秒`;
 }
 function updateCompanionHUD(){
@@ -442,13 +444,15 @@ function adventureSceneProps(camX,camY){
   if(game.portal&&visible({...game.portal,y:game.portal.y-30}))props.push({...game.portal,type:'portal',sortY:game.portal.y});
   if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type!=='merchant'&&Math.abs(site.x-camX)<width/2+200&&Math.abs(site.y-camY)<height/2+230)props.push({...site,isSettlement:true});
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
+  if(game.encounters?.active?.type==='hunt')props.push(...encounterArt.props(game.encounters.active).filter(visible));
   return props;
 }
 function drawAdventureShadowPaths(mask,props){
-  for(const prop of props){if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
+  for(const prop of props){if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
     mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();}
 }
 function drawAdventureProp(prop){
+  if(prop.type==='huntMarker'){encounterArt.drawMarker(ctx,prop,combatOptions);return;}
   if(prop.isSettlement){drawSettlement(prop);return;}if(prop.isDungeonTreasure){drawDungeonChest(prop);return;}
   propArt.drawProp(ctx,prop,combatOptions);
   ctx.save();ctx.translate(prop.x,prop.y);ctx.textAlign='center';ctx.font='600 9px ui-monospace,monospace';
@@ -617,12 +621,7 @@ function drawEncounterGround(){
   const active=game.encounters?.active;if(!active)return;
   ctx.save();
   if(active.type==='hunt'){
-    const {x,y,r,goal,progress}=active;ctx.fillStyle='#a6c98e08';ctx.strokeStyle='#bfce9270';ctx.lineWidth=2;
-    ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();ctx.stroke();
-    ctx.setLineDash([5,10]);ctx.lineWidth=1;ctx.strokeStyle='#c7db9e55';ctx.beginPath();ctx.arc(x,y,r-7,0,TAU);ctx.stroke();ctx.setLineDash([]);
-    for(let i=0;i<goal;i++){const angle=-Math.PI/2+i*TAU/goal,dx=Math.cos(angle),dy=Math.sin(angle);diamond(x+dx*r,y+dy*r,4,i<progress?'#e2d999':'#788e6577');}
-    ctx.font='600 10px ui-monospace,monospace';ctx.textAlign='center';ctx.fillStyle='#c5d6a7';ctx.fillText('林间猎区',x,y-r+26);
-    ctx.strokeStyle='#c5d6a72f';ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,17,0,TAU);ctx.stroke();line(x-6,y,x+6,y,'#c5d6a744',1);line(x,y-6,x,y+6,'#c5d6a744',1);
+    encounterArt.drawGround(ctx,active,combatOptions);
   }else{
     const x=active.x,y=active.y;ctx.strokeStyle='#e4c57088';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(x,y,25,13,0,0,TAU);ctx.stroke();
   }
@@ -982,13 +981,13 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   const offsetX=width/2-camX+sx,offsetY=height/2-camY+sy;
   const actors=game.enemies.map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally)actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:900001};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
   const terrain=terrainInView(camX,camY),adventureProps=adventureSceneProps(camX,camY);
-  ctx.save();ctx.translate(offsetX,offsetY);drawMudGround();drawDungeonGround();ctx.restore();
+  ctx.save();ctx.translate(offsetX,offsetY);drawEncounterGround();drawMudGround();drawDungeonGround();ctx.restore();
   drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active?null:target=>drawMapLights(camX-sx,camY-sy,target));ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(Math.abs(gem.x-p.x)>width/2+20||Math.abs(gem.y-p.y)>height/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   drawCoins();drawSuperFields();
   combatArt.drawStormGround(ctx,game.storm,combatOptions);
   for(const e of game.effects)if(e.type==='ring')effects(e);drawRescueGround();
-  drawEncounterGround();drawAdventurePickups();drawEnemyTelegraphs();drawEnvironmentWarnings();drawRegionMechanisms();drawEliteGroundEffects();drawBossGroundEffects();
+  drawAdventurePickups();drawEnemyTelegraphs();drawEnvironmentWarnings();drawRegionMechanisms();drawEliteGroundEffects();drawBossGroundEffects();
   drawScene(actors,terrain,p,adventureProps);
   drawSuperFields(true);drawEnemyBullets();
   for(const b of game.bullets)if(Math.abs(b.x-p.x)<width/2+80&&Math.abs(b.y-p.y)<height/2+80)combatArt.drawArrow(ctx,b,{time:game._clock,reduced,dense:combatOptions.dense});

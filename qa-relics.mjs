@@ -92,8 +92,8 @@ shield.player.invuln=0;shield._hurtPlayer(10);assert.equal(shield.player.hp,72,'
 
 const herbs=arena({owned:['herbalEcho','deepRoot','thunderstone']});herbs.player.skillCooldown=8;
 const herbEnemy=monster(herbs,100),farEnemy=monster(herbs,200),drop=herb(herbs);herbs.update(0);
-assert(herbs.adventure.pickups.includes(drop));assert.equal(herbEnemy.hp,10000,'a full-health herb neither consumes nor casts a wave');
-herbs.player.hp=40;herbs.update(0);
+assert(!herbs.adventure.pickups.includes(drop));assert.equal(herbEnemy.hp,10000,'a full-health herb is consumed without triggering an actual-healing relic');
+herbs.player.hp=40;herb(herbs);herbs.update(0);
 assert.equal(herbs.player.hp,75,'deep root increases actual herb healing to thirty-five');
 assert(!herbs.adventure.pickups.includes(drop));assert.equal(herbEnemy.hp,9940);assert.equal(farEnemy.hp,10000);
 assert(!herbEnemy.bleed&&!herbEnemy.shock,'the herb wave uses raw damage without applying weapon status reactions');

@@ -137,8 +137,10 @@ const collect=(g,a,type,duration)=>{const p=foot(g),item=a.dropPickup(type,p.x,p
 
 const healing=expedition(),herb=collect(healing.g,healing.a,'herb');
 assert.equal(healing.g.player.hp,healing.g.player.maxHp);
-assert(healing.a.pickups.includes(herb),'a healing item is preserved when health is already full');
-healing.g.player.hp-=7;healing.a.update(0);
+assert(!healing.a.pickups.includes(herb),'a full-health healing pickup is consumed immediately');
+assert(healing.g.events.some(event=>event.type==='herb'&&event.healed===0));
+assert.equal(healing.a._collect(herb),false,'a consumed pickup cannot be used twice');
+healing.g.player.hp-=7;healing.a.update(0);assert.equal(healing.g.player.hp,healing.g.player.maxHp-7,'the consumed full-health herb is not stored for later');collect(healing.g,healing.a,'herb');
 assert.equal(healing.g.player.hp,healing.g.player.maxHp,'healing clamps to maximum health');
 assert(!healing.a.pickups.includes(herb),'a used healing item is consumed once');
 healing.g.player.hp=35;collect(healing.g,healing.a,'herb');

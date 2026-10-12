@@ -18,15 +18,17 @@ export class Encounters {
   _canStart() {
     return canStartObjective(this.game,{skipEncounter:true});
   }
-  _point(x,y) {
-    const g=this.game,p=this._foot(),chest=g.adventure?.treasure;
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,42)&&objectivePointSafe(g,candidate,210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
-      !g.adventure?.props.some(o=>distance(o,candidate)<70)&&
-      (!chest||distance(chest,candidate)>180);
+  _point(x,y,type='treasure') {
+    const g=this.game,p=this._foot(),chest=g.adventure?.treasure,hunt=type==='hunt',clearance=hunt?245:42;
+    // A stone arena belongs on clear ground, not under an existing solid tree.
+    // Search a few nearby rings without removing terrain or moving its props.
+    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&objectivePointSafe(g,candidate,hunt?245:210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?245:90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
+      !g.adventure?.props.some(o=>distance(o,candidate)<(hunt?245+(o.r||18):70))&&
+      (!chest||distance(chest,candidate)>(hunt?290:180));
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;
-    const start=Math.random()*TAU;
-    for(let i=0;i<30;i++) {
-      const a=start+i*TAU/30,r=280+(i%3)*50;
+    const start=Math.random()*TAU,attempts=hunt?144:30;
+    for(let i=0;i<attempts;i++) {
+      const a=start+i*TAU/(hunt?24:30),r=hunt?300+Math.floor(i/24)*100:280+(i%3)*50;
       const candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
       if(free(candidate))return candidate;
     }
@@ -36,7 +38,7 @@ export class Encounters {
     const g=this.game;
     if(this.active||g.status!=='playing'||!TYPES.includes(type))return null;
     if(type==='treasure'&&g.enemies.length>=180)return null;
-    const point=this._point(x,y);if(!point)return null;
+    const point=this._point(x,y,type);if(!point)return null;
     const life=type==='hunt'?40:35;
     const active={id:`encounter:${++this._id}`,type,...point,r:210,life,maxLife:life,goal:12,progress:0,enemyId:null,state:'active'};
     if(type==='treasure') {
