@@ -1,6 +1,7 @@
 import { Game, RELICS } from './engine.js';
 import { SceneryArt } from './scenery-art.js';
 import { CombatArt } from './combat-art.js';
+import { getStormGeometry, lightningPath, stormBrightness, stormImpactBrightness } from './storm-geometry.js';
 import { MonsterArt } from './monster-art.js';
 import { RegionalArt } from './regional-art.js';
 import { SuperArt } from './super-art.js';
@@ -127,9 +128,9 @@ function openUpgrades(){
   const alreadyOpen=!$('upgrade-overlay').classList.contains('hidden');
   upgradeLevel=game.skillLevel;clearInput();const cards=$('upgrade-cards');cards.replaceChildren();
   const choices=game.getUpgradeChoices(),hasBranches=choices.some(choice=>choice.branch);
-  $('upgrade-title').textContent=hasBranches?'选择你的战斗方式':'灵晶的馈赠';
-  $('upgrade-description').textContent=hasBranches?'两条分支互斥，本局选择后固定；也可先选其他强化。':game.skillLevel===1?'选择一种新技能，立即加入自动攻击。':`第 ${game.skillLevel} 次灵晶强化 · 技能改变攻击，属性增强角色。`;
-  $('upgrade-note').textContent=game.crystals>game.crystalsNext?'时间已暂停 · 剩余灵晶会保留':'时间已暂停 · 选择后继续冒险';
+  $('upgrade-title').textContent=hasBranches?'选择战斗分支':'灵晶的馈赠';
+  $('upgrade-description').textContent=hasBranches?'同一技能分支互斥，本局固定，也可先选其他强化。':game.skillLevel===1?'选择一种自动攻击技能。':`第 ${game.skillLevel} 次灵晶强化 · 选择一项`;
+  $('upgrade-note').textContent='时间已暂停 · 伤害为基础值 · 灵晶保留';
   for(const upgrade of choices){
     const card=createChoiceCard(upgrade);
     card.onclick=()=>{
@@ -174,7 +175,7 @@ function openSuperChoices(){
   if(key===superChoiceKey&&!$('super-overlay').classList.contains('hidden'))return;
   superChoiceKey=key;clearInput();show('upgrade-overlay',false);show('relic-overlay',false);show('portal-action',false);
   const castle=pending?.source==='castle';$('super-title').textContent=castle?'王城深处的秘藏':'荒野领主的秘藏';
-  $('super-description').textContent=castle?'击败城堡最终首领的奖励 · 选择一项城堡超级技能。':'击败驻门首领的奖励 · 选择后继续探索，随时使用传送门。';
+  $('super-description').textContent=castle?'城堡首领奖励 · 选择一项超级技能':'驻门首领奖励 · 选择后传送门可往返';
   const cards=$('super-cards');cards.replaceChildren();cards.style.gridTemplateColumns=`repeat(${Math.min(3,Math.max(1,choices.length))},minmax(0,1fr))`;
   for(const choice of choices){const card=createChoiceCard(choice);
     card.onclick=()=>{if(game?.status!=='super'||paused||helpOpen||mapOpen||!game.chooseSuper(choice.id))return;superChoiceKey='';show('super-overlay',false);clearInput();tone(540,.3,'sine',.04,1080);updateHUD();canvas.focus({preventScroll:true});};cards.append(card);
@@ -870,74 +871,6 @@ function drawBossGroundEffects(){
   }
   ctx.restore();
 }
-// Build the discharge once per cast. Pausing freezes its age and its geometry.
-const stormGeometryCache=new WeakMap();
-function lightningPath(start,end,seed,depth=5,roughness=.2){
-  const points=[start];
-  function split(a,b,level,key){
-    if(level<=0){points.push(b);return;}
-    const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
-    const along=.4+hash(seed,key)*.2,offset=(hash(seed+19,key)-.5)*d*roughness*2;
-    const midpoint={x:a.x+dx*along-dy/d*offset,y:a.y+dy*along+dx/d*offset};
-    split(a,midpoint,level-1,key*2+1);split(midpoint,b,level-1,key*2+2);
-  }
-  split(start,end,depth,1);return points;
-}
-function getStormGeometry(storm){
-  if(stormGeometryCache.has(storm))return stormGeometryCache.get(storm);
-  const viewWidth=storm.viewWidth||width,viewHeight=storm.viewHeight||height;
-  const targets=storm.targets.length?storm.targets:[{x:storm.x-90,y:storm.y+70,r:14,seed:1},{x:storm.x+110,y:storm.y-75,r:14,seed:2},{x:storm.x+15,y:storm.y+140,r:14,seed:3}];
-  const boltLimit=viewWidth<600?8:14,selected=[];
-  // Large targets lead; farthest-point selection spreads detailed bolts across
-  // the viewport instead of hiding the entire horde under full-height strokes.
-  if(targets.length<=boltLimit)selected.push(...targets);
-  else{
-    let next=targets.reduce((best,target)=>target.r>best.r?target:best,targets[0]);
-    const remaining=new Set(targets),distances=new Map();
-    while(selected.length<boltLimit&&remaining.size){
-      selected.push(next);remaining.delete(next);let farthest=-1,candidate=null;
-      for(const target of remaining){
-        const distance=((target.x-next.x)/viewWidth)**2+((target.y-next.y)/viewHeight)**2;
-        const nearest=Math.min(distances.get(target)??Infinity,distance);distances.set(target,nearest);
-        if(nearest>farthest){farthest=nearest;candidate=target;}
-      }
-      next=candidate;
-    }
-  }
-  const selectedSet=new Set(selected),mainBolts=selected.map((target,index)=>{
-    const seed=(target.seed||index+1)*13.7;
-    const end={x:target.x,y:target.y+3};
-    const start={x:target.x+(hash(seed,2)-.5)*Math.min(180,viewWidth*.35),y:Math.min(storm.y-viewHeight/2-45,end.y-190)};
-    const trunk=lightningPath(start,end,seed,5,.17),branches=[];
-    for(let i=0;i<3;i++){
-      const at=7+i*6+Math.floor(hash(seed,i+4)*4),origin=trunk[at];
-      const side=hash(seed,i+11)>.5?1:-1,length=40+hash(seed,i+17)*70;
-      const tip={x:origin.x+side*length*.72,y:origin.y+length*(.55+hash(seed,i+20)*.55)};
-      const branch=lightningPath(origin,tip,seed+i*23+3,3,.24);branches.push(branch);
-      if(i===1){const fork=branch[4];branches.push(lightningPath(fork,{x:fork.x-side*length*.35,y:fork.y+length*.4},seed+83,2,.2));}
-    }
-    return{trunk,branches};
-  });
-  const impacts=targets.map((target,index)=>{
-    const seed=target.seed||index+1,hero=selectedSet.has(target),radius=clamp(target.r*.65+7,13,35),paths=[];
-    for(let i=0;i<(hero?5:2);i++){
-      const angle=(i/(hero?5:2)+hash(seed,i)*.19)*TAU,length=radius*(.75+hash(seed,i+6)*.55);
-      const dx=Math.cos(angle),dy=Math.sin(angle)*.48;
-      paths.push([{x:target.x+dx*3,y:target.y+3+dy*3},{x:target.x+dx*length*.45-dy*5,y:target.y+3+dy*length*.45+dx*3},{x:target.x+dx*length*.7+dy*3,y:target.y+3+dy*length*.7-dx*2},{x:target.x+dx*length,y:target.y+3+dy*length}]);
-    }
-    return{x:target.x,y:target.y+3,r:radius,paths,hero};
-  });
-  const geometry={mainBolts,impacts,targetCount:storm.targets.length,boltLimit};
-  stormGeometryCache.set(storm,geometry);return geometry;
-}
-function stormBrightness(storm,calm=reduced){
-  const progress=clamp(1-storm.life/storm.maxLife,0,1),age=progress*storm.maxLife;
-  if(calm)return .8*(1-progress);
-  // One main discharge, one weaker return stroke, then a faint afterglow.
-  const first=age<.045?1:Math.exp(-(age-.045)*18);
-  const returnStroke=.5*Math.exp(-Math.pow((age-.185)/.028,2));
-  return clamp(first+returnStroke+.22*(1-progress),0,1);
-}
 function stormExposure(storm){
   if(reduced||!storm||storm.life<=0)return 0;
   return .09*Math.max(0,1-(storm.maxLife-storm.life)/.095)**2;
@@ -945,23 +878,29 @@ function stormExposure(storm){
 function appendLightningPath(points){ctx.moveTo(points[0].x,points[0].y);for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);}
 function drawStorm(){
   const storm=game.storm;if(!storm||storm.life<=0)return;
-  const geometry=getStormGeometry(storm),brightness=stormBrightness(storm),progress=clamp(1-storm.life/storm.maxLife,0,1);
+  const geometry=getStormGeometry(storm);
   ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.shadowBlur=0;
-  ctx.beginPath();for(const bolt of geometry.mainBolts)appendLightningPath(bolt.trunk);
-  // Batch the shared glow passes; there is no per-enemy blur or gradient.
-  for(const [strokeWidth,color,opacity] of [[14,'#5199ff',.09],[8,'#73b8ff',.22],[4,'#abdfff',.8],[1.9,'#ffffff',1]]){
-    ctx.lineWidth=strokeWidth;ctx.strokeStyle=color;ctx.globalAlpha=brightness*opacity;ctx.stroke();
+  // Five short waves keep a crowded cast readable. Each wave shares the same
+  // stroke passes: no per-enemy gradients, glow filters or render-time geometry.
+  for(const wave of geometry.waves){
+    const brightness=stormBrightness(storm,reduced,wave.delay);
+    if(brightness>0){
+      ctx.beginPath();for(const bolt of wave.mainBolts)appendLightningPath(bolt.trunk);
+      for(const [strokeWidth,color,opacity] of [[12,'#5199ff',.075],[7,'#73b8ff',.2],[3.7,'#abdfff',.8],[1.65,'#ffffff',1]]){
+        ctx.lineWidth=strokeWidth;ctx.strokeStyle=color;ctx.globalAlpha=brightness*opacity;ctx.stroke();
+      }
+      ctx.beginPath();for(const bolt of wave.mainBolts)for(const branch of bolt.branches)appendLightningPath(branch);for(const link of wave.links)appendLightningPath(link);
+      ctx.strokeStyle='#83c5ff';ctx.lineWidth=2.7;ctx.globalAlpha=brightness*.28;ctx.stroke();
+      ctx.strokeStyle='#d5f1ff';ctx.lineWidth=.95;ctx.globalAlpha=brightness*.85;ctx.stroke();
+    }
+    const impactAlpha=stormImpactBrightness(storm,reduced,wave.delay);
+    ctx.beginPath();for(const impact of wave.impacts)for(const path of impact.paths)appendLightningPath(path);
+    ctx.strokeStyle='#6dbbff';ctx.lineWidth=3.6;ctx.globalAlpha=impactAlpha*.24;ctx.stroke();
+    ctx.strokeStyle='#e5f6ff';ctx.lineWidth=1.25;ctx.globalAlpha=impactAlpha;ctx.stroke();
+    ctx.beginPath();for(const impact of wave.impacts){ctx.moveTo(impact.x+2.2,impact.y);ctx.ellipse(impact.x,impact.y,2.2,1.6,0,0,TAU);}
+    ctx.fillStyle='#ffffff';ctx.globalAlpha=impactAlpha;ctx.fill();
   }
-  ctx.beginPath();for(const bolt of geometry.mainBolts)for(const branch of bolt.branches)appendLightningPath(branch);
-  ctx.strokeStyle='#83c5ff';ctx.lineWidth=3;ctx.globalAlpha=brightness*.3;ctx.stroke();
-  ctx.strokeStyle='#d5f1ff';ctx.lineWidth=.9;ctx.globalAlpha=brightness*.8;ctx.stroke();
-  // Even targets killed on the casting frame retain their own impact snapshot.
-  const impactAlpha=reduced?brightness:Math.max(brightness*.8,.65*(1-progress)**1.5);
-  ctx.beginPath();for(const impact of geometry.impacts)for(const path of impact.paths)appendLightningPath(path);
-  ctx.strokeStyle='#6dbbff';ctx.lineWidth=4;ctx.globalAlpha=impactAlpha*.24;ctx.stroke();
-  ctx.strokeStyle='#e5f6ff';ctx.lineWidth=1.25;ctx.globalAlpha=impactAlpha;ctx.stroke();
-  ctx.beginPath();for(const impact of geometry.impacts){ctx.moveTo(impact.x+2.2,impact.y);ctx.ellipse(impact.x,impact.y,2.2,1.6,0,0,TAU);}
-  ctx.fillStyle='#ffffff';ctx.globalAlpha=impactAlpha;ctx.fill();ctx.restore();
+  ctx.restore();
 }
 // Each mote belongs to a map cell. Camera movement only changes its projection;
 // bounded drift never wraps at a screen edge or follows a resized viewport.

@@ -1,3 +1,4 @@
+import { getStormGeometry, stormAge } from './storm-geometry.js';
 // Canvas-native combat artwork. Geometry is generated once per live effect,
 // then aged exclusively by simulation life: pauses never keep particles moving.
 const TAU=Math.PI*2;
@@ -221,21 +222,21 @@ export class CombatArt {
 
   _stormGeometry(storm){
     if(this.storms.has(storm))return this.storms.get(storm);
-    const targets=storm.targets||[],limit=Math.min(14,targets.length),patches=[];
-    for(let i=0;i<limit;i++){
-      const target=targets[Math.floor(i*targets.length/limit)],seed=effectSeed(target),r=clamp((target.r||15)*.65+7,13,35),cracks=[],sparks=[];
+    const bolts=getStormGeometry(storm).mainBolts,patches=[];
+    for(const bolt of bolts){
+      const target=bolt.target,seed=effectSeed(target),r=clamp((target.r||15)*.65+7,13,35),cracks=[],sparks=[];
       for(let j=0;j<5;j++){const a=j*TAU/5+noise(seed,j)*.4,length=r*(.62+noise(seed,j+10)*.36),dx=Math.cos(a),dy=Math.sin(a)*.52;cracks.push([{x:dx*2,y:dy*2},{x:dx*length*.4-dy*3,y:dy*length*.4+dx*2},{x:dx*length*.7+dy*3,y:dy*length*.7-dx*2},{x:dx*length,y:dy*length}]);sparks.push({dx:Math.cos(a),dy:Math.sin(a),distance:7+noise(seed,j+20)*14,up:10+noise(seed,j+30)*20});}
-      patches.push({x:target.x,y:target.y+4,r,cracks,sparks});
+      patches.push({x:target.x,y:target.y+4,r,cracks,sparks,delay:bolt.delay});
     }
     this.storms.set(storm,patches);return patches;
   }
 
   drawStormGround(ctx,storm,{reduced=false,dense=false}={}){
     if(!storm||!(storm.life>0)||!(storm.maxLife>0))return;
-    const t=clamp(1-storm.life/storm.maxLife),fade=(1-t)**1.1,patches=this._stormGeometry(storm);
+    const age=stormAge(storm),patches=this._stormGeometry(storm);
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=0;
     for(let i=0;i<(dense?Math.min(7,patches.length):patches.length);i++){
-      const p=patches[i];ctx.save();ctx.translate(p.x,p.y);
+      const p=patches[i];if(age<p.delay)continue;const t=clamp((age-p.delay)/Math.max(.01,storm.maxLife-p.delay)),fade=(1-t)**1.1;ctx.save();ctx.translate(p.x,p.y);
       ctx.beginPath();for(const crack of p.cracks)path(ctx,crack);ctx.globalAlpha=fade*.65;ctx.strokeStyle='#274140';ctx.lineWidth=4;ctx.stroke();
       ctx.globalAlpha=fade*(reduced?.24:.45);ctx.strokeStyle='#b5ddea';ctx.lineWidth=1;ctx.stroke();
       if(!reduced&&!dense){ctx.globalAlpha=fade*.1;ctx.fillStyle='#94c8eb';ctx.beginPath();ctx.ellipse(0,0,p.r*.75,p.r*.3,0,0,TAU);ctx.fill();}
@@ -246,11 +247,11 @@ export class CombatArt {
 
   drawStormAir(ctx,storm,{reduced=false,dense=false}={}){
     if(!storm||!(storm.life>0)||!(storm.maxLife>0))return;
-    const t=clamp(1-storm.life/storm.maxLife),fade=(1-t)**1.6,patches=this._stormGeometry(storm);
+    const age=stormAge(storm),patches=this._stormGeometry(storm);
     if(reduced)return; // The existing discharge already provides a calm fallback.
     ctx.save();ctx.lineCap='round';ctx.shadowBlur=0;ctx.lineWidth=1.05;
     for(let i=0;i<(dense?Math.min(5,patches.length):patches.length);i++){
-      const p=patches[i];ctx.beginPath();
+      const p=patches[i];if(age<p.delay)continue;const t=clamp((age-p.delay)/Math.max(.01,storm.maxLife-p.delay)),fade=(1-t)**1.6;ctx.beginPath();
       for(let j=0;j<(dense?2:4);j++){const s=p.sparks[j],x=p.x+s.dx*s.distance*ease(t),y=p.y+s.dy*s.distance*.4*ease(t)-Math.sin(t*Math.PI*.8)*s.up;segment(ctx,x,y,x-s.dx*1.6,y+3.5*(1-t));}
       ctx.globalAlpha=fade*.8;ctx.strokeStyle=i%2?'#b9e5ff':'#effaff';ctx.stroke();
     }

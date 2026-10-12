@@ -15,6 +15,9 @@ for(let i=0;i<150;i++){
   for(const c of g.getUpgradeChoices()){
     const m=presentUpgrade(c,g),html=upgradeCardHTML(m);seen.add(c.id);
     assert(m.quality.name);assert(!html.includes('undefined')&&!html.includes('NaN'));
+    assert(m.summary,'every choice has a merged effect sentence');
+    assert(html.includes('choice-summary'));
+    assert(!/choice-(stats|stat|description|note|scope)/.test(html),'remove repeated description and individual stat table from visible cards');
     assert.equal(m.category,['power','speed','magnet','vitality','regen'].includes(c.id)?'attribute':'skill');
     assert(m.category!=='attribute'||!m.levelLabel.includes('Lv.'),'attributes are not disguised as skill levels');
     assert(m.category!=='skill'||m.scope.includes('自动攻击')||m.scope.includes('飞矢'));
@@ -36,17 +39,35 @@ for(const id of ['orbit','pulse','lightning']){
 }
 for(const [weapon,branches] of Object.entries(WEAPON_BRANCHES))for(const c of branches){
   const g=game();g.levels[weapon==='arrow'?'rapid':weapon]=weapon==='arrow'?3:4;
-  const m=presentUpgrade(c,g);assert.equal(m.action,'分支');assert(m.note.includes('本局固定'));assert(!upgradeCardHTML(m).includes('NaN'));
+  const m=presentUpgrade(c,g);assert.equal(m.action,'分支');assert(m.note.includes('本局固定'));assert(!upgradeCardHTML(m).includes('本局固定'),'exclusive-branch explanation is shared by the panel');assert(!upgradeCardHTML(m).includes('NaN'));
 }
 for(const def of SUPER_SKILLS){
   const g=game();for(let owned=0;owned<3;owned++){
     g.superSkills.owned[def.id]=owned;const c={...def,level:owned+1},m=presentUpgrade(c,g),stats=getSuperSkillStats(def.id,owned+1);
     assert.equal(m.category,'skill');assert.equal(m.action,owned?'升级':'新获得');assert.equal(after(m.rows[0]),def.id==='miasma'?stats.impactDamage:stats.damage);
-    assert(!upgradeCardHTML(m).includes('undefined'));assert.equal(m.rarity,def.id==='meteor'||def.id==='vortex'?'legendary':def.id==='swords'||def.id==='runes'?'epic':'rare');
+    assert(!upgradeCardHTML(m).includes('undefined'));assert(m.summary.includes(String(def.id==='miasma'?stats.impactDamage:stats.damage)),'super summary uses current combat values');assert.equal(m.rarity,def.id==='meteor'||def.id==='vortex'?'legendary':def.id==='swords'||def.id==='runes'?'epic':'rare');
   }
 }
 const capped=game();Object.assign(capped.levels,{power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
 for(const c of capped.getUpgradeChoices()){const m=presentUpgrade(c,capped);assert.equal(m.category,'attribute');assert(m.note.includes('无尽'));assert(!upgradeCardHTML(m).includes('NaN'));}
 assert.equal(presentUpgrade({id:'super:resource',name:'满阶宝藏',desc:'领取资源',icon:'◆'},g).category,'resource');
 assert(upgradeCardHTML({...presentUpgrade(find(g,'power'),g),name:'<script>bad</script>'}).includes('&lt;script&gt;'),'card strings are escaped');
+// At a 320px arena: overlay 20px + card padding/borders 22px leave
+// 278px for 12px body copy. Conservatively count every CJK glyph as 12px,
+// ASCII as 7px. Even the longest real choice has room for two full lines.
+// This is a source/text fit guard, not a browser layout claim.
+const width=text=>[...text].reduce((total,ch)=>total+(/[\x00-\x7f]/.test(ch)?7:12),0);
+const examples=[];
+for(const id of seen){
+  for(const owned of [0,1,2,3,4]){
+    const current=game();current.levels[id]=owned;
+    const c=find(game(),id),model=presentUpgrade({...c,evolves:id==='orbit'&&owned===4},current);examples.push(model);
+  }
+}
+for(const choice of Object.values(WEAPON_BRANCHES).flat())examples.push(presentUpgrade(choice,game()));
+for(const choice of SUPER_SKILLS)for(const owned of [0,1,2]){const current=game();current.superSkills.owned[choice.id]=owned;examples.push(presentUpgrade(choice,current));}
+for(const model of examples)assert(width(model.summary)<278*1.8,`${model.name}: condensed copy has two-line allowance without ellipsis`);
+const pulse=game();pulse.levels.pulse=2;assert.equal(presentUpgrade(find(pulse,'pulse'),pulse).summary,'伤害 60→70，范围 120→130。');
+assert(presentUpgrade(find(g,'power'),g).summary.includes('25 个百分点'));
+assert(upgradeCardHTML({...presentUpgrade(find(g,'power'),g),summary:'<img onerror="bad()"> 25% \'safe\''}).includes('&lt;img onerror=&quot;bad()&quot;&gt; <b>25%</b> &#39;safe&#39;'),'summary emphasis must preserve HTML escaping');
 console.log('Upgrade cards: actual mixed choices, non-mutating preview, honest paid-reward comparisons, branch/super labels and endless/resource cases passed.');

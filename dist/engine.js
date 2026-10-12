@@ -1,3 +1,4 @@
+import { STORM_DURATION } from './storm-geometry.js';
 import { Terrain, groundOffset } from './terrain.js';
 import { Adventure } from './adventure.js';
 import { Encounters } from './encounters.js';
@@ -164,11 +165,10 @@ export class Game {
     p.skillCooldown=this.debug?0:p.skillCooldownMax;
     // This separate snapshot keeps every strike visible after enemies die or
     // the generic particle cap trims hit effects during a crowded screen clear.
-    this.storm={x:p.x,y:p.y,viewWidth:this.viewWidth,viewHeight:this.viewHeight,life:.65,maxLife:.65,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
+    this.storm={x:p.x,y:p.y,viewWidth:this.viewWidth,viewHeight:this.viewHeight,life:STORM_DURATION,maxLife:STORM_DURATION,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
     this._emit('skill');
     for(const e of targets) {
       this._hitEnemy(e,160*this._damageMultiplier(),0,p,'storm');
-      this._effect(e.x,e.y,'thunder',.6,e.r,'#d4e7ff');
     }
     this.environment?.hitAllVisible('storm');
     this._effect(p.x,p.y,'ring',.45,95,'#d4e7ff');
