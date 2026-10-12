@@ -8,7 +8,7 @@ export const COMPANIONS=Object.freeze([
   Object.freeze({id:'stormcaller',kind:'stormcaller',name:'唤雷者',skill:'高级雷电',color:'#c8b9f0'}),
   Object.freeze({id:'warden',kind:'warden',name:'守林人',skill:'高级地震',color:'#e4c487'})
 ]);
-export const RESCUE_RULES=Object.freeze({firstAt:35,campDuration:70,companionDuration:60,interval:45,guards:6,rescueRadius:65,bonus:.08});
+export const RESCUE_RULES=Object.freeze({firstAt:35,campDuration:70,companionDuration:60,interval:45,guards:6,rescueRadius:65,bonus:.08,spawnGrace:.8,spawnDistance:150});
 const definition=kind=>COMPANIONS.find(c=>c.id===kind);
 
 // Rescue is an optional world objective. Guards can only be credited by an
@@ -43,20 +43,38 @@ export class Companions {
     }
     return null;
   }
+  _guardPoints(site,count) {
+    const g=this.game,p=this._foot(),points=[],r=28;
+    // The doorway and its approach stay empty. Every slot is checked before
+    // creating any defenders; an obstructed ruin never uses an unsafe fallback.
+    for(const depth of [52,130,208,286])for(const side of [-1,1])for(const lateral of [150,228,306]) {
+      const point={x:site.x+side*lateral,y:site.door.y+depth};
+      if(distance(point,p)<RESCUE_RULES.spawnDistance||!g.terrain.isFree(point.x,point.y,r+5)||!this._hazardFree(point.x,point.y,r))continue;
+      if(g.enemies.some(e=>e.hp>0&&distance(point,{x:e.x,y:e.y+groundOffset(e)})<r+e.r+12))continue;
+      if(points.some(other=>distance(point,other)<r*2+14))continue;
+      points.push(point);if(points.length===count)return points;
+    }
+    return null;
+  }
   spawn(kind=this._nextKind,x,y,{siteId=null}={}) {
     const g=this.game,def=definition(kind);
     const guards=siteId?9:RESCUE_RULES.guards;
-    if(siteId&&!g.relicSites?.sites.some(s=>s.id===siteId&&s.type==='rescue'&&s.state==='ready'))return null;
+    const site=siteId&&g.relicSites?.sites.find(s=>s.id===siteId&&s.type==='rescue'&&s.state==='ready');
+    if(siteId&&!site)return null;
     if(!def||g.status!=='playing'||this.camp||this.active||!this._canStart()||g.enemies.length+guards>180)return null;
-    const point=this._point(x,y);if(!point)return null;
-    const camp={id:`rescue:${++g._id}`,kind,name:def.name,...point,r:24,state:'trapped',siteId,category:siteId?'relic':'random',guardIds:[],guardTotal:guards,remainingGuards:guards,life:RESCUE_RULES.campDuration,maxLife:RESCUE_RULES.campDuration,_remaining:new Set()};
+    // A physical prison surrounds its NPC, so only its usable interior needs
+    // clearance here. Random camps retain their original open-circle check.
+    const point=site?(g.terrain.isFree(site.x,site.y,26)&&this._hazardFree(site.x,site.y,24)?{x:site.x,y:site.y}:null):this._point(x,y);if(!point)return null;
+    const guardPoints=site?this._guardPoints(site,guards):null;if(site&&!guardPoints)return null;
+    const camp={id:`rescue:${++g._id}`,kind,name:def.name,...point,r:24,state:'trapped',siteId,category:siteId?'relic':'random',engageRadius:siteId?520:OBJECTIVE_RULES.campEngage,guardIds:[],guardTotal:guards,remainingGuards:guards,life:RESCUE_RULES.campDuration,maxLife:RESCUE_RULES.campDuration,_remaining:new Set()};
     for(let i=0;i<guards;i++) {
       const angle=-Math.PI/2+i*TAU/guards,enemy=g._spawnEnemy(siteId&&i%4===0?'brute':i%3===0?'beetle':'slime',1);
       if(!enemy){g.enemies=g.enemies.filter(e=>e.rescueId!==camp.id);return null;}
       enemy.rescueId=camp.id;enemy.eventRole='rescueGuard';enemy.xp=2;
       enemy.relicSiteId=siteId;enemy.hp*=siteId?1.8:1.25;enemy.maxHp=enemy.hp;enemy.guardActive=false;
-      enemy.rescueHome={x:point.x+Math.cos(angle)*92,y:point.y+Math.sin(angle)*92};
+      enemy.rescueHome=guardPoints?{...guardPoints[i]}:{x:point.x+Math.cos(angle)*92,y:point.y+Math.sin(angle)*92};
       enemy.x=enemy.rescueHome.x;enemy.y=enemy.rescueHome.y-groundOffset(enemy);
+      if(site){enemy.rescueSpawnGrace=RESCUE_RULES.spawnGrace;g._effect(enemy.x,enemy.rescueHome.y,'rescueWarning',RESCUE_RULES.spawnGrace,enemy.r+10,'#efd49a',undefined,{seed:enemy.id});}
       enemy._navTimer=0;g._moveEntity(enemy,0,0);
       camp.guardIds.push(enemy.id);camp._remaining.add(enemy.id);
     }
@@ -81,6 +99,7 @@ export class Companions {
     const site=this.game.relicSites?.sites.find(s=>s.id===camp.siteId);if(site)site.progress=camp.guardTotal-camp.remainingGuards;
     if(!camp.remainingGuards) {
       camp.state='ready';
+      if(camp.siteId)this.game.relicSites?.openGate(camp.siteId);
       this.game._emit('rescueReady',{name:camp.name,kind:camp.kind});
       this.game._effect(camp.x,camp.y,'ring',.65,75,definition(camp.kind).color);
     }
@@ -88,6 +107,7 @@ export class Companions {
   _join() {
     const g=this.game,camp=this.camp;
     if(!camp||camp.state!=='ready'||this.active||g.status!=='playing'||distance(this._foot(),camp)>RESCUE_RULES.rescueRadius)return false;
+    if(camp.siteId&&!g.relicSites?.insideRescue(camp.siteId,this._foot(),g.player.r))return false;
     // Detach the reward-bearing camp before any effect/notification can reenter.
     this.camp=null;
     if(camp.siteId&&!g.relicSites?.complete(camp.siteId,true))return false;
@@ -164,9 +184,15 @@ export class Companions {
   updateEnemy(enemy,dt) {
     if(!enemy.rescueId)return false;
     const camp=this.camp,g=this.game;
+    if(g.status!=='playing')return true;
     if(!camp||camp.id!==enemy.rescueId)return true;
+    if(enemy.rescueSpawnGrace>0) {
+      enemy.rescueSpawnGrace=Math.max(0,enemy.rescueSpawnGrace-dt);
+      enemy.guardActive=false;enemy.guardReturnTarget=null;enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
+      return true;
+    }
     const p=this._foot(),foot={x:enemy.x,y:enemy.y+groundOffset(enemy)};
-    const active=distance(p,camp)<OBJECTIVE_RULES.campEngage&&distance(foot,camp)<250&&!majorFightActive(g);
+    const active=distance(p,camp)<camp.engageRadius&&distance(foot,camp)<(camp.siteId?520:250)&&!majorFightActive(g);
     enemy.guardActive=active;enemy.guardReturnTarget=null;
     if(!active) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;

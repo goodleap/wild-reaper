@@ -48,21 +48,38 @@ for(const expected of [{crystals:110,skillLevel:2,status:'upgrade'},{crystals:0,
 assert.equal(g.player.level,1);assert.equal(g.player.xp,0);assert.equal(g.gold,500);
 g.gold-=73;
 const spentResources=resources(g);
-// Walk through the real update/input path rather than teleporting to the door.
-for(let i=0;i<120&&Math.hypot(site.door.x-feet(g).x,site.door.y-feet(g).y)>5;i++) {
+// Walk through the real update/input path. Touching the door must enter without
+// a second button press, and the scene change must stop this world-space route.
+for(let i=0;i<120&&!g.dungeon.active;i++) {
   const from=feet(g),dx=site.door.x-from.x,dy=site.door.y-from.y,length=Math.hypot(dx,dy);
-  g.update(Math.min(.025,length/g.player.speed),{x:dx/length,y:dy/length});
+  g.update(Math.min(.025,length/g.player.speed),length?{x:dx/length,y:dy/length}:{});
 }
-assert(Math.hypot(site.door.x-feet(g).x,site.door.y-feet(g).y)<6,'player can walk to the debug door');
-assert.equal(g.getInteraction()?.type,'castle');assert(g.interact());
-const dungeon=g.dungeon.active,maze=JSON.stringify(dungeon.cells),guardIds=g.enemies.map(e=>e.id);
-assert(dungeon);assert.equal(dungeon.bossDefeated,false);assert.equal(dungeon.rewardClaimed,false);
+const dungeon=g.dungeon.active;assert(dungeon,'walking to the debug castle door automatically enters the normal dungeon');
+const maze=JSON.stringify(dungeon.cells),guardIds=g.enemies.map(e=>e.id);
+assert.equal(dungeon.bossDefeated,false);assert.equal(dungeon.rewardClaimed,false);
 assert.equal(g.enemies.filter(e=>e.dungeonBoss).length,1,'debug entrance uses the normal guarded dungeon');
-assert.equal(g.getInteraction()?.type,'dungeonExit');assert(g.interact());
+assert.equal(g.getInteraction()?.type,'dungeonExit');g.update(0);g.update(0);
+assert.equal(g.dungeon.active,dungeon,'standing at the arrival doorway does not instantly leave');
+// Step into the entrance room beyond the contact latch, then return to the exit.
+function walkTo(point,done){
+  for(let i=0;i<160&&!done();i++){
+    const from=feet(g),dx=point.x-from.x,dy=point.y-from.y,length=Math.hypot(dx,dy);
+    g.update(Math.min(.025,length/g.player.speed),length?{x:dx/length,y:dy/length}:{});
+  }
+  assert(done(),'the short clear doorway approach remains walkable');
+}
+const inside={x:dungeon.entrance.x,y:dungeon.entrance.y-75};
+walkTo(inside,()=>Math.hypot(feet(g).x-inside.x,feet(g).y-inside.y)<3);
+walkTo(dungeon.entrance,()=>!g.dungeon.active);
 assert.equal(g.dungeon.active,null);assert.equal(g.terrain,worldTerrain);assert.deepEqual(layout(g),initialLayout);
-assert.equal(g.getInteraction()?.type,'castle');assert(g.interact());
-assert.equal(g.dungeon.active,dungeon);assert.equal(JSON.stringify(dungeon.cells),maze);assert.deepEqual(g.enemies.map(e=>e.id),guardIds,'reentry keeps the same finite maze and guards');
-assert(g.interact());
+g.update(0);g.update(0);assert.equal(g.dungeon.active,null,'returning to the world does not immediately reenter the castle');
+const outside={x:site.door.x,y:site.door.y+75};
+walkTo(outside,()=>Math.hypot(feet(g).x-outside.x,feet(g).y-outside.y)<3);
+walkTo(site.door,()=>!!g.dungeon.active);
+assert.equal(g.dungeon.active,dungeon);assert.equal(JSON.stringify(dungeon.cells),maze);assert.deepEqual(g.enemies.map(e=>e.id),guardIds,'touch reentry keeps the same finite maze and guards');
+g.update(0);assert.equal(g.dungeon.active,dungeon);
+walkTo(inside,()=>Math.hypot(feet(g).x-inside.x,feet(g).y-inside.y)<3);
+walkTo(dungeon.entrance,()=>!g.dungeon.active);
 assert.deepEqual(resources(g),spentResources,'castle entry, exit and reentry never grant the starting budget again');
 assert.equal(debugGrants(g).length,1);
 

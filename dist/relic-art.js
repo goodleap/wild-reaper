@@ -279,7 +279,7 @@ export class RelicArt {
     }
     for (const p of props) {
       p.x = site.x + p.dx; p.y = site.y + p.dy;
-      p.sortY = p.y + (site.state === 'cleared' && p.part.startsWith('gate') ? 13 : 0);
+      p.sortY = p.y + (site.gateOpen && p.part.startsWith('gate') ? 13 : 0);
     }
     return props;
   }
@@ -294,7 +294,7 @@ export class RelicArt {
       return true;
     }
     if (prop?.type !== 'rescueRelicPart') return false;
-    const part = prop.part, open = prop.site?.state === 'cleared';
+    const part = prop.part, open = !!prop.site?.gateOpen;
     const image = part === 'back' ? this._back() : part.startsWith('side') ? this._side() : part.startsWith('post') ? this._post() : this._gate(open);
     c.save(); c.translate(prop.x, prop.y);
     if (part === 'sideRight' || part === 'gateRight') c.scale(-1, 1);

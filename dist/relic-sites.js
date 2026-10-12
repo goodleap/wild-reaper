@@ -5,15 +5,34 @@ const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 export const RELIC_SITE_RULES=Object.freeze({huntGuards:24,rescueGuards:9,interactRadius:82});
+export const RESCUE_BUILDING=Object.freeze({halfWidth:63,back:-46,front:61,doorHalfWidth:34,wallRadius:8});
 
 // The site is the durable world object; the encounter/camp is only its battle.
 // Region snapshots retain these instances, their defenders and progress.
 export class RelicSites {
   constructor(game,{generation=true}={}) {
     this.game=game;this.generation=!!generation;this.sites=[];
+    this._setStructures();
     if(this.generation)this._generate();
+    this._setStructures();
   }
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
+  _obstacles(site) {
+    if(site.type!=='rescue')return [];
+    const b=RESCUE_BUILDING,segments=[['back',-b.halfWidth,b.back,b.halfWidth,b.back],['left',-b.halfWidth,b.back,-b.halfWidth,b.front],['right',b.halfWidth,b.back,b.halfWidth,b.front],['frontLeft',-b.halfWidth,b.front,-b.doorHalfWidth,b.front],['frontRight',b.doorHalfWidth,b.front,b.halfWidth,b.front]];
+    if(!site.gateOpen)segments.push(['gate',-b.doorHalfWidth,b.front,b.doorHalfWidth,b.front]);
+    return segments.map(([part,ax,ay,bx,by])=>({id:`${site.id}:collision:${part}`,type:'log',x:site.x+(ax+bx)/2,y:site.y+(ay+by)/2,halfLength:Math.hypot(bx-ax,by-ay)/2,angle:Math.atan2(by-ay,bx-ax),r:b.wallRadius,structureId:site.id,structureType:'rescue',relicSiteId:site.id,variant:'rescue-wall',visual:false}));
+  }
+  _setStructures(){this.game.terrain.setStructures?.(this.sites.flatMap(site=>this._obstacles(site)),'relic');}
+  openGate(siteId) {
+    const site=this.sites.find(s=>s.id===siteId&&s.type==='rescue');if(!site)return false;
+    site.gateOpen=true;this._setStructures();return true;
+  }
+  insideRescue(siteId,point,r=0) {
+    const site=this.sites.find(s=>s.id===siteId&&s.type==='rescue');if(!site?.gateOpen)return false;
+    const b=RESCUE_BUILDING;
+    return Math.abs(point.x-site.x)<=b.halfWidth-b.wallRadius-r&&point.y>=site.y+b.back+b.wallRadius+r&&point.y<=site.y+b.front-b.wallRadius-r;
+  }
   _valid(site) {
     const g=this.game,clearance=site.type==='hunt'?245:site.type==='rescue'?135:100;
     if(!g.terrain.isFree(site.x,site.y,clearance))return false;
@@ -42,7 +61,7 @@ export class RelicSites {
         const angle=rotation+index*2.3+(i%32)*TAU/32,radius=530+Math.floor(i/32)*100;
         const x=Math.round(Math.cos(angle)*radius),y=Math.round(Math.sin(angle)*radius);
         const hunt=type==='hunt',rune=type==='rune';
-        const site={id:`relic-site:${regionIndex}:${type}`,category:'relic',type,name:hunt?'林间狩猎':rune?'遗迹符文阵':'囚牢遗迹',x,y,r:hunt?210:rune?72:105,width:hunt?420:rune?96:128,depth:hunt?420:rune?82:66,sortY:y,door:{x,y:y+(hunt?190:rune?45:80)},interactRadius:RELIC_SITE_RULES.interactRadius,state:'ready',progress:0,goal:hunt?RELIC_SITE_RULES.huntGuards:rune?12:RELIC_SITE_RULES.rescueGuards,kind:regionIndex%2===0?'stormcaller':'warden',discovered:false,regionIndex,seed:hash(regionIndex+131,index+41)};
+        const site={id:`relic-site:${regionIndex}:${type}`,category:'relic',type,name:hunt?'林间狩猎':rune?'遗迹符文阵':'囚牢遗迹',x,y,r:hunt?210:rune?72:105,width:hunt?420:rune?96:128,depth:hunt?420:rune?82:66,sortY:y,door:{x,y:y+(hunt?190:rune?45:84)},interactRadius:RELIC_SITE_RULES.interactRadius,state:'ready',gateOpen:false,progress:0,goal:hunt?RELIC_SITE_RULES.huntGuards:rune?12:RELIC_SITE_RULES.rescueGuards,kind:regionIndex%2===0?'stormcaller':'warden',discovered:false,regionIndex,seed:hash(regionIndex+131,index+41)};
         if(this._valid(site)){
           if(rune)site.mechanism={id:`${site.id}:support`,siteId:site.id,type:'rune',x,y,r:48,state:'idle',charge:0,remaining:0,maxRemaining:12};
           this.sites.push(site);break;
@@ -93,6 +112,7 @@ export class RelicSites {
     if(!siteId)return false;
     const site=this.sites.find(s=>s.id===siteId);if(!site||site.state!=='active')return false;
     site.state=success?'cleared':'failed';if(success)site.progress=site.goal;
+    if(site.type==='rescue')this.openGate(site.id);
     return true;
   }
   update(dt=0) {

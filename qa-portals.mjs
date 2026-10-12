@@ -61,13 +61,18 @@ const frozen={time:access.time,cooldown:access.player.skillCooldown,x:access.pla
 advance(access,2,{x:1,skill:true});assert.deepEqual({time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y},frozen);
 assert.equal(access.chooseSuper('invalid-relic'),false);assert(access.chooseSuper(choiceIds[0]));assert.equal(access.regionIndex,0);
 assert.equal(access.chooseSuper(choiceIds[0]),false);assert.equal(access.portal.rewardClaimed,true);
-assert.equal(access.enterPortal(),false,'remote interaction cannot travel');standAtPortal(access);access.update(0);
-assert.equal(access.regionIndex,0,'walking into an active gate never automatically travels');
-for(const state of ['paused','upgrade','dead']){access.status=state;assert.equal(access.enterPortal(),false);assert.equal(access.regionIndex,0);}
-access.status='playing';const blockingBoss=monster(access,'boss',450,0);assert.equal(access.enterPortal(),false,'an engaged Boss prevents flight through a gate');
-blockingBoss.guardActive=false;assert(access.enterPortal(),'a dormant remote guardian never locks all gates');assert.equal(access.region.id,'marsh');
+assert.equal(access.enterPortal(),false,'remote interaction cannot travel');standAtPortal(access);
+for(const state of ['paused','upgrade','dead']){access.status=state;access.update(0);assert.equal(access.enterPortal(),false);assert.equal(access.regionIndex,0,'touching a gate cannot travel while gameplay is paused');}
+access.status='playing';const blockingBoss=monster(access,'boss',450,0);access.update(0);assert.equal(access.regionIndex,0);assert.equal(access.enterPortal(),false,'an engaged Boss prevents flight through a gate');
+blockingBoss.guardActive=false;access.update(0);assert.equal(access.region.id,'marsh','touching an activated gate automatically travels once eligible; dormant remote guardians do not lock every gate');
 const returnGate=access.regions.portals.find(p=>p.direction==='back');assert(returnGate&&returnGate.state==='active');
-assert(usePortal(access,returnGate));assert.equal(access.regionIndex,0);assert.equal(access.portal.id,portalId);assert.equal(access.superSkills.owned[choiceIds[0]],1);
+// Even if the player is still touching the paired doorway on the first frame
+// in a new scene, arrival must not trigger an immediate return or a bounce loop.
+standAtPortal(access,returnGate);access.update(0);access.update(0);assert.equal(access.regionIndex,1,'arrival contact is latched until the player leaves the doorway');
+access.player.x=returnGate.x+75;access.player.y=returnGate.y-groundOffset(access.player,true);access.update(0);
+standAtPortal(access,returnGate);access.update(0);assert.equal(access.regionIndex,0,'leaving and touching the return gate again automatically returns');
+access.update(0);access.update(0);assert.equal(access.regionIndex,0,'the restored region also remains stable after arrival');
+assert.equal(access.portal.id,portalId);assert.equal(access.superSkills.owned[choiceIds[0]],1);
 assert.equal(access.superSkills.pending,null,'return journeys do not award the same skill again');
 
 const travel=arena({adventure:true,encounters:true,environment:true,companions:true});
@@ -228,4 +233,4 @@ for(const region of REGIONS) {
 assert(populations[1].spore>populations[0].spore,'marsh produces more spore enemies under the same sampled spawn rolls');
 assert(populations[2].beetle+populations[2].brute>populations[0].beetle+populations[0].brute,'ruins favor beetles and brutes without increasing the spawn count');
 
-console.log('Portal and elite mechanics: deliberate travel, preserved progression, persistent round trips, discovered gates, region populations, shield/swift/summoner behavior and bounded rewards passed.');
+console.log('Portal and elite mechanics: contact travel with arrival latches, departure/reentry, preserved progression, persistent round trips, discovered gates, region populations, shield/swift/summoner behavior and bounded rewards passed.');

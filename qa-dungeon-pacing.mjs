@@ -53,7 +53,7 @@ assert.equal(idle.gems.length,0);assert.equal(idleState.rooms.size,10);
 
 const g=arena(),{site,state}=enter(g,'room-persistence'),room=[...state.rooms.values()].find(room=>room.kind==='battle'&&room.heal),cell=state.cells[room.cellId];
 const guards=g.enemies.filter(enemy=>enemy.dungeonRoom===room.cellId),initialCount=g.enemies.length;
-feet(g,cell);for(const enemy of guards)g.dungeon.updateEnemy(enemy,0);
+feet(g,cell);g.dungeon.update(0);for(const enemy of guards)g.dungeon.updateEnemy(enemy,0);
 assert(guards.every(enemy=>enemy.guardActive));assert.equal(room.started,true);
 assert.equal(g.dungeon.getPacing().remaining,guards.length);
 const unopened=[...state.rooms.values()].find(other=>other.kind==='battle'&&other.cellId!==room.cellId);

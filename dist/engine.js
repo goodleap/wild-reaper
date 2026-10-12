@@ -17,6 +17,7 @@ import { Dungeon } from './dungeon.js';
 import { Settlements } from './settlements.js';
 import { WaveDirector } from './wave-director.js';
 import { RelicSites } from './relic-sites.js';
+import { TouchInteractions } from './touch-interactions.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
@@ -120,7 +121,7 @@ export class Game {
     this.environment=environment?new Environment(this):null;
     this.relics=new Relics(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
     this.companions=new Companions(this,{generation:companions});
-    this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);
+    this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);this.touchInteractions=new TouchInteractions(this);
     this.settlements??=new Settlements(this,{generation:settlements});
     this.waveDirector=new WaveDirector(this);
     this.discoveredMap=new Set();this.regions.initialize();
@@ -158,7 +159,7 @@ export class Game {
   _castStorm() {
     const p=this.player, halfW=this.viewWidth*.5, halfH=this.viewHeight*.5;
     const targets=this.enemies.filter(e=>{
-      if(e.hp<=0||(e.dungeonId&&!this.dungeon.canDamage(e,p))) return false;
+      if(e.hp<=0||e.rescueSpawnGrace>0||(e.dungeonId&&!this.dungeon.canDamage(e,p))) return false;
       const dx=Math.max(0,Math.abs(e.x-p.x)-halfW), dy=Math.max(0,Math.abs(e.y-p.y)-halfH);
       return dx*dx+dy*dy<=e.r*e.r;
     });
@@ -176,7 +177,7 @@ export class Game {
   _nearest(x,y,range=BALANCE.arrowRange,exclude,originEntity=null) {
     const origin=originEntity||{x,y,groundY:y+groundOffset(this.player,true)};
     let best=null, d=range*range;
-    for(const e of this.enemies) if(e.hp>0 && this._inView(e) && !exclude?.has(e.id)&&(!e.dungeonId||this.dungeon.canDamage(e,origin))) {
+    for(const e of this.enemies) if(e.hp>0 && !(e.rescueSpawnGrace>0) && this._inView(e) && !exclude?.has(e.id)&&(!e.dungeonId||this.dungeon.canDamage(e,origin))) {
       const n=sq(e.x-x)+sq(e.y-y); if(n<d) { d=n; best=e; }
     }
     return best;
@@ -206,9 +207,12 @@ export class Game {
     return this.combatStatus.hit(enemy,amount,knockback,origin,source);
   }
   _hurtEnemy(enemy,amount,knockback=0,origin=this.player,source='raw') {
-    if(enemy.hp<=0||!Number.isFinite(amount)||amount<=0)return 0;
+    if(enemy.hp<=0||enemy.rescueSpawnGrace>0||!Number.isFinite(amount)||amount<=0)return 0;
     if(enemy.dungeonId&&!this.dungeon.canDamage(enemy,origin))return 0;
     if(this.regions&&!this.regions.canDamage(enemy))return 0;
+    // A shield absorbing a valid hit still alerts its defender. Visibility
+    // and origin checks above remain pure and reject blocked strikes first.
+    if(enemy.dungeonId)this.dungeon.awaken?.(enemy);
     amount=this.elites?.beforeDamage(enemy,amount)??amount;
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
@@ -531,6 +535,7 @@ export class Game {
     const oldX=p.x,oldY=p.y;
     this._moveEntity(p,ix*p.speed*movement*dt,iy*p.speed*movement*dt,true);
     updateLocomotion(p,oldX,oldY,dt);
+    if(this.touchInteractions.update())return;
     this.adventure?.update(dt);
     this.companions.update(dt);
     if(!inDungeon){this.encounters?.update(dt);this.settlements.update(dt);this.relicSites?.update(dt);}
@@ -724,7 +729,7 @@ export class Game {
       let origin=p;const excluded=new Set();
       if(this.evolutions.lightning&&this.branches.lightning==='focus') {
         let target=null;
-        for(const e of this.enemies)if(e.hp>0&&this._inView(e)&&dist2(e,p)<=360*360&&(!e.dungeonId||this.dungeon.canDamage(e,p))) {
+        for(const e of this.enemies)if(e.hp>0&&!(e.rescueSpawnGrace>0)&&this._inView(e)&&dist2(e,p)<=360*360&&(!e.dungeonId||this.dungeon.canDamage(e,p))) {
           if(!target||(e.type==='boss'&&target.type!=='boss')||((e.type==='boss')===(target.type==='boss')&&(e.hp>target.hp||(e.hp===target.hp&&dist2(e,p)<dist2(target,p)))))target=e;
         }
         if(target) {

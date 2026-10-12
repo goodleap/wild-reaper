@@ -42,13 +42,15 @@ export class Terrain {
     this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
     this.cacheLimit=Math.max(16,Math.min(512,cacheLimit));this._cache=new Map();
     this._fixed=obstacles===undefined?null:obstacles.map((o,i)=>obstacle(o,i));
-    this._structures=[];
+    this._structures=[];this._structureOwners=new Map();
   }
   get cacheSize(){return this._cache.size;}
-  // Region-owned buildings form a small separate layer. Replacing it never
-  // mutates the procedural cache or a dungeon's fixed wall geometry.
-  setStructures(obstacles=[]) {
-    this._structures=obstacles.slice(0,48).map((o,i)=>obstacle({...o,id:o.id??`structure:${i}`},i));
+  // Each world system replaces only its own bounded collision layer. A gate
+  // opening must never erase a neighboring hut or castle foundation.
+  setStructures(obstacles=[],owner='default') {
+    const key=String(owner),layer=obstacles.slice(0,128).map((o,i)=>obstacle({...o,id:o.id??`structure:${key}:${i}`},i));
+    if(layer.length)this._structureOwners.set(key,layer);else this._structureOwners.delete(key);
+    this._structures=[...this._structureOwners.values()].flat();
     return this._structures;
   }
   _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}

@@ -16,7 +16,7 @@ export function bossApproaching(g) {
 
 export function optionalFightNearby(g,{skipCamp=false,skipEncounter=false,skipSite=null}={}) {
   const p=feet(g),camp=g.companions?.camp,encounter=g.encounters?.active,chest=g.adventure?.treasure;
-  if(!skipCamp&&camp?.state==='trapped'&&distance(p,camp)<OBJECTIVE_RULES.campEngage)return true;
+  if(!skipCamp&&camp?.state==='trapped'&&distance(p,camp)<(camp.engageRadius||OBJECTIVE_RULES.campEngage))return true;
   if(!skipEncounter&&encounter&&distance(p,encounter)<(encounter.type==='treasure'?420:encounter.r+80))return true;
   if(g.settlements?.sites.some(site=>site!==skipSite&&site.state==='active'&&distance(p,site.door)<OBJECTIVE_RULES.houseEngage))return true;
   return chest?.state==='active'&&distance(p,chest)<600;

@@ -53,29 +53,30 @@ portal.regionGrace=0;const boss=portal._spawnEnemy('boss',1);
 assert(!portal.companions._canStart());assert(!portal.encounters._canStart());
 boss.hp=0;assert(portal.companions._canStart());assert(portal.encounters._canStart());
 
-// A half-cleared house keeps exactly the same guards and reward state when
-// abandoned, while other objectives become available away from its battle.
+// Indoor house fights suspend outdoor events. A retreat restores the exact
+// world scheduler, while the finite indoor squad and reward retain progress.
 const house=arena({settlements:true});house.nextBossAt=Infinity;
 const site=house.settlements.sites.find(s=>s.type==='occupied');assert(site);feet(house,site.door);
-assert(house.settlements.interact(site.id));
-const guards=house.enemies.filter(e=>e.settlementId===site.id),ids=guards.map(e=>e.id);
-house._hurtEnemy(guards[0],guards[0].hp+1);assert.equal(site.remainingGuards,3);
-assert(!house.companions._canStart());assert(!house.encounters._canStart());
+const outdoorEncounters=house.encounters,outdoorEnemies=house.enemies;
+assert(house.settlements.interact(site.id));const interior=house.dungeon.active;
+assert.equal(interior.kind,'hut');assert.equal(house.encounters,null,'outdoor random events are suspended inside a hut');
+const guards=house.enemies.filter(e=>e.dungeonId===site.id),ids=guards.map(e=>e.id);assert.equal(guards.length,4);
+feet(house,{x:guards[0].x,y:guards[0].y+groundOffset(guards[0])});house.dungeon.updateEnemy(guards[0],0);
+house._hurtEnemy(guards[0],guards[0].hp+1);assert(guards[0].hp<=0);assert.equal(guards.filter(e=>e.hp>0).length,3);
+assert(!house.companions._canStart(),'indoor combat cannot create another outdoor rescue');
+feet(house,interior.entrance);assert(house.dungeon.exit());house.regionGrace=0;
+assert.equal(house.encounters,outdoorEncounters);assert.equal(house.enemies,outdoorEnemies,'indoor guards cannot leak into the overworld');
 feet(house,{x:site.door.x+900,y:site.door.y});house.settlements.update(.05);
-assert(guards.filter(e=>e.hp>0).every(e=>e.guardActive===false));
-assert(house.companions._canStart());assert(house.encounters._canStart(),'a remote active house is not a global veto');
+assert(house.companions._canStart());assert(house.encounters._canStart(),'a saved indoor fight cannot veto distant outdoor events');
 house.encounters.nextAt=0;house.encounters.update(0);assert(house.encounters.active);
-assert(distance(house.encounters.active,site.door)>=OBJECTIVE_RULES.houseEngage+house.encounters.active.r);
-house.encounters.active=null;feet(house,site.door);house.settlements.update(.05);
-assert(guards.filter(e=>e.hp>0).every(e=>e.guardActive));
-assert.equal(site.remainingGuards,3);assert.deepEqual(site.guardIds,ids);
-assert.equal(house.settlements._startGuards(site),false,'returning cannot spawn another guard squad');
-assert(!house.companions._canStart());assert(!house.encounters._canStart());
-for(const guard of guards)if(guard.hp>0)house._hurtEnemy(guard,guard.hp+1);
-assert.equal(site.state,'cleared');assert(house.settlements.interact(site.id));
-assert.equal(house.gold,24);assert.equal(house.crystals,40);
-assert.equal(house.settlements.interact(site.id),false);
-for(const guard of guards)house.settlements.onEnemyKilled(guard);
+house.encounters.active=null;feet(house,site.door);assert(house.settlements.interact(site.id));
+assert.equal(house.dungeon.active,interior);assert.equal(house.enemies.filter(e=>e.hp>0).length,3);assert.deepEqual(house.enemies.map(e=>e.id),ids,'returning cannot replace or duplicate the saved guard squad');
+assert(!house.companions._canStart());assert.equal(house.encounters,null);
+for(const guard of guards)if(guard.hp>0){feet(house,{x:guard.x,y:guard.y+groundOffset(guard)});house.dungeon.updateEnemy(guard,0);house._hurtEnemy(guard,guard.hp+1);assert(guard.hp<=0);}
+assert.equal(site.state,'cleared');assert.equal(house.gold,0,'clearing guards never claims the chest remotely');
+feet(house,interior.chests[0]);assert(house.interact());assert.equal(house.gold,24);assert.equal(house.crystals,40);
+assert.equal(house.interact(interior.chests[0].id),false);
+for(const guard of guards)house.dungeon.onEnemyKilled(guard);
 assert.equal(house.gold,24);assert.equal(house.crystals,40,'abandonment and resuming never duplicate the house reward');
 
 // Active timed fights only reserve the nearby area; a distant hunt cannot

@@ -36,7 +36,7 @@ for(const [index,region] of REGIONS.entries()){
   }
  }
  g.settlements.resetRegion();assert.deepEqual(g.settlements.sites.map(s=>[s.id,s.type,s.x,s.y]),layout,'rebuilding unchanged region does not shuffle sites');
- const oldIds=new Set(g.terrain.query(-2000,-2000,2000,2000).filter(o=>o.structureId).map(o=>o.id));assert(oldIds.size>0);g.terrain.setStructures([]);assert(!g.terrain.query(-2000,-2000,2000,2000).some(o=>oldIds.has(o.id)),'the structures layer can be cleared without stale collisions');
+ const oldIds=new Set(g.terrain.query(-2000,-2000,2000,2000).filter(o=>o.structureId).map(o=>o.id));assert(oldIds.size>0);g.terrain.setStructures([],'settlements');assert(!g.terrain.query(-2000,-2000,2000,2000).some(o=>oldIds.has(o.id)),'the structures layer can be cleared without stale collisions');
 }
 const safeDoors=new Game();
 for(const type of ['merchant','castle','supply']){const s=site(safeDoors,type);assert.equal(safeDoors.environment._objectiveClear(s.door.x,s.door.y,82),false,'later mushroom generation reserves building approaches');assert.equal(safeDoors.environment.mechanisms._objectiveClear({x:s.door.x,y:s.door.y,r:70}),false,'later regional hazards cannot spawn over an established building door');}
@@ -72,12 +72,20 @@ const revisit=arena(),departed=near(revisit,'merchant');revisit.gold=100;assert(
 near(revisit,'castle');assert(revisit.interact());assert(revisit.dungeon.active);assert(revisit.interact());assert.equal(revisit.dungeon.active,null);feet(revisit,departed.door);
 assert.equal(revisit.settlements.sites.find(s=>s.id===departed.id),departed);assert.equal(departed.state,'spent');assert.deepEqual(departed.stock,departedStock);assert.equal(revisit.gold,remainingGold);assert.equal(revisit.getInteraction()?.id===departed.id,false,'castle round trip never respawns a departed merchant');assert.equal(revisit.interact(departed.id),false);
 const angel=arena(),shrine=near(angel,'angel');angel.player.hp=31;assert.equal(angel.settlements.interact(shrine.id),false);angel.settlements.update(2);assert.equal(angel.player.hp,37);assert.equal(shrine.state,'ready','the persistent guardian is not consumed by healing');
-feet(angel,{x:shrine.x+116,y:shrine.y});angel.settlements.update(2);assert.equal(angel.player.hp,37,'leaving the haven stops its continuous recovery');
+feet(angel,{x:shrine.x+301,y:shrine.y});angel.settlements.update(2);assert.equal(angel.player.hp,37,'leaving the haven stops its continuous recovery');
 feet(angel,shrine.door);angel.player.hp=99;angel.settlements.update(2);assert.equal(angel.player.hp,100);assert.equal(angel.relics.wardAmount,0,'full health is capped without creating the removed blessing shield');
-const huts=arena(),supply=near(huts,'supply');assert(huts.interact());assert.equal(huts.gold,4);assert.equal(huts.crystals,12);assert.equal(huts.interact(supply.id),false);
-const occupied=near(huts,'occupied');assert(huts.interact());assert.equal(occupied.state,'active');assert.equal(occupied.remainingGuards,4);assert.equal(huts.getInteraction().enabled,false);
-const guards=huts.enemies.filter(e=>e.settlementId===occupied.id);assert.equal(guards.length,4);for(const e of guards){assert(huts.terrain.isFree(e.x,e.y+groundOffset(e),e.r));huts._hurtEnemy(e,e.hp+100);}
-assert.equal(occupied.state,'cleared');assert.equal(huts.gold,4,'killing guards does not remotely claim the house');feet(huts,occupied.door);assert(huts.interact());assert.equal(huts.gold,28);assert.equal(huts.crystals,52);assert.equal(occupied.state,'spent');assert.equal(huts.interact(occupied.id),false);huts.settlements.onEnemyKilled(guards[0]);assert.equal(huts.gold,28);
+const huts=arena(),supply=near(huts,'supply');assert(huts.interact());
+const supplyRoom=huts.dungeon.active;assert.equal(supplyRoom.kind,'hut');assert.equal(supplyRoom.cells.length,1);assert.equal(huts.enemies.length,0);
+assert.equal(huts.gold,0,'entering a hut does not remotely open its supply chest');assert.equal(huts.crystals,0);
+feet(huts,supplyRoom.chests[0]);assert(huts.interact());assert.equal(huts.gold,4);assert.equal(huts.crystals,12);assert.equal(supplyRoom.chests[0].state,'claimed');assert.equal(supply.state,'spent');
+feet(huts,supplyRoom.entrance);assert(huts.interact());feet(huts,supply.door);assert(huts.interact(),'claimed huts remain enterable');assert.equal(huts.dungeon.active,supplyRoom);assert.equal(supplyRoom.chests[0].state,'claimed');assert.equal(huts.gold,4);assert.equal(huts.crystals,12);
+feet(huts,supplyRoom.entrance);assert(huts.interact());const occupied=near(huts,'occupied');assert(huts.interact());
+const occupiedRoom=huts.dungeon.active,guards=huts.enemies.filter(e=>e.dungeonId===occupied.id);assert.equal(occupiedRoom.kind,'hut');assert.equal(guards.length,4);
+assert(guards.every(e=>Math.hypot(e.x-huts.player.x,e.y+groundOffset(e)-(huts.player.y+groundOffset(huts.player,true)))>125),'indoor guards do not overlap the safe entry landing');
+feet(huts,occupiedRoom.chests[0]);assert.equal(huts.getInteraction().enabled,false,'the indoor reward remains guarded');
+for(const e of guards){assert(huts.terrain.isFree(e.x,e.y+groundOffset(e),e.r));kill(huts,e);}
+assert.equal(occupied.state,'cleared');assert.equal(huts.gold,4,'killing guards does not remotely claim the house');feet(huts,occupiedRoom.chests[0]);assert(huts.interact());assert.equal(huts.gold,28);assert.equal(huts.crystals,52);assert.equal(occupied.state,'spent');assert.equal(huts.interact(occupiedRoom.chests[0].id),false);huts.dungeon.onEnemyKilled(guards[0]);assert.equal(huts.gold,28);
+feet(huts,occupiedRoom.entrance);assert(huts.interact());feet(huts,occupied.door);assert(huts.interact());assert.equal(huts.dungeon.active,occupiedRoom);assert.equal(occupiedRoom.chests[0].state,'claimed');assert(!huts.enemies.some(e=>e.hp>0),'claimed occupied huts cannot respawn guards');assert.equal(huts.gold,28);assert.equal(huts.crystals,52);
 
 const journey=arena();const ally=clearCamp(journey);journey.time=119.9;journey._clock=119.9;journey.runTime=119.9;journey.nextBossAt=120;ally.remaining=20;ally._attack=3;journey.adventure.furyTime=5;journey.adventure.magnetTime=1;
 const worldBoss=journey._spawnEnemy('boss');worldBoss.x=200;worldBoss.y=0;journey._hurtEnemy(worldBoss,worldBoss.hp+100);journey.enemies=journey.enemies.filter(e=>e.hp>0);

@@ -24,6 +24,9 @@ function begin(g,type) {
   assert.equal(g.relicSites.getInteraction()?.enabled,true);
   assert(g.relicSites.interact(target.id));assert.equal(target.state,'active');return target;
 }
+function finishWarnings(g) {
+  for(let i=0;i<17;i++)for(const enemy of g.enemies)if(enemy.rescueId)g.companions.updateEnemy(enemy,.05);
+}
 const generated=world(),initial=structuredClone(generated.relicSites.sites);
 assert.deepEqual(initial.map(s=>s.type),['hunt','rescue']);
 assert(initial.every(s=>s.category==='relic'&&s.state==='ready'&&!s.discovered));
@@ -85,6 +88,7 @@ const guards=rescue.enemies.filter(e=>e.rescueId===camp.id);
 assert.equal(guards.length,9);assert.equal(camp.siteId,prison.id);assert.equal(camp.category,'relic');
 const campLife=camp.life;feet(rescue,{x:5000,y:5000});rescue.time+=1000;rescue.companions.update(.05);
 assert.equal(rescue.companions.camp,camp);assert.equal(camp.life,campLife);
+finishWarnings(rescue);
 for(const enemy of guards)rescue._hurtEnemy(enemy,enemy.hp+1);
 assert.equal(prison.progress,9);assert.equal(prison.state,'active');assert.equal(camp.state,'ready');assert.equal(rescue.rescuePower,0);
 feet(rescue,camp);assert(rescue.companions._join());
@@ -124,6 +128,7 @@ feet(runes,platform.door);assert.equal(runes.relicSites.interact(platform.id),fa
 for(const type of ['hunt','rescue']) {
   const traveler=new Game();traveler.player.xpNext=Infinity;traveler.crystalsNext=Infinity;
   const structure=begin(traveler,type),battle=type==='hunt'?traveler.encounters.active:traveler.companions.camp;
+  finishWarnings(traveler);
   const ids=battle.guardIds,first=traveler.enemies.find(e=>e.id===ids[0]);traveler._hurtEnemy(first,first.hp+1);
   const remaining=traveler.enemies.filter(e=>e.hp>0&&ids.includes(e.id)),remainingIds=remaining.map(e=>e.id);
   const wounded=remaining[0];traveler._hurtEnemy(wounded,1);const wounds=wounded.hp;

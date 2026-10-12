@@ -42,7 +42,17 @@ const result=map.draw(ctx,drawing,{x:10,y:20,width:150,height:178});
 assert.equal(result.markers.length,0);assert(!drawing.settlements.sites[0].discovered,'rendering cannot reveal an unseen building');
 assert.equal(balance,0);assert(draws>0);
 map.discover(drawing);assert.equal(map.draw(ctx,drawing).markers.length,1);assert.equal(balance,0);
-drawing.dungeon.active={};const before=draws;assert.equal(map.draw(ctx,drawing),null);assert.equal(draws,before,'the existing castle map owns its own UI');
+drawing.dungeon.active={kind:'castle'};
+drawing.dungeon.getMap=()=>({landmarks:[{id:'exit',type:'exit',name:'荒野出口',x:50,y:0,state:'active'}]});
+let discoveryWrites=0;
+drawing.dungeon.vision={getExploredRects:()=>[{x:-100,y:-100,width:200,height:200}],knownWallSegments:()=>[{ax:-100,ay:-100,bx:100,by:-100,r:14}],update(){discoveryWrites++;}};
+const indoor=map.draw(ctx,drawing,{width:128,height:128}),outdoor=map.draw(ctx,{...drawing,dungeon:{active:null}},{width:128,height:128});
+assert.deepEqual(indoor.center,outdoor.center);assert.equal(indoor.scale,outdoor.scale,'castle map keeps wilderness world scale and player centering');
+assert.deepEqual(indoor.markers.map(marker=>marker.id),['exit']);assert.equal(discoveryWrites,0,'map redraw never explores rooms');
+assert.equal(balance,0);
+const indoorExpanded=map.draw(ctx,drawing,{width:420,height:420,expanded:true});
+assert.deepEqual(indoorExpanded.markers.map(marker=>marker.id),['exit'],'both map sizes use discovered landmarks only');
+drawing.dungeon.active.kind='hut';assert.equal(map.draw(ctx,drawing).markers[0].type,'exit','huts use the shared map as well');
 console.log('World map: bounded on-screen discovery, persistent landmarks, region isolation, gate states and read-only drawing passed.');
 
 // Both world and castle HUDs share compact square bounds close to the top edge.

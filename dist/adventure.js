@@ -199,6 +199,10 @@ export class Adventure {
       if(!this.treasure&&this.game.time>=this._nextTreasureAt&&!this.spawnTreasure())this._nextTreasureAt=this.game.time+5;
     }
     const p=this._foot();
+    // Walking into a supply opens it too; ranged attacks remain a convenient
+    // way to break one before reaching it. Both paths share once-only drops.
+    for(const prop of [...this.props])if(prop.hp>0&&distance(prop,p)<=prop.r+this.game.player.r+2&&
+      (!this.game.dungeon?.active||this.game.dungeon.vision?.isVisible(prop.x,prop.y)))this.hitSupply(prop,prop.hp);
     for(const pickup of this.pickups){
       pickup.life-=dt;
       if(pickup.life>0&&distance(pickup,p)<26)this._collect(pickup);

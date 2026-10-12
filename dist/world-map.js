@@ -11,9 +11,9 @@ export function minimapBounds(width,height){
   const compact=width<600||height<430,size=compact?104:128,margin=compact?10:16;
   return {x:width-size-margin,y:margin,width:size,height:size,margin};
 }
-export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',portal:'传送门'});
+export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',portal:'传送门',exit:'荒野出口',chest:'宝箱',boss:'首领'});
 export function landmarkLabel(marker){return marker.name||LANDMARK_NAMES[marker.type]||'遗迹';}
-export function landmarkState(marker){return marker.type==='portal'?(marker.active?'已激活 · 可往返':'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
+export function landmarkState(marker){if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?'已激活 · 可往返':'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
 // Discovery lives on each region-owned landmark. A map instance never keeps a
@@ -55,8 +55,12 @@ export class WorldMap {
   }
 
   getMarkers(game,{range=WORLD_MAP_RULES.range}={}) {
-    if(!game?.player||game.dungeon?.active)return [];
+    if(!game?.player)return [];
     range=positive(range,WORLD_MAP_RULES.range);const p=feet(game),result=[];
+    if(game.dungeon?.active){
+      for(const marker of game.dungeon.getMap?.()?.landmarks||[]){const dx=marker.x-p.x,dy=marker.y-p.y,distance=Math.hypot(dx,dy);if(distance<=range)result.push({...marker,dx,dy,distance});}
+      return result;
+    }
     for(const {site,type} of landmarks(game)) {
       if(!site.discovered)continue;
       const dx=site.x-p.x,dy=site.y-p.y,distance=Math.hypot(dx,dy);
@@ -70,7 +74,7 @@ export class WorldMap {
   }
 
   draw(ctx,game,{x=0,y=0,width=128,height=128,range=WORLD_MAP_RULES.range,expanded=false}={}) {
-    if(!game?.player||game.dungeon?.active)return null;
+    if(!game?.player)return null;
     width=positive(width,128);height=positive(height,128);range=positive(range,WORLD_MAP_RULES.range);
     const markers=this.getMarkers(game,{range}),p=feet(game),pad=6;
     const mapW=width-pad*2,mapH=height-pad*2,cx=x+width*.5,cy=y+height*.5;
@@ -85,6 +89,16 @@ export class WorldMap {
     for(let gx=ox+step;gx<x+width-pad;gx+=step)segment(ctx,gx,y+pad,gx,y+height-pad);
     for(let gy=oy;gy>y+pad;gy-=step)segment(ctx,x+pad,gy,x+width-pad,gy);
     for(let gy=oy+step;gy<y+height-pad;gy+=step)segment(ctx,x+pad,gy,x+width-pad,gy);
+    if(game.dungeon?.active){
+      const vision=game.dungeon.vision;
+      // The indoor map uses the exact same scale and player anchor. Unknown
+      // interiors have no room silhouettes; only explored floor and walls exist.
+      ctx.fillStyle='#0c1715';ctx.fillRect(x+pad,y+pad,mapW,mapH);
+      ctx.fillStyle='#2b4035';
+      for(const rect of vision?.getExploredRects?.()||[])ctx.fillRect(cx+(rect.x-p.x)*scale,cy+(rect.y-p.y)*scale,rect.width*scale+.25,rect.height*scale+.25);
+      ctx.lineCap='butt';ctx.strokeStyle='#b2bc9d';ctx.lineWidth=expanded?3.5:2.2;ctx.beginPath();
+      for(const wall of vision?.knownWallSegments?.()||[]){ctx.moveTo(cx+(wall.ax-p.x)*scale,cy+(wall.ay-p.y)*scale);ctx.lineTo(cx+(wall.bx-p.x)*scale,cy+(wall.by-p.y)*scale);}ctx.stroke();ctx.lineCap='round';
+    }
     ctx.strokeStyle='#9ab29920';ctx.lineWidth=.75;ctx.beginPath();ctx.arc(cx,cy,radius,0,TAU);ctx.stroke();
     ctx.setLineDash([2,4]);ctx.beginPath();ctx.arc(cx,cy,radius*.5,0,TAU);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='#bed0b1';ctx.font=`600 ${expanded?15:8}px ${FONT}`;ctx.textAlign='center';ctx.fillText('N',cx,y+pad+(expanded?16:8));
@@ -103,7 +117,13 @@ export class WorldMap {
     ctx.save();ctx.translate(x,y);ctx.lineWidth=1.25;
     const color=marker.completed?'#6d8271':marker.type==='portal'?(marker.active?'#a7e3cd':'#c08b78'):marker.type==='angel'?'#eee4b7':'#cbb888';
     ctx.strokeStyle=color;ctx.fillStyle='#172b25';
-    if(marker.type==='portal') {
+    if(marker.type==='exit') {
+      ctx.beginPath();ctx.moveTo(-4,4);ctx.lineTo(-4,-4);ctx.lineTo(3,-4);ctx.lineTo(3,4);ctx.stroke();segment(ctx,-1,0,6,0);segment(ctx,3,-2,6,0);segment(ctx,3,2,6,0);
+    } else if(marker.type==='chest') {
+      ctx.fillRect(-4,-2,8,6);ctx.strokeRect(-4,-2,8,6);segment(ctx,-4,0,4,0);segment(ctx,0,-1,0,2);
+    } else if(marker.type==='boss') {
+      diamond(ctx,0,0,5);ctx.fill();ctx.stroke();segment(ctx,0,-2,0,1);ctx.fillStyle=color;ctx.fillRect(-.5,2,1,1);
+    } else if(marker.type==='portal') {
       if(marker.active){ctx.fillStyle='#9ae6c620';ctx.beginPath();ctx.arc(0,0,8,0,TAU);ctx.fill();}
       ctx.beginPath();ctx.moveTo(-3.8,4.5);ctx.lineTo(-3.8,-.8);ctx.bezierCurveTo(-3.8,-6,3.8,-6,3.8,-.8);ctx.lineTo(3.8,4.5);ctx.closePath();ctx.fill();ctx.stroke();
       if(marker.active){ctx.strokeStyle='#c7f8e2';segment(ctx,0,-1.5,0,2.5);segment(ctx,-1.3,1.2,0,2.5);segment(ctx,1.3,1.2,0,2.5);}

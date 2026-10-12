@@ -2,6 +2,8 @@ import { Terrain, groundOffset } from './terrain.js';
 import { Adventure } from './adventure.js';
 import { clearBossAttacks, initBoss } from './bosses.js';
 import { resetLocomotion } from './locomotion.js';
+import { DungeonVision } from './dungeon-vision.js';
+import { HUT_RULES, createHutState, populateHut, claimHutChest } from './hut-interior.js';
 
 const TAU=Math.PI*2;
 const DIRS=Object.freeze([{dx:0,dy:-1,opposite:2},{dx:1,dy:0,opposite:3},{dx:0,dy:1,opposite:0},{dx:-1,dy:0,opposite:1}]);
@@ -18,7 +20,7 @@ const foot=entity=>({x:entity.x,y:Number.isFinite(entity.groundY)?entity.groundY
 // A castle owns one finite scene. The same object is retained on retreat:
 // rooms, surviving guards, opened chests and the treasury cannot be rerolled.
 export class Dungeon {
-  constructor(game){this.game=game;this.active=null;this.states=new Map();this._world=null;}
+  constructor(game){this.game=game;this.active=null;this.states=new Map();this._world=null;this.vision=new DungeonVision(this);}
   _playerFoot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _door(site){return site.door||{x:site.interactionX??site.x,y:site.interactionY??site.y};}
   _near(point,r=DUNGEON_RULES.interactRadius){return distance(this._playerFoot(),point)<=r;}
@@ -42,8 +44,8 @@ export class Dungeon {
       const direction=available[Math.floor(random()*available.length)],d=DIRS[direction],next=cells[(cell.row+d.dy)*cols+cell.col+d.dx];
       cell.open.push(direction);next.open.push(d.opposite);seen.add(next.id);stack.push(next);
     }
-    const state={id:site.id,name:'旧王城迷宫',site,seed,cols,rows,cellSize,originX,originY,cells,visited:new Set([entranceId]),entranceId,
-      entrance:{x:cells[entranceId].x,y:cells[entranceId].y+55},bounds:{minX:originX,minY:originY,maxX:originX+cols*cellSize,maxY:originY+rows*cellSize},
+    const state={id:site.id,kind:'castle',name:'旧王城迷宫',site,seed,cols,rows,cellSize,originX,originY,cells,visited:new Set([entranceId]),entranceId,
+      entrance:{x:cells[entranceId].x,y:cells[entranceId].y+55},landing:{x:cells[entranceId].x,y:cells[entranceId].y-30},bounds:{minX:originX,minY:originY,maxX:originX+cols*cellSize,maxY:originY+rows*cellSize},
       bossDefeated:false,rewardClaimed:false,rewardPending:false,enemies:[],gems:[],coins:[],rooms:new Map(),adventure:null,createdAt:this.game.time};
     const distances=new Map([[entranceId,0]]),parents=new Map(),queue=[cells[entranceId]];
     for(let i=0;i<queue.length;i++)for(const next of this._neighbors(queue[i],state))if(!distances.has(next.id)){distances.set(next.id,distances.get(queue[i].id)+1);parents.set(next.id,queue[i].id);queue.push(next);}
@@ -69,7 +71,7 @@ export class Dungeon {
       if(cell.row===rows-1)wall(cell.x,cell.y+cellSize*.5,0,false);
       if(cell.col===cols-1)wall(cell.x+cellSize*.5,cell.y,Math.PI*.5,false);
     }
-    state.terrain=new Terrain({obstacles:walls,region:'ruins',seed});
+    state.walls=walls;state.terrain=new Terrain({obstacles:walls,region:'ruins',seed});
     state.distances=distances;return state;
   }
   _snapshotWorld(site){
@@ -124,17 +126,23 @@ export class Dungeon {
   enter(site){
     const g=this.game;
     if(!site||!site.id||this.active||g.status!=='playing'||!this._near(this._door(site),site.interactRadius||100)||g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false))return false;
+    const kind=site.type==='supply'||site.type==='occupied'?'hut':'castle';
+    if(site.type&&!['supply','occupied','castle'].includes(site.type))return false;
     let state=this.states.get(site.id);
-    if(!state){if(this.states.size>=DUNGEON_RULES.maxStates)return false;state=this._makeState(site);this.states.set(site.id,state);}
+    if(!state){
+      const count=[...this.states.values()].filter(existing=>(existing.kind||'castle')===kind).length;
+      if(count>=(kind==='hut'?HUT_RULES.maxStates:DUNGEON_RULES.maxStates))return false;
+      state=kind==='hut'?createHutState(g,site,seedFor(`${g.regionIndex}:${site.id}:${site.seed??0}`)):this._makeState(site);this.states.set(site.id,state);
+    }
     this._world=this._snapshotWorld(site);
     const furyTime=g.adventure?.furyTime||0,magnetTime=g.adventure?.magnetTime||0;
-    this._clearScene();if(g.superSkills)g.superSkills.pending=null;this.active=state;g.sceneKind='castle';g.terrain=state.terrain;g.enemies=state.enemies;g.gems=state.gems;g.coins=state.coins;g.portal=null;g.environment=null;g.encounters=null;
-    g.regionGrace=2;g.regionTransition={life:.7,maxLife:.7,name:state.name,from:g.region.id,to:'castle'};
+    this._clearScene();if(g.superSkills)g.superSkills.pending=null;this.active=state;g.sceneKind=state.kind;g.terrain=state.terrain;g.enemies=state.enemies;g.gems=state.gems;g.coins=state.coins;g.portal=null;g.environment=null;g.encounters=null;
+    g.regionGrace=2;g.regionTransition={life:.7,maxLife:.7,name:state.name,from:g.region.id,to:state.kind};
     if(!state.adventure)state.adventure=new Adventure(g,{generation:false});
     g.adventure=state.adventure;g.adventure.furyTime=furyTime;g.adventure.magnetTime=magnetTime;
     if(g.companions){g.companions.camp=null;g.companions.generation=false;}
-    this._placePlayer(state.entrance);
-    if(!state.populated){state.populated=true;this._populate(state);}
+    this._placePlayer(state.landing||state.entrance);
+    if(!state.populated){state.populated=true;if(state.kind==='hut')populateHut(g,state);else this._populate(state);}
     this._clearScene();g._refreshStats();g._refreshWeapons();this.update(0);
     g._emit('dungeonEnter',{name:state.name,revisit:state.visited.size>1});return true;
   }
@@ -150,25 +158,25 @@ export class Dungeon {
     if(!state||!world||g.status!=='playing')return false;
     // Only the entrance or the claimed treasury is an exit; this is not a
     // combat teleport that can bypass the route back while the Boss lives.
-    if(!this._near(state.entrance,95)&&!(state.rewardClaimed&&this._near(state.treasure,95)))return false;
+    if(!this._near(state.entrance,95)&&!(state.treasure&&state.rewardClaimed&&this._near(state.treasure,95)))return false;
     const furyTime=g.adventure?.furyTime||0,magnetTime=g.adventure?.magnetTime||0;
     this._clearScene();this._saveScene();
     Object.assign(g,{terrain:world.terrain,adventure:world.adventure,environment:world.environment,encounters:world.encounters,enemies:world.enemies,gems:world.gems,coins:world.coins,portal:world.portal,sceneKind:world.sceneKind,_spawn:world.spawn});
     if(g.adventure){g.adventure.furyTime=furyTime;g.adventure.magnetTime=magnetTime;}
     if(g.superSkills)g.superSkills.pending=world.superPending??null;
     if(g.companions){g.companions.camp=world.companionCamp;g.companions.generation=world.companionGeneration;g.companions.nextAt=Math.max(world.companionNextAt??0,g.companions.nextAt??0);}
-    this.active=null;this._world=null;g.regionGrace=Math.max(2,world.regionGrace||0);g.regionTransition={life:.7,maxLife:.7,name:g.region.name,from:'castle',to:g.region.id};
+    this.active=null;this._world=null;g.regionGrace=Math.max(2,world.regionGrace||0);g.regionTransition={life:.7,maxLife:.7,name:g.region.name,from:state.kind,to:g.region.id};
     this._clearScene();this._placePlayer(this._returnPoint(world));g._refreshStats();g._refreshWeapons();g._emit('dungeonExit',{name:state.name,cleared:state.rewardClaimed});return true;
   }
   getInteraction(){
     const g=this.game,state=this.active;if(!state||g.status!=='playing')return null;
-    if(this._near(state.entrance,95))return {id:`${state.id}:exit`,type:'dungeonExit',label:'返回荒野',description:'保留迷宫探索与战斗进度',...state.entrance,enabled:true};
-    if(this._near(state.treasure)){
+    if(this._near(state.entrance,95)&&this.vision.isVisible(state.entrance))return {id:`${state.id}:exit`,type:'dungeonExit',label:'返回荒野',description:'保留探索与战斗进度',...state.entrance,enabled:true};
+    if(state.treasure&&this._near(state.treasure)&&this.vision.isVisible(state.treasure.x,state.treasure.y)){
       if(state.treasure.state==='unlocked')return {id:state.treasure.id,type:'castleTreasure',label:'开启王城宝藏',description:'超级技能 · 80 金币 · 100 灵晶',x:state.treasure.x,y:state.treasure.y,enabled:true};
       if(state.rewardClaimed)return {id:`${state.id}:treasury-exit`,type:'dungeonExit',label:'携宝返回荒野',x:state.treasure.x,y:state.treasure.y,enabled:true};
     }
-    const chest=state.chests.find(c=>c.state==='closed'&&this._near(c,62));
-    if(chest){const guarded=g.enemies.some(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===chest.cellId);return {id:chest.id,type:'dungeonChest',label:guarded?'清理房间守卫':'打开古堡宝箱',description:guarded?'击败本房间守卫后开启':'金币、灵晶与恢复补给',x:chest.x,y:chest.y,enabled:!guarded};}
+    const chest=state.chests.find(c=>c.state==='closed'&&this._near(c,62)&&this.vision.isVisible(c.x,c.y));
+    if(chest){const guarded=g.enemies.some(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===chest.cellId);return {id:chest.id,type:'dungeonChest',label:guarded?'清理房间守卫':state.kind==='hut'?'打开小屋补给':'打开古堡宝箱',description:guarded?'击败本房间守卫后开启':'金币、灵晶与恢复补给',x:chest.x,y:chest.y,enabled:!guarded};}
     return null;
   }
   interact(id){
@@ -176,6 +184,7 @@ export class Dungeon {
     if(choice.type==='dungeonExit')return this.exit();
     if(choice.type==='dungeonChest'){
       const chest=state.chests.find(c=>c.id===id);if(!chest||chest.state!=='closed')return false;
+      if(state.kind==='hut')return claimHutChest(g,state,chest);
       chest.state='claimed';g.grantResources({gold:12,crystals:24},'castleSideChest');g.adventure?.dropPickup('herb',chest.x,chest.y+28);g._effect(chest.x,chest.y,'ring',.7,65,'#edca85');g._emit('dungeonChest');return true;
     }
     if(choice.type==='castleTreasure'){
@@ -198,7 +207,9 @@ export class Dungeon {
     const room=state.rooms.get(enemy.dungeonRoom);
     if(room&&!room.cleared&&!this.game.enemies.some(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===room.cellId)){
       room.cleared=true;
-      if(room.kind!=='boss'&&!room.rewarded){
+      if(state.kind==='hut'){
+        room.rewarded=true;state.site.state='cleared';this.game._emit('houseCleared',{name:state.name});
+      }else if(room.kind!=='boss'&&!room.rewarded){
         room.rewarded=true;const cell=state.cells[room.cellId],g=this.game;
         g.dropCrystals(cell.x,cell.y,DUNGEON_RULES.roomCrystals);
         if(room.heal)g.adventure?.dropPickup('herb',cell.x,cell.y+28);
@@ -209,17 +220,22 @@ export class Dungeon {
   }
   canDamage(enemy,origin=this.game.player){
     if(!this.active||enemy.dungeonId!==this.active.id)return true;
-    if(enemy.guardActive===false)return false;
     const a=origin===this.game.player?this._playerFoot():foot(origin),b=foot(enemy);
-    return !this.game.terrain.firstBlocker(a.x,a.y,b.x,b.y,0);
+    return this.vision.isVisible(b.x,b.y,enemy.r||0)&&!this.game.terrain.firstBlocker(a.x,a.y,b.x,b.y,0);
+  }
+  awaken(enemy){
+    const state=this.active;if(!state||enemy.dungeonId!==state.id)return false;
+    const room=state.rooms.get(enemy.dungeonRoom);if(room)room.started=true;
+    enemy.guardActive=true;return true;
   }
   updateEnemy(enemy,dt){
     const state=this.active;if(!state||enemy.dungeonId!==state.id)return false;
     const g=this.game,p=this._playerFoot(),point=foot(enemy),cell=this._cellAt(point.x,point.y),playerCell=this._cellAt(p.x,p.y);
     const sameRoom=cell&&playerCell&&cell.id===playerCell.id,room=state.rooms.get(enemy.dungeonRoom);
-    const visible=distance(p,point)<300&&!g.terrain.firstBlocker(p.x,p.y,point.x,point.y,enemy.r+2);
+    const visible=this.vision.isVisible(point.x,point.y,enemy.r||0)&&!g.terrain.firstBlocker(p.x,p.y,point.x,point.y,0);
     if(room&&playerCell?.id===room.cellId)room.started=true;
-    // Crossing a doorway wakes one pack, not all visible rooms in a corridor.
+    // Crossing a doorway or actually taking damage wakes one pack. Merely
+    // querying a sleeping target through an open door never starts combat.
     // A started pack can pursue briefly, then walks home on a genuine retreat.
     enemy.guardActive=room?!!(playerCell?.id===room.cellId||(room.started&&visible)):!!(sameRoom||visible);
     if(!enemy.guardActive){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;clearBossAttacks(enemy);if(enemy.dungeonHome&&distance(point,enemy.dungeonHome)>6)g._moveEnemy(enemy,dt,enemy.dungeonHome);return true;}
@@ -234,31 +250,51 @@ export class Dungeon {
     const margin=g.player.r+DUNGEON_RULES.wallRadius+1,b=state.bounds;
     const x=Math.max(b.minX+margin,Math.min(b.maxX-margin,p.x)),y=Math.max(b.minY+margin,Math.min(b.maxY-margin,p.y));
     if(x!==p.x||y!==p.y)this._placePlayer({x,y});
+    this.vision.update();
+    const boss=g.enemies.find(enemy=>enemy.dungeonBoss&&enemy.dungeonId===state.id);
+    if(boss&&this.vision.isVisible(foot(boss)))state.bossDiscovered=true;
     this._saveScene();
   }
   getMap(){
-    const state=this.active;if(!state)return null;const p=this._playerFoot();
-    return {cols:state.cols,rows:state.rows,cellSize:state.cellSize,originX:state.originX,originY:state.originY,bounds:state.bounds,
-      cells:state.cells.map(c=>({...c,revealed:state.visited.has(c.id),roomKind:state.rooms.get(c.id)?.kind,cleared:state.rooms.get(c.id)?.cleared??false})),playerCell:this._cellAt(p.x,p.y)?.id??state.entranceId,player:p,
-      entrance:state.entranceId,boss:state.bossRoom.id,bossDefeated:state.bossDefeated,
-      chests:state.chests.filter(c=>state.visited.has(c.cellId)).map(c=>({cellId:c.cellId,state:c.state})),treasure:state.treasure.state};
+    const state=this.active;if(!state)return null;const p=this._playerFoot(),known=point=>this.vision.isExplored(point.x,point.y);
+    const landmarks=[{id:`${state.id}:exit`,type:'exit',name:'荒野出口',...state.entrance,state:'active',completed:false}];
+    for(const chest of state.chests)if(known(chest))landmarks.push({...chest,type:'chest',name:state.kind==='hut'?'小屋补给':'古堡宝箱',completed:chest.state==='claimed'});
+    if(state.treasure&&known(state.treasure))landmarks.push({...state.treasure,type:'chest',name:'王城宝藏',completed:state.rewardClaimed});
+    if(state.bossDiscovered&&state.bossRoom)landmarks.push({id:`${state.id}:boss`,type:'boss',name:'旧王城守卫',x:state.bossRoom.x,y:state.bossRoom.y,state:state.bossDefeated?'cleared':'active',completed:state.bossDefeated});
+    return {kind:state.kind,cols:state.cols,rows:state.rows,cellSize:state.cellSize,originX:state.originX,originY:state.originY,bounds:state.bounds,
+      cells:state.cells.map(c=>{const revealed=state.visited.has(c.id);return {...c,open:revealed?c.open:[],revealed,roomKind:revealed?state.rooms.get(c.id)?.kind:undefined,cleared:revealed&&(state.rooms.get(c.id)?.cleared??false)};}),playerCell:this._cellAt(p.x,p.y)?.id??state.entranceId,player:p,
+      entrance:state.entranceId,boss:state.bossDiscovered?state.bossRoom?.id:null,bossDefeated:!!state.bossDiscovered&&state.bossDefeated,
+      chests:state.chests.filter(known).map(c=>({cellId:c.cellId,state:c.state})),treasure:state.treasure&&known(state.treasure)?state.treasure.state:null,
+      walls:this.vision.knownWallSegments(),explored:this.vision.getExploredRects(),landmarks:landmarks.filter(known)};
   }
   getPacing(){
     const state=this.active;if(!state)return null;
     const p=this._playerFoot(),cell=this._cellAt(p.x,p.y)||state.cells[state.entranceId],room=state.rooms.get(cell.id);
-    const remaining=room?this.game.enemies.filter(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===cell.id).length:0;
-    const battleRooms=[...state.rooms.values()].filter(r=>r.kind!=='boss'),chest=state.chests.find(c=>c.cellId===cell.id&&c.state==='closed');let next;
-    if(state.bossDefeated)next={...state.treasure,kind:'treasure',label:state.rewardClaimed?'携宝返回荒野':'领取王城宝藏'};
+    const remaining=room?this.game.enemies.filter(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===cell.id&&this.vision.isVisible(foot(e))).length:0;
+    const battleRooms=[...state.rooms.values()].filter(r=>r.kind!=='boss'&&state.visited.has(r.cellId)),chest=state.chests.find(c=>c.cellId===cell.id&&c.state==='closed'&&this.vision.isExplored(c.x,c.y));let next;
+    if(state.kind==='hut'){
+      next=remaining?{x:cell.x,y:cell.y,kind:'battle',label:`清理屋内守卫 ${room.total-remaining}/${room.total}`}:
+        chest?{x:chest.x,y:chest.y,kind:'treasure',label:'领取小屋补给'}:{...state.entrance,kind:'route',label:'返回荒野'};
+    }else if(state.bossDefeated&&this.vision.isExplored(state.treasure.x,state.treasure.y))next={...state.treasure,kind:'treasure',label:state.rewardClaimed?'携宝返回荒野':'领取王城宝藏'};
     else if(remaining)next={x:cell.x,y:cell.y,kind:room.kind,label:room.kind==='boss'?'击败旧王城守卫':`清理守卫 ${room.total-remaining}/${room.total}`};
     else if(chest)next={x:chest.x,y:chest.y,kind:'treasure',label:'打开古堡宝箱'};
     else{
-      const queue=[cell],parents=new Map([[cell.id,null]]);
-      for(let i=0;i<queue.length&&!parents.has(state.bossRoom.id);i++)for(const neighbor of this._neighbors(queue[i],state))if(!parents.has(neighbor.id)){parents.set(neighbor.id,queue[i].id);queue.push(neighbor);}
-      let id=state.bossRoom.id;
-      while(parents.get(id)!==cell.id&&parents.get(id)!==null&&parents.has(id))id=parents.get(id);
-      const point=state.cells[id];next={x:point.x,y:point.y,kind:id===state.bossRoom.id?'boss':'route',label:id===state.bossRoom.id?'前往王城守卫':'沿通道推进'};
+      // Search only already visited rooms for a frontier. The old shortest
+      // route to the hidden Boss disclosed the correct maze branch in advance.
+      const queue=[cell],parents=new Map([[cell.id,null]]);let frontier=null;
+      for(let i=0;i<queue.length&&!frontier;i++)for(const neighbor of this._neighbors(queue[i],state)){
+        const doorway={x:(queue[i].x+neighbor.x)*.5,y:(queue[i].y+neighbor.y)*.5};
+        if(!this.vision.isExplored(doorway.x,doorway.y))continue;
+        if(!state.visited.has(neighbor.id)){frontier={from:queue[i],to:neighbor,doorway};break;}
+        if(!parents.has(neighbor.id)){parents.set(neighbor.id,queue[i].id);queue.push(neighbor);}
+      }
+      if(frontier){
+        let id=frontier.from.id;
+        while(parents.get(id)!==cell.id&&parents.get(id)!==null&&parents.has(id))id=parents.get(id);
+        const point=frontier.from.id===cell.id?frontier.doorway:state.cells[id];next={x:point.x,y:point.y,kind:'route',label:'探索前方通道'};
+      }else next={x:cell.x,y:cell.y,kind:'route',label:'探索房间与入口'};
     }
-    return {currentRoom:cell.id,remaining,total:room?.total||0,clearedRooms:battleRooms.filter(r=>r.cleared).length,combatRooms:battleRooms.length,next,bossDistance:state.distances.get(state.bossRoom.id)};
+    return {currentRoom:cell.id,remaining,total:room?.total||0,clearedRooms:battleRooms.filter(r=>r.cleared).length,combatRooms:battleRooms.length,next,bossDistance:state.bossDiscovered?state.distances.get(state.bossRoom.id):null};
   }
   resetRegion(){if(this.active)return false;this.states=new Map();this._world=null;return true;}
 }

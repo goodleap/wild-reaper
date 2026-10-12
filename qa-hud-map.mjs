@@ -67,5 +67,16 @@ listeners['window:blur']();assert(run('paused&&mapOpen'));assert.equal(document.
 run('width=1100;height=700;');
 const normalPointer=run('edgePointer({x:game.player.x+2500,y:game.player.y-1400})');assert(normalPointer.y>=174);
 run('game.dungeon.active={};');const castlePointer=run('edgePointer({x:game.player.x+2500,y:game.player.y-1400})');assert.equal(castlePointer.y,normalPointer.y);run('game.dungeon.active=null;');
+// A visible-screen but occluded Boss must not leak through any HUD phase,
+// cast label, map landmark, toast, or HP bar before it is discovered.
+run(`game.status='playing';game.enemies=[];game.viewWidth=900;game.viewHeight=700;game.dungeon.enter({id:'qa-fog-hud',type:'castle',x:game.player.x,y:game.player.y+19.8});
+let fogPoint=null;for(let yy=game.player.y-250;yy<game.player.y+250&&!fogPoint;yy+=20)for(let xx=game.player.x-390;xx<game.player.x+390;xx+=20)if(game.terrain.isFree(xx,yy,50)&&!game.dungeon.vision.isVisible(xx,yy,50)){fogPoint={x:xx,y:yy};break;}
+if(!fogPoint)throw new Error('missing occluded on-screen fixture');
+game.enemies=[{id:9009,type:'boss',x:fogPoint.x,y:fogPoint.y-groundOffset({type:'boss',r:49}),r:49,hp:200,maxHp:200,guardActive:true,dungeonBoss:true,bloomAttack:{life:1,kind:'fan'},slam:{life:1}}];updateHUD();`);
+assert(nodes['boss-bar'].classList.contains('hidden'));assert.equal(run('bossFeedbackVisible()'),false,'unseen Boss cannot emit positional cast feedback');
+assert.equal(nodes['phase-label'].textContent,'穿过门口 · 探索迷宫','hidden casts and boss presence do not override exploration HUD');
+assert.equal(run("worldMap.getMarkers(game).some(marker=>marker.type==='boss')"),false);
+run(`const capturedNotices=[];notify=(...args)=>capturedNotices.push(args);pendingEvolutions=[];announceCombatEvents([{type:'boss'},{type:'bloomWindup'}]);`);
+assert.equal(run('capturedNotices.length'),0,'unseen Boss spawn/cast does not produce a toast');
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('mapOpen'),false);assert(nodes['map-overlay'].classList.contains('hidden'));
 console.log('HUD map: compact bounds, simulation pause, modal stack restoration, blocked input, discovery privacy and reset passed.');

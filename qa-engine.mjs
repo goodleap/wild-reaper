@@ -138,10 +138,16 @@ const sim=(difficulty,seconds,immortal=false)=>{
     if(immortal)g.player.invuln=.3;
     const p=g.player;let target=null,distance=Infinity;
     for(const gem of g.gems){const d=Math.hypot(gem.x-p.x,gem.y-p.y);if(d<distance){distance=d;target=gem;}}
-    if(g.portal){target=g.portal;distance=Math.hypot(target.x-p.x,target.y-p.y);if(g.canEnterPortal()){assert(g.enterPortal());continue;}}
+    if(g.portal){target=g.portal;distance=Math.hypot(target.x-p.x,target.y-p.y);if(g.canEnterPortal(g.portal.id)){assert(g.enterPortal(g.portal.id));continue;}}
     let vx=target?(target.x-p.x)/(distance||1):Math.cos(g.time*.7)*.2;
     let vy=target?(target.y-p.y)/(distance||1):Math.sin(g.time*.7)*.2;
     for(const e of g.enemies){const dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||1;if(d<105){const force=(105-d)/105*2;vx+=dx/d*force;vy+=dy/d*force;}}
+    // Contact now travels automatically. Keep this farming bot away from the
+    // return gate; intentional bidirectional travel is covered in qa-portals.
+    for(const gate of g.regions.portals)if(gate.direction==='back'){
+      const dx=p.x-gate.x,dy=p.y+groundOffset(p,true)-gate.y,d=Math.hypot(dx,dy)||1;
+      if(d<180){const force=(180-d)/180*4;vx+=dx/d*force;vy+=dy/d*force;}
+    }
     const l=Math.hypot(vx,vy)||1;
     g.update(1/30,{x:vx/l,y:vy/l,skill:g.player.skillCooldown<=0&&g.enemies.length>=8});
     if(g.time<180){killsAt180=g.kills;levelAt180=g.player.level;}

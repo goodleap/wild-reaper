@@ -132,7 +132,8 @@ export class SuperSkills {
     return {x:entity.x,y:entity.y+groundOffset(entity,entity===this.game.player||!!entity.isCompanion)};
   }
   _visible(enemy) {
-    return enemy.hp>0&&!enemy.isCompanion&&enemy.guardActive!==false&&this.game._inView(enemy);
+    return enemy.hp>0&&!enemy.isCompanion&&!(enemy.rescueSpawnGrace>0)&&this.game._inView(enemy)&&
+      (enemy.dungeonId?this.game.dungeon.canDamage(enemy):enemy.guardActive!==false);
   }
   _lineClear(from,to,r=0) {
     return !this.game.terrain?.firstBlocker(from.x,from.y,to.x,to.y,r);

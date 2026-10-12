@@ -1,3 +1,5 @@
+import { ANGEL_RULES } from './settlements.js';
+
 // The haven is a ground-anchored feather wreath; lightning stays local to its
 // target. Cached ground art and per-effect weak geometry avoid frame churn.
 const TAU=Math.PI*2;
@@ -33,7 +35,7 @@ export class AngelArt {
   }
   drawAura(ctx,site,{time=0,reduced=false}={}){
     if(site.type!=='angel')return false;
-    const r=site.auraRadius||115,scale=r/115,t=reduced?0:time;
+    const r=ANGEL_RULES.guardRadius,scale=r/115,t=reduced?0:time;
     ctx.save();ctx.translate(site.x,site.y);ctx.scale(scale,scale);ctx.globalAlpha=site.healing?1:.75;ctx.drawImage(this._aura(),-128,-128);
     ctx.fillStyle='#e5ecc3';ctx.beginPath();
     for(let i=0;i<(reduced?4:8);i++){
@@ -41,7 +43,7 @@ export class AngelArt {
       diamond(ctx,Math.cos(angle)*radius,Math.sin(angle)*radius-lift,site.healing?1.7:1.1);
     }
     ctx.globalAlpha=site.healing?.42:.17;ctx.fill();
-    const cast=clamp(((site._attack||0)-2.05)/.45);
+    const pulseDuration=.18,cast=clamp(((site._attack||0)-(ANGEL_RULES.attackInterval-pulseDuration))/pulseDuration);
     if(cast>0){ctx.globalAlpha=cast*.5;ctx.strokeStyle='#fff3c3';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(0,-7,16+(1-cast)*8,6+(1-cast)*3,0,0,TAU);ctx.stroke();}
     ctx.restore();return true;
   }

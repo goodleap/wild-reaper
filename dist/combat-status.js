@@ -10,7 +10,7 @@ export class CombatStatus {
 
   hit(enemy,amount,knockback=0,origin=this.game.player,source='arrow') {
     const game=this.game,rules=STATUS_RULES;
-    if(game.status!=='playing'||enemy.hp<=0||!Number.isFinite(amount)||amount<=0||game.dungeon?.canDamage(enemy,origin)===false)return 0;
+    if(game.status!=='playing'||enemy.hp<=0||enemy.rescueSpawnGrace>0||!Number.isFinite(amount)||amount<=0||game.dungeon?.canDamage(enemy,origin)===false)return 0;
     const x=enemy.x,y=enemy.y;
     const burst=['pulse','echo','companionPulse','companionEcho'].includes(source)&&enemy.bleed?.life>0;
     const shock=(source==='arrow'||source==='orbit')&&enemy.shock?.life>0?enemy.shock:null;
