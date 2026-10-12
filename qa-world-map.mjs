@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { WorldMap, WORLD_MAP_RULES } from './dist/world-map.js';
+import { WorldMap, WORLD_MAP_RULES, minimapBounds, landmarkLabel, landmarkState } from './dist/world-map.js';
 
 const map=new WorldMap();
 const site=(id,type,x,y=0,extra={})=>({id,type,x,y,state:'ready',discovered:false,...extra});
@@ -44,3 +44,17 @@ assert.equal(balance,0);assert(draws>0);
 map.discover(drawing);assert.equal(map.draw(ctx,drawing).markers.length,1);assert.equal(balance,0);
 drawing.dungeon.active={};const before=draws;assert.equal(map.draw(ctx,drawing),null);assert.equal(draws,before,'the existing castle map owns its own UI');
 console.log('World map: bounded on-screen discovery, persistent landmarks, region isolation, gate states and read-only drawing passed.');
+
+// Both world and castle HUDs share compact square bounds close to the top edge.
+for(const [width,height,size] of [[1100,700,128],[393,717,104],[760,360,104],[320,568,104]]){
+  const bounds=minimapBounds(width,height);assert.equal(bounds.width,size);assert.equal(bounds.height,size);
+  assert.equal(bounds.x+bounds.width,width-bounds.margin);assert.equal(bounds.y,bounds.margin);assert(bounds.y<=16);
+}
+assert.equal(landmarkLabel({type:'hunt'}),'狩猎擂台');assert(landmarkState({type:'portal',active:true}).includes('可往返'));
+const texts=[];const textCtx=new Proxy(ctx,{get(target,key){if(key==='fillText'||key==='strokeText')return value=>texts.push(value);return target[key];}});
+drawing.dungeon.active=null;const compact=map.draw(textCtx,drawing,{width:104,height:104});
+assert.deepEqual(texts,['N'],'the compact map devotes its entire panel to the map, with no title/footer text');
+assert.equal(compact.center.x,52);assert.equal(compact.center.y,52);assert(compact.radius>=39);
+texts.length=0;const expanded=map.draw(textCtx,drawing,{width:420,height:420,expanded:true});
+assert.equal(expanded.markers.length,1);assert(texts.includes('1'),'expanded markers are numbered for their matching named list');
+assert.equal(balance,0);

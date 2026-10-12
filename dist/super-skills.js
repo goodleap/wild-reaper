@@ -3,7 +3,7 @@ import { groundOffset } from './terrain.js';
 const freeze=Object.freeze;
 export const SUPER_SKILLS=freeze([
   freeze({id:'thorns',name:'荆棘缚阵',desc:'在敌群脚下召出荆棘，造成范围伤害并短暂定身普通敌人',icon:'♧',color:'#a9d888',source:'region',regionId:'forest',tier:'区域超级技能',automatic:true,maxLevel:3}),
-  freeze({id:'miasma',name:'瘴雾侵蚀',desc:'在敌群位置留下持续 4 秒的侵蚀雾，每半秒造成范围伤害',icon:'♨',color:'#cea1da',source:'region',regionId:'marsh',tier:'区域超级技能',automatic:true,maxLevel:3}),
+  freeze({id:'miasma',name:'瘴雾侵蚀',desc:'在敌群脚下爆发瘴气，留下持续 4 秒的侵蚀雾，每半秒造成范围伤害',icon:'♨',color:'#cea1da',source:'region',regionId:'marsh',tier:'区域超级技能',automatic:true,maxLevel:3}),
   freeze({id:'runes',name:'符文穿击',desc:'朝敌人展开三道符文射线，贯穿沿途目标，同次攻击不重复命中',icon:'✧',color:'#89ddd8',source:'region',regionId:'ruins',tier:'区域超级技能',automatic:true,maxLevel:3}),
   freeze({id:'meteor',name:'星陨',desc:'标记数处敌群位置，短暂蓄能后落下星陨，造成高额范围伤害',icon:'✦',color:'#f1bc79',source:'castle',regionId:null,tier:'城堡超级技能',automatic:true,maxLevel:3}),
   freeze({id:'swords',name:'王庭剑阵',desc:'连续唤出追击灵剑，优先攻击附近首领和强敌',icon:'⚔',color:'#f0dda3',source:'castle',regionId:null,tier:'城堡超级技能',automatic:true,maxLevel:3}),
@@ -18,15 +18,32 @@ const segmentDistance=(x,y,x1,y1,x2,y2)=>{
   const t=length?clamp(((x-x1)*dx+(y-y1)*dy)/length,0,1):0;
   return Math.hypot(x-x1-dx*t,y-y1-dy*t);
 };
-const cooldown=(id,level)=>({thorns:7-(level-1)*.6,miasma:7-(level-1)*.3,runes:5.4-(level-1)*.3,meteor:9-(level-1)*.5,swords:6.6-(level-1)*.4,vortex:9-(level-1)*.5})[id];
-const upgradeDescription=(id,level)=>({
-  thorns:`荆棘伤害提升至 ${65+(level-1)*25}，范围与定身时间增加，冷却缩短`,
-  miasma:`侵蚀雾每次伤害提升至 ${20+(level-1)*6}，范围增加，冷却缩短`,
-  runes:`符文射线伤害提升至 ${72+(level-1)*23}，射线加宽，冷却缩短`,
-  meteor:`星陨伤害提升至 ${110+(level-1)*30}，扩大爆炸范围${level===2?'，增加一次星陨':''}`,
-  swords:`每轮增加一柄灵剑，单剑伤害提升至 ${95+(level-1)*25}，冷却缩短`,
-  vortex:`漩涡每次伤害提升至 ${20+(level-1)*8}，范围与牵引速度增加，冷却缩短`
-})[id];
+// One immutable source supplies both combat and the upgrade-card comparisons.
+// damage is a single hit/tick, before the player's shared damage multiplier.
+const LEVEL_STATS=freeze(Object.fromEntries(SUPER_SKILLS.map(({id})=>[id,freeze([1,2,3].map(level=>{
+  const n=level-1,stats={
+    thorns:{cooldown:7-n*.6,damage:84+n*32,radius:105+n*15,root:1.25+n*.2},
+    miasma:{cooldown:7-n*.3,damage:24+n*7,impactDamage:32+n*8,radius:95+n*10,duration:4,interval:.5},
+    runes:{cooldown:5.4-n*.3,damage:96+n*30,width:11+n*3,range:450,count:3},
+    meteor:{cooldown:9-n*.5,damage:145+n*40,radius:86+n*9,count:level===1?2:3},
+    swords:{cooldown:6.6-n*.4,damage:124+n*32,count:3+level,interval:.22},
+    vortex:{cooldown:9-n*.5,damage:27+n*10,radius:125+n*15,duration:3.2,interval:.4,pull:82+n*14}
+  }[id];
+  return freeze({level,...stats});
+}))])));
+export const getSuperSkillStats=(id,level=1)=>LEVEL_STATS[id]?.[level-1]||null;
+const cooldown=(id,level)=>getSuperSkillStats(id,level).cooldown;
+const upgradeDescription=(id,level)=>{
+  const s=getSuperSkillStats(id,level);
+  return {
+    thorns:`荆棘伤害提升至 ${s.damage}，范围与定身时间增加，冷却缩短`,
+    miasma:`瘴气爆发伤害提升至 ${s.impactDamage}，每次侵蚀 ${s.damage} 伤害，范围增加`,
+    runes:`符文射线伤害提升至 ${s.damage}，射线加宽，冷却缩短`,
+    meteor:`星陨伤害提升至 ${s.damage}，扩大爆炸范围${level===2?'，增加一次星陨':''}`,
+    swords:`每轮增加一柄灵剑，单剑伤害提升至 ${s.damage}，冷却缩短`,
+    vortex:`漩涡每次伤害提升至 ${s.damage}，范围与牵引速度增加，冷却缩短`
+  }[id];
+};
 
 // Boss rewards exclusively unlock these skills. Ordinary crystal choices can
 // strengthen an already owned skill, but cannot introduce an unearned one.
@@ -157,13 +174,13 @@ export class SuperSkills {
   _cast(id,level) {
     const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,id==='runes'?450:420,{strongest:id==='swords'});
     if(!targets.length)return false;
-    const power=g._damageMultiplier();
+    const power=g._damageMultiplier(),stats=getSuperSkillStats(id,level);
     if(id==='thorns') {
-      const radius=90+(level-1)*15,root=1+(level-1)*.15;
+      const {radius,root}=stats;
       const field=this._field(id,this._center(targets,radius),radius,root+.15);
       if(!field)return false;
       for(const enemy of this._areaTargets(field,12)) {
-        this._damage(enemy,(65+(level-1)*25)*power,field);
+        this._damage(enemy,stats.damage*power,field);
         if(enemy.hp>0&&enemy.type!=='boss') {
           enemy.superRootUntil=Math.max(enemy.superRootUntil||0,g._clock+root);
           // A newly rooted charging beast stops at its current location;
@@ -174,13 +191,16 @@ export class SuperSkills {
       }
       this._burst(field,.4);
     } else if(id==='miasma') {
-      const radius=85+(level-1)*10;
-      if(!this._field(id,this._center(targets,radius),radius,4,{tick:.5,interval:.5,damage:(20+(level-1)*6)*power}))return false;
+      const {radius,duration,interval}=stats;
+      const field=this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage:stats.damage*power});
+      if(!field)return false;
+      for(const enemy of this._areaTargets(field))this._damage(enemy,stats.impactDamage*power,field);
+      this._burst(field,.5);
     } else if(id==='runes') {
       const target=targets[0],angle=Math.atan2(target.y-p.y,target.x-p.x),hit=new Set();
       for(const turn of [0,-.2,.2]) {
-        const a=angle+turn,dx=Math.cos(a),dy=Math.sin(a),width=9+(level-1)*3;
-        let length=450;
+        const a=angle+turn,dx=Math.cos(a),dy=Math.sin(a),width=stats.width;
+        let length=stats.range;
         if(!this._lineClear(origin,{x:origin.x+dx*length,y:origin.y+dy*length},width)) {
           let lo=0,hi=length;
           for(let i=0;i<10;i++){const mid=(lo+hi)/2;if(this._lineClear(origin,{x:origin.x+dx*mid,y:origin.y+dy*mid},width))lo=mid;else hi=mid;}
@@ -189,11 +209,11 @@ export class SuperSkills {
         const end={x:p.x+dx*length,y:p.y+dy*length};
         const along=g.enemies.filter(enemy=>this._visible(enemy)&&!hit.has(enemy.id)&&segmentDistance(enemy.x,enemy.y,p.x,p.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
           .sort((a,b)=>distance(p,a)-distance(p,b)).slice(0,8);
-        g._effect(p.x,p.y,'superRay',.35,width,DEFINITIONS.get(id).color,undefined,{x2:end.x,y2:end.y,skillId:id,seed:++this._id});
-        for(const enemy of along){hit.add(enemy.id);this._damage(enemy,(72+(level-1)*23)*power,p);}
+        g._effect(p.x,p.y,'superRay',.48,width,DEFINITIONS.get(id).color,undefined,{x2:end.x,y2:end.y,skillId:id,seed:++this._id});
+        for(const enemy of along){hit.add(enemy.id);this._damage(enemy,stats.damage*power,p);}
       }
     } else if(id==='meteor') {
-      const radius=74+(level-1)*8,count=level===1?2:3,points=[];
+      const {radius,count}=stats,points=[];
       for(const enemy of targets) {
         const at=this._foot(enemy);
         if(points.some(point=>distance(point,at)<radius*.9))continue;
@@ -202,13 +222,15 @@ export class SuperSkills {
       // Against a lone boss, the second star still lands nearby rather than
       // silently deleting half the reward's damage potential.
       while(points.length<count)points.push({...points[0]});
-      for(let i=0;i<points.length;i++)this._field(id,points[i],radius,.7+i*.25,{stage:'warning',damage:(110+(level-1)*30)*power});
+      for(let i=0;i<points.length;i++)this._field(id,points[i],radius,.7+i*.25,{stage:'warning',damage:stats.damage*power});
     } else if(id==='swords') {
       if(this._volleys.length>=2)return false;
-      this._volleys.push({skillId:id,remaining:3+level,index:0,tick:0,damage:(95+(level-1)*25)*power});
+      const formationId=++this._id;
+      this._volleys.push({skillId:id,formationId,remaining:stats.count,count:stats.count,index:0,tick:.16,interval:stats.interval,damage:stats.damage*power});
+      g._effect(p.x,p.y,'superBurst',.16+stats.count*stats.interval,48,DEFINITIONS.get(id).color,undefined,{skillId:id,count:stats.count,interval:stats.interval,released:0,castX:p.x,castY:p.y,seed:formationId});
     } else if(id==='vortex') {
-      const radius=115+(level-1)*15;
-      if(!this._field(id,this._center(targets,radius),radius,3.2,{tick:.4,interval:.4,damage:(20+(level-1)*8)*power,pull:55+(level-1)*10}))return false;
+      const {radius,duration,interval,pull}=stats;
+      if(!this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage:stats.damage*power,pull}))return false;
     }
     g._emit('superCast',{skillId:id});return true;
   }
@@ -219,8 +241,9 @@ export class SuperSkills {
       field.life-=dt;
       if(field.kind==='meteor') {
         if(field.life<=1e-9) {
-          this._burst(field,.65);
+          this._burst(field,.82);
           for(const enemy of this._areaTargets(field,12))this._damage(enemy,field.damage,field);
+          g._emit('superImpact',{skillId:'meteor',x:field.x,y:field.y});
         }
         continue;
       }
@@ -244,12 +267,18 @@ export class SuperSkills {
   _updateVolleys(dt) {
     const g=this.game,p=g.player;
     for(const volley of this._volleys) {
+      // Unlaunched swords share the actual caster position. Ground decoration
+      // retains castX/Y, but the formation and release count follow simulation.
+      const formation=g.effects.find(effect=>effect.type==='superBurst'&&effect.skillId==='swords'&&effect.seed===volley.formationId);
+      if(formation){formation.x=p.x;formation.y=p.y;}
       volley.tick-=dt;if(volley.tick>1e-9)continue;
-      volley.tick=.16;volley.remaining--;
+      volley.tick+=volley.interval;volley.remaining--;
+      const index=volley.index++;
+      if(formation)formation.released=volley.count-volley.remaining;
       const target=this._targets(this._foot(),430,{strongest:true})[0];
       if(!target)continue;
-      const a=volley.index++*1.9,x=p.x+Math.cos(a)*27,y=p.y-16+Math.sin(a)*15;
-      g._effect(x,y,'superSword',.27,7,DEFINITIONS.get('swords').color,undefined,{x2:target.x,y2:target.y,skillId:'swords',seed:++this._id});
+      const a=-Math.PI+.35+(index/(volley.count-1))*(Math.PI-.7),x=p.x+Math.cos(a)*35,y=p.y-13+Math.sin(a)*25;
+      g._effect(x,y,'superSword',.34,9,DEFINITIONS.get('swords').color,undefined,{x2:target.x,y2:target.y,skillId:'swords',seed:++this._id});
       this._damage(target,volley.damage,p);
     }
     this._volleys=this._volleys.filter(volley=>volley.remaining>0);

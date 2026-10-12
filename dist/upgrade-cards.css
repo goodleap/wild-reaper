@@ -1,0 +1,40 @@
+/* Type is shown by the badge/icon; border colour is skill quality. */
+.upgrade-card.choice-card{--quality:#b9c9b0;padding:18px 19px 16px;min-height:338px;gap:0;border-color:color-mix(in srgb,var(--quality) 38%,transparent);border-top:3px solid var(--quality);background:linear-gradient(155deg,#29362e,#17251f);overflow:hidden}
+.upgrade-card.choice-card:hover{border-color:var(--quality);background:linear-gradient(155deg,#334338,#203026);transform:translateY(-4px)}
+.choice-card:focus-visible{outline-color:var(--quality);outline-offset:3px}
+.choice-card.choice-attribute{background:linear-gradient(155deg,#30372f,#1f2822)}
+.choice-card.choice-attribute:hover{background:linear-gradient(155deg,#3b4439,#283229)}
+.choice-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:17px;width:100%}
+.choice-category{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;letter-spacing:.3px;color:#e0ead7}
+.choice-category svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.choice-quality{font-size:10px;line-height:1.5;color:var(--quality);padding:2px 7px;border:1px solid color-mix(in srgb,var(--quality) 30%,transparent);border-radius:4px;white-space:nowrap}
+.choice-heading{display:flex;align-items:center;gap:11px;margin-bottom:12px;min-width:0}
+.choice-card .upgrade-icon{position:static;width:43px;height:43px;font-size:25px;margin:0;flex-shrink:0;border-radius:10px;background:#efffd507}
+.choice-heading>span:last-child{min-width:0;display:flex;flex-direction:column;gap:6px}
+.choice-heading strong{font-size:18px;font-weight:600;letter-spacing:.5px;color:#edf2df;line-height:1.2}
+.choice-scope{font-size:9px;line-height:1.4;color:#b6c4af}
+.choice-description{display:block;font-size:11px;color:#b6c3af;line-height:1.7;min-height:3.4em;margin-bottom:13px}
+.choice-stats{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid #d5e6c719;width:100%}
+.choice-stat{display:flex;align-items:baseline;justify-content:space-between;gap:7px;font-size:10px;line-height:1.6;color:#b0bdaa}
+.choice-values{display:flex;align-items:baseline;justify-content:flex-end;gap:6px;text-align:right;font-variant-numeric:tabular-nums}
+.choice-values s{text-decoration:none;color:#a0ac97;font-size:10px}
+.choice-values i{font-style:normal;color:#8d9f82;font-size:10px}
+.choice-values b{font-size:12px;color:#e4efcf;font-weight:600}
+.choice-attribute .choice-values b{font-size:15px;color:#edf0dc}
+.choice-note{margin-top:auto;padding-top:10px;font-size:9px;color:#9eaf93;line-height:1.6;display:block}
+.choice-card .select-arrow{font-size:10px;color:var(--quality);gap:10px;padding-top:13px;margin-top:0;width:100%;line-height:1.5}
+.choice-card .select-arrow>span:first-child{color:#c1cbb5}
+.choice-card .select-arrow>span:last-child{white-space:nowrap}
+#upgrade-overlay,#super-overlay{align-items:flex-start}.upgrade-panel{margin:auto 0;flex-shrink:0}
+@media(max-width:760px){
+  #upgrade-overlay,#super-overlay{padding:16px 13px}.upgrade-panel h2{font-size:23px;margin-top:10px}.upgrade-panel>p{font-size:11px;margin-bottom:12px}
+  #upgrade-cards,#super-cards{display:grid;grid-template-columns:1fr!important;gap:10px;margin:15px 0}
+  .upgrade-card.choice-card{padding:12px 14px;min-height:0;display:grid;grid-template-columns:1fr;gap:0;flex-shrink:0}
+  .choice-top{margin-bottom:10px}.choice-category{font-size:11px}.choice-quality{font-size:9px;padding:1px 6px}
+  .choice-heading{gap:9px;margin-bottom:9px}.choice-heading strong{font-size:16px}.choice-heading>span:last-child{gap:3px}.choice-card .upgrade-icon{width:34px;height:34px;font-size:23px}
+  .choice-description{font-size:10px;line-height:1.6;min-height:0;margin-bottom:7px}
+  .choice-stats{gap:3px;padding:8px 0 3px}.choice-stat{font-size:10px}.choice-values b{font-size:11px}.choice-attribute .choice-values b{font-size:13px}
+  .choice-note{padding-top:5px;font-size:9px}.choice-card .select-arrow{padding-top:7px;font-size:10px}
+}
+@media(min-width:761px) and (max-height:500px){.upgrade-card.choice-card{padding:12px;min-height:290px}.choice-top{margin-bottom:10px}.choice-description{font-size:10px}.choice-heading strong{font-size:16px}.choice-stat{font-size:9px}.choice-values b{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.upgrade-card.choice-card,.upgrade-card.choice-card:hover{transition:none;transform:none}}

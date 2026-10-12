@@ -35,11 +35,11 @@ export class SuperArt {
     // Twisting woody roots and paired foliage make a recognizable living trap.
     for(let j=0;j<7;j++){
       const a=j*TAU/7+noise(variant,j)*.25,dx=Math.cos(a),dy=Math.sin(a),bend=(noise(variant,j+10)-.5)*35,end=80+noise(variant,j+25)*13;
-      ctx.beginPath();ctx.moveTo(dx*12,dy*12);ctx.bezierCurveTo(dx*35-dy*bend,dy*35+dx*bend,dx*64+dy*bend,dy*64-dx*bend,dx*end,dy*end);ctx.strokeStyle='#304b36';ctx.lineWidth=5.8;ctx.stroke();ctx.strokeStyle='#789659';ctx.lineWidth=3;ctx.stroke();ctx.strokeStyle='#c2d69a';ctx.lineWidth=.7;ctx.stroke();
+      ctx.beginPath();ctx.moveTo(dx*12,dy*12);ctx.bezierCurveTo(dx*35-dy*bend,dy*35+dx*bend,dx*64+dy*bend,dy*64-dx*bend,dx*end,dy*end);ctx.strokeStyle='#273f2c';ctx.lineWidth=7.5;ctx.stroke();ctx.strokeStyle='#86a960';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#e0e8ae';ctx.lineWidth=1;ctx.stroke();
       for(let k=0;k<4;k++){const rr=24+k*18,xx=dx*rr+Math.sin(k*2.1)*4,yy=dy*rr,side=k%2?1:-1;leaf(ctx,xx,yy,a+side*1.12,5.3+k*.6,k%2?'#96b477':'#658957');}
     }
     for(let j=0;j<15;j++){
-      const a=j*2.399+noise(variant,j+50)*.2,r=Math.sqrt((j+1)/16)*82,x=Math.cos(a)*r,y=Math.sin(a)*r,h=17+noise(variant,j+70)*15,side=j%2?1:-1;
+      const a=j*2.399+noise(variant,j+50)*.2,r=Math.sqrt((j+1)/16)*82,x=Math.cos(a)*r,y=Math.sin(a)*r,h=20+noise(variant,j+70)*18,side=j%2?1:-1;
       ctx.fillStyle='#385036';polygon(ctx,[[x-7,y+3],[x-3,y-h*.48],[x+side*7,y-h],[x+side*3,y-h*.55],[x+6,y+2]]);
       ctx.fillStyle='#789b62';polygon(ctx,[[x-3,y+1],[x-2,y-h*.44],[x+side*7,y-h],[x+side*1,y-h*.48],[x+2,y+2]]);
       ctx.fillStyle='#d3dcaa';polygon(ctx,[[x+side*2,y-h*.53],[x+side*7,y-h],[x+side*5,y-h*.45]]);
@@ -70,14 +70,15 @@ export class SuperArt {
     const {kind,x,y,r}=field,t=age(field),elapsed=field.maxLife-field.life,data=this._data(field),fade=kind==='meteor'?1:clamp(field.life/.4);
     ctx.save();ctx.translate(x,y);ctx.lineJoin='round';ctx.lineCap='round';ctx.globalAlpha=fade;ctx.shadowBlur=0;
     if(kind==='thorns'){
-      ctx.globalAlpha=fade*.12;ctx.drawImage(this._glow('#a9d888'),-r,-r,r*2,r*2);ctx.globalAlpha=fade;
-      ctx.drawImage(this._thorns(Math.abs(data.seed)%3),-r*1.28,-r*1.28,r*2.56,r*2.56);
+      ctx.globalAlpha=fade*.16;ctx.drawImage(this._glow('#a9d888'),-r,-r,r*2,r*2);ctx.globalAlpha=fade;
+      const growth=reduced?1:.87+.13*smooth(elapsed/.16),size=r*1.28*growth;
+      ctx.drawImage(this._thorns(Math.abs(data.seed)%3),-size,-size,size*2,size*2);
     }else if(kind==='miasma'){
       // A hard game radius remains readable while the interior consists of soft,
       // mottled clouds. The foliage and enemies above it are never obscured.
       ctx.save();ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.clip();ctx.globalAlpha=fade*.25;ctx.drawImage(this._glow('#ad83cd'),-r,-r,r*2,r*2);
       for(let i=0;i<(dense?5:8);i++){const p=data.particles[i],a=p.a+(reduced?0:elapsed*.09),rr=p.r*r*.64,xx=Math.cos(a)*rr,yy=Math.sin(a)*rr*.82,size=r*(.75+p.r*.25);ctx.globalAlpha=fade*(.45+Math.sin(p.phase+(reduced?0:elapsed*.45))*.08);ctx.drawImage(this._mist(i%2),xx-size*.65,yy-size*.42,size*1.3,size*.85);}
-      ctx.restore();ctx.globalAlpha=fade*.58;ctx.strokeStyle='#d0addd';ctx.lineWidth=.85;ctx.beginPath();for(let i=0;i<12;i++){const a=i*TAU/12;ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);ctx.arc(0,0,r,a,a+.08);}ctx.stroke();
+      ctx.restore();ctx.globalAlpha=fade*.7;ctx.strokeStyle='#d0addd';ctx.lineWidth=1.2;ctx.beginPath();for(let i=0;i<12;i++){const a=i*TAU/12;ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);ctx.arc(0,0,r,a,a+.08);}ctx.stroke();
       if(!dense){ctx.globalAlpha=fade*.5;for(let i=0;i<8;i++){const p=data.particles[i],xx=Math.cos(p.a)*r*p.r,yy=Math.sin(p.a)*r*p.r-(reduced?0:Math.sin(elapsed*.6+p.phase)*3);ellipse(ctx,xx,yy,1.4,1.1,'#eed3ef');}}
     }else if(kind==='meteor')this._meteorWarning(ctx,field,t,reduced,dense);
     else if(kind==='vortex')this._vortex(ctx,field,elapsed,data,reduced,dense,fade);
@@ -95,16 +96,18 @@ export class SuperArt {
     if(!reduced&&!dense){ctx.globalAlpha=.4;for(let i=0;i<6;i++){const a=i*TAU/6+.4,rr=r*(.25+.4*(1-t));shard(ctx,Math.cos(a)*rr,Math.sin(a)*rr,a,2,'#f4c780');}}
   }
   _vortex(ctx,f,elapsed,data,reduced,dense,fade){
-    const r=f.r,phase=reduced?0:elapsed*.65;ctx.globalAlpha=fade*.18;ctx.drawImage(this._glow('#a896eb'),-r,-r,r*2,r*2);
+    const r=f.r,phase=reduced?0:elapsed*.9;ctx.globalAlpha=fade*.18;ctx.drawImage(this._glow('#a896eb'),-r,-r,r*2,r*2);
     if(!dense){ctx.save();ctx.rotate(phase*.65);ctx.globalAlpha=fade*.17;ctx.drawImage(this._mist(1),-r*.61,-r*.25,r*1.22,r*.5);ctx.rotate(1.4);ctx.drawImage(this._mist(0),-r*.49,-r*.21,r*.98,r*.42);ctx.restore();}
     ctx.globalAlpha=fade*.72;ctx.fillStyle='#282436';ctx.beginPath();ctx.moveTo(-r*.27,0);ctx.bezierCurveTo(-r*.08,-r*.31,r*.3,-r*.24,r*.28,-r*.03);ctx.bezierCurveTo(r*.21,r*.24,-r*.24,r*.25,-r*.27,0);ctx.fill();
     for(let arm=0;arm<3;arm++){
       const a0=phase+arm*TAU/3;ctx.beginPath();for(let j=0;j<=25;j++){const u=j/25,a=a0+u*3.9,rr=r*(.94-u*.79),x=Math.cos(a)*rr,y=Math.sin(a)*rr;ctx[j?'lineTo':'moveTo'](x,y);}for(let j=25;j>=0;j--){const u=j/25,a=a0+u*3.9+.16+u*.32,rr=r*(.94-u*.79),x=Math.cos(a)*rr,y=Math.sin(a)*rr;ctx.lineTo(x,y);}ctx.closePath();ctx.globalAlpha=fade*(arm===0?.46:.31);ctx.fillStyle=arm===0?'#baa7ee':'#826bba';ctx.fill();
       if(!dense){ctx.save();ctx.clip();ctx.globalAlpha=fade*.26;ctx.drawImage(this._mist(1),-r,-r,r*2,r*2);ctx.restore();}
-      ctx.beginPath();for(let j=0;j<=25;j++){const u=j/25,a=a0+u*3.9,rr=r*(.94-u*.79);ctx[j?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr);}ctx.globalAlpha=fade*.55;ctx.lineWidth=arm===0?1.5:.8;ctx.strokeStyle=arm===0?'#e3d6ff':'#b9a5e1';ctx.stroke();
+      ctx.beginPath();for(let j=0;j<=25;j++){const u=j/25,a=a0+u*3.9,rr=r*(.94-u*.79);ctx[j?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr);}ctx.globalAlpha=fade*.72;ctx.lineWidth=arm===0?2.5:1.2;ctx.strokeStyle=arm===0?'#eee3ff':'#c6aef0';ctx.stroke();
     }
     ctx.globalAlpha=fade*.85;ctx.fillStyle='#1e2330';ctx.beginPath();ctx.moveTo(-14,-2);ctx.bezierCurveTo(-1,-20,17,-10,14,3);ctx.bezierCurveTo(3,21,-19,11,-14,-2);ctx.fill();ctx.strokeStyle='#e0cdff';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-12,-4);ctx.bezierCurveTo(-6,-15,13,-15,15,-1);ctx.stroke();
-    for(let i=0;i<(dense?6:12);i++){const p=data.particles[i],a=p.a+(reduced?0:elapsed*(.45+p.r*.25)),rr=r*(.27+p.r*.65);ctx.globalAlpha=fade*(.25+p.r*.35);shard(ctx,Math.cos(a)*rr,Math.sin(a)*rr,a,p.size*.75,i%3?'#b3a0d1':'#ede2ff');}
+    // Debris spirals inward instead of orbiting in place, making the pull
+    // legible without adding opaque haze over enemies or their telegraphs.
+    for(let i=0;i<(dense?6:12);i++){const p=data.particles[i],travel=reduced?p.r:(p.r+elapsed*.54)%1,a=p.a+(reduced?0:elapsed*(.7+p.r*.3)),rr=r*(.92-travel*.76);ctx.globalAlpha=fade*(.3+Math.sin(travel*Math.PI)*.45);shard(ctx,Math.cos(a)*rr,Math.sin(a)*rr,a,p.size*.85,i%3?'#bba4e3':'#f0e7ff');}
     ctx.globalAlpha=fade*.4;ctx.strokeStyle='#bca7df';ctx.lineWidth=.85;ctx.beginPath();for(let i=0;i<12;i++){const a=i*TAU/12;line(ctx,Math.cos(a)*(r-4),Math.sin(a)*(r-4),Math.cos(a)*r,Math.sin(a)*r);}ctx.stroke();
   }
 
@@ -112,7 +115,7 @@ export class SuperArt {
   // the air. Impact debris is emitted later by the actual superBurst effect.
   drawFieldAir(ctx,field,{reduced=false,dense=false}={}){
     if(field?.kind!=='meteor'||!(field.life>0))return false;
-    const t=age(field),fall=smooth(clamp((t-.12)/.88)),height=reduced?28:225*(1-fall)+8,x=field.x-(reduced?0:height*.43),y=field.y-height,scale=reduced?.42:.42+.3*fall,alpha=reduced?.68:clamp(t*7);
+    const t=age(field),fall=smooth(clamp((t-.12)/.88)),height=reduced?28:225*(1-fall)+8,x=field.x-(reduced?0:height*.43),y=field.y-height,scale=reduced?.58:.5+.42*fall,alpha=reduced?.74:clamp(t*7);
     ctx.save();ctx.globalAlpha=alpha;ctx.lineJoin='round';ctx.translate(x,y);ctx.rotate(-.405);
     if(!reduced){
       ctx.globalAlpha=alpha*.32;ctx.fillStyle='#d98455';polygon(ctx,[[-15,10],[-26,-43],[-13,-32],[-18,-83],[0,-59],[14,-96],[13,-41],[27,-58],[17,7]]);
@@ -130,15 +133,17 @@ export class SuperArt {
     if(e.type==='superRay')this._runes(ctx,e,t,reduced,dense);
     else if(e.type==='superSword')this._swordHit(ctx,e,t,reduced,dense);
     else if(e.skillId==='meteor')this._meteorImpact(ctx,e,t,data,reduced,dense);
+    else if(e.skillId==='miasma')this._miasmaBurst(ctx,e,t,data,reduced,dense);
+    else if(e.skillId==='swords')this._swordSummon(ctx,e,t,reduced);
     else this._thornBurst(ctx,e,t,data,reduced,dense);
     ctx.restore();return true;
   }
   _runes(ctx,e,t,reduced,dense){
     const dx=e.x2-e.x,dy=e.y2-e.y,length=Math.hypot(dx,dy),a=Math.atan2(dy,dx),fade=(1-t)**.8,width=e.r||9;
-    ctx.translate(e.x,e.y);ctx.rotate(a);ctx.globalAlpha=fade*(reduced?.13:.22);ctx.fillStyle='#79ddd2';polygon(ctx,[[0,-width*.65],[Math.min(20,length*.2),-width],[length,-width*.45],[length+3,0],[length,width*.45],[Math.min(20,length*.2),width],[0,width*.65]]);
-    ctx.globalAlpha=fade*.65;ctx.strokeStyle='#8bede3';ctx.lineWidth=3;ctx.beginPath();line(ctx,0,0,length,0);ctx.stroke();ctx.globalAlpha=fade;ctx.strokeStyle='#effff1';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.translate(e.x,e.y);ctx.rotate(a);ctx.globalAlpha=fade*(reduced?.15:.25);ctx.fillStyle='#79ddd2';polygon(ctx,[[0,-width*.65],[Math.min(20,length*.2),-width],[length,-width*.45],[length+3,0],[length,width*.45],[Math.min(20,length*.2),width],[0,width*.65]]);
+    ctx.globalAlpha=fade*.8;ctx.strokeStyle='#7ce4de';ctx.lineWidth=5.5;ctx.beginPath();line(ctx,0,0,length,0);ctx.stroke();ctx.globalAlpha=fade;ctx.strokeStyle='#f0fff4';ctx.lineWidth=2.2;ctx.stroke();
     ctx.globalAlpha=fade*.55;ctx.strokeStyle='#a3dbd3';ctx.lineWidth=.8;ctx.beginPath();line(ctx,9,-width*.72,length,-width*.28);line(ctx,9,width*.72,length,width*.28);ctx.stroke();
-    const n=Math.min(dense?3:6,Math.max(1,Math.floor(length/58)));for(let i=0;i<n;i++){const xx=(i+.4)/n*length;ctx.globalAlpha=fade*.9;glyph(ctx,xx,0,0,3.6,i,'#d5fff0');ctx.globalAlpha=fade*.42;ctx.strokeStyle='#92d7d2';ctx.lineWidth=.9;ctx.beginPath();ctx.moveTo(xx-7,-width*.8);ctx.lineTo(xx-10,0);ctx.lineTo(xx-7,width*.8);ctx.moveTo(xx+7,-width*.8);ctx.lineTo(xx+10,0);ctx.lineTo(xx+7,width*.8);ctx.stroke();}
+    const n=Math.min(dense?3:6,Math.max(1,Math.floor(length/58)));for(let i=0;i<n;i++){const xx=(i+.4)/n*length;ctx.globalAlpha=fade*.95;glyph(ctx,xx,0,0,4.4,i,'#d5fff0');ctx.globalAlpha=fade*.65;ctx.strokeStyle='#92d7d2';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(xx-7,-width*.8);ctx.lineTo(xx-10,0);ctx.lineTo(xx-7,width*.8);ctx.moveTo(xx+7,-width*.8);ctx.lineTo(xx+10,0);ctx.lineTo(xx+7,width*.8);ctx.stroke();}
     ctx.globalAlpha=fade*.55;ctx.drawImage(this._glow('#a5fff0'),-22,-22,44,44);ctx.globalAlpha=fade;glyph(ctx,0,0,Math.PI/4,8,1,'#d7fff2');
     // The contact spark is present on frame one: these beams damage instantly.
     ctx.globalAlpha=fade*.8;ctx.fillStyle='#ebfff1';polygon(ctx,[[length-8,0],[length-2,-2],[length,-10],[length+2,-2],[length+8,0],[length+2,2],[length,10],[length-2,2]]);
@@ -146,27 +151,58 @@ export class SuperArt {
   _swordHit(ctx,e,t,reduced,dense){
     const dx=e.x2-e.x,dy=e.y2-e.y,a=Math.atan2(dy,dx),length=Math.hypot(dx,dy),fade=(1-t)**.7;
     ctx.translate(e.x,e.y);ctx.rotate(a);ctx.globalAlpha=fade*(reduced?.16:.28);ctx.fillStyle='#f2dda2';polygon(ctx,[[0,0],[length*.35,-3],[length,-8],[length+5,0],[length,8],[length*.35,3]]);
-    ctx.globalAlpha=fade*.7;ctx.strokeStyle='#ffedc2';ctx.lineWidth=1.3;ctx.beginPath();line(ctx,0,0,length,0);ctx.stroke();
-    ctx.translate(length,0);ctx.globalAlpha=fade;ctx.drawImage(this._sword(),-88,-24);ctx.globalAlpha=fade*.25;ctx.drawImage(this._glow('#ffdda1'),-31,-31,62,62);
+    ctx.globalAlpha=fade*.85;ctx.strokeStyle='#ffedc2';ctx.lineWidth=2;ctx.beginPath();line(ctx,0,0,length,0);ctx.stroke();
+    ctx.translate(length,0);ctx.globalAlpha=fade;ctx.drawImage(this._sword(),-101,-27.6,128.8,55.2);ctx.globalAlpha=fade*.3;ctx.drawImage(this._glow('#ffdda1'),-36,-36,72,72);
     ctx.globalAlpha=fade*.86;ctx.fillStyle='#fff5d8';const spread=reduced?14:12+t*22;polygon(ctx,[[-spread,-spread*.8],[-2,-3],[spread*.72,-spread], [3,0],[spread,spread*.8],[1,3],[-spread*.7,spread],[-3,0]]);
     if(!reduced&&!dense){ctx.globalAlpha=fade*.65;ctx.strokeStyle='#ecd69f';ctx.lineWidth=1.1;ctx.beginPath();for(let i=0;i<5;i++){const angle=i*TAU/5+.3,rr=8+t*23;line(ctx,Math.cos(angle)*rr,Math.sin(angle)*rr,Math.cos(angle)*(rr+5),Math.sin(angle)*(rr+5));}ctx.stroke();}
   }
   _meteorImpact(ctx,e,t,data,reduced,dense){
-    const r=e.r||74,fade=(1-t)**.75,spread=reduced?.66:smooth(t/.7),flash=reduced?.18:Math.max(0,1-t*4);
+    const r=e.r||86,fade=(1-t)**.75,spread=reduced?.66:smooth(t/.7),flash=reduced?.18:Math.max(0,1-t*4);
     ctx.translate(e.x,e.y);
     // A scorched, faceted crater replaces the old post-impact falling stone.
-    ctx.globalAlpha=fade*.63;ctx.fillStyle='#3b3435';ctx.beginPath();for(let i=0;i<14;i++){const a=i*TAU/14,rr=r*(.32+noise(data.seed,i)*.13);ctx[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr*.65);}ctx.closePath();ctx.fill();
+    ctx.globalAlpha=fade*.7;ctx.fillStyle='#3b3435';ctx.beginPath();for(let i=0;i<14;i++){const a=i*TAU/14,rr=r*(.4+noise(data.seed,i)*.13);ctx[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr*.65);}ctx.closePath();ctx.fill();
     ctx.globalAlpha=fade*.72;ctx.strokeStyle='#b27652';ctx.lineWidth=2;ctx.stroke();ctx.strokeStyle='#f1b77a';ctx.lineWidth=.85;ctx.stroke();
+    ctx.globalAlpha=fade*.85;ctx.strokeStyle='#6a4a3c';ctx.lineWidth=2.5;ctx.beginPath();for(let i=0;i<(dense?4:7);i++){const p=data.particles[i],a=p.a,rr=r*(.5+p.r*.28);ctx.moveTo(Math.cos(a)*r*.27,Math.sin(a)*r*.2);ctx.lineTo(Math.cos(a+.1)*rr*.67,Math.sin(a+.1)*rr*.5);ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr*.72);}ctx.stroke();ctx.strokeStyle='#f5bc7e';ctx.lineWidth=.8;ctx.stroke();
     ctx.globalAlpha=flash*.55;ctx.drawImage(this._glow('#ffe2ad'),-r,-r,r*2,r*2);
+    // A short, faceted flame crown carries the initial impact. It stays inside
+    // the blast footprint, then leaves the crater and outward debris visible.
+    ctx.globalAlpha=flash*(reduced?.25:.8);ctx.fillStyle='#f6bc78';
+    for(let i=0;i<(dense?4:6);i++){const p=data.particles[i],xx=Math.cos(p.a)*r*.25,yy=Math.sin(p.a)*r*.16,h=(reduced?14:30+p.size*3)*(1-t);polygon(ctx,[[xx-7,yy+4],[xx-5,yy-h*.34],[xx-8,yy-h*.55],[xx-1,yy-h*.4],[xx+3,yy-h],[xx+8,yy-h*.28],[xx+7,yy+4]]);}
     ctx.globalAlpha=fade*.5;ctx.fillStyle='#e5b986';ctx.beginPath();for(let i=0;i<24;i++){const a=i*TAU/24,rr=r*(.24+spread*.7)*(i%2?.93:1);ctx[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr);}for(let i=23;i>=0;i--){const a=i*TAU/24,rr=r*(.20+spread*.7)*(i%2?.93:1);ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}ctx.closePath();ctx.fill();
     ctx.globalAlpha=fade*(reduced?.23:.58);ctx.fillStyle='#f1aa6f';for(let i=0;i<(dense?6:9);i++){const p=data.particles[i],xx=Math.cos(p.a)*r*.34,yy=Math.sin(p.a)*r*.25,h=reduced?9:13*(1-t);polygon(ctx,[[xx-3,yy+3],[xx-1,yy-h*.4],[xx+1,yy-h],[xx+3,yy-h*.25],[xx+4,yy+3]]);}
     for(let i=0;i<(dense?9:18);i++){const p=data.particles[i],rr=r*(.16+spread*p.r*.9),lift=reduced?0:Math.sin(t*Math.PI)*p.lift;ctx.globalAlpha=fade*(i%3?.85:.55);shard(ctx,Math.cos(p.a)*rr,Math.sin(p.a)*rr-lift,p.a+(reduced?0:t*2),p.size*(reduced?1:1-t*.35),i%3?'#957660':'#efc18b');}
     if(!reduced&&!dense){ctx.globalAlpha=fade*.27;for(let i=0;i<5;i++){const p=data.particles[i],xx=Math.cos(p.a)*r*spread*.55,yy=Math.sin(p.a)*r*spread*.45-10*t;ctx.drawImage(this._dust(),xx-r*.4,yy-r*.26,r*.8,r*.52);}}
     ctx.globalAlpha=flash*.75;ctx.fillStyle='#fff1c4';polygon(ctx,[[-22,0],[-4,-5],[0,-26],[4,-5],[22,0],[5,4],[0,15],[-4,4]]);
   }
+  _miasmaBurst(ctx,e,t,data,reduced,dense){
+    const r=e.r||95,fade=(1-t)**.8,spread=reduced?.62:.3+smooth(t)*.65;
+    ctx.translate(e.x,e.y);
+    // The opening burst is localized. A broken crest and billowing lobes
+    // distinguish it from lightning and from the later, quiet poison field.
+    ctx.globalAlpha=fade*(reduced?.1:.2);ctx.drawImage(this._glow('#d2a7e6'),-r,-r,r*2,r*2);
+    for(let i=0;i<(dense?4:6);i++){
+      const p=data.particles[i],a=i*TAU/6+p.a*.08,rr=r*spread*.65,xx=Math.cos(a)*rr,yy=Math.sin(a)*rr*.8,size=r*(.5+t*.2);
+      ctx.globalAlpha=fade*.6;ctx.drawImage(this._mist(i%2),xx-size*.6,yy-size*.38-(reduced?0:12*t),size*1.2,size*.76);
+      ctx.globalAlpha=fade*.8;ctx.strokeStyle=i%2?'#c4e5a1':'#f1d3ff';ctx.lineWidth=2*(1-t)+.7;ctx.beginPath();ctx.arc(0,0,r*spread,a-.17,a+.17);ctx.stroke();
+    }
+    if(!dense)for(let i=0;i<9;i++){const p=data.particles[i],rr=r*spread*p.r;ctx.globalAlpha=fade*.82;shard(ctx,Math.cos(p.a)*rr,Math.sin(p.a)*rr-(reduced?0:Math.sin(t*Math.PI)*p.lift*.45),p.a,p.size*.75,i%2?'#d9efaf':'#e3b7f0');}
+  }
+  _swordSummon(ctx,e,t,reduced){
+    const elapsed=t*e.maxLife,count=Math.min(6,e.count||4),released=e.released??(elapsed<.16?0:Math.floor((elapsed-.16)/(e.interval||.22))+1),fade=clamp(e.life/.22);
+    ctx.translate(e.x,e.y);ctx.globalAlpha=fade*.13;ctx.drawImage(this._glow('#ffdda1'),-46,-49,92,92);
+    for(let i=released;i<count;i++){
+      const a=-Math.PI+.35+i/(count-1)*(Math.PI-.7),x=Math.cos(a)*35,y=-13+Math.sin(a)*25;
+      ctx.save();ctx.translate(x,y);ctx.rotate(-Math.PI/2);ctx.globalAlpha=fade*(reduced?.46:.58);ctx.drawImage(this._sword(),-36,-10,47,20);ctx.restore();
+    }
+    // A low crown-shaped seal stays at the casting location while the swords
+    // launch from the player's current position. It never fills the screen.
+    ctx.translate((e.castX??e.x)-e.x,(e.castY??e.y)-e.y);
+    ctx.globalAlpha=fade*.65;ctx.strokeStyle='#f1d894';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-17,15);ctx.lineTo(-19,7);ctx.lineTo(-8,11);ctx.lineTo(0,3);ctx.lineTo(8,11);ctx.lineTo(19,7);ctx.lineTo(17,15);ctx.closePath();ctx.stroke();
+  }
   _thornBurst(ctx,e,t,data,reduced,dense){
     const r=e.r||90,fade=1-t,spread=reduced?.65:.24+smooth(t)*.55;
     ctx.translate(e.x,e.y);ctx.globalAlpha=fade*.16;ctx.drawImage(this._glow('#c4e89c'),-r,-r,r*2,r*2);
+    ctx.globalAlpha=fade*.72;ctx.strokeStyle='#b5d187';ctx.lineWidth=1.8;ctx.beginPath();for(let i=0;i<(dense?5:8);i++){const p=data.particles[i],rr=r*(.3+spread*.7);ctx.moveTo(Math.cos(p.a)*rr*.45,Math.sin(p.a)*rr*.45);ctx.lineTo(Math.cos(p.a+.12)*rr*.7,Math.sin(p.a+.12)*rr*.7);ctx.lineTo(Math.cos(p.a)*rr,Math.sin(p.a)*rr);}ctx.stroke();
     for(let i=0;i<(dense?7:13);i++){const p=data.particles[i],rr=r*spread*p.r,xx=Math.cos(p.a)*rr,yy=Math.sin(p.a)*rr-(reduced?0:Math.sin(t*Math.PI)*p.lift*.7);ctx.globalAlpha=fade*.85;leaf(ctx,xx,yy,p.a+(reduced?0:t*2.5),p.size*1.25,i%2?'#c9df9e':'#96bc79');}
   }
 }
