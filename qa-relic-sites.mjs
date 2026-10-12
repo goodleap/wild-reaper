@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { portalDoor } from './dist/portal-geometry.js';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Adventure } from './dist/adventure.js';
@@ -132,12 +133,12 @@ for(const type of ['hunt','rescue']) {
   const ids=battle.guardIds,first=traveler.enemies.find(e=>e.id===ids[0]);traveler._hurtEnemy(first,first.hp+1);
   const remaining=traveler.enemies.filter(e=>e.hp>0&&ids.includes(e.id)),remainingIds=remaining.map(e=>e.id);
   const wounded=remaining[0];traveler._hurtEnemy(wounded,1);const wounds=wounded.hp;
-  const gateway=traveler.portal;feet(traveler,gateway);
+  const gateway=traveler.portal;feet(traveler,portalDoor(gateway));
   const guardian=traveler.enemies.find(e=>e.id===gateway.bossId);traveler._hurtEnemy(guardian,guardian.hp+1);
   traveler.regions.flushReward();assert(traveler.chooseSuper(traveler.getSuperChoices()[0].id));
   assert(traveler.enterPortal(gateway.id));assert.equal(traveler.regionIndex,1);
   traveler.time+=120;traveler._clock+=120;
-  const returnGate=traveler.regions.portals.find(p=>p.direction==='back');feet(traveler,returnGate);
+  const returnGate=traveler.regions.portals.find(p=>p.direction==='back');feet(traveler,portalDoor(returnGate));
   assert(traveler.enterPortal(returnGate.id));assert.equal(traveler.regionIndex,0);
   assert.equal(site(traveler,type),structure);assert.equal(structure.state,'active');assert.equal(structure.progress,1);
   assert.equal(type==='hunt'?traveler.encounters.active:traveler.companions.camp,battle);

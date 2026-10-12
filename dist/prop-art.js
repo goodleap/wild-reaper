@@ -1,6 +1,7 @@
 // Small hand-painted world objects. All brushwork is drawn into a finite 2x
 // sprite cache; the live path only composites sprites and a few tiny glints.
 // Cast shadows, interaction labels and health bars remain owned by app.js.
+import {PORTAL_GEOMETRY} from './portal-geometry.js';
 const TAU=Math.PI*2, PIXEL_LIMIT=3*1024*1024/4, OPTIONS=Object.freeze({});
 const poly=(c,p,color,edge=null,w=1)=>{c.beginPath();for(let i=0;i<p.length;i++)c[i?'lineTo':'moveTo'](p[i][0],p[i][1]);c.closePath();if(color){c.fillStyle=color;c.fill();}if(edge){c.strokeStyle=edge;c.lineWidth=w;c.stroke();}};
 const path=(c,p,color,w=1)=>{c.beginPath();for(let i=0;i<p.length;i++)c[i?'lineTo':'moveTo'](p[i][0],p[i][1]);c.strokeStyle=color;c.lineWidth=w;c.stroke();};
@@ -101,10 +102,54 @@ function mushroom(c,armed){
   if(armed){path(c,[[2,-30],[-2,-23],[3,-21],[0,-14]],'#6f4e2d',3);path(c,[[2,-30],[-2,-23],[3,-21],[0,-14]],'#fff1c2',1.2);}
 }
 
+function portalPlinth(c,pale,bright){
+  const {halfWidth:w,backY:back,frontY:front,wallRadius:r,entranceHalfWidth:door}=PORTAL_GEOMETRY;
+  // One raised stone landing, with a low U-shaped parapet matching the solid
+  // side/back walls. Only the central, south-facing steps remain open.
+  const edge='#344c3c',top='#87927a',light='#b0b599',shade='#586b54';
+  const slab=[[-42,-24],[-29,-31],[29,-31],[42,-24],[42,14],[28,22],[-28,22],[-42,14]];
+  poly(c,[[-42,11],[-28,19],[28,19],[42,11],[42,18],[28,26],[-28,26],[-42,18]],shade,edge,1);
+  poly(c,slab,top,edge,1.15);
+  poly(c,[[-39,-23],[-28,-28],[28,-28],[39,-22],[39,12],[27,19],[-27,19],[-39,12]],'#919b81');
+  path(c,[[-39,13],[-27,20],[27,20],[39,13]],'#c4c7a4',.9);
+  path(c,[[-27,23],[-19,23]],'#8b9978',.7);path(c,[[22,23],[28,23],[38,18]],'#8b9978',.7);
+  // Large fitted paving blocks give the landing a physical walking surface.
+  path(c,[[-26,-21],[-25,13],[-18,19]],'#52694f94',.8);
+  path(c,[[24,-21],[25,13],[19,19]],'#566d5099',.8);
+  path(c,[[-24,6],[24,6]],'#61775494',.9);
+  path(c,[[-24,7],[23,7]],'#c1c7a16e',.55);
+  path(c,[[0,-21],[0,-6],[-5,-2],[-4,5]],'#6377577a',.7);
+  path(c,[[8,8],[7,14],[11,18]],'#6174548a',.75);
+  // Three short treads are wider than the actual trigger lane. There is no
+  // front kerb across it, so the entrance reads clearly even while sealed.
+  poly(c,[[-door-5,19],[door+5,19],[door+5,25],[-door-5,25]],'#5a6c55',edge,.75);
+  poly(c,[[-door-3,14],[door+3,14],[door+5,20],[-door-5,20]],'#a1ab8a',edge,.75);
+  path(c,[[-door-4,20],[door+4,20]],'#d0cfaa',.8);
+  poly(c,[[-door-7,26],[door+7,26],[door+7,32],[-door-7,32]],'#596b52',edge,.75);
+  poly(c,[[-door-5,21],[door+5,21],[door+7,27],[-door-7,27]],'#8d9b7b',edge,.75);
+  path(c,[[-door-6,27],[door+6,27]],'#bdc19b',.85);
+  path(c,[[-door-6,30],[-door+3,30]],'#a7ad8975',.55);
+  // The parapet top is visibly brighter than its vertical stone faces.
+  poly(c,[[-w-r,back-3],[w+r,back-3],[w+r,back+4],[-w-r,back+4]],shade,edge,.9);
+  poly(c,[[-w-r,back-3],[-w,back-9],[w,back-9],[w+r,back-3]],top,edge,.9);
+  path(c,[[-w-r+1,back-3],[w+r-1,back-3]],light,.9);
+  for(const side of [-1,1]){
+    const x=side*w,inside=x-side*r,outside=x+side*r;
+    poly(c,[[inside,back-2],[outside,back-3],[outside,front+3],[inside,front+7]],shade,edge,1);
+    poly(c,[[inside,back-2],[outside,back-3],[outside,front-5],[inside,front-1]],side<0?'#7f8e71':'#9ba386',edge,.9);
+    poly(c,[[inside,front-1],[outside,front-5],[outside,front+3],[inside,front+7]],side<0?'#627451':'#6e7e5c',edge,.85);
+    path(c,[[inside,back-1],[inside,front-1],[outside,front-5]],light,.85);
+    for(const yy of [-15,-5]){path(c,[[inside,yy],[outside,yy-1]],'#405d438c',.8);path(c,[[outside,yy-1],[outside,yy+4]],'#405d438c',.65);}
+    poly(c,[[x-3,front],[x,front-2],[x+3,front],[x,front+2]],bright,edge,.5);
+    path(c,[[x-1,front],[x+1,front]],pale,.65);
+  }
+}
+
 function portal(c,variant){
   const locked=variant===3;
   const mint=variant===0,amber=variant===2;
   const pale=amber?'#ffe1a5':mint?'#b6f4da':'#e1c5f7',bright=amber?'#cba45f':mint?'#74b8a4':'#ad8fc0',dark=amber?'#34473a':mint?'#153b3c':'#2b3048';
+  portalPlinth(c,pale,bright);
   // Narrow, uneven masonry surrounds a translucent opening. The opening is
   // rendered inside the arch, leaving feet and neighbouring actors readable.
   const aperture=c.createRadialGradient(6,-49,1,0,-39,37);aperture.addColorStop(0,bright+'ae');aperture.addColorStop(.35,dark+'e8');aperture.addColorStop(.75,dark+'ef');aperture.addColorStop(1,bright+'35');
@@ -174,7 +219,7 @@ export class PropArt {
   _frame(key){
     let image=this.cache.get(key);if(image)return image;
     const isPortal=key.startsWith('portal'),isChest=key.startsWith('chest'),small=key.startsWith('pickup')||key.startsWith('bullet')||key.startsWith('blade');
-    const w=isPortal?84:isChest?76:small?40:64,h=isPortal?96:isChest?82:small?44:48,ox=w*.5,oy=isPortal?88:isChest?72:small?22:40;
+    const w=isPortal?96:isChest?76:small?40:64,h=isPortal?128:isChest?82:small?44:48,ox=w*.5,oy=isPortal?90:isChest?72:small?22:40;
     const canvas=this.makeCanvas();canvas.width=w*2;canvas.height=h*2;const c=canvas.getContext('2d');c.setTransform(2,0,0,2,ox*2,oy*2);c.lineJoin='round';c.lineCap='round';
     if(isPortal)portal(c,key==='portal:locked'?3:key==='portal:ruins'?2:key==='portal:marsh'?1:0);
     else if(isChest){const royal=key.includes(':royal:'),state=key.endsWith(':open')?'open':key.endsWith(':ready')?'ready':key.endsWith(':locked')?'locked':'closed';chest(c,royal,state);}

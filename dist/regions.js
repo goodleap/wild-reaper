@@ -1,5 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
+import { PORTAL_GEOMETRY, portalDoor, portalEntranceContains, portalObstacles } from './portal-geometry.js';
 
 export const REGIONS=Object.freeze([
   Object.freeze({id:'forest',name:'低语之森',shortName:'密林',colors:{ground:'#263e30',light:'#35503a',dark:'#182b22',accent:'#a9d991',mist:'#c1d6a9',grass:'#648052',stone:'#788170'},enemyWeights:{slime:1,beetle:1,bat:1,brute:1,boar:1,spore:1}}),
@@ -40,6 +41,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 // authored objectives; disposable chase mobs and terrain caches are released.
 export class Regions {
   constructor(game){this.game=game;this._lastBossId=null;this.portals=[];this.states=new Map();this.guarded=!!game._features.adventure;this.rewardPortal=null;this.unlockedConnections=new Set();this.claimedConnections=new Set();this.endlessStartedAt=null;this._rewardQueue=[];}
+  _setStructures(){this.game.terrain.setStructures?.(this.portals.flatMap(portalObstacles),'portals');}
   get defeatedConnectionsCount(){return this.unlockedConnections.size;}
   get endlessUnlocked(){return this.unlockedConnections.size===3;}
   _endpoint(target,{origin=null,back=false}={}) {
@@ -92,7 +94,7 @@ export class Regions {
     return null;
   }
   initialize(fromPortal=null,fromRegionIndex=null) {
-    const g=this.game,index=normalizeWorldIndex(g.regionIndex);this.portals=[];g.portal=null;
+    const g=this.game,index=normalizeWorldIndex(g.regionIndex);this.portals=[];g.portal=null;this._setStructures();
     // Small isolated mechanics fixtures keep the legacy timed-boss trigger.
     // Once entered they still use the same finite three-world graph.
     if(!this.guarded&&!fromPortal)return;
@@ -101,6 +103,7 @@ export class Regions {
     for(const target of targets){const endpoint=this._endpoint(target,{back:fromPortal&&target===fromRegionIndex});if(endpoint)this.portals.push(endpoint);}
     if(fromPortal)fromPortal.targetPortalId=`portal:${index}:${normalizeWorldIndex(fromRegionIndex)}`;
     g.portal=this.portals.find(portal=>portal.state==='locked')||this.portals[0]||null;
+    this._setStructures();
     if(this.guarded)for(const portal of this.portals)if(portal.state==='locked')this._spawnGuardian(portal);
     g.settlements?.ensureAngels?.();
   }
@@ -149,6 +152,7 @@ export class Regions {
       portal=this._endpoint(target,{origin:{x:enemy.x,y:enemy.y+groundOffset(enemy)}});
       if(portal){this.portals.push(portal);g.portal=portal;}
       const second=this._endpoint((target+1)%3);if(second)this.portals.push(second);
+      this._setStructures();
     }
     if(!portal||this.unlockedConnections.has(portal.connectionId))return null;
     this._lastBossId=enemy.id;this.unlockedConnections.add(portal.connectionId);
@@ -184,12 +188,29 @@ export class Regions {
   canEnter(portalOrId) {
     const g=this.game,portal=this._portal(portalOrId);
     return !!(portal&&portal.state==='active'&&g.status==='playing'&&!g.superSkills.pending&&!this._rewardQueue.length&&!g.dungeon?.active&&
-      !g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false)&&distance(feet(g),portal)<=portal.interactRadius);
+      !g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false)&&portalEntranceContains(portal,feet(g)));
   }
   getInteraction() {
-    const portal=this.nearest(),g=this.game;if(!portal||g.status!=='playing'||g.dungeon?.active||distance(feet(g),portal)>portal.interactRadius)return null;
+    const portal=this.nearest(),g=this.game;if(!portal||g.status!=='playing'||g.dungeon?.active)return null;
+    const door=portalDoor(portal);if(distance(feet(g),door)>portal.interactRadius)return null;
     const locked=portal.state!=='active',enabled=this.canEnter(portal);
-    return {id:portal.id,type:'portal',label:locked?`通往${portal.nextRegion.name}`:`前往${portal.nextRegion.name}`,description:locked?'击败驻门首领 · 解锁双向通道':'已激活 · 可以往返穿越',x:portal.x,y:portal.y,enabled};
+    return {id:portal.id,type:'portal',label:locked?`通往${portal.nextRegion.name}`:`前往${portal.nextRegion.name}`,description:locked?'击败驻门首领 · 解锁双向通道':'已激活 · 可以往返穿越',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
+  }
+  arrivalPoint(portal,r=this.game.player.r){
+    const g=this.game,door=portalDoor(portal),clearance=r+4;
+    // Arrival stays beyond the contact zone and on the open front apron.
+    // Guardians are removed on unlock; persistent angels still need room.
+    const safe=point=>placementAllowed(g,'loot',{...point,r:clearance})&&
+      !g.terrain.firstBlocker(door.x,door.y,point.x,point.y,clearance)&&
+      g.environment?.isHazardFree?.(point.x,point.y,clearance)!==false&&
+      !g.environment?.props?.some(prop=>prop.state!=='spent'&&distance(prop,point)<(prop.blastRadius||82)+clearance)&&
+      !g.settlements?.sites.some(site=>site.type==='angel'&&distance(site,point)<r+(site.r||15)+14);
+    for(const offset of [90,60,120,150,180,210,45])for(const dx of [0,-26,26,-52,52]){
+      const point={x:portal.x+dx,y:portal.y+offset};if(safe(point))return point;
+    }
+    // The reserved doorway itself is the final checked fallback. Its contact
+    // latch, like all scene arrivals, requires leaving before entering again.
+    return safe(door)?door:null;
   }
   saveWorld() {
     const g=this.game;
@@ -207,6 +228,6 @@ export class Regions {
     g.companions.camp=state.companionCamp;g.companions.generation=state.companionGeneration;g.companions.nextAt=state.companionNextAt+delta;
     if(g.adventure)g.adventure._nextTreasureAt+=delta;if(g.encounters)g.encounters.nextAt+=delta;
     for(const e of g.enemies)for(const key of ['superRootUntil','shockUntil'])if(Number.isFinite(e[key]))e[key]+=clockDelta;
-    this.states.delete(index);this._syncConnections();g.settlements?.ensureAngels?.();return true;
+    this.states.delete(index);this._setStructures();this._syncConnections();g.settlements?.ensureAngels?.();return true;
   }
 }

@@ -204,7 +204,7 @@ export class HumanoidArt {
       }else{
         // Soft cheek-side locks, a side part and an open forehead read as hair;
         // the floating halo remains separate from the head silhouette.
-        c.beginPath();c.moveTo(-11,-4);c.quadraticCurveTo(-14,-11,-13,-20);c.quadraticCurveTo(-13,-28,-6,-29);c.quadraticCurveTo(-2,-32,3,-29);c.quadraticCurveTo(9,-29,11,-24);c.quadraticCurveTo(14,-17,12,-9);c.quadraticCurveTo(11,-5,12,-3);c.quadraticCurveTo(11.3,-5,11.6,-10);c.quadraticCurveTo(11.7,-17,9.7,-20);c.quadraticCurveTo(8.8,-23,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.quadraticCurveTo(-12,-11,-11,-4);c.closePath();
+        c.beginPath();c.moveTo(-11,-4);c.quadraticCurveTo(-14,-11,-13,-20);c.bezierCurveTo(-13,-26.2,-7.5,-30.1,-1,-30.2);c.bezierCurveTo(5.3,-30.3,9.8,-27.8,11,-24);c.quadraticCurveTo(14,-17,12,-9);c.quadraticCurveTo(11,-5,12,-3);c.quadraticCurveTo(10.6,-5,10.8,-10);c.quadraticCurveTo(10.9,-17,9.4,-20);c.quadraticCurveTo(8.8,-23,5,-25);c.quadraticCurveTo(3,-20,-3,-19);c.lineTo(-2,-22);c.quadraticCurveTo(-6,-19,-10,-18);c.quadraticCurveTo(-10.8,-11,-10.6,-4);c.closePath();
         paint(c,material(c,flip,['#ad975d','#dcc788','#fff0bb'],14,-32,-12),'#7d8965',.9);
         c.beginPath();c.moveTo(3,-28);c.quadraticCurveTo(-2,-28,-7,-24);c.strokeStyle='#fff1c5';c.lineWidth=1.15;c.stroke();
         c.beginPath();c.moveTo(5,-27);c.quadraticCurveTo(9,-25,10,-21);c.strokeStyle='#fff1c599';c.lineWidth=.85;c.stroke();

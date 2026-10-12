@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { SCENE_TRANSITION_RULES } from './dist/scene-transition.js';
+import { portalDoor } from './dist/portal-geometry.js';
 
 const fresh=()=>{
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
@@ -104,11 +105,11 @@ assert.equal(deferred.crystals,41,'the transition never spends the pending upgra
 
 const travel=fresh(),bossGate=travel._spawnEnemy('boss',1);Object.assign(bossGate,{x:180,y:0,hp:0});
 travel.regions.openPortal(bossGate);travel.regions.flushReward();assert(travel.chooseSuper(travel.getSuperChoices()[0].id));
-const portal=travel.portal,oldTerrain=travel.terrain;place(travel,portal);
+const portal=travel.portal,oldTerrain=travel.terrain;place(travel,portalDoor(portal));
 const saved=persistent(travel);assert(travel.requestInteraction(portal.id));travel.update(.05);travel.update(.05);
 assert.equal(travel.regionIndex,0);assert.equal(travel.terrain,oldTerrain);travel.update(.05);
 assert.equal(travel.regionIndex,1);assert.equal(travel.sceneTransition.opacity,1);finish(travel);assert.deepEqual(persistent(travel),saved);
-const back=travel.regions.portals.find(p=>p.direction==='back');place(travel,back);assert(travel.requestInteraction(back.id));finish(travel);
+const back=travel.regions.portals.find(p=>p.direction==='back');place(travel,portalDoor(back));assert(travel.requestInteraction(back.id));finish(travel);
 assert.equal(travel.regionIndex,0);assert.equal(travel.terrain,oldTerrain);assert.deepEqual(persistent(travel),saved,'portal round trips freeze time and preserve progression');
 assert.equal(travel.superSkills.pending,null,'transitions do not replay the portal reward');
 

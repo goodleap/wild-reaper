@@ -78,6 +78,41 @@ assert.equal(nodes['phase-label'].textContent,'穿过门口 · 探索迷宫','hi
 assert.equal(run("worldMap.getMarkers(game).some(marker=>marker.type==='boss')"),false);
 run(`const capturedNotices=[];notify=(...args)=>capturedNotices.push(args);pendingEvolutions=[];announceCombatEvents([{type:'boss'},{type:'bloomWindup'}]);`);
 assert.equal(run('capturedNotices.length'),0,'unseen Boss spawn/cast does not produce a toast');
+// A royal chest's raised open lid crosses the north wall's floor silhouette.
+// Its ground anchor still controls discovery, while world depth controls which
+// wall can cover the sprite. Exercise the real castle, visibility and draw list.
+const chestRendering=JSON.parse(run(`JSON.stringify((()=>{
+  const previous=game,originalTerrain=drawTerrain,originalProp=drawAdventureProp,save=ctx.save,restore=ctx.restore;
+  let vision,originalClip;
+  try{
+    game=new Game({terrain:new previous.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
+    game.enemies=[];game.viewWidth=1100;game.viewHeight=700;
+    if(!game.dungeon.enter({id:'qa-raised-chest',type:'castle',x:0,y:groundOffset(game.player,true)}))throw new Error('castle fixture failed');
+    const state=game.dungeon.active,chest=state.treasure,room=state.bossRoom;
+    vision=game.dungeon.vision;originalClip=vision.clipVisible;
+    game.player.x=room.x;game.player.y=room.y+230-groundOffset(game.player,true);vision.update();
+    const hidden=adventureSceneProps(game.player.x,game.player.y).some(p=>p.id===chest.id);
+    const hiddenBehindWall=!!game.terrain.firstBlocker(room.x,room.y+230,chest.x,chest.y,0);
+    game.player.y=room.y+40-groundOffset(game.player,true);chest.state='claimed';vision.update();
+    const visible=adventureSceneProps(game.player.x,game.player.y).find(p=>p.id===chest.id);
+    const lidBeyondFloor=!vision.isVisible(chest.x,chest.y-80);
+    const north=state.walls.find(w=>w.angle===0&&w.x===room.x&&w.y===room.y-state.cellSize/2);
+    const south=state.walls.find(w=>w.angle===0&&w.x===room.x&&w.y===room.y+state.cellSize/2);
+    if(!visible||!north||!south)throw new Error('missing visible chest or real surrounding walls');
+    const calls=[],stack=[];let clipped=false,clips=0;
+    ctx.save=()=>{stack.push(clipped);save.call(ctx);};ctx.restore=()=>{restore.call(ctx);clipped=stack.pop();};
+    vision.clipVisible=function(...args){clips++;clipped=true;return originalClip.apply(this,args);};
+    drawTerrain=p=>calls.push({id:p.id,clipped});drawAdventureProp=p=>calls.push({id:p.id,state:p.state,clipped});
+    const floorProp={id:'qa-floor-prop',type:'supply',x:chest.x,y:chest.y+10};
+    drawScene([],[south,north],game.player,[floorProp,visible]);
+    return {hidden,hiddenBehindWall,lidBeyondFloor,visible:visible.isDungeonTreasure&&visible.royal,calls,clips,north:north.id,south:south.id,chest:chest.id};
+  }finally{if(vision)vision.clipVisible=originalClip;ctx.save=save;ctx.restore=restore;drawTerrain=originalTerrain;drawAdventureProp=originalProp;game=previous;}
+})())`));
+assert(chestRendering.hiddenBehindWall);assert.equal(chestRendering.hidden,false,'a chest in a wall-separated castle room never enters the scene draw list');
+assert(chestRendering.visible&&chestRendering.lidBeyondFloor,'the open royal lid must actually extend beyond the ground visibility mask');
+assert.deepEqual(chestRendering.calls.map(call=>call.id),[chestRendering.north,chestRendering.chest,'qa-floor-prop',chestRendering.south],'north wall stays behind the chest; a foreground wall still draws over it');
+assert.equal(chestRendering.calls[1].state,'claimed');assert.equal(chestRendering.calls[1].clipped,false,'the visible chest and its entire open lid bypass the floor-only clip');
+assert.equal(chestRendering.calls[2].clipped,true);assert.equal(chestRendering.clips,1,'ordinary floor props still retain their visibility clipping');
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('mapOpen'),false);assert(nodes['map-overlay'].classList.contains('hidden'));
 // Drive the real frame and native UI handlers across a door fade. Only drawing
 // is stubbed: movement, input revisions and the scene controller are live.

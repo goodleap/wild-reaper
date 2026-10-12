@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { portalDoor } from './dist/portal-geometry.js';
 import { Game, REGIONS } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
@@ -166,7 +167,7 @@ const portalBoss=monster(safety,260,-21.2,'boss');safety._hurtEnemy(portalBoss,p
 assert(safety.portal);assert(safety.environment.isHazardFree(safety.portal.x,safety.portal.y,45),'portal placement avoids existing hazardous ground');
 const oldEnvironment=safety.environment,oldMechanisms=mechanism(safety),oldHp=safety.player.hp;
 safety.regions.flushReward();assert(safety.chooseSuper(safety.getSuperChoices()[0].id));
-safety._features.environment=true;safety.player.x=safety.portal.x;safety.player.y=safety.portal.y-groundOffset(safety.player,true);
+safety._features.environment=true;safety.player.x=safety.portal.x;safety.player.y=portalDoor(safety.portal).y-groundOffset(safety.player,true);
 assert(safety.enterPortal());
 assert.notEqual(safety.environment,oldEnvironment);assert.notEqual(mechanism(safety),oldMechanisms);
 assert(!mechanism(safety).props.some(p=>p.id.startsWith('qa-')),'travel discards old mechanism state and pending attacks');

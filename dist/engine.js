@@ -567,9 +567,8 @@ export class Game {
     if(arrival) {
       // Land just in front of the paired gate, never at a different region's
       // coordinates. The interaction latch prevents an immediate bounce back.
-      let point={x:arrival.x,y:arrival.y+90};
-      for(const offset of [90,60,-60,-90,0])if(this.terrain.isFree(arrival.x,arrival.y+offset,p.r+4)){point={x:arrival.x,y:arrival.y+offset};break;}
-      p.x=point.x;p.y=point.y-groundOffset(p,true);
+      const point=this.regions.arrivalPoint(arrival,p.r);
+      if(point){p.x=point.x;p.y=point.y-groundOffset(p,true);}
     }
     this._moveEntity(p,0,0,true);resetLocomotion(p);
     this._islandWorlds=!!this.terrain.island;

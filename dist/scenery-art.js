@@ -1,4 +1,4 @@
-import {TREE_PROFILES} from './terrain.js';
+import {TREE_PROFILES,ROCK_FRAGMENTS} from './terrain.js';
 // Hand-painted Canvas scenery. The expensive brushwork is rasterized once;
 // world rendering only projects and composites these bounded, reusable images.
 // No cast shadows are baked here: the shared sunlight/shadow mask owns those.
@@ -15,13 +15,7 @@ function lobedPath(c,x,y,rx,ry,seed,count=28){const points=[];for(let i=0;i<coun
 // Low, separated fragments fill the same small collision footprint as a rock.
 // Gaps remain transparent; no intact boulder or ground shadow sits behind them.
 export function paintRockFragments(c,ruins=false){
-  const random=rng(329),pieces=[
-    {points:[[-33,-15],[-26,-29],[-15,-31],[-4,-23],[-11,-12],[-25,-9]],depth:7},
-    {points:[[4,-20],[13,-29],[28,-24],[34,-12],[27,-3],[10,-7]],depth:7},
-    {points:[[-12,1],[-5,-6],[5,-3],[8,6],[1,12],[-13,8]],depth:7},
-    {points:[[-33,13],[-27,4],[-18,7],[-18,17],[-25,21],[-34,18]],depth:5},
-    {points:[[11,19],[16,10],[27,9],[35,20],[28,28],[16,28]],depth:5}
-  ],tops=ruins?['#a6ad92','#b2b79b','#919f83','#a5ae90','#a1ab8b']:['#9fae8d','#b1b798','#8e9f82','#a2af8d','#99a988'];
+  const random=rng(329),pieces=ROCK_FRAGMENTS,tops=ruins?['#a6ad92','#b2b79b','#919f83','#a5ae90','#a1ab8b']:['#9fae8d','#b1b798','#8e9f82','#a2af8d','#99a988'];
   for(let j=0;j<pieces.length;j++){
     const {points,depth}=pieces[j];
     for(let i=0;i<points.length;i++){
@@ -101,8 +95,28 @@ export class SceneryArt {
     for(let i=0;i<leaves;i++){const x=-rx+r()*rx*2,y=-ry+r()*ry*2,lit=x/rx-y/ry>.15,l=2.5+r()*5;leaf(c,x,y,l,1+r()*1.4,-.8+r()*1.4,lit?['#adc07173','#8fa45a99','#c0d18548'][i%3]:['#6a8b4760','#20493080','#9aaa5650'][i%3]);if(i%11===0)stroke(c,[[x-3,y+3],[x+4,y-2]],'#173c2950',.8);}
     c.restore();for(let i=0;i<outline.length;i+=2){const [x,y]=outline[i];leaf(c,x,y,4.5,1.4,Math.atan2(y,x),'#496d3a');}
   });}
+  _branchFoliage(v){return this._image(`leaf-branches:${v}`,132,106,2,c=>{
+    c.translate(66,144);
+    if(v===4){
+      // A living asymmetrical crown: shorten the old sawn-off snag and join
+      // both branch tips to small leaf masses inside the existing envelope.
+      stroke(c,[[4,-44],[26,-78],[33,-111],[30,-125]],'#47513a',7);
+      stroke(c,[[6,-45],[28,-78],[35,-111],[32,-124]],'#9a8a59',2.6);
+      stroke(c,[[29,-101],[44,-110],[47,-119]],'#596344',3.5);
+    }
+    const clusters=v===4?[[24,-104,15,14],[29,-121,14,13],[45,-113,12,10]]:[[-27,-70,12,9]];
+    for(let i=0;i<clusters.length;i++){
+      const [x,y,rx,ry]=clusters[i],seed=2081+v*37+i*11,r=rng(seed);
+      lobedPath(c,x,y,rx,ry,seed,19);c.fillStyle='#203e2d';c.fill();
+      c.save();lobedPath(c,x,y,rx,ry,seed,19);c.clip();
+      const tone=c.createLinearGradient(x-rx,y+ry,x+rx,y-ry);tone.addColorStop(0,'#355d38');tone.addColorStop(1,'#748d4f');c.fillStyle=tone;c.fillRect(x-rx,y-ry,rx*2,ry*2);
+      for(let j=0;j<3;j++){const xx=x+(j-1)*rx*.45,yy=y+(j%2?-.22:.18)*ry;lobedPath(c,xx,yy,rx*.58,ry*.58,seed+j+3,14);c.fillStyle=['#4a6b3b','#688447','#53773f'][j];c.fill();}
+      for(let j=0;j<50;j++){const xx=x-rx+r()*rx*2,yy=y-ry+r()*ry*2;leaf(c,xx,yy,2+r()*3,.6+r(),-.7+r()*1.3,['#b1bd756b','#8fa35e83','#365d3880'][j%3]);}
+      c.restore();
+    }
+  });}
   drawTree(c,prop,canopyAlpha=1){const v=Number.isInteger(prop.treeForm)?prop.treeForm:this._variant(prop.seed),p=TREE_PROFILES[v],s=prop.scale||1,trunk=this._trunk(v),crown=this._canopy(v),cw=prop.crownWidth||1,ch=prop.crownHeight||1;c.save();c.translate(prop.x,prop.y);c.scale(s,s);c.drawImage(trunk.canvas,-trunk.w/2,-trunk.h+28,trunk.w,trunk.h);c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));
-    if(v===4){stroke(c,[[4,-44],[26,-78],[34,-117],[30,-137]],'#47513a',8);stroke(c,[[6,-45],[28,-78],[36,-117],[32,-136]],'#9a8a59',3);poly(c,[[27,-138],[34,-140],[35,-133],[30,-132]],'#c5af7d');stroke(c,[[29,-102],[47,-112],[49,-126]],'#596344',4);}
+    if(v===2||v===4){const foliage=this._branchFoliage(v);c.drawImage(foliage.canvas,-66,-144,foliage.w,foliage.h);}
     c.drawImage(crown.canvas,p.x-crown.w*cw/2,p.y-crown.h*ch/2,crown.w*cw,crown.h*ch);c.restore();}
   _rock(v){return this._image(`rock:${v}`,96,120,2,c=>{c.translate(48,72);if(v===3){paintRockFragments(c);return;}const r=rng(148+v*27);
     const forms=[

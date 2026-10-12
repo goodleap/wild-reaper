@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { portalDoor } from './dist/portal-geometry.js';
 import { Game, WEAPON_BRANCHES, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 
@@ -165,7 +166,7 @@ for(const branch of ['chain','focus']) {
 }
 const travel=arena();select(travel,'arrow','ricochet');select(travel,'pulse','control');select(travel,'lightning','focus');
 const beforeTravel=structuredClone(travel.branches),travelBoss=monster(travel,280,0,'boss');travel._hurtEnemy(travelBoss,travelBoss.hp+1);
-travel.player.x=travel.portal.x;travel.player.y=travel.portal.y-groundOffset(travel.player,true);
+travel.player.x=travel.portal.x;travel.player.y=portalDoor(travel.portal).y-groundOffset(travel.player,true);
 travel.regions.flushReward();assert(travel.chooseSuper(travel.getSuperChoices()[0].id));assert(travel.enterPortal());
 assert.deepEqual(travel.branches,beforeTravel,'travel preserves all mutually exclusive branch choices');
 assert.equal(travel._pulseEchoes.length,0);assert.equal(travel.bullets.length,0);

@@ -3,6 +3,7 @@ import { Game, REGIONS } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Adventure } from './dist/adventure.js';
 import { Encounters } from './dist/encounters.js';
+import { portalDoor } from './dist/portal-geometry.js';
 
 // Focused state transitions and enemy behaviors, not a long-run difficulty bot.
 let seed=195870;
@@ -37,7 +38,7 @@ function openPortal(g) {
   if(boss.portalId){g.player.x=g.portal.x;g.player.y=g.portal.y+180-groundOffset(g.player,true);g.regions.update();}
   g._hurtEnemy(boss,boss.hp+1);assert(g.portal&&g.portal.state==='active');return boss;
 }
-function standAtPortal(g,portal=g.portal) {g.player.x=portal.x;g.player.y=portal.y-groundOffset(g.player,true);}
+function standAtPortal(g,portal=g.portal) {const door=portalDoor(portal);g.player.x=door.x;g.player.y=door.y-groundOffset(g.player,true);}
 function usePortal(g,portal=g.portal) {standAtPortal(g,portal);return g.enterPortal(portal.id);}
 
 assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins']);

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { portalDoor } from './dist/portal-geometry.js';
 import { Game, HEROES, COMPANIONS } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Encounters } from './dist/encounters.js';
@@ -34,7 +35,7 @@ function rescue(g,kind='stormcaller',x=350,y=19.8) {
 }
 function travel(g) {
   const boss=monster(g,300,0,'boss');g._hurtEnemy(boss,boss.hp+1);
-  g.player.x=g.portal.x;g.player.y=g.portal.y-groundOffset(g.player,true);
+  g.player.x=g.portal.x;g.player.y=portalDoor(g.portal).y-groundOffset(g.player,true);
   g.regions.flushReward();assert(g.chooseSuper(g.getSuperChoices()[0].id));assert(g.enterPortal());
 }
 
@@ -245,7 +246,7 @@ assert.equal(pendingTravel.regionIndex,1);assert.equal(pendingTravel.companions.
 assert.equal(pendingTravel.rescuePower,0);assert.equal(pendingTravel.companions.rescuedCount,0);
 assert.equal(pendingTravel.kills,beforeTravelKills+1,'travel only rewards the defeated Boss, never cleared rescue guards');
 assert(!pendingTravel.enemies.some(e=>e.rescueId===lostCamp.id));
-const backToCamp=pendingTravel.regions.portals.find(p=>p.direction==='back');pendingTravel.player.x=backToCamp.x;pendingTravel.player.y=backToCamp.y-groundOffset(pendingTravel.player,true);assert(pendingTravel.enterPortal(backToCamp.id));
+const backToCamp=pendingTravel.regions.portals.find(p=>p.direction==='back');pendingTravel.player.x=backToCamp.x;pendingTravel.player.y=portalDoor(backToCamp).y-groundOffset(pendingTravel.player,true);assert(pendingTravel.enterPortal(backToCamp.id));
 assert.equal(pendingTravel.companions.camp,lostCamp,'an unfinished camp is restored on returning to its region');assert.equal(pendingTravel.enemies.filter(e=>e.rescueId===lostCamp.id).length,6);
 const followingTravel=arena(),follower=rescue(followingTravel,'warden');
 advance(followingTravel,7);const remaining=follower.remaining;

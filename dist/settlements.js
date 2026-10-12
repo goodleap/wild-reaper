@@ -1,5 +1,6 @@
 import { Terrain, groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
+import { portalDoor } from './portal-geometry.js';
 import { RELICS } from './relics.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive } from './event-scheduling.js';
 
@@ -104,13 +105,13 @@ export class Settlements {
     for(const enemy of this.game.enemies)if(enemy.hp>0)this.game._moveEntity?.(enemy,0,0);
   }
   _angelPoint(anchor) {
-    const g=this.game;
+    const g=this.game,approach=Number.isInteger(anchor.nextRegionIndex)||anchor.id?.startsWith('portal:')?portalDoor(anchor):anchor;
     // A small, fixed ring beside the anchor keeps the safe haven recognizable
     // on return. It never follows the player or moves an existing building.
     for(const radius of [85,105,125,145])for(let i=0;i<16;i++) {
       const angle=i*TAU/16,x=anchor.x+Math.cos(angle)*radius,y=anchor.y+Math.sin(angle)*radius;
       if(!g.terrain.isFree(x,y,28)||!this._hazardFree(x,y,28))continue;
-      if(g.terrain.firstBlocker(anchor.x,anchor.y,x,y,18))continue;
+      if(g.terrain.firstBlocker(approach.x,approach.y,x,y,18))continue;
       if(this.sites.some(s=>s.type!=='angel'&&!(s.type==='merchant'&&s.state==='spent')&&distance({x,y},this._bodyCenter(s))<s.width*.5+48))continue;
       if(g.adventure?.props.some(o=>distance(o,{x,y})<65))continue;
       if(g.adventure?.treasure&&distance(g.adventure.treasure,{x,y})<90)continue;

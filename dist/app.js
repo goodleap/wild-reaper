@@ -16,7 +16,7 @@ import { RelicArt } from './relic-art.js';
 import { AngelArt } from './angel-art.js';
 import { ImmersionArt } from './immersion-art.js';
 import { presentUpgrade, upgradeCardHTML } from './upgrade-presentation.js';
-import { groundOffset } from './terrain.js';
+import { groundOffset, rockShadowParts } from './terrain.js';
 import { isGrounded } from './environment.js';
 import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-map.js';
 
@@ -479,10 +479,12 @@ function drawScene(actors,props,mainPlayer,adventureProps=[]){
   const vision=game?.dungeon?.active?game.dungeon.vision:null;
   for(const item of sceneDrawList(actors,props,adventureProps)){
     const wall=item.kind==='terrain'&&['castle-wall','hut-wall'].includes(item.prop.variant);
-    // The player's own feet define this view. A floor-level clip would chop
-    // their hood off against the north wall; depth-sorted walls still occlude.
+    // The floor visibility test already admitted each interior chest at its
+    // ground anchor. Its raised lid, like the player's hood, must not be cut
+    // by the north wall's floor mask. Depth-sorted walls still occlude both.
     const self=item.kind==='actor'&&item.actor.entity===mainPlayer;
-    ctx.save();if(vision&&!wall&&!self)vision.clipVisible(ctx);
+    const raisedChest=item.kind==='adventure'&&item.prop.isDungeonTreasure;
+    ctx.save();if(vision&&!wall&&!self&&!raisedChest)vision.clipVisible(ctx);
     if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else drawActor(item.actor);
     ctx.restore();
   }
@@ -491,6 +493,22 @@ function terrainCapsulePath(target,halfLength,radius){
   target.moveTo(-halfLength,-radius);target.lineTo(halfLength,-radius);
   target.arc(halfLength,0,radius,-Math.PI/2,Math.PI/2);
   target.lineTo(-halfLength,radius);target.arc(-halfLength,0,radius,Math.PI/2,Math.PI*1.5);target.closePath();
+}
+const rockShadowOutlines=new WeakMap();
+function rubbleShadowPaths(prop){
+  let outlines=rockShadowOutlines.get(prop);if(outlines)return outlines;
+  const parts=rockShadowParts(prop);if(!parts)return null;
+  const turn=(a,b,c)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+  outlines=parts.map(({points,offset})=>{
+    // The convex hull joins each fragment's real base to its short projection.
+    // Cache in local coordinates: camera movement never rebuilds this geometry.
+    const vertices=[...points,...points.map(p=>({x:p.x+SUN.x*offset,y:p.y+SUN.y*offset}))].sort((a,b)=>a.x-b.x||a.y-b.y);
+    const lower=[],upper=[];
+    for(const p of vertices){while(lower.length>1&&turn(lower.at(-2),lower.at(-1),p)<=0)lower.pop();lower.push(p);}
+    for(let i=vertices.length-1;i>=0;i--){const p=vertices[i];while(upper.length>1&&turn(upper.at(-2),upper.at(-1),p)<=0)upper.pop();upper.push(p);}
+    return lower.slice(0,-1).concat(upper.slice(0,-1));
+  });
+  rockShadowOutlines.set(prop,outlines);return outlines;
 }
 function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
@@ -502,6 +520,12 @@ function drawTerrainShadowPaths(mask,props){
       mask.moveTo(ax+dy*radius,ay-dx*radius);mask.lineTo(bx+dy*radius,by-dx*radius);
       mask.arc(bx,by,radius,angle-Math.PI/2,angle+Math.PI/2);mask.lineTo(ax-dy*radius,ay+dx*radius);
       mask.arc(ax,ay,radius,angle+Math.PI/2,angle+Math.PI*1.5);mask.closePath();
+    }else if(type==='rock'&&prop.rockForm===3&&prop.variant!=='pillar'){
+      for(const points of rubbleShadowPaths(prop)||[]){
+        mask.moveTo(x+points[0].x,y+points[0].y);
+        for(let i=1;i<points.length;i++)mask.lineTo(x+points[i].x,y+points[i].y);
+        mask.closePath();
+      }
     }else{
       const dead=prop.variant==='dead-tree',pillar=prop.variant==='pillar',visual=prop.visual||{},offset=visual.shadowOffset??(type==='tree'&&visual.shadowLength?visual.shadowLength*.68:type==='tree'?35*scale:pillar?r*.9:r*.48),cx=x+SUN.x*offset,cy=y+SUN.y*offset;
       const rx=visual.shadowWidth??(type==='tree'?(dead?18:39)*scale:r*.88),ry=visual.shadowLength??(type==='tree'?51*scale:pillar?r*1.75:r*1.07);

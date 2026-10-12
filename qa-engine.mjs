@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { portalDoor } from './dist/portal-geometry.js';
 import { Game, xpCost, crystalCost, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 let seed=61851;
@@ -98,7 +99,7 @@ assert.equal(boss.bossCount,1,'overdue boss waits for current boss');
 boss._hurtEnemy(firstBoss,firstBoss.hp+1);
 assert.equal(boss.bossKills,1);assert(boss.events.some(e=>e.type==='bossKill'));
 boss.update(.02,{});assert.equal(boss.bossCount,1,'a pending region reward holds the next Boss');
-boss.player.x=boss.portal.x;boss.player.y=boss.portal.y-groundOffset(boss.player,true);assert(boss.chooseSuper(boss.getSuperChoices()[0].id));assert(boss.enterPortal());
+boss.player.x=boss.portal.x;boss.player.y=portalDoor(boss.portal).y-groundOffset(boss.player,true);assert(boss.chooseSuper(boss.getSuperChoices()[0].id));assert(boss.enterPortal());
 for(let i=0;i<101;i++)boss.update(.02,{});
 assert.equal(boss.bossCount,2);assert.equal(boss.enemies.filter(e=>e.type==='boss').length,1);
 const secondBoss=boss.enemies.find(e=>e.type==='boss');
@@ -138,7 +139,7 @@ const sim=(difficulty,seconds,immortal=false)=>{
     if(immortal)g.player.invuln=.3;
     const p=g.player;let target=null,distance=Infinity;
     for(const gem of g.gems){const d=Math.hypot(gem.x-p.x,gem.y-p.y);if(d<distance){distance=d;target=gem;}}
-    if(g.portal){target=g.portal;distance=Math.hypot(target.x-p.x,target.y-p.y);if(g.canEnterPortal(g.portal.id)){assert(g.enterPortal(g.portal.id));continue;}}
+    if(g.portal&&!g.sceneTransition.active){const door=portalDoor(g.portal);target={x:door.x,y:door.y-groundOffset(p,true)};distance=Math.hypot(target.x-p.x,target.y-p.y);if(g.canEnterPortal(g.portal.id)){assert(g.enterPortal(g.portal.id));continue;}}
     let vx=target?(target.x-p.x)/(distance||1):Math.cos(g.time*.7)*.2;
     let vy=target?(target.y-p.y)/(distance||1):Math.sin(g.time*.7)*.2;
     for(const e of g.enemies){const dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||1;if(d<105){const force=(105-d)/105*2;vx+=dx/d*force;vy+=dy/d*force;}}

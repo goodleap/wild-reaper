@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { portalDoor } from './dist/portal-geometry.js';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 
@@ -109,7 +110,7 @@ assert(Math.abs(first.x-scheduled.player.x)-first.r>=scheduled.viewWidth/2||Math
 scheduled.time=scheduled.nextBossAt+.1;scheduled.update(0);
 assert.equal(scheduled.bossCount,1,'an overdue Boss waits until the current one dies');
 scheduled._hurtEnemy(first,first.hp+1);scheduled.crystalsNext=Infinity;scheduled.update(0);assert.equal(scheduled.bossCount,1,'pending portal reward holds the overdue next Boss');
-scheduled.player.x=scheduled.portal.x;scheduled.player.y=scheduled.portal.y-groundOffset(scheduled.player,true);assert(scheduled.chooseSuper(scheduled.getSuperChoices()[0].id));assert(scheduled.enterPortal());advance(scheduled,2.025);
+scheduled.player.x=scheduled.portal.x;scheduled.player.y=portalDoor(scheduled.portal).y-groundOffset(scheduled.player,true);assert(scheduled.chooseSuper(scheduled.getSuperChoices()[0].id));assert(scheduled.enterPortal());advance(scheduled,2.025);
 assert.equal(scheduled.bossCount,2);
 assert.equal(scheduled.enemies.filter(e=>e.type==='boss'&&e.hp>0).length,1);
 

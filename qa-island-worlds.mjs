@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { groundOffset } from './dist/terrain.js';
 import { regionFor, normalizeWorldIndex } from './dist/regions.js';
+import { portalDoor } from './dist/portal-geometry.js';
 
 let seed=314159;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -18,7 +19,7 @@ function verifyWorld() {
     assert.equal(portal.targetPortalId,`portal:${portal.nextRegionIndex}:${g.regionIndex}`);
     const planned=island.plan[`portal:${portal.nextRegionIndex}`];
     assert(Math.hypot(portal.x-planned.x,portal.y-planned.y)<=97,'a world gateway uses its planned district');
-    assert(island.isDry(portal.x,portal.y,200));assert(g.terrain.isFree(portal.x,portal.y,45));
+    assert(island.isDry(portal.x,portal.y,200));const door=portalDoor(portal);assert(g.terrain.isFree(door.x,door.y,g.player.r),'the front opening must fit the player between its solid jambs');
     const guardians=g.enemies.filter(enemy=>enemy.portalId===portal.id&&enemy.hp>0);
     assert.equal(guardians.length,portal.state==='locked'?1:0);
   }
@@ -48,7 +49,7 @@ function unlock(target) {
   assert(g.chooseSuper(choices[0]));assert(portal.rewardClaimed);
   return portal;
 }
-function travel(target){const portal=gate(target);feet(portal);assert(g.enterPortal(portal.id));assert.equal(g.regionIndex,target);assert(g.regions.states.size<=2);assert.equal(gate(Number(portal.id.split(':')[1])).state,'active');}
+function travel(target){const portal=gate(target);feet(portalDoor(portal));assert(g.enterPortal(portal.id));assert.equal(g.regionIndex,target);assert(g.regions.states.size<=2);assert.equal(gate(Number(portal.id.split(':')[1])).state,'active');}
 
 for(const value of [-9,-1,0,1,2,3,600,NaN])assert([0,1,2].includes(normalizeWorldIndex(value)));
 assert.equal(regionFor(3).id,'forest');assert.equal(regionFor(-1).id,'ruins');

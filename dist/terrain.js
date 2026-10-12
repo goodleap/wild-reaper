@@ -18,6 +18,27 @@ export const DEAD_TREE_PROFILES=Object.freeze([
   {x:0,y:-53,rx:26,ry:27,trunkWidth:.58,trunkHeight:.7},
   {x:-3,y:-61,rx:49,ry:32,trunkWidth:1.22,trunkHeight:.86}
 ].map(Object.freeze));
+
+// The five pieces share their exact top outline and low vertical depth with
+// the painter. Their ground projection must follow each piece, not a central
+// oval that misses the front stones and darkens the empty middle instead.
+export const ROCK_FRAGMENTS=Object.freeze([
+  {points:[[-33,-15],[-26,-29],[-15,-31],[-4,-23],[-11,-12],[-25,-9]],depth:7},
+  {points:[[4,-20],[13,-29],[28,-24],[34,-12],[27,-3],[10,-7]],depth:7},
+  {points:[[-12,1],[-5,-6],[5,-3],[8,6],[1,12],[-13,8]],depth:7},
+  {points:[[-33,13],[-27,4],[-18,7],[-18,17],[-25,21],[-34,18]],depth:5},
+  {points:[[11,19],[16,10],[27,9],[35,20],[28,28],[16,28]],depth:5}
+].map(piece=>Object.freeze({...piece,points:Object.freeze(piece.points.map(point=>Object.freeze(point)))})));
+const fragmentShadows=new WeakMap();
+export function rockShadowParts(prop){
+  if(!prop||prop.rockForm!==3||prop.variant==='pillar'||!Number.isFinite(prop.r)||prop.r<=0)return null;
+  const cached=fragmentShadows.get(prop);if(cached)return cached;
+  const scale=prop.r/36,parts=Object.freeze(ROCK_FRAGMENTS.map(({points,depth})=>Object.freeze({
+    points:Object.freeze(points.map(([x,y])=>Object.freeze({x:x*scale,y:(y+depth)*scale}))),
+    offset:depth*.85*scale
+  })));
+  fragmentShadows.set(prop,parts);return parts;
+}
 export function sceneryVisual(prop){
   const s=prop.scale||1;
   if(prop.type==='tree'){
@@ -27,7 +48,11 @@ export function sceneryVisual(prop){
   if(prop.type==='log')return Object.freeze({halfWidth:Math.abs(Math.cos(prop.angle||0))*(prop.halfLength+prop.r)+28,top:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,bottom:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,shadowWidth:prop.r,shadowLength:prop.r*1.7});
   if(prop.rockForm===3&&prop.variant!=='pillar')return Object.freeze({halfWidth:prop.r*1.02+2,top:prop.r*.9+2,bottom:prop.r*.96+2,shadowWidth:prop.r*.85,shadowLength:prop.r*.35,shadowOffset:prop.r*.13});
   const r=prop.r,top=prop.variant==='pillar'?([3.05,3.75,2.6,3.35,2.05][prop.rockForm||0])*r:([1.42,.75,1.7,1.5,1.25][prop.rockForm||0])*r;
-  return Object.freeze({halfWidth:r*1.14,top:top+4,bottom:r*1.12,shadowWidth:r*.92,shadowLength:r*(prop.variant==='pillar'?1.8:.72)});
+  // Move the oval toward the actual front footing and let taller boulders
+  // project farther. Previously most of its short ellipse was hidden by the
+  // stone body, leaving only a thin skirt regardless of the stone's height.
+  const pillar=prop.variant==='pillar',height=top*(prop.variant==='slab'?.72:1);
+  return Object.freeze({halfWidth:r*1.14,top:top+4,bottom:r*1.12,shadowWidth:r*.92,shadowLength:pillar?r*1.8:r*.75+height*.2,shadowOffset:pillar?r*.9:r*.48+height*.13});
 }
 
 
