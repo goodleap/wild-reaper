@@ -18,7 +18,7 @@ for(const weapon of ['orbit','pulse','lightning']){
   assert.deepEqual(new Set(g.getUpgradeChoices().map(c=>c.id)),new Set(['orbit','pulse','lightning']));
   const first=g.getUpgradeChoices();assert.equal(g.getUpgradeChoices(),first,'opening the panel cannot reroll it');
   assert(g.chooseUpgrade(weapon));assert.equal(g.crystals,0);assert.equal(g.crystalsNext,110);assert.equal(g.skillLevel,2);
-  assert.equal(g.player.level,1);assert(g.weapons.some(w=>w.id===weapon));
+  assert.equal(g.player.level,1);assert((weapon==='orbit'?g.weapons:g.skills).some(w=>w.id===weapon));
   const target=g._spawnEnemy('brute',1);Object.assign(target,{x:75,y:0,speed:0,hp:1000,maxHp:1000});
   advance(g,.25);
   if(weapon==='orbit')assert(g.orbitals.length>=2);

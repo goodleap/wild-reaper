@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { LEVEL_CAPS } from './dist/combat-catalog.js';
 import { portalDoor } from './dist/portal-geometry.js';
 import { Game, xpCost, crystalCost, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
@@ -111,16 +112,16 @@ progression.player.invuln=100;progression.update(.03,{});
 assert(progression.time>180&&progression.status==='playing');
 const capped=new Game({adventure:false});
 Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
-Object.assign(capped.levels,{power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});
+Object.assign(capped.levels,LEVEL_CAPS);
 for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower','endlessRegen']) {
   capped.crystals=capped.crystalsNext;capped.update(.02,{});
   const choices=capped.getUpgradeChoices();
   assert.equal(choices.length,3);assert.equal(new Set(choices.map(c=>c.id)).size,3);
-  assert(choices.every(c=>c.kind==='无尽强化'));
+  assert(choices.every(c=>c.kind==='无尽属性强化'));
   assert(capped.chooseUpgrade(id));assert.equal(capped.status,'playing');
 }
 assert.equal(capped.levels.endlessPower,2);assert.equal(capped.levels.endlessRegen,2);
-assert.equal(capped.player.maxHp,112);finite(capped);
+assert.equal(capped.player.maxHp,100+5*25+12);finite(capped);
 const late=new Game({adventure:false});late.time=720;late._spawnEnemy('slime');
 assert(late.enemies.at(-1).hp>late.enemies[0].hp*2&&late.enemies.at(-1).damage>late.enemies[0].damage);
 
@@ -132,7 +133,7 @@ const sim=(difficulty,seconds,immortal=false)=>{
   while(['playing','upgrade','super'].includes(g.status)&&g.time<seconds&&frames++<30*(seconds+10)) {
     if(g.status==='super'){assert(g.chooseSuper(g.getSuperChoices()[0].id));continue;}
     if(g.status==='upgrade') {
-      const choices=g.getUpgradeChoices();assert.equal(choices.length,3);
+      const choices=[...g.getUpgradeChoices()];assert.equal(choices.length,3);
       const score=c=>priority.indexOf(c.id)+(g.levels[c.id]||0)*2;
       choices.sort((a,b)=>score(a)-score(b));g.chooseUpgrade(choices[0].id);upgrades++;continue;
     }

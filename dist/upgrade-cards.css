@@ -44,3 +44,8 @@
   .choice-card .select-arrow{padding-top:8px}.choice-level{font-size:10px}
 }
 @media(prefers-reduced-motion:reduce){.upgrade-card.choice-card,.upgrade-card.choice-card:hover{transition:none;transform:none}}
+
+/* Ownership and super tier are separate from rarity and from numeric rank. */
+.choice-card.choice-weapon{background:linear-gradient(155deg,#30392c,#1c2a20)}
+.choice-tier{font-style:normal;font-size:9px;font-weight:500;line-height:13px;padding:0 4px;color:#e4c8f1;border:1px solid #cba2df55;border-radius:3px;white-space:nowrap;letter-spacing:0}
+@media(max-width:760px){.choice-tier{font-size:8px;line-height:12px;padding:0 3px}.choice-category{gap:4px}.choice-heading strong{min-width:0;white-space:normal;overflow-wrap:anywhere}.choice-level{flex-shrink:0}}

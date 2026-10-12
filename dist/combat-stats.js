@@ -1,0 +1,97 @@
+// Derived combat numbers. The reference attack preserves the existing game
+// balance while giving the character an actual attack attribute. A weapon's
+// base damage / reference attack is its coefficient, not another attack bonus.
+import { getUpgradeDefinition } from './combat-catalog.js';
+
+export const COMBAT_REFERENCE_ATTACK=32;
+export const ATTACK_DEFAULTS=Object.freeze({arrowDamage:32,arrowInterval:.38,arrowRange:420,arrowSpeed:640,arrowLife:.82,magnet:105,maxArrowTargets:4,maxArrowProjectiles:4});
+const rank=(g,id)=>Math.max(0,g.build?.getRank?.(id)??g.levels?.[id]??0);
+const boundedRank=(g,id,cap)=>Math.min(cap,rank(g,id));
+// Catalog effects are the source of truth for every selectable modifier.
+// Executable base formulas below describe the ability, not an upgrade card.
+const effectTotal=(g,id,stat)=>{
+  const def=getUpgradeDefinition(id);
+  let perRank=0;
+  for(const effect of def?.effects||[])if(effect.stat===stat&&effect.operation==='add')perRank+=effect.value;
+  return Math.min(def?.cap??Infinity,rank(g,id))*perRank;
+};
+export { effectTotal as upgradeEffectTotal };
+
+export function resolveCharacterStats(game) {
+  const p=game.player,hero=game.hero;
+  const attackMultiplier=1+effectTotal(game,'power','damageBonus')+effectTotal(game,'endlessPower','damageBonus')+(game.rescuePower||0)*.08+(p.level-1)*.01;
+  const externalDamageMultiplier=(game.adventure?.damageMultiplier()??1)*(game.relics?.damageMultiplier()??1);
+  const moveMultiplier=(1+effectTotal(game,'speed','moveSpeedBonus'))*(game.relics?.movementMultiplier()??1)*(game.debug?3:1);
+  return {
+    attack:COMBAT_REFERENCE_ATTACK*attackMultiplier,attackMultiplier,
+    externalDamageMultiplier,damageMultiplier:attackMultiplier*externalDamageMultiplier,
+    // Reserved attributes have neutral values until a real source grants them.
+    defense:Math.max(0,game.build?.attributes?.defense??0),criticalChance:0,criticalMultiplier:1,
+    maxHp:p.maxHp,currentHp:p.hp,
+    regen:effectTotal(game,'regen','healthRegen')+effectTotal(game,'endlessRegen','healthRegen'),
+    moveSpeed:hero.baseSpeed*moveMultiplier,moveMultiplier,
+    magnet:ATTACK_DEFAULTS.magnet*(1+effectTotal(game,'magnet','pickupRangeBonus')),
+    fireRate:1+effectTotal(game,'rapid','attackRateBonus'),
+    stormCooldown:game.debug?0:hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction'))
+  };
+}
+
+// Apply character/global scaling exactly once. Local weapon and skill bonuses
+// belong in their resolved baseDamage; a delayed echo/bleed copies final damage
+// and must never pass its snapshot through this function for a second time.
+export function scalePlayerDamage(game,base,{weaponId,skillId}={}) {
+  if(!Number.isFinite(base)||base<=0)return 0;
+  // These IDs label the source for callers; only its own resolver applies local
+  // modifiers, so a weapon upgrade cannot leak into independent skill damage.
+  void weaponId;void skillId;
+  const stats=resolveCharacterStats(game);
+  return base*stats.attack/COMBAT_REFERENCE_ATTACK*stats.externalDamageMultiplier;
+}
+
+export function weaponStats(game,id) {
+  const equipped=game.build?.isEquipped?.(id)??(id==='arrow'||rank(game,id)>0);
+  if(id==='arrow') {
+    const branch=game.build?.getWeapon?.(id)?.branch??game.branches?.arrow??null;
+    const reach=branch?effectTotal(game,'arrowReach','maxTargets'):0;
+    const baseDamage=ATTACK_DEFAULTS.arrowDamage*(1+effectTotal(game,'arrowPower','baseDamageBonus'));
+    const fireRate=(1+effectTotal(game,'rapid','attackRateBonus'))*(game.adventure?.fireRateMultiplier()??1);
+    return {id,equipped,branch,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
+      interval:ATTACK_DEFAULTS.arrowInterval/fireRate,range:ATTACK_DEFAULTS.arrowRange,
+      speed:ATTACK_DEFAULTS.arrowSpeed,life:ATTACK_DEFAULTS.arrowLife,
+      count:Math.min(ATTACK_DEFAULTS.maxArrowProjectiles,1+effectTotal(game,'multishot','projectileCount')),
+      targetLimit:branch?Math.min(ATTACK_DEFAULTS.maxArrowTargets,3+reach):1,
+      maxBounces:branch==='ricochet'?2+reach:0,
+      retention:branch ? .65+effectTotal(game,'arrowRetention','damageRetention') : 1};
+  }
+  if(id==='orbit') {
+    const level=Math.min(5,rank(game,'orbit'));
+    const baseDamage=(24+level*6)*(1+effectTotal(game,'orbitPower','baseDamageBonus'));
+    return {id,equipped:equipped&&level>0,level,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
+      count:2+Math.floor((Math.max(1,level)-1)/2),radius:70+level*4+effectTotal(game,'orbitRadius','radius'),
+      rotationSpeed:2.15+level*.14,hitInterval:.42};
+  }
+  return null;
+}
+
+export function skillStats(game,id) {
+  const record=game.build?.getSkill?.(id),branch=record?.branch??game.branches?.[id]??null;
+  if(id==='storm') {
+    const upgrades=boundedRank(game,'storm',2),baseDamage=160*(1+effectTotal(game,'storm','baseDamageBonus'));
+    return {id,level:1+upgrades,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),cooldown:game.debug?0:game.hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction')),manual:true,super:true};
+  }
+  if(id==='pulse') {
+    const level=Math.min(5,rank(game,id)),evolved=!!game.evolutions?.pulse,control=evolved&&branch==='control';
+    const baseDamage=(40+level*10)*(1+effectTotal(game,'pulseMastery','baseDamageBonus'));
+    return {id,level,owned:level>0,branch,evolved,control,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),
+      cooldown:2.6,radius:control?210:100+level*10,knockback:control?45:20,echo:evolved&&branch==='echoes'};
+  }
+  if(id==='lightning') {
+    const level=Math.min(5,rank(game,id)),evolved=!!game.evolutions?.lightning,focus=evolved&&branch==='focus';
+    const baseDamage=(38+level*10)*(1+effectTotal(game,'lightningMastery','baseDamageBonus'));
+    const primaryBaseDamage=baseDamage*(focus?2.5:1);
+    return {id,level,owned:level>0,branch,evolved,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),
+      primaryBaseDamage,primaryDamage:scalePlayerDamage(game,primaryBaseDamage,{skillId:id}),
+      cooldown:2.8,range:360,chainRange:190,targetLimit:evolved&&branch==='chain'?5:3,focus};
+  }
+  return null;
+}

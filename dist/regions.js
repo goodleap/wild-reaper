@@ -136,10 +136,14 @@ export class Regions {
     }
     return false;
   }
-  canDamage(enemy) {
+  canTarget(enemy) {
     if(!enemy.portalId)return true;
     const portal=this.portals.find(p=>p.id===enemy.portalId);
-    if(!portal||portal.state!=='locked'||distance(feet(this.game),portal)>PORTAL_RULES.leashRadius)return false;
+    return !!portal&&portal.state==='locked'&&distance(feet(this.game),portal)<=PORTAL_RULES.leashRadius;
+  }
+  canDamage(enemy) {
+    if(!this.canTarget(enemy))return false;
+    if(!enemy.portalId)return true;
     enemy.guardActive=true;
     if(!enemy._portalAnnounced){enemy._portalAnnounced=true;this.game.bossCount++;this.game._emit('boss');}
     return true;

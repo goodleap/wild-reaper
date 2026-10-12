@@ -44,12 +44,12 @@ for(const id of Object.keys(EVOLUTIONS)) {
   assert.equal(g.status,'playing','evolution does not add another selection screen');
   assert.equal(g.player.xp,17,'evolution does not charge additional experience');
   assert.equal(g.player.level,8,'evolution does not create a bonus hero level');
-  const weapon=g.weapons.find(w=>w.id===id);
+  const weapon=(id==='orbit'?g.weapons:g.skills).find(w=>w.id===id);
   assert(weapon.evolved&&weapon.name===expectedName,'the displayed weapon name and state update together');
   g._syncEvolutions(true);g._syncEvolutions(true);advance(g,.1);
   assert.equal(g.events.filter(e=>e.type==='evolution'&&e.weaponId===id).length,1,'an evolution announces only once');
   g._choices=null;
-  assert(!g.getUpgradeChoices().some(c=>c.id===id||c.weaponId===id),'a completed weapon cannot be offered a sixth level');
+  assert(!g.getUpgradeChoices().some(c=>c.id===id||c.weaponId===id),'a completed base track cannot offer its base upgrade or a second branch');
 }
 
 const orbit=arena();orbit.levels.orbit=5;orbit.update(0);

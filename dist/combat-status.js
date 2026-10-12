@@ -1,3 +1,6 @@
+import { attackSource } from './combat-resolution.js';
+import { scalePlayerDamage } from './combat-stats.js';
+
 // Weapon reactions share the normal damage/death path, but never call hit()
 // recursively. Each enemy keeps only one bleed and one shock record.
 export const STATUS_RULES=Object.freeze({
@@ -8,12 +11,14 @@ export const STATUS_RULES=Object.freeze({
 export class CombatStatus {
   constructor(game) { this.game=game; }
 
-  hit(enemy,amount,knockback=0,origin=this.game.player,source='arrow') {
+  hit(enemy,amount,knockback=0,origin=this.game.player,source='arrow',attack=null) {
     const game=this.game,rules=STATUS_RULES;
-    if(game.status!=='playing'||enemy.hp<=0||enemy.rescueSpawnGrace>0||!Number.isFinite(amount)||amount<=0||game.dungeon?.canDamage(enemy,origin)===false)return 0;
+    if(game.status!=='playing'||!Number.isFinite(amount)||amount<=0||!game.combat.canTarget(enemy,origin))return 0;
     const x=enemy.x,y=enemy.y;
-    const burst=['pulse','echo','companionPulse','companionEcho'].includes(source)&&enemy.bleed?.life>0;
-    const shock=(source==='arrow'||source==='orbit')&&enemy.shock?.life>0?enemy.shock:null;
+    const profile=attackSource(source);
+    const owner=attack?.ownerScope??profile.owner;
+    const burst=profile.consumeBleed&&enemy.bleed?.life>0;
+    const shock=profile.conduct&&enemy.shock?.life>0?enemy.shock:null;
     // Consume before dealing damage: killing blows still discharge exactly
     // once, and death hooks cannot reuse a mark that has already reacted.
     if(burst)enemy.bleed=null;
@@ -29,13 +34,13 @@ export class CombatStatus {
     }
     // A fully absorbed strike can spend an existing reaction, but cannot
     // plant a fresh status through an intact elite shield.
-    if(dealt>0&&source==='orbit') {
+    if(dealt>0&&profile.bleed) {
       // Repeated blade hits are faster than the tick interval. Refresh the
       // lifetime, not the tick phase, so contact cannot postpone all damage.
       const nextTick=enemy.bleed?.life>0?enemy.bleed.nextTick:rules.bleedInterval;
-      enemy.bleed={life:rules.bleedDuration,maxLife:rules.bleedDuration,nextTick,damage:rules.bleedDamage*game._damageMultiplier()};
-    }else if(dealt>0&&(source==='lightning'||source==='storm'||source==='companionLightning')) {
-      enemy.shock={life:rules.shockDuration,maxLife:rules.shockDuration,damage:source==='companionLightning'?Math.max(rules.conductionDamage,amount*.12):rules.conductionDamage*game._damageMultiplier()};
+      enemy.bleed={life:rules.bleedDuration,maxLife:rules.bleedDuration,nextTick,damage:owner==='player'?scalePlayerDamage(game,rules.bleedDamage,{weaponId:attack?.weaponId||'orbit'}):rules.bleedDamage};
+    }else if(dealt>0&&profile.shock) {
+      enemy.shock={life:rules.shockDuration,maxLife:rules.shockDuration,damage:owner==='player'?scalePlayerDamage(game,rules.conductionDamage,{skillId:attack?.skillId||profile.skillId}):Math.max(rules.conductionDamage,amount*.12)};
     }
     return dealt;
   }
@@ -44,7 +49,7 @@ export class CombatStatus {
     const game=this.game,origin={x,y,type:source.type,r:source.r};
     let target=null,nearest=STATUS_RULES.conductionRange**2;
     for(const enemy of game.enemies) {
-      if(enemy===source||enemy.id===source.id||enemy.hp<=0||!game._inView(enemy)||game.dungeon?.canDamage(enemy,origin)===false)continue;
+      if(enemy===source||enemy.id===source.id||!game.combat.canTarget(enemy,origin,{requireView:true}))continue;
       const distance=(enemy.x-x)**2+(enemy.y-y)**2;
       if(distance<=nearest) { target=enemy;nearest=distance; }
     }

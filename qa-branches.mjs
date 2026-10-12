@@ -51,7 +51,7 @@ const offer=arena();offer.levels.rapid=3;offer.crystalsNext=40;offer.crystals=40
 const choices=offer.getUpgradeChoices(),ids=choices.map(c=>c.id);
 assert.equal(choices.length,3);assert.equal(new Set(ids).size,3);
 assert.equal(choices.filter(c=>c.weaponId==='arrow').length,2);
-assert(choices.filter(c=>c.weaponId).every(c=>c.kind==='武器分支'&&c.evolves));
+assert(choices.filter(c=>c.weaponId).every(c=>c.kind===(c.weaponId==='arrow'?'武器分支':'技能分支')&&c.evolves===(c.weaponId!=='arrow')));
 for(let i=0;i<10;i++)assert.deepEqual(offer.getUpgradeChoices().map(c=>c.id),ids,'reopening choices cannot reroll a branch offer');
 const unconsumed={level:offer.player.level,xp:offer.player.xp,levels:structuredClone(offer.levels),branches:structuredClone(offer.branches)};
 for(const invalid of ['branch:arrow:fake','branch:pulse:control','arrow','']) {
@@ -78,7 +78,7 @@ assert.equal(new Set(seen).size,3,'deferring a branch rotates through other read
 for(const [weapon,branch] of [['pulse','echoes'],['lightning','focus']]) {
   const g=arena();select(g,weapon,branch);
   assert.equal(g.levels[weapon],5);assert.equal(g.branches[weapon],branch);assert.equal(g.evolutions[weapon],true);
-  const displayed=g.weapons.find(w=>w.id===weapon);
+  const displayed=g.skills.find(w=>w.id===weapon);
   assert(displayed.evolved);assert.equal(displayed.name,WEAPON_BRANCHES[weapon].find(b=>b.branch===branch).name);
   assert.equal(g.status,'playing','choosing the fifth level does not open a second dialog');
 }

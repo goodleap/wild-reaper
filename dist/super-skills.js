@@ -1,14 +1,9 @@
 import { groundOffset } from './terrain.js';
+import { SUPER_SKILL_DEFS } from './combat-catalog.js';
+import { scalePlayerDamage } from './combat-stats.js';
 
 const freeze=Object.freeze;
-export const SUPER_SKILLS=freeze([
-  freeze({id:'thorns',name:'荆棘缚阵',desc:'在敌群脚下召出荆棘，造成范围伤害并短暂定身普通敌人',icon:'♧',color:'#a9d888',source:'region',regionId:'forest',tier:'区域超级技能',automatic:true,maxLevel:3}),
-  freeze({id:'miasma',name:'瘴雾侵蚀',desc:'在敌群脚下爆发瘴气，留下持续 4 秒的侵蚀雾，每半秒造成范围伤害',icon:'♨',color:'#cea1da',source:'region',regionId:'marsh',tier:'区域超级技能',automatic:true,maxLevel:3}),
-  freeze({id:'runes',name:'符文穿击',desc:'朝敌人展开三道符文射线，贯穿沿途目标，同次攻击不重复命中',icon:'✧',color:'#89ddd8',source:'region',regionId:'ruins',tier:'区域超级技能',automatic:true,maxLevel:3}),
-  freeze({id:'meteor',name:'星陨',desc:'标记数处敌群位置，短暂蓄能后落下星陨，造成高额范围伤害',icon:'✦',color:'#f1bc79',source:'castle',regionId:null,tier:'城堡超级技能',automatic:true,maxLevel:3}),
-  freeze({id:'swords',name:'王庭剑阵',desc:'连续唤出追击灵剑，优先攻击附近首领和强敌',icon:'⚔',color:'#f0dda3',source:'castle',regionId:null,tier:'城堡超级技能',automatic:true,maxLevel:3}),
-  freeze({id:'vortex',name:'虚空漩涡',desc:'生成持续漩涡，牵引普通敌人并反复造成伤害；首领不受牵引',icon:'◉',color:'#b7a3ed',source:'castle',regionId:null,tier:'城堡超级技能',automatic:true,maxLevel:3})
-]);
+export const SUPER_SKILLS=SUPER_SKILL_DEFS;
 export const SUPER_RULES=freeze({maxLevel:3,maxFields:12,maxTargets:16,regionFallback:freeze({gold:60,crystals:100}),castleFallback:freeze({gold:120,crystals:180})});
 const DEFINITIONS=new Map(SUPER_SKILLS.map(skill=>[skill.id,skill]));
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -49,7 +44,7 @@ const upgradeDescription=(id,level)=>{
 // strengthen an already owned skill, but cannot introduce an unearned one.
 export class SuperSkills {
   constructor(game) {
-    this.game=game;this.owned={};this.cooldowns={};this.pending=null;
+    this.game=game;this.owned=game.build.superLevels;this.cooldowns={};this.pending=null;
     this.fields=[];this._volleys=[];this._id=0;
   }
 
@@ -76,7 +71,7 @@ export class SuperSkills {
 
   _choice(skill) {
     const currentLevel=this.owned[skill.id]||0,level=currentLevel+1;
-    return freeze({...skill,level,currentLevel,acquired:currentLevel>0,kind:currentLevel?'超级技能强化':'超级技能',desc:currentLevel?upgradeDescription(skill.id,level):skill.desc});
+    return freeze({...skill,tier:skill.rewardTier,abilityTier:skill.tier,level,currentLevel,acquired:currentLevel>0,kind:currentLevel?'超级技能强化':'超级技能',desc:currentLevel?upgradeDescription(skill.id,level):skill.desc});
   }
   getChoices(){
     // A portal can remain unclaimed while crystals strengthen learned skills,
@@ -119,7 +114,7 @@ export class SuperSkills {
     if(this.game.status!=='upgrade'||typeof id!=='string'||!id.startsWith('super:'))return false;
     const skillId=id.slice(6),level=this.owned[skillId];
     if(!DEFINITIONS.has(skillId)||!level||level>=SUPER_RULES.maxLevel)return false;
-    this.owned[skillId]=level+1;
+    if(!this.game.build.increment(id))return false;
     this.cooldowns[skillId]=Math.min(this.cooldowns[skillId]??0,cooldown(skillId,level+1));
     return true;
   }
@@ -175,13 +170,17 @@ export class SuperSkills {
   _cast(id,level) {
     const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,id==='runes'?450:420,{strongest:id==='swords'});
     if(!targets.length)return false;
-    const power=g._damageMultiplier(),stats=getSuperSkillStats(id,level);
+    const stats=getSuperSkillStats(id,level);
+    // Snapshot a cast once: a kill-triggered buff must not retroactively alter
+    // the remaining victims, delayed impacts or ticks of the same cast.
+    const damage=scalePlayerDamage(g,stats.damage,{skillId:id});
+    const impactDamage=stats.impactDamage?scalePlayerDamage(g,stats.impactDamage,{skillId:id}):0;
     if(id==='thorns') {
       const {radius,root}=stats;
       const field=this._field(id,this._center(targets,radius),radius,root+.15);
       if(!field)return false;
       for(const enemy of this._areaTargets(field,12)) {
-        this._damage(enemy,stats.damage*power,field);
+        this._damage(enemy,damage,field);
         if(enemy.hp>0&&enemy.type!=='boss') {
           enemy.superRootUntil=Math.max(enemy.superRootUntil||0,g._clock+root);
           // A newly rooted charging beast stops at its current location;
@@ -193,9 +192,9 @@ export class SuperSkills {
       this._burst(field,.4);
     } else if(id==='miasma') {
       const {radius,duration,interval}=stats;
-      const field=this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage:stats.damage*power});
+      const field=this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage});
       if(!field)return false;
-      for(const enemy of this._areaTargets(field))this._damage(enemy,stats.impactDamage*power,field);
+      for(const enemy of this._areaTargets(field))this._damage(enemy,impactDamage,field);
       this._burst(field,.5);
     } else if(id==='runes') {
       const target=targets[0],angle=Math.atan2(target.y-p.y,target.x-p.x),hit=new Set();
@@ -211,7 +210,7 @@ export class SuperSkills {
         const along=g.enemies.filter(enemy=>this._visible(enemy)&&!hit.has(enemy.id)&&segmentDistance(enemy.x,enemy.y,p.x,p.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
           .sort((a,b)=>distance(p,a)-distance(p,b)).slice(0,8);
         g._effect(p.x,p.y,'superRay',.48,width,DEFINITIONS.get(id).color,undefined,{x2:end.x,y2:end.y,skillId:id,seed:++this._id});
-        for(const enemy of along){hit.add(enemy.id);this._damage(enemy,stats.damage*power,p);}
+        for(const enemy of along){hit.add(enemy.id);this._damage(enemy,damage,p);}
       }
     } else if(id==='meteor') {
       const {radius,count}=stats,points=[];
@@ -223,15 +222,15 @@ export class SuperSkills {
       // Against a lone boss, the second star still lands nearby rather than
       // silently deleting half the reward's damage potential.
       while(points.length<count)points.push({...points[0]});
-      for(let i=0;i<points.length;i++)this._field(id,points[i],radius,.7+i*.25,{stage:'warning',damage:stats.damage*power});
+      for(let i=0;i<points.length;i++)this._field(id,points[i],radius,.7+i*.25,{stage:'warning',damage});
     } else if(id==='swords') {
       if(this._volleys.length>=2)return false;
       const formationId=++this._id;
-      this._volleys.push({skillId:id,formationId,remaining:stats.count,count:stats.count,index:0,tick:.16,interval:stats.interval,damage:stats.damage*power});
+      this._volleys.push({skillId:id,formationId,remaining:stats.count,count:stats.count,index:0,tick:.16,interval:stats.interval,damage});
       g._effect(p.x,p.y,'superBurst',.16+stats.count*stats.interval,48,DEFINITIONS.get(id).color,undefined,{skillId:id,count:stats.count,interval:stats.interval,released:0,castX:p.x,castY:p.y,seed:formationId});
     } else if(id==='vortex') {
       const {radius,duration,interval,pull}=stats;
-      if(!this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage:stats.damage*power,pull}))return false;
+      if(!this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage,pull}))return false;
     }
     g._emit('superCast',{skillId:id});return true;
   }

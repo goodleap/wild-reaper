@@ -114,3 +114,35 @@
 @media(max-width:760px) and (min-height:501px) and (max-height:650px){.intro-content{margin-bottom:calc(32px + var(--safe-bottom))}.hero-caption{display:none}}
 @media(max-width:950px) and (max-height:500px){.intro-tools{top:calc(12px + var(--safe-top));right:calc(12px + var(--safe-right))}.intro-content{margin:calc(20px + var(--safe-top)) 0 calc(20px + var(--safe-bottom)) calc(5% + var(--safe-left));width:calc(65% - var(--safe-left) - var(--safe-right))}.terrain-label{display:none}}
 @media(min-width:761px) and (max-height:500px){#arena #upgrade-overlay,#arena #super-overlay{--modal-padding:10px}}
+
+/* Combat taxonomy uses two compact rows; full details live in the paused build. */
+.equipment-stack{min-width:0}
+.combat-loadout{display:flex;align-items:center;gap:5px;max-width:min(340px,100%);overflow-x:auto;overflow-y:hidden;padding:1px 0;scrollbar-width:thin;pointer-events:auto;touch-action:pan-x;overscroll-behavior:contain}
+.combat-loadout .loadout-label{flex:0 0 24px;font-size:9px;letter-spacing:1px;color:#afc49f;text-shadow:0 1px 3px #101d15}
+.combat-loadout .combat-slot{flex:0 0 auto;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:5px;width:auto;min-width:41px;height:29px;padding:3px 6px;border:1px solid #b7d19945;border-radius:6px;background:#122218d9;white-space:nowrap}
+.combat-loadout .combat-slot>span{font-size:19px;line-height:1;color:var(--lime)}
+.combat-loadout .combat-slot>small{font-size:9px;line-height:1;margin:0;letter-spacing:0;color:#bfd3aa}
+.combat-loadout .super-slot{border-color:#c1a5d954;background:#302940d9}
+.combat-loadout .super-slot small{color:#e1c7ed}.combat-loadout i{font-style:normal;font-size:8px}
+.combat-loadout .weapon-slot.evolved{border-color:#e0c89966}.combat-loadout .weapon-slot.branched{border-color:#a8dbc65c}
+.arena.has-supers{--super-stack-height:24px}
+.pause-panel{width:min(560px,100%)}
+.combat-build{text-align:left;margin:0 0 18px;border:1px solid #b5cd9538;border-radius:9px;background:#12261d55}
+.combat-build>summary{cursor:pointer;min-height:44px;padding:12px 13px;color:#dce8c9;font-size:12px;font-weight:550;touch-action:manipulation}
+.combat-build>summary>span{float:right;font-size:10px;color:#a3b59c;font-weight:400;line-height:18px}
+.combat-build>summary:focus-visible{outline:2px solid var(--lime);outline-offset:2px;border-radius:8px}
+.build-content{padding:0 13px 13px}
+.build-attributes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px;border-top:1px solid #abc99424;padding:12px 0}
+.build-attributes>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.build-attributes span{font-size:9px;color:#a1b599}.build-attributes strong{font:500 13px ui-monospace,monospace;color:#e4efd3}
+.build-group{margin-top:10px}.build-group h3{font-size:10px;font-weight:500;color:#abc399;letter-spacing:.4px;margin:0 0 6px}
+.build-item{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #abc99424}
+.build-item-copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:5px}
+.build-item-copy>strong{font-size:12px;font-weight:550;color:#e0ebd0;line-height:1.6}.build-item-copy>strong>span{font-size:17px;vertical-align:-1px}
+.build-item-copy>strong>small{font:10px ui-monospace,monospace;color:#b8caaa;margin-left:5px}
+.build-item-copy>span,.build-enhancements{font-size:10px;line-height:1.65;color:#b5c6ab;overflow-wrap:anywhere}.build-enhancements{font-size:9px;color:#91ab86}
+.build-equip{flex:0 0 auto;min-width:48px;min-height:44px;padding:8px;border:1px solid #a7c7894d;border-radius:7px;background:#9abd7320;color:#d4e8bc;font-size:11px}
+.build-equip:hover:not(:disabled){background:#9abd7340}.build-equip:disabled{opacity:.4;cursor:default}.build-item.unequipped .build-item-copy{opacity:.55}
+.build-note{font-size:9px;line-height:1.8;color:#90a786;margin:9px 0 0}
+@media(max-width:760px){.combat-loadout{gap:4px;max-width:100%}.combat-loadout .loadout-label{flex-basis:22px;font-size:8px}.combat-loadout .combat-slot{height:26px;min-width:37px;padding:3px 5px;gap:4px}.combat-loadout .combat-slot>span{font-size:17px}.combat-loadout .combat-slot>small{font-size:8px}.combat-build>summary>span{font-size:9px}.build-content{padding:0 10px 10px}.build-attributes{gap:11px 6px}.build-attributes span{font-size:8px}.build-attributes strong{font-size:12px}.build-item-copy>strong{font-size:11px}.build-item-copy>span{font-size:9px}.build-enhancements{font-size:9px}}
+@media(max-height:430px){.equipment-stack{gap:4px}.combat-loadout .combat-slot{height:23px}.combat-loadout .combat-slot>span{font-size:15px}.combat-build{margin-bottom:12px}.pause-panel{padding-top:20px;padding-bottom:20px}}

@@ -16,6 +16,7 @@ import { RelicArt } from './relic-art.js';
 import { AngelArt } from './angel-art.js';
 import { ImmersionArt } from './immersion-art.js';
 import { presentUpgrade, upgradeCardHTML } from './upgrade-presentation.js';
+import { resolveCharacterStats, weaponStats, skillStats } from './combat-stats.js';
 import { groundOffset, rockShadowParts } from './terrain.js';
 import { isGrounded } from './environment.js';
 import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-map.js';
@@ -107,9 +108,9 @@ for(const difficulty of ['normal','casual']){const radio=$(`difficulty-${difficu
 
 
 function clearInput(){keys.clear();skillRequested=false;portalRequested=false;touch=null;input={x:0,y:0,skill:false};show('joystick',false);$('joystick-thumb').style.transform='';}
-function startGame(){if(debugMode)resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';saveSetup();game=new Game({difficulty:selectedDifficulty,debug:debugMode});game.viewWidth=width;game.viewHeight=height;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却':'击杀自动成长 · 拾取灵晶强化技能，金币可交易。');worldMap.discover(game,{viewportWidth:width,viewportHeight:height});updateHUD();canvas.focus({preventScroll:true});}
+function startGame(){if(debugMode)resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';saveSetup();game=new Game({difficulty:selectedDifficulty,debug:debugMode});game.viewWidth=width;game.viewHeight=height;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却':'击杀获得经验 · 灵晶强化属性、武器与技能。');worldMap.discover(game,{viewportWidth:width,viewportHeight:height});updateHUD();canvas.focus({preventScroll:true});}
 function home(){sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;helpOpen=false;$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=null;paused=false;runEnded=false;clearInput();for(const id of ['hud','game-bottom','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','touch-skill','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('intro');arena.classList.remove('playing');arena.classList.remove('has-encounter');arena.classList.remove('has-relics');arena.classList.remove('near-portal');arena.classList.remove('has-companion');arena.classList.remove('has-rescue-power');arena.classList.remove('has-supers');arena.classList.remove('in-dungeon');$('terrain-code').textContent='01 / THE WHISPERING WOODS';$('terrain-name').textContent='低语之森';$('toast').classList.remove('visible');bestText();$('start-button').focus({preventScroll:true});}
-function pause(){if(!game||!['playing','relic','upgrade','super','shop'].includes(game.status)||runEnded)return;paused=true;clearInput();show('pause-overlay');$(helpOpen?'close-help':mapOpen?'close-map':'resume-button').focus({preventScroll:true});}
+function pause(){if(!game||!['playing','relic','upgrade','super','shop'].includes(game.status)||runEnded)return;paused=true;clearInput();renderCombatBuild();show('pause-overlay');$(helpOpen?'close-help':mapOpen?'close-map':'resume-button').focus({preventScroll:true});}
 function focusGameDialog(){const id={relic:'relic-cards',upgrade:'upgrade-cards',super:'super-cards',shop:'shop-items'}[game?.status];if(id)$(id).querySelector('button:not(:disabled)')?.focus({preventScroll:true});else canvas.focus({preventScroll:true});}
 function resume(){if(mapOpen||helpOpen)return;paused=false;clearInput();show('pause-overlay',false);initAudio();focusGameDialog();}
 function openHelp(){helpOpen=true;clearInput();show('help-overlay');$('close-help').focus({preventScroll:true});}
@@ -137,12 +138,12 @@ function renderExpandedMap(){
   $('map-legend').textContent=indoor?'箭头：你与朝向　门：出口　箱子：宝箱　菱形：已发现首领。墙体缺口为通路，暗处保留探索记忆。':'箭头：你　拱门：传送门　双翼：天使　屋顶：小屋　城垛：城堡　菱形：遗迹。灰雾尚未探索；绿门可往返，红门有首领。';
 }
 function openUpgrades(){
-  if(upgradeLevel===game.skillLevel)return;
+  if(upgradeLevel===game.progressionTier)return;
   const alreadyOpen=!$('upgrade-overlay').classList.contains('hidden');
-  upgradeLevel=game.skillLevel;clearInput();const cards=$('upgrade-cards');cards.replaceChildren();
+  upgradeLevel=game.progressionTier;clearInput();const cards=$('upgrade-cards');cards.replaceChildren();
   const choices=game.getUpgradeChoices(),hasBranches=choices.some(choice=>choice.branch);
   $('upgrade-title').textContent=hasBranches?'选择战斗分支':'灵晶的馈赠';
-  $('upgrade-description').textContent=hasBranches?'同一技能分支互斥，本局固定，也可先选其他强化。':game.skillLevel===1?'选择一种自动攻击技能。':`第 ${game.skillLevel} 次灵晶强化 · 选择一项`;
+  $('upgrade-description').textContent=hasBranches?'同一能力分支互斥，选路后仍可继续强化。':game.progressionTier===1?'获得一件武器或一项技能。':`第 ${game.progressionTier} 次灵晶强化 · 选择一项`;
   $('upgrade-note').textContent='时间已暂停 · 伤害为基础值 · 灵晶保留';
   for(const upgrade of choices){
     const card=createChoiceCard(upgrade);
@@ -161,7 +162,7 @@ function createChoiceCard(choice){
   const model=presentUpgrade(choice,game),card=document.createElement('button');
   card.type='button';card.className=`upgrade-card choice-card choice-${model.category}${choice.evolves?' evolution-card':''}${choice.branch?' branch-card':''}`;
   card.style.setProperty('--quality',model.quality.color);
-  card.setAttribute('data-category',model.category);card.setAttribute('data-rarity',model.rarity);
+  card.setAttribute('data-category',model.category);card.setAttribute('data-rarity',model.rarity);card.setAttribute('data-tier',model.tier||'regular');card.setAttribute('data-owner',model.ownerId||'character');
   card.innerHTML=upgradeCardHTML(model);return card;
 }
 function openRelics(){
@@ -208,10 +209,46 @@ function openShop(force=false){
   if(entering){$('shop-feedback').textContent='购买一件后游商离开 · 交易期间时间暂停';show('shop-overlay');$('shop-close').focus({preventScroll:true});}
 }
 function closeShop(){if(game?.status!=='shop'||paused||helpOpen||mapOpen)return;game.closeShop();shopKey='';show('shop-overlay',false);clearInput();updateHUD();canvas.focus({preventScroll:true});}
+const uiEscape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const statLabel=value=>Number.isFinite(value)?String(Math.round(value*10)/10):'—';
+function skillKind(skill){return `${skill.tier==='super'?'超级 · ':''}${skill.activation==='manual'?'手动':'自动'}${skill.binding==='weapon'?' · 武器绑定':''}`;}
+function capabilityTitle(item){return `${item.name} · Lv.${item.level}${item.branchName?' · '+item.branchName:''}${item.evolved?' · 已进化':''}`;}
 function updateSuperHUD(){
-  const owned=game.superSkills?.getLoadout()||[],key=JSON.stringify(owned.map(s=>[s.id,s.level]));show('super-loadout',owned.length>0);arena.classList.toggle('has-supers',owned.length>0);
-  if(key===lastSupers)return;lastSupers=key;$('super-loadout').innerHTML=owned.map(s=>`<div class="super-slot" title="${s.name} · 自动攻击 · LV. ${s.level} · ${s.desc}" aria-label="${s.name}，自动攻击，${s.level} 级"><span style="color:${s.color}">${s.icon}</span><small>${s.name} <b>${s.level}</b></small></div>`).join('');
+  const owned=game.build.getSkillLoadout(),key=JSON.stringify(owned.map(s=>[s.id,s.level,s.branch,s.evolved]));
+  show('super-loadout',owned.length>0);arena.classList.toggle('has-supers',owned.length>0);
+  if(key===lastSupers)return;lastSupers=key;
+  $('super-loadout').innerHTML='<span class="loadout-label">技能</span>'+owned.map(s=>`<div class="combat-slot skill-slot${s.tier==='super'?' super-slot':''}" title="${uiEscape(capabilityTitle(s)+' · '+skillKind(s))}" aria-label="${uiEscape(capabilityTitle(s)+'，'+skillKind(s))}"><span style="color:${uiEscape(s.color)}">${uiEscape(s.icon)}</span><small>${s.tier==='super'?'<i aria-hidden="true">✦</i> ':''}${s.level}</small></div>`).join('');
 }
+function updateWeaponHUD(){
+  const equipped=game.build.getWeaponLoadout().filter(w=>w.equipped),key=JSON.stringify(equipped.map(w=>[w.id,w.level,w.branch,w.evolved]));
+  if(key===lastLoadout)return;lastLoadout=key;
+  $('loadout').innerHTML='<span class="loadout-label">武器</span>'+equipped.map(w=>`<div class="combat-slot weapon-slot${w.evolved?' evolved':''}${w.branch?' branched':''}" title="${uiEscape(capabilityTitle(w))}" aria-label="${uiEscape(capabilityTitle(w))}"><span>${uiEscape(w.icon)}</span><small>${w.level}${w.evolved?' ✦':''}</small></div>`).join('');
+}
+function renderCombatBuild(){
+  if(!game)return;
+  const content=$('build-content'),stats=resolveCharacterStats(game),weapons=game.build.getWeaponLoadout(),skills=game.build.getSkillLoadout();
+  const values=[['角色等级',`Lv.${game.player.level}`],['攻击力',statLabel(stats.attack)],['最大生命',statLabel(stats.maxHp)],['防御',statLabel(stats.defense)],['移动速度',statLabel(stats.moveSpeed)],['每秒恢复',statLabel(stats.regen)],['拾取范围',statLabel(stats.magnet)],['灵晶强化',`${Math.max(0,game.progressionTier-1)} 次`]];
+  content.replaceChildren();
+  const attributes=document.createElement('div');attributes.className='build-attributes';attributes.innerHTML=values.map(([label,value])=>`<div><span>${label}</span><strong>${uiEscape(value)}</strong></div>`).join('');content.append(attributes);
+  const appendGroup=(title,items,weapon)=>{
+    const section=document.createElement('section');section.className='build-group';const heading=document.createElement('h3');heading.textContent=title;section.append(heading);
+    for(const item of items){
+      const row=document.createElement('div');row.className=`build-item${weapon&&!item.equipped?' unequipped':''}`;
+      const resolved=weapon?weaponStats(game,item.id):skillStats(game,item.id),info=[];
+      if(item.branchName)info.push(item.branchName);if(item.evolved)info.push('已进化');
+      if(resolved){info.push(`伤害 ${statLabel(resolved.primaryDamage??resolved.damage)}`);if(weapon&&resolved.interval)info.push(`间隔 ${statLabel(resolved.interval)}秒`);if(!weapon&&resolved.cooldown!==undefined)info.push(`冷却 ${statLabel(resolved.cooldown)}秒`);if(resolved.count)info.push(`${resolved.count}${item.id==='arrow'?'支':'枚'}`);}
+      if(!weapon)info.unshift(skillKind(item));
+      const refinements=(item.enhancements||[]).filter(e=>e.rank>0).map(e=>`${e.name} ×${e.rank}`).join(' · ');
+      const copy=document.createElement('div');copy.className='build-item-copy';copy.innerHTML=`<strong><span style="color:${uiEscape(item.color)}">${uiEscape(item.icon)}</span> ${uiEscape(item.name)} <small>Lv.${item.level}</small></strong><span>${uiEscape(info.join(' · '))}</span>${refinements?`<small class="build-enhancements">${uiEscape(refinements)}</small>`:''}`;row.append(copy);
+      if(weapon){const button=document.createElement('button');button.type='button';button.className='build-equip';button.id=`equip-${item.id}`;button.textContent=item.equipped?'卸下':'装备';button.setAttribute('aria-label',`${button.textContent}${item.name}`);button.setAttribute('aria-pressed',String(item.equipped));button.disabled=game.status!=='playing'||(item.equipped&&weapons.filter(w=>w.equipped).length<=1);button.title=game.status!=='playing'?'先完成当前奖励选择':button.disabled?'至少装备一件武器':'本局强化保留';button.onclick=()=>{if(!paused||helpOpen||mapOpen||game.status!=='playing')return;if(game.setWeaponEquipped(item.id,!item.equipped)){renderCombatBuild();updateHUD();$(`equip-${item.id}`).focus({preventScroll:true});}};row.append(button);}
+      section.append(row);
+    }
+    content.append(section);
+  };
+  appendGroup('武器 · 装备决定基础攻击',weapons,true);appendGroup('技能 · 独立掌握',skills,false);
+  const note=document.createElement('p');note.className='build-note';note.textContent='伤害已计入当前角色与增益。卸下武器会停用其攻击，重新装备保留等级、分支与强化；至少保留一件。';content.append(note);
+}
+
 function updateRelicHUD(){
   const owned=game.relics?.owned||[],key=owned.join(',');arena.classList.toggle('has-relics',owned.length>0);show('relic-loadout',owned.length>0);
   if(key===lastRelics)return;lastRelics=key;
@@ -253,7 +290,7 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='bossKill'))notify(game.portal?`领主已击败 · 超级技能已解锁，三界连通 ${game.regions.defeatedConnectionsCount??0}/3`:'领主已击败 · 无尽挑战继续',3);
   else if(boss&&events.some(event=>event.type==='bloomWindup'))notify(boss?.bloomAttack?.kind==='fan'?'孢冠扇射 · 绕至侧面，借树石掩护':'孢爆将至 · 离开紫色预警圈',3);
   else if(events.some(event=>event.type==='bossWindup')||game.enemies.some(enemy=>(enemy.slam?.life>0||enemy.bloomAttack?.life>0)&&sceneVisible(enemy)))return;
-  else if(pendingEvolutions.length&&(Date.now()>=toastUntil||toastPriority<2)){const evolution=pendingEvolutions.shift();notify(`${evolution.name} · 武器已进化`,2);}
+  else if(pendingEvolutions.length&&(Date.now()>=toastUntil||toastPriority<2)){const evolution=pendingEvolutions.shift();notify(`${evolution.name} · ${evolution.weaponId==='orbit'?'武器已进化':'技能分支已解锁'}`,2);}
   else if(events.some(event=>event.type==='companionJoined')){const joined=events.find(event=>event.type==='companionJoined');notify(`${joined.name}加入 · 助战60秒，援助之力 +1`,2);}
   else if(events.some(event=>event.type==='rescueReady'))notify('围困怪物已清除 · 靠近受困者完成解救',2);
   else if(events.some(event=>event.type==='rescueExpired'))notify('营救机会已错过 · 继续寻找其他旅人',1);
@@ -266,7 +303,8 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='treasureUnlocked'))notify('守卫已击败 · 靠近宝箱领取奖励',2);
   else if(events.some(event=>event.type==='treasureGuard'))notify('精英守卫现身 · 击败它可解锁宝箱',2);
   else if(events.some(event=>event.type==='waveCleared'))notify('怪潮击破 · 灵晶奖励到账，战利品汇聚',2);
-  else if(events.some(event=>event.type==='weaponAcquired'))notify(`${events.find(event=>event.type==='weaponAcquired').name}已加入自动攻击`,2);
+  else if(events.some(event=>event.type==='branchChosen'))notify(`${events.find(event=>event.type==='branchChosen').name} · 分支已确定，可继续强化`,2);
+  else if(events.some(event=>event.type==='weaponAcquired')){const acquired=events.find(event=>event.type==='weaponAcquired');notify(`${acquired.category==='skill'?'学会技能':'获得武器'} · ${acquired.name}`,2);}
   else if(events.some(event=>event.type==='wave'))notify(`${game.waveDirector.summary().directionLabel}兽群逼近 · 留意来袭方向`,1);
   else if(events.some(event=>event.type==='siege'))notify(`${game.waveDirector.summary().name} · 击破这一波怪群`,1);
   else if(events.some(event=>event.type==='encounterHunt'))notify('林间狩猎 · 可前往标记区域挑战',1);
@@ -302,7 +340,7 @@ function updateCompanionHUD(){
   if(ally){$('companion-icon').textContent=ally.kind==='stormcaller'?'ϟ':'◈';$('companion-name').textContent=`${ally.name} · ${ally.kind==='stormcaller'?'雷电':'地震'}`;$('companion-time').textContent=`${Math.ceil(ally.remaining)}秒`;$('companion-fill').style.width=`${100*clamp(ally.remaining/ally.maxDuration,0,1)}%`;$('companion-status').classList.toggle('storm-companion',ally.kind==='stormcaller');}
   $('rescue-power').textContent=`援助 Lv.${power} · 基础伤害 +${power*8}%`;
 }
-function updateHUD(){if(!game)return;arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;$('level-label').textContent=`LV. ${p.level}`;$('xp-caption').textContent=`经验 ${Math.floor(p.xp)} / ${p.xpNext}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`灵晶 ${Math.floor(game.crystals||0)} / ${game.crystalsNext||0}`;$('gold-label').textContent=game.gold||0;$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=waveProgressLabel();$('kills').textContent=game.kills;$('skill-button').title=`天雷轰击 · 空格 · 冷却 ${p.skillCooldownMax} 秒`;$('skill-label').textContent=p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪';$('skill-fill').style.width=`${100*clamp((p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1),0,1)}%`;$('touch-skill').classList.toggle('cooldown',p.skillCooldown>0);$('skill-button').disabled=p.skillCooldown>0;$('touch-skill').disabled=p.skillCooldown>0;$('skill-symbol').textContent=p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ';$('touch-skill-label').textContent=p.skillCooldown>0?'冷却中':'天雷';$('touch-skill').setAttribute('aria-label',p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击');const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',boss?.bossKind==='bloom');if(boss){$('boss-name').textContent=boss.dungeonBoss?'王城守望者 · 最终首领':`${boss.bossKind==='bloom'?'孢冠领主':'荒野领主'} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}const loadoutKey=JSON.stringify(game.weapons);if(loadoutKey!==lastLoadout){lastLoadout=loadoutKey;$('loadout').innerHTML=game.weapons.map(w=>{const detail=w.branch?'本局分支已固定':w.evolved?'已进化':w.id==='arrow'?'飞矢 4 级起可选择穿透或弹射':w.id==='pulse'||w.id==='lightning'?'升至 5 级时选择分支':w.evolutionName?'5 级进化为'+w.evolutionName:'持续强化';return `<div class="weapon-slot${w.evolved?' evolved':''}${w.branch?' branched':''}" title="${w.name} · ${detail}" aria-label="${w.name}，${detail}"><span>${w.icon}</span><small>${w.branch?'分支 ✦':w.evolved?'进化 ✦':'LV.'+w.level}</small></div>`;}).join('');}}
+function updateHUD(){if(!game)return;arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;$('level-label').textContent=`LV. ${p.level}`;$('xp-caption').textContent=`经验 ${Math.floor(p.xp)} / ${p.xpNext}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`灵晶 ${Math.floor(game.crystals||0)} / ${game.crystalsNext||0}`;$('gold-label').textContent=game.gold||0;$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=waveProgressLabel();$('kills').textContent=game.kills;$('skill-button').title=`天雷轰击 · 超级技能 Lv.${game.build.getSkill('storm').level} · 空格 · 冷却 ${p.skillCooldownMax} 秒`;$('skill-label').textContent=p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪';$('skill-fill').style.width=`${100*clamp((p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1),0,1)}%`;$('touch-skill').classList.toggle('cooldown',p.skillCooldown>0);$('skill-button').disabled=p.skillCooldown>0;$('touch-skill').disabled=p.skillCooldown>0;$('skill-symbol').textContent=p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ';$('touch-skill-label').textContent=p.skillCooldown>0?'冷却中':'天雷';$('touch-skill').setAttribute('aria-label',p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击');const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',boss?.bossKind==='bloom');if(boss){$('boss-name').textContent=boss.dungeonBoss?'王城守望者 · 最终首领':`${boss.bossKind==='bloom'?'孢冠领主':'荒野领主'} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}
 
 $('upgrade-pause').onclick=pause;$('super-pause').onclick=pause;$('shop-pause').onclick=pause;$('shop-close').onclick=closeShop;
 $('map-button').onclick=openMap;$('close-map').onclick=closeMap;$('map-done').onclick=closeMap;
@@ -327,7 +365,7 @@ $('skill-button').onclick=requestSkill;
 $('touch-skill').onclick=requestSkill;
 $('touch-skill').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();requestSkill();});
 // Keep keyboard focus inside whichever dialog is currently active.
-document.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const dialog=[...document.querySelectorAll('.modal-layer')].reverse().find(x=>!x.classList.contains('hidden'));if(!dialog)return;const focusable=[...dialog.querySelectorAll('button:not(:disabled),select,a[href]')];if(!focusable.length)return;const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first.focus();}});
+document.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const dialog=[...document.querySelectorAll('.modal-layer')].reverse().find(x=>!x.classList.contains('hidden'));if(!dialog)return;const focusable=[...dialog.querySelectorAll('button:not(:disabled),select,a[href],summary')];if(!focusable.length)return;const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first.focus();}});
 
 function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,TAU);ctx.fill();}
 function line(x1,y1,x2,y2,color,w=1){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}

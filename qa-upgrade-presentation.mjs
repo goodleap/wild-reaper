@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { LEVEL_CAPS, getUpgradeDefinition, canTakeUpgrade } from './dist/combat-catalog.js';
 import { Game, WEAPON_BRANCHES } from './dist/engine.js';
+import { resolveCharacterStats } from './dist/combat-stats.js';
 import { Terrain } from './dist/terrain.js';
 import { SUPER_SKILLS, getSuperSkillStats } from './dist/super-skills.js';
 import { presentUpgrade, upgradeCardHTML } from './dist/upgrade-presentation.js';
@@ -18,18 +20,18 @@ for(let i=0;i<150;i++){
     assert(m.summary,'every choice has a merged effect sentence');
     assert(html.includes('choice-summary'));
     assert(!/choice-(stats|stat|description|note|scope)/.test(html),'remove repeated description and individual stat table from visible cards');
-    assert.equal(m.category,['power','speed','magnet','vitality','regen'].includes(c.id)?'attribute':'skill');
+    assert.equal(m.category,getUpgradeDefinition(c.id).category);
     assert(m.category!=='attribute'||!m.levelLabel.includes('Lv.'),'attributes are not disguised as skill levels');
-    assert(m.category!=='skill'||m.scope.includes('自动攻击')||m.scope.includes('飞矢'));
+    assert(m.category!=='skill'||['automatic','manual'].includes(m.activation));
   }
 }
-assert.equal(seen.size,10);assert.equal(JSON.stringify({levels:g.levels,player:g.player,branches:g.branches,crystals:g.crystals}),initial,'presentation cannot award or modify progress');
+assert.equal(seen.size,12);assert.equal(JSON.stringify({levels:g.levels,player:g.player,branches:g.branches,crystals:g.crystals}),initial,'presentation cannot award or modify progress');
 
 // Compare the promise on a real choice with the result of paying for it.
 for(const id of ['power','rapid','multishot','speed','magnet','vitality','regen']){
   const g=game();g.levels[id]=1;g.player.level=7;g.rescuePower=2;g._refreshStats();
   const c=find(g,id),m=presentUpgrade(c,g),cost=g.crystalsNext,before=g.crystals;assert(g.chooseUpgrade(c.id));assert.equal(g.crystals,before-cost);
-  const actual={power:()=>100*(g._damageMultiplier()-1),rapid:()=>g.levels.rapid*15,multishot:()=>1+g.levels.multishot,speed:()=>100*(g.stats.moveSpeed-1),magnet:()=>g.stats.magnet,vitality:()=>g.player.maxHp,regen:()=>g.levels.regen*.8}[id]();
+  const actual={power:()=>resolveCharacterStats(g).attack,rapid:()=>g.levels.rapid*15,multishot:()=>1+g.levels.multishot,speed:()=>g.player.speed,magnet:()=>g.stats.magnet,vitality:()=>g.player.maxHp,regen:()=>g.levels.regen*.8}[id]();
   assert(Math.abs(actual-after(m.rows[0]))<1e-7,`${id}: preview and actual reward agree`);
 }
 for(const id of ['orbit','pulse','lightning']){
@@ -48,7 +50,7 @@ for(const def of SUPER_SKILLS){
     assert(!upgradeCardHTML(m).includes('undefined'));assert(m.summary.includes(String(def.id==='miasma'?stats.impactDamage:stats.damage)),'super summary uses current combat values');assert.equal(m.rarity,def.id==='meteor'||def.id==='vortex'?'legendary':def.id==='swords'||def.id==='runes'?'epic':'rare');
   }
 }
-const capped=game();Object.assign(capped.levels,{power:6,rapid:5,multishot:3,orbit:5,pulse:5,lightning:5,speed:4,magnet:4,vitality:5,regen:3});Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
+const capped=game();Object.assign(capped.levels,LEVEL_CAPS);Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
 for(const c of capped.getUpgradeChoices()){const m=presentUpgrade(c,capped);assert.equal(m.category,'attribute');assert(m.note.includes('无尽'));assert(!upgradeCardHTML(m).includes('NaN'));}
 assert.equal(presentUpgrade({id:'super:resource',name:'满阶宝藏',desc:'领取资源',icon:'◆'},g).category,'resource');
 assert(upgradeCardHTML({...presentUpgrade(find(g,'power'),g),name:'<script>bad</script>'}).includes('&lt;script&gt;'),'card strings are escaped');
@@ -60,7 +62,7 @@ const width=text=>[...text].reduce((total,ch)=>total+(/[\x00-\x7f]/.test(ch)?7:1
 const examples=[];
 for(const id of seen){
   for(const owned of [0,1,2,3,4]){
-    const current=game();current.levels[id]=owned;
+    const current=game();current.levels[id]=owned;if(!canTakeUpgrade(current.build,id))continue;
     const c=find(game(),id),model=presentUpgrade({...c,evolves:id==='orbit'&&owned===4},current);examples.push(model);
   }
 }
@@ -68,6 +70,6 @@ for(const choice of Object.values(WEAPON_BRANCHES).flat())examples.push(presentU
 for(const choice of SUPER_SKILLS)for(const owned of [0,1,2]){const current=game();current.superSkills.owned[choice.id]=owned;examples.push(presentUpgrade(choice,current));}
 for(const model of examples)assert(width(model.summary)<278*1.8,`${model.name}: condensed copy has two-line allowance without ellipsis`);
 const pulse=game();pulse.levels.pulse=2;assert.equal(presentUpgrade(find(pulse,'pulse'),pulse).summary,'伤害 60→70，范围 120→130。');
-assert(presentUpgrade(find(g,'power'),g).summary.includes('25 个百分点'));
+assert(presentUpgrade(find(g,'power'),g).summary.includes('角色攻击力 32→40'));
 assert(upgradeCardHTML({...presentUpgrade(find(g,'power'),g),summary:'<img onerror="bad()"> 25% \'safe\''}).includes('&lt;img onerror=&quot;bad()&quot;&gt; <b>25%</b> &#39;safe&#39;'),'summary emphasis must preserve HTML escaping');
 console.log('Upgrade cards: actual mixed choices, non-mutating preview, honest paid-reward comparisons, branch/super labels and endless/resource cases passed.');

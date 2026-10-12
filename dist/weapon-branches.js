@@ -1,8 +1,9 @@
-// Branches consume one existing level-up choice and remain exclusive for the
-// rest of the run. Their IDs are distinct from the ordinary upgrade counters.
+// Routes are exclusive choices, not independent levels. Their modifiers can
+// continue to grow after selection and live on the same weapon/skill record.
 const branch=(weaponId,id,name,desc,icon,color)=>Object.freeze({
   id:`branch:${weaponId}:${id}`,weaponId,branch:id,name,desc,icon,color,
-  kind:'武器分支',evolves:true,evolutionName:name
+  ownerId:weaponId,category:weaponId==='arrow'?'weapon':'skill',upgradeKind:'branch',
+  kind:weaponId==='arrow'?'武器分支':'技能分支',evolves:weaponId!=='arrow',evolutionName:weaponId==='arrow'?undefined:name
 });
 export const WEAPON_BRANCHES=Object.freeze({
   arrow:Object.freeze([
@@ -23,5 +24,9 @@ export function branchDefinition(weaponId,id) {
   return WEAPON_BRANCHES[weaponId]?.find(def=>def.branch===id)||null;
 }
 export function isBranchReady(game,weaponId) {
-  return !game.branches[weaponId]&&(weaponId==='arrow'?1+game.levels.rapid+game.levels.multishot>=4:game.levels[weaponId]>=4);
+  const build=game.build||game;
+  if(!WEAPON_BRANCHES[weaponId]||build.branches[weaponId])return false;
+  // Preserve the established first route threshold; power-only investments do
+  // not bring forward the old rapid/multishot milestone during migration.
+  return weaponId==='arrow'?1+build.levels.rapid+build.levels.multishot>=4:build.levels[weaponId]>=4;
 }

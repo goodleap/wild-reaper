@@ -30,7 +30,8 @@ class Element{
   setPointerCapture(){}
 }
 for(const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g))nodes[match[3]]=new Element(match[3],match[1].toUpperCase(),match[2].match(/class="([^"]*)"/)?.[1]||'');
-Object.assign(document,{getElementById:id=>{assert(nodes[id],id);return nodes[id];},body:new Element(),createElement:tag=>new Element('',tag.toUpperCase()),querySelectorAll:()=>Object.values(nodes).filter(node=>node.classList.contains('modal-layer')),addEventListener:(type,handler)=>listeners[`document:${type}`]=handler});
+const findDescendant=(node,id)=>node.id===id?node:node.children.map(child=>findDescendant(child,id)).find(Boolean);
+Object.assign(document,{getElementById:id=>{const node=nodes[id]||Object.values(nodes).map(root=>findDescendant(root,id)).find(Boolean);assert(node,id);return node;},body:new Element(),createElement:tag=>new Element('',tag.toUpperCase()),querySelectorAll:()=>Object.values(nodes).filter(node=>node.classList.contains('modal-layer')),addEventListener:(type,handler)=>listeners[`document:${type}`]=handler});
 const sandbox={...modules,document,window:{location:{search:'?debug'},devicePixelRatio:1,addEventListener:(type,handler)=>listeners[`window:${type}`]=handler},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 const run=script=>vm.runInContext(script,sandbox);
@@ -57,7 +58,7 @@ const upgrade=nodes['upgrade-cards'].children[0];assert(upgrade?.onclick);
 const upgradeBefore=run('game.skillLevel');key('KeyM');upgrade.onclick();assert.equal(run('game.skillLevel'),upgradeBefore);key('Escape');upgrade.onclick();assert.equal(run('game.skillLevel'),upgradeBefore+1);assert.equal(run('game.status'),'playing');
 run("game.regions.rewardPortal={rewardClaimed:false};game.superSkills.offer('region',game.region.id);game.status='super';openSuperChoices();");
 const superChoice=nodes['super-cards'].children[0];assert(superChoice?.onclick);
-key('KeyM');superChoice.onclick();assert.equal(run('Object.keys(game.superSkills.owned).length'),0);assert.equal(run('game.status'),'super');key('Escape');superChoice.onclick();assert.equal(run('Object.keys(game.superSkills.owned).length'),1);assert.equal(run('game.status'),'playing');
+key('KeyM');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),0);assert.equal(run('game.status'),'super');key('Escape');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),1);assert.equal(run('game.status'),'playing');
 // The expanded map obeys exactly the minimap's discovery rules.
 run("game.status='playing';game.settlements.sites=[{id:'visible',type:'castle',name:'已知城堡',x:40,y:0,state:'ready',discovered:true},{id:'secret',type:'castle',name:'隐藏城堡',x:50,y:0,state:'ready',discovered:false}];game.relicSites.sites=[];game.regions.portals=[];");
 key('KeyM');const mapCopy=nodes['map-landmarks'].children.flatMap(row=>row.children.map(child=>child.textContent)).join(' ');assert(mapCopy.includes('已知城堡'));assert(!mapCopy.includes('隐藏城堡'));assert.equal(run('game.settlements.sites[1].discovered'),false);
@@ -156,6 +157,23 @@ keyup('KeyW');key('KeyW');tick();assert.notEqual(run('JSON.stringify([game.playe
 pointer('pointerdown',83);pointer('pointermove',83,170,200);const beforeTouch=run('game.player.x');tick();assert(run('game.player.x')>beforeTouch,'a new touch gesture controls the new scene normally');
 pointer('pointerup',83);const afterTouch=run('game.player.x');tick();assert.equal(run('game.player.x'),afterTouch);
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('blockedTransitionKeys.size'),0);
+// The build panel uses real UI buttons, including rerender/focus and modal
+// restrictions, rather than only testing the engine equipment setter.
+nodes['start-button'].onclick();nodes['pause-button'].onclick();
+assert(run('paused'));assert(nodes['build-content'].children[0].innerHTML.includes('角色等级'));assert(nodes['build-content'].children[0].innerHTML.includes('攻击力'));
+assert.equal(document.getElementById('equip-arrow').disabled,true,'a lone equipped weapon cannot be removed');
+run("game.build.increment('orbit');game.levels.rapid=3;game.build.selectBranch('arrow','pierce');game._refreshWeapons();renderCombatBuild();");
+const equippedBefore=run('JSON.stringify({level:game.build.getWeapon("arrow").level,branch:game.build.getWeapon("arrow").branch})');
+assert.equal(document.getElementById('equip-arrow').disabled,false);document.getElementById('equip-arrow').onclick();
+assert.equal(run('game.build.isEquipped("arrow")'),false);assert.equal(document.activeElement.id,'equip-arrow');
+assert.equal(document.getElementById('equip-orbit').disabled,true);assert.equal(document.getElementById('equip-arrow').textContent,'装备');
+assert.equal(run('JSON.stringify({level:game.build.getWeapon("arrow").level,branch:game.build.getWeapon("arrow").branch})'),equippedBefore);
+document.getElementById('equip-arrow').onclick();assert.equal(run('game.build.isEquipped("arrow")'),true);
+run("game.status='upgrade';renderCombatBuild();");assert(document.getElementById('equip-arrow').disabled&&document.getElementById('equip-orbit').disabled);
+document.getElementById('equip-arrow').onclick();assert.equal(run('game.build.isEquipped("arrow")'),true,'a stale button cannot change equipment while a reward is pending');
+run("game.status='playing';renderCombatBuild();");nodes['resume-button'].onclick();assert.equal(run('paused'),false);assert.equal(document.activeElement.id,'game-canvas');
+nodes['quit-button'].onclick();assert.equal(run('game'),null);
+
 // Drive the real RAF entry point at distinct display rates. Paused gameplay
 // still renders, and its clamped simulation delta must not distort telemetry.
 const fpsNode=nodes['debug-fps'];
