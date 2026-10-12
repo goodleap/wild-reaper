@@ -84,6 +84,24 @@ for(const angle of [0,Math.PI/2,Math.PI/4]){
 const concealed=scene([wall('front',0,0,300),wall('hidden',120,0,200)]);concealed.vision.update();
 assert.equal(concealed.vision.knownWallSegments().some(w=>w.id.startsWith('hidden:')),false,'Near-face discovery still respects intervening walls.');
 
+// Joined room walls must reveal their physically visible endpoint strips.
+// The old midpoint-only test fell inside the perpendicular capsule, leaving
+// a permanent black notch at all four corners of a completely visible hut.
+for(const radius of [12,14]){
+  const size=radius===12?200:180,room=scene([
+    {...wall('north',0,-size,size,0),r:radius},
+    {...wall('south',0,size,size,0),r:radius},
+    {...wall('west',-size,0,size),r:radius},
+    {...wall('east',size,0,size),r:radius}
+  ]);
+  room.game.player={x:0,y:-19.8};room.game.viewWidth=room.game.viewHeight=700;room.vision.update();
+  for(const id of ['north','south','west','east']){
+    const pieces=room.vision.knownWallSegments(id);
+    assert.equal(pieces.length,Math.ceil(size*2/24),'Room corner endpoints must not vanish behind their perpendicular neighbour.');
+    assert.ok(pieces.every(p=>room.vision.isWallSegmentVisible(p)),'Known endpoint faces should be lit, not remembered darkness.');
+  }
+}
+
 // A full 5x5 maze is a finite workload even with an unusually large viewport.
 const mazeWalls=[];
 for(let i=0;i<=5;i++)for(let j=0;j<5;j++){

@@ -50,12 +50,12 @@ export class DungeonVision {
     if(!record||record.terrain!==state.terrain){
       const b=state.bounds,cols=Math.ceil((b.maxX-b.minX)/TILE),rows=Math.ceil((b.maxY-b.minY)/TILE);
       const walls=state.terrain.query(b.minX,b.minY,b.maxX,b.maxY).map(capsule);
-      record={terrain:state.terrain,cols,rows,seen:new Uint8Array(cols*rows),walls,pieces:[],known:[],rects:[],dirty:false,discoverKey:null,count:0};
+      record={terrain:state.terrain,cols,rows,seen:new Uint8Array(cols*rows),walls,pieces:[],known:[],knownByWall:new Map(),rects:[],dirty:false,discoverKey:null,count:0};
       for(const wall of walls){
         const count=Math.max(1,Math.ceil(wall.length*2/TILE));
         for(let i=0;i<count;i++){
           const a=i/count,z=(i+1)/count;
-          record.pieces.push({id:`${wall.obstacle.id}:${i}`,ax:wall.ax+(wall.bx-wall.ax)*a,ay:wall.ay+(wall.by-wall.ay)*a,bx:wall.ax+(wall.bx-wall.ax)*z,by:wall.ay+(wall.by-wall.ay)*z,r:wall.r,seen:false});
+          record.pieces.push({wallId:wall.obstacle.id,id:`${wall.obstacle.id}:${i}`,ax:wall.ax+(wall.bx-wall.ax)*a,ay:wall.ay+(wall.by-wall.ay)*a,bx:wall.ax+(wall.bx-wall.ax)*z,by:wall.ay+(wall.by-wall.ay)*z,r:wall.r,seen:false});
         }
       }
       this._states.set(state,record);
@@ -133,18 +133,26 @@ export class DungeonVision {
     }
     for(const piece of record.pieces){
       if(piece.seen)continue;
-      const x=(piece.ax+piece.bx)*.5,y=(piece.ay+piece.by)*.5,dx=this._origin.x-x,dy=this._origin.y-y;
-      const tx=piece.bx-piece.ax,ty=piece.by-piece.ay,length=Math.hypot(tx,ty);
-      // Use the near side's perpendicular normal. A radial offset towards the
-      // player stays inside a long capsule at oblique angles, making correctly
-      // visible wall ends disappear from static memory and the minimap.
-      let nx,ny;
-      if(length>1e-6){nx=-ty/length;ny=tx/length;const side=dx*nx+dy*ny<0?-1:1;nx*=side;ny*=side;}
-      else{const distance=Math.hypot(dx,dy)||1;nx=dx/distance;ny=dy/distance;}
-      const px=x+nx*(piece.r+.65),py=y+ny*(piece.r+.65);
-      if(this.isVisible(px,py)){piece.seen=true;record.known.push({id:piece.id,ax:piece.ax,ay:piece.ay,bx:piece.bx,by:piece.by,r:piece.r});}
+      if(this.isWallSegmentVisible(piece)){piece.seen=true;const segment={id:piece.id,ax:piece.ax,ay:piece.ay,bx:piece.bx,by:piece.by,r:piece.r};record.known.push(segment);if(!record.knownByWall.has(piece.wallId))record.knownByWall.set(piece.wallId,[]);record.knownByWall.get(piece.wallId).push(segment);}
     }
     this.stats.exploredTiles=record.count;
+  }
+  isWallSegmentVisible(piece){
+    if(!this.ensureCurrent())return true;
+    const x=(piece.ax+piece.bx)*.5,y=(piece.ay+piece.by)*.5,dx=this._origin.x-x,dy=this._origin.y-y;
+    const tx=piece.bx-piece.ax,ty=piece.by-piece.ay,length=Math.hypot(tx,ty);
+    // At an L-junction, a 24px end piece's midpoint can sit inside the
+    // perpendicular wall even though its inner edge is plainly visible.
+    // Sample a few points along the SAME near face, retaining exact LOS.
+    // This never grants vision through a wall or discovers an entire room.
+    let nx,ny;
+    if(length>1e-6){nx=-ty/length;ny=tx/length;const side=dx*nx+dy*ny<0?-1:1;nx*=side;ny*=side;}
+    else{const distance=Math.hypot(dx,dy)||1;nx=dx/distance;ny=dy/distance;}
+    for(const t of [.5,.12,.88]){
+      const px=piece.ax+tx*t+nx*(piece.r+.75),py=piece.ay+ty*t+ny*(piece.r+.75);
+      if(this.isVisible(px,py))return true;
+    }
+    return false;
   }
   isExplored(x,y){
     if(typeof x==='object'){y=x.y;x=x.x;}
@@ -153,7 +161,7 @@ export class DungeonVision {
     const col=Math.floor((x-b.minX)/TILE),row=Math.floor((y-b.minY)/TILE);
     return col>=0&&col<record.cols&&row>=0&&row<record.rows&&!!record.seen[row*record.cols+col];
   }
-  knownWallSegments(){const state=this.dungeon.active;return state?this._record(state).known:[];}
+  knownWallSegments(wallId){const state=this.dungeon.active;if(!state)return [];const record=this._record(state);return wallId===undefined?record.known:record.knownByWall.get(wallId)||[];}
   getExploredRects(){
     const state=this.dungeon.active;if(!state)return [];
     const record=this._record(state);if(!record.dirty)return record.rects;

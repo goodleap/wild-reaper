@@ -20,10 +20,10 @@ export class TouchInteractions {
     if(!choice||choice.enabled===false||this._distance(choice)>this._radius(choice))return false;
     if(this.latched&&Math.hypot(choice.x-this.latched.x,choice.y-this.latched.y)<8)return false;
     const anchor=this._anchor(choice);
-    if(!g.interact(choice.id))return false;
+    if(!g.requestInteraction(choice.id))return false;
     this.latched=anchor;
     // Preserve surplus crystal choices even when collecting a chest ends this
     // update early, while scene/shop/reward changes remain atomic.
-    g._trySkillUpgrade();return true;
+    if(!g.sceneTransition.active)g._trySkillUpgrade();return true;
   }
 }

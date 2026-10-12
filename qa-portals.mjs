@@ -17,6 +17,11 @@ function arena(options={}) {
 function advance(g,seconds,input={}) {
   for(let left=seconds;left>1e-8;left-=.025)g.update(Math.min(.025,left),input);
 }
+function finishTransition(g) {
+  assert(g.sceneTransition.active,'eligible contact queues a portal fade');
+  for(let i=0;g.sceneTransition.active&&i<20;i++)g.update(.025);
+  assert.equal(g.sceneTransition.active,false,'the portal transition finishes promptly');
+}
 function monster(g,type,x=200,y=0) {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
@@ -64,13 +69,13 @@ assert.equal(access.chooseSuper(choiceIds[0]),false);assert.equal(access.portal.
 assert.equal(access.enterPortal(),false,'remote interaction cannot travel');standAtPortal(access);
 for(const state of ['paused','upgrade','dead']){access.status=state;access.update(0);assert.equal(access.enterPortal(),false);assert.equal(access.regionIndex,0,'touching a gate cannot travel while gameplay is paused');}
 access.status='playing';const blockingBoss=monster(access,'boss',450,0);access.update(0);assert.equal(access.regionIndex,0);assert.equal(access.enterPortal(),false,'an engaged Boss prevents flight through a gate');
-blockingBoss.guardActive=false;access.update(0);assert.equal(access.region.id,'marsh','touching an activated gate automatically travels once eligible; dormant remote guardians do not lock every gate');
+blockingBoss.guardActive=false;access.update(0);assert.equal(access.regionIndex,0,'portal contact keeps the original scene until the fade cut');finishTransition(access);assert.equal(access.region.id,'marsh','touching an activated gate automatically travels once eligible; dormant remote guardians do not lock every gate');
 const returnGate=access.regions.portals.find(p=>p.direction==='back');assert(returnGate&&returnGate.state==='active');
 // Even if the player is still touching the paired doorway on the first frame
 // in a new scene, arrival must not trigger an immediate return or a bounce loop.
 standAtPortal(access,returnGate);access.update(0);access.update(0);assert.equal(access.regionIndex,1,'arrival contact is latched until the player leaves the doorway');
 access.player.x=returnGate.x+75;access.player.y=returnGate.y-groundOffset(access.player,true);access.update(0);
-standAtPortal(access,returnGate);access.update(0);assert.equal(access.regionIndex,0,'leaving and touching the return gate again automatically returns');
+standAtPortal(access,returnGate);access.update(0);assert.equal(access.regionIndex,1);finishTransition(access);assert.equal(access.regionIndex,0,'leaving and touching the return gate again automatically returns');
 access.update(0);access.update(0);assert.equal(access.regionIndex,0,'the restored region also remains stable after arrival');
 assert.equal(access.portal.id,portalId);assert.equal(access.superSkills.owned[choiceIds[0]],1);
 assert.equal(access.superSkills.pending,null,'return journeys do not award the same skill again');

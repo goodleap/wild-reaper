@@ -18,6 +18,8 @@ import { Settlements } from './settlements.js';
 import { WaveDirector } from './wave-director.js';
 import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
+import { SceneTransition } from './scene-transition.js';
+import { spawnDebugWave } from './debug-wave.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
@@ -121,12 +123,13 @@ export class Game {
     this.environment=environment?new Environment(this):null;
     this.relics=new Relics(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
     this.companions=new Companions(this,{generation:companions});
-    this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);this.touchInteractions=new TouchInteractions(this);
+    this.superSkills=new SuperSkills(this);this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
     this.settlements??=new Settlements(this,{generation:settlements});
     this.waveDirector=new WaveDirector(this);
     this.discoveredMap=new Set();this.regions.initialize();
     this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
     this.settlements.ensureAngels?.();
+    spawnDebugWave(this);
     // A debug run gets a one-time testing budget; choices still use the
     // ordinary crystal thresholds and begin on the first gameplay update.
     if(this.debug)this.grantResources({gold:500,crystals:150},'debugStart');
@@ -431,13 +434,20 @@ export class Game {
     return candidates.sort((a,b)=>Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
   }
   interact(id) {
+    if(this.sceneTransition.active&&!this.sceneTransition.committing)return false;
     const interaction=this.getInteraction();
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
     if(interaction.category==='relic'||interaction.type==='relic')return !!this.relicSites?.interact(interaction.id);
     return interaction.type==='portal'?this.enterPortal(interaction.id):this.settlements.interact(interaction.id);
   }
+  requestInteraction(id) {
+    const interaction=this.getInteraction();
+    if(!interaction||(id!==undefined&&id!==interaction.id))return false;
+    return this.sceneTransition.request(interaction);
+  }
   enterPortal(id) {
+    if(this.sceneTransition.active&&!this.sceneTransition.committing)return false;
     if(!this.canEnterPortal(id))return false;
     return this._switchRegion(this.regions._portal(id));
   }
@@ -512,11 +522,12 @@ export class Game {
   }
 
   update(dt,input={}) {
+    dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
+    if(this.sceneTransition.active){this.sceneTransition.update(dt);return;}
     this.regions.flushReward();
     if(this.status!=='playing') return;
     const interact=!!input.interact,pressed=interact&&!this._interactHeld;this._interactHeld=interact;
-    if(pressed&&this.interact())return;
-    dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
+    if(pressed&&this.requestInteraction())return;
     const p=this.player;
     const inDungeon=!!this.dungeon.active;
     if(!inDungeon)this.time+=dt;this.runTime+=dt;this._clock+=dt;

@@ -34,7 +34,7 @@ Object.assign(document,{getElementById:id=>{assert(nodes[id],id);return nodes[id
 const sandbox={...modules,document,window:{location:{search:'?debug'},devicePixelRatio:1,addEventListener:(type,handler)=>listeners[`window:${type}`]=handler},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 const run=script=>vm.runInContext(script,sandbox);
-const key=(code)=>listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat:false,target:nodes['game-canvas'],preventDefault(){}});
+const key=(code,repeat=false)=>listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat,target:nodes['game-canvas'],preventDefault(){}});
 nodes['start-button'].onclick();
 // Freeze rendering only: the actual frame, game clock, input and HUD run normally.
 run('renderGame=()=>{};renderIntro=()=>{}');
@@ -79,4 +79,46 @@ assert.equal(run("worldMap.getMarkers(game).some(marker=>marker.type==='boss')")
 run(`const capturedNotices=[];notify=(...args)=>capturedNotices.push(args);pendingEvolutions=[];announceCombatEvents([{type:'boss'},{type:'bloomWindup'}]);`);
 assert.equal(run('capturedNotices.length'),0,'unseen Boss spawn/cast does not produce a toast');
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('mapOpen'),false);assert(nodes['map-overlay'].classList.contains('hidden'));
-console.log('HUD map: compact bounds, simulation pause, modal stack restoration, blocked input, discovery privacy and reset passed.');
+// Drive the real frame and native UI handlers across a door fade. Only drawing
+// is stubbed: movement, input revisions and the scene controller are live.
+nodes['start-button'].onclick();
+run(`game=new Game({terrain:new game.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
+game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;
+const fadeHut={id:'ui-fade-hut',type:'supply',name:'测试小屋',x:400,y:0,door:{x:400,y:30},width:54,depth:28,interactRadius:82,state:'ready',seed:1,guardIds:[]};
+game.settlements.sites=[fadeHut];game.player.x=fadeHut.door.x;game.player.y=fadeHut.door.y-groundOffset(game.player,true);last=2000;
+const originalDiscover=worldMap.discover.bind(worldMap);let transitionDiscoveries=0;worldMap.discover=(...args)=>{transitionDiscoveries++;return originalDiscover(...args);};`);
+let frameTime=2000;
+const tick=()=>run(`frame(${frameTime+=40})`);
+const keyup=code=>listeners['window:keyup']({code});
+const pointer=(type,id,x=130,y=200)=>listeners[`game-canvas:${type}`]({pointerId:id,clientX:x,clientY:y,preventDefault(){},stopPropagation(){}});
+key('KeyW');pointer('pointerdown',81);pointer('pointermove',81,170,200);
+assert(run("keys.has('KeyW')&&touch?.id===81&&touch.dx>0"));
+tick();assert(run('game.sceneTransition.active'));assert.equal(run('game.dungeon.active'),null);
+assert.equal(run('keys.size'),0);assert.equal(run('touch'),null);assert(run("blockedTransitionKeys.has('KeyW')"));
+assert.equal(run('sceneInputRevision'),1);assert.equal(run('skillRequested||portalRequested'),false);assert(nodes.joystick.classList.contains('hidden'));
+const fadeClock=run('clock'),fadeRunTime=run('game.runTime');
+key('KeyW',true);key('KeyD');key('Space');key('KeyE');nodes['skill-button'].onclick();
+listeners['touch-skill:pointerdown']({preventDefault(){},stopPropagation(){}});
+nodes['map-button'].onclick();key('KeyM');pointer('pointerdown',82);pointer('pointermove',81,180,250);
+assert.equal(run('keys.size'),0);assert.equal(run('touch'),null);assert.equal(run('skillRequested||portalRequested'),false);assert.equal(run('mapOpen'),false);
+assert(run("blockedTransitionKeys.has('KeyD')"),'new held keys pressed during the fade are also blocked until release');
+tick();assert.equal(run('clock'),fadeClock);assert.equal(run('game.runTime'),fadeRunTime);assert.equal(run('transitionDiscoveries'),0,'a frozen transition cannot discover new landmarks');
+nodes['pause-button'].onclick();assert(run('paused'));
+const pausedFade=run('game.sceneTransition.elapsed');tick();tick();assert.equal(run('game.sceneTransition.elapsed'),pausedFade,'the pause menu stops an in-progress fade');
+nodes['resume-button'].onclick();tick();assert(run('game.sceneTransition.elapsed')>pausedFade);assert.equal(run('paused'),false);
+nodes['help-button'].onclick();assert(run('helpOpen'));
+const helpFade=run('game.sceneTransition.elapsed');tick();tick();assert.equal(run('game.sceneTransition.elapsed'),helpFade,'help also stops the fade without losing it');
+nodes['close-help'].onclick();assert.equal(run('helpOpen'),false);
+for(let i=0;run('game.sceneTransition.active')&&i<20;i++)tick();
+assert.equal(run('game.sceneTransition.active'),false);assert.equal(run('game.dungeon.active.kind'),'hut');
+assert.equal(run('sceneInputRevision'),2);assert.equal(run('keys.size'),0);assert.equal(run('touch'),null);assert.equal(run('skillRequested||portalRequested'),false);
+assert.equal(run('game.runTime'),fadeRunTime);assert.equal(run('clock'),fadeClock,'visual and simulation clocks stay frozen until the transition finishes');
+const landed=run('JSON.stringify([game.player.x,game.player.y])');
+key('KeyW',true);key('KeyD',true);pointer('pointermove',81,300,400);pointer('pointerup',81);tick();
+assert.equal(run('JSON.stringify([game.player.x,game.player.y])'),landed,'old keyboard repeats and a stale touch pointer cannot resume movement in the destination');
+assert.equal(run('touch'),null);assert.equal(run('keys.size'),0);
+keyup('KeyW');key('KeyW');tick();assert.notEqual(run('JSON.stringify([game.player.x,game.player.y])'),landed,'movement resumes after a deliberate key release and new press');keyup('KeyW');keyup('KeyD');
+pointer('pointerdown',83);pointer('pointermove',83,170,200);const beforeTouch=run('game.player.x');tick();assert(run('game.player.x')>beforeTouch,'a new touch gesture controls the new scene normally');
+pointer('pointerup',83);const afterTouch=run('game.player.x');tick();assert.equal(run('game.player.x'),afterTouch);
+nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('blockedTransitionKeys.size'),0);
+console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity and clean re-press behavior passed.');

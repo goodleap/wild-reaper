@@ -7,8 +7,8 @@ const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const WARD=18;
 export const SETTLEMENT_RULES=Object.freeze({maxSites:7,interactRadius:82,ward:WARD,guards:4});
-const ANGEL_GUARD_RADIUS=300;
-export const ANGEL_RULES=Object.freeze({guardRadius:ANGEL_GUARD_RADIUS,auraRadius:ANGEL_GUARD_RADIUS,attackRange:ANGEL_GUARD_RADIUS,healingPerSecond:.03,strikeRadius:60,attackInterval:.5,damage:115});
+const ANGEL_GUARD_RADIUS=150;
+export const ANGEL_RULES=Object.freeze({guardRadius:ANGEL_GUARD_RADIUS,auraRadius:ANGEL_GUARD_RADIUS,attackRange:ANGEL_GUARD_RADIUS,healingPerSecond:.03,strikeRadius:60,attackInterval:.2,damage:115});
 const SITE_DEFS=Object.freeze([
   {type:'merchant',name:'荒野游商',width:42,depth:24,radius:410,angle:.12},
   {type:'supply',name:'林间小屋',width:54,depth:28,radius:610,angle:2.2},
@@ -226,8 +226,8 @@ export class Settlements {
       const nearby=distance(p,site)<=ANGEL_RULES.guardRadius&&!g.terrain.firstBlocker(site.x,site.y,p.x,p.y,0);
       if(nearby){inAura=true;site.healing=player.hp<player.maxHp;}
       site._attack=Math.max(0,(site._attack||0)-dt);
-      if(site._attack>0||!g._inView(site,ANGEL_RULES.guardRadius))continue;
-      const canHit=enemy=>enemy.hp>0&&!enemy.dungeonId&&enemy.guardActive!==false&&g._inView(enemy)&&
+      if(site._attack>1e-8||!g._inView(site,ANGEL_RULES.guardRadius))continue;
+      const canHit=enemy=>enemy.hp>0&&!enemy.dungeonId&&!(enemy.rescueSpawnGrace>0)&&enemy.guardActive!==false&&g._inView(enemy)&&
         Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y)<=ANGEL_RULES.guardRadius&&
         !g.terrain.firstBlocker(site.x,site.y,enemy.x,enemy.y+groundOffset(enemy),0);
       let target=null,nearest=Infinity;
@@ -238,7 +238,9 @@ export class Settlements {
       const damage=ANGEL_RULES.damage*(1+Math.max(0,g.regionIndex||0)*.25);
       for(const enemy of g.enemies)if(canHit(enemy)&&Math.hypot(enemy.x-impact.x,enemy.y+groundOffset(enemy)-impact.y)<=ANGEL_RULES.strikeRadius)
         g._hurtEnemy(enemy,damage,0,origin,'angel');
-      g._effect(impact.x,impact.y,'angelStrike',.55,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:site.x,sourceY:site.y,angelId:site.id});
+      // Short, local discharge: at five casts/second at most two live strikes
+      // overlap per guardian. It never creates a screen-wide storm or flash.
+      g._effect(impact.x,impact.y,'angelStrike',.34,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:site.x,sourceY:site.y,angelId:site.id});
     }
     // Overlapping havens never multiply healing; the aura stops at its real
     // world-space boundary and heals no one through a building foundation.
