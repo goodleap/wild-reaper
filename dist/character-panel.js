@@ -1,4 +1,4 @@
-import { COMBAT_REFERENCE_ATTACK, resolveCharacterStats, weaponStats, skillStats, scalePlayerDamage, upgradeEffectTotal } from './combat-stats.js';
+import { COMBAT_REFERENCE_ATTACK, CHARACTER_DEFENSE_PER_LEVEL, resolveCharacterStats, weaponStats, skillStats, scalePlayerDamage, upgradeEffectTotal, defenseReduction } from './combat-stats.js';
 import { UPGRADE_DEFS, ENDLESS_UPGRADES } from './combat-catalog.js';
 import { getSuperSkillStats } from './super-skills.js';
 import { RELICS, RELIC_RULES } from './relics.js';
@@ -32,10 +32,11 @@ function attributes(game) {
   if(game.adventure?.furyTime>0)attackSources.push(`狂暴：伤害 ×${number(game.adventure.damageMultiplier())}`);
   if((game.relics?.damageMultiplier?.()??1)!==1)attackSources.push(`赤心：伤害 ×${number(game.relics.damageMultiplier())}`);
   const otherSources=[`初始最大生命 ${number(p.baseMaxHp??s.maxHp)} · 初始移速 ${number(game.hero.baseSpeed)}`];
-  if(p.level>1)otherSources.push(`角色等级：最大生命 +${number((p.level-1)*2)}`);
+  if(game.build.attributes.defense>0)otherSources.push(`基础防御 +${number(game.build.attributes.defense)}`);
+  if(p.level>1)otherSources.push(`角色等级：最大生命 +${number((p.level-1)*2)} · 防御 +${number((p.level-1)*CHARACTER_DEFENSE_PER_LEVEL)}`);
   for(const def of [...UPGRADE_DEFS,...ENDLESS_UPGRADES])if(def.category==='attribute'&&rank(def.id)&&!['power','endlessPower'].includes(def.id)) {
     const effects=[];
-    for(const [stat,label,format] of [['maxHealth','最大生命',value=>`+${number(value)}`],['healthRegen','每秒回复',value=>`+${number(value)}`],['moveSpeedBonus','移动速度',bonus],['pickupRangeBonus','拾取范围',bonus]]) {
+    for(const [stat,label,format] of [['maxHealth','最大生命',value=>`+${number(value)}`],['defense','防御',value=>`+${number(value)}`],['healthRegen','每秒回复',value=>`+${number(value)}`],['moveSpeedBonus','移动速度',bonus],['pickupRangeBonus','拾取范围',bonus]]) {
       const amount=upgradeEffectTotal(game,def.id,stat);if(amount)effects.push(`${label} ${format(amount)}`);
     }
     otherSources.push(`${def.name} ×${rank(def.id)}${effects.length?'：'+effects.join(' · '):''}`);
@@ -48,12 +49,12 @@ function attributes(game) {
     grid([
       ['角色等级',`Lv.${p.level}`,'level'],['生命',`${number(s.currentHp)} / ${number(s.maxHp)}`,'health'],
       ['角色攻击',number(s.attack),'attack'],['额外伤害增益',bonus(s.externalDamageMultiplier-1),'damageBonus'],
-      ['防御',number(s.defense),'defense'],['受击减伤',percent(s.defense/(100+s.defense)),'damageReduction'],
+      ['防御',number(s.defense),'defense'],['受击减伤',percent(defenseReduction(s.defense)),'damageReduction'],
       ['当前移速',number(move.speed),'moveSpeed'],['自身回复',`${number(s.regen)} / 秒`,'regen'],
       ['拾取范围',number(magnet),'magnet'],['金币',number(game.gold),'gold'],
       ['角色经验',`${number(p.xp)} / ${number(p.xpNext)}`,'experience'],['灵晶进度',`${number(game.crystals)} / ${number(game.crystalsNext)}`,'crystals'],
       ['灵晶强化',`${Math.max(0,game.progressionTier-1)} 次`,'upgrades']
-    ])+sources('攻击与伤害来源',attackSources)+sources('生命、移动与其他来源',otherSources);
+    ])+sources('攻击与伤害来源',attackSources)+sources('防御、生命与其他来源',otherSources);
 }
 function enhancements(item) {
   return tags((item.enhancements||[]).filter(value=>value.rank>0).map(value=>`${value.name} ×${value.rank}`));

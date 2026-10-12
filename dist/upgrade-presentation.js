@@ -1,5 +1,5 @@
 import { getUpgradeDefinition, WEAPON_DEFS, SKILL_DEFS } from './combat-catalog.js';
-import { resolveCharacterStats, weaponStats, skillStats } from './combat-stats.js';
+import { resolveCharacterStats, weaponStats, skillStats, defenseReduction } from './combat-stats.js';
 import { getSuperSkillStats } from './super-skills.js';
 
 // The same build rules and derived stats power combat and non-mutating previews.
@@ -75,6 +75,11 @@ export function presentUpgrade(choice,game) {
     } else if(id==='vitality'||id==='endlessVitality') {
       const heal=definition.effects.find(effect=>effect.stat==='heal').value;
       model.rows=[change('最大生命',before.maxHp,after.maxHp),fixed('立即恢复',`最多 ${heal} 生命`)];model.summary=`最大生命 ＋${num(after.maxHp-before.maxHp)}，立即恢复最多 ${heal} 生命。`;
+    } else if(id==='toughness'||id==='endlessToughness') {
+      const beforeReduction=defenseReduction(before.defense)*100,afterReduction=defenseReduction(after.defense)*100;
+      model.scope='角色属性 · 受到伤害降低';
+      model.rows=[change('防御',before.defense,after.defense),change('受击减伤',beforeReduction,afterReduction,'%')];
+      model.summary=`防御 +${num(after.defense-before.defense)}，减伤 ${num(beforeReduction)}%→${num(afterReduction)}%。`;
     } else {
       model.rows=[change('每秒生命恢复',before.regen,after.regen)];model.summary=`每秒生命恢复 ${pair(before.regen,after.regen)}。`;
     }

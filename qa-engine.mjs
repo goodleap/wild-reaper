@@ -116,9 +116,16 @@ Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'})
 Object.assign(capped.levels,LEVEL_CAPS);
 for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower','endlessRegen']) {
   capped.crystals=capped.crystalsNext;capped.update(.02,{});
-  const choices=capped.getUpgradeChoices();
+  // Endless growth has more eligible cards than slots. Resample only in this
+  // fixture to exercise each requested paid upgrade through a real offer.
+  let choices;
+  for(let attempt=0;attempt<100;attempt++) {
+    capped._choices=null;choices=capped.getUpgradeChoices();
+    if(choices.some(choice=>choice.id===id))break;
+  }
   assert.equal(choices.length,3);assert.equal(new Set(choices.map(c=>c.id)).size,3);
   assert(choices.every(c=>c.kind==='无尽属性强化'));
+  assert(choices.some(choice=>choice.id===id),'requested eligible endless card appears in a real offer');
   assert(capped.chooseUpgrade(id));assert.equal(capped.status,'playing');
 }
 assert.equal(capped.levels.endlessPower,2);assert.equal(capped.levels.endlessRegen,2);

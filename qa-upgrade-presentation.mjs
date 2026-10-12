@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { LEVEL_CAPS, getUpgradeDefinition, canTakeUpgrade } from './dist/combat-catalog.js';
+import { LEVEL_CAPS, UPGRADE_DEFS, getUpgradeDefinition, canTakeUpgrade } from './dist/combat-catalog.js';
 import { Game, WEAPON_BRANCHES } from './dist/engine.js';
 import { resolveCharacterStats } from './dist/combat-stats.js';
 import { Terrain } from './dist/terrain.js';
@@ -25,13 +25,14 @@ for(let i=0;i<150;i++){
     assert(m.category!=='skill'||['automatic','manual'].includes(m.activation));
   }
 }
-assert.equal(seen.size,12);assert.equal(JSON.stringify({levels:g.levels,player:g.player,branches:g.branches,crystals:g.crystals}),initial,'presentation cannot award or modify progress');
+assert.deepEqual([...seen].sort(),UPGRADE_DEFS.filter(def=>canTakeUpgrade(g.build,def.id)).map(def=>def.id).sort(),'real cards cover all currently eligible ordinary upgrades');
+assert.equal(JSON.stringify({levels:g.levels,player:g.player,branches:g.branches,crystals:g.crystals}),initial,'presentation cannot award or modify progress');
 
 // Compare the promise on a real choice with the result of paying for it.
-for(const id of ['power','rapid','multishot','speed','magnet','vitality','regen']){
+for(const id of ['power','rapid','multishot','speed','magnet','vitality','toughness','regen']){
   const g=game();g.levels[id]=1;g.player.level=7;g.rescuePower=2;g._refreshStats();
   const c=find(g,id),m=presentUpgrade(c,g),cost=g.crystalsNext,before=g.crystals;assert(g.chooseUpgrade(c.id));assert.equal(g.crystals,before-cost);
-  const actual={power:()=>resolveCharacterStats(g).attack,rapid:()=>g.levels.rapid*15,multishot:()=>1+g.levels.multishot,speed:()=>g.player.speed,magnet:()=>g.stats.magnet,vitality:()=>g.player.maxHp,regen:()=>g.levels.regen*.8}[id]();
+  const actual={power:()=>resolveCharacterStats(g).attack,rapid:()=>g.levels.rapid*15,multishot:()=>1+g.levels.multishot,speed:()=>g.player.speed,magnet:()=>g.stats.magnet,vitality:()=>g.player.maxHp,toughness:()=>resolveCharacterStats(g).defense,regen:()=>g.levels.regen*.8}[id]();
   assert(Math.abs(actual-after(m.rows[0]))<1e-7,`${id}: preview and actual reward agree`);
 }
 for(const id of ['orbit','pulse','lightning']){
@@ -52,6 +53,34 @@ for(const def of SUPER_SKILLS){
 }
 const capped=game();Object.assign(capped.levels,LEVEL_CAPS);Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
 for(const c of capped.getUpgradeChoices()){const m=presentUpgrade(c,capped);assert.equal(m.category,'attribute');assert(m.note.includes('无尽'));assert(!upgradeCardHTML(m).includes('NaN'));}
+
+// Defensive cards preview the real current total, including character levels
+// and prior investments. Reading a card is free; buying it changes damage.
+for(const id of ['toughness','endlessToughness']) {
+  const current=game();current.player.level=21;
+  if(id==='endlessToughness') {
+    Object.assign(current.levels,LEVEL_CAPS);
+    Object.assign(current.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
+  }else current.levels.toughness=1;
+  current._refreshStats();
+  const choice=find(current,id),beforeDefense=resolveCharacterStats(current).defense;
+  const snapshot=JSON.stringify({build:current.build.serialize(),player:current.player,crystals:current.crystals,events:current.events});
+  const model=presentUpgrade(choice,current),html=upgradeCardHTML(model);
+  assert.equal(JSON.stringify({build:current.build.serialize(),player:current.player,crystals:current.crystals,events:current.events}),snapshot,'defense preview does not change ranks, health, events or resources');
+  assert.equal(model.category,'attribute');assert.equal(model.action,'加强');
+  assert.equal(model.scope,'角色属性 · 受到伤害降低');
+  assert.doesNotMatch(html,/choice-new|Lv\./,'defense is an attribute investment, not a newly acquired skill');
+  assert.equal(Number(model.rows[0].before),beforeDefense);
+  if(id==='toughness')assert.equal(model.summary,'防御 +20，减伤 28.57%→37.5%。');
+  else assert.match(model.summary,/防御 \+10/);
+  const cost=current.crystalsNext,crystals=current.crystals;
+  assert(current.chooseUpgrade(id));assert.equal(current.crystals,crystals-cost);
+  assert.equal(resolveCharacterStats(current).defense,after(model.rows[0]));
+  current.player.invuln=0;current.player.hp=current.player.maxHp;
+  const hp=current.player.hp;current._hurtPlayer(40);
+  const actualReduction=(1-(hp-current.player.hp)/40)*100;
+  assert.equal(Number(actualReduction.toFixed(2)),after(model.rows[1]),'displayed reduction matches actual incoming damage after payment');
+}
 assert.equal(presentUpgrade({id:'super:resource',name:'满阶宝藏',desc:'领取资源',icon:'◆'},g).category,'resource');
 assert(upgradeCardHTML({...presentUpgrade(find(g,'power'),g),name:'<script>bad</script>'}).includes('&lt;script&gt;'),'card strings are escaped');
 // At a 320px arena: overlay 20px + card padding/borders 22px leave

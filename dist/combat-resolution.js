@@ -1,7 +1,7 @@
 import { groundOffset } from './terrain.js';
 import { isGrounded } from './height-rules.js';
 import { clearBossAttacks } from './bosses.js';
-import { resolveCharacterStats, scalePlayerDamage } from './combat-stats.js';
+import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } from './combat-stats.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -147,8 +147,7 @@ export class CombatResolution {
   damagePlayer(amount) {
     const g=this.game;
     const p=g.player;if(p.invuln>0||g.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
-    const defense=Math.max(0,resolveCharacterStats(g).defense);
-    amount*=100/(100+defense);
+    amount*=defenseDamageMultiplier(resolveCharacterStats(g).defense);
     amount=g.relics?.modifyIncomingDamage(amount)??amount;
     const previousHp=p.hp;
     p.hp=Math.max(0,p.hp-amount);p.invuln=.8;if(p.hp<previousHp)p.hurtFace=.24;g._emit('hurt');

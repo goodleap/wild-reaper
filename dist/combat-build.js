@@ -131,6 +131,7 @@ export class CombatBuild {
       }
     };
     restore(build.weapons,snapshot.weapons,WEAPON_DEFS);restore(build.skills,snapshot.skills,SKILL_DEFS);
+    for(const def of ALL_UPGRADES)if(def.category==='attribute'&&build.getRank(def.id)&&!meetsUpgradeRequirements(build,def))throw new RangeError(`Unavailable combat build attribute: ${def.id}`);
     for(const item of [...Object.values(build.weapons),...Object.values(build.skills)]) {
       if(item.branch) {
         const ready=item.id==='arrow'?1+build.getRank('rapid')+build.getRank('multishot')>=4:item.baseRank>=5;

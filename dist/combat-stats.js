@@ -4,6 +4,9 @@
 import { getUpgradeDefinition } from './combat-catalog.js';
 
 export const COMBAT_REFERENCE_ATTACK=32;
+export const CHARACTER_DEFENSE_PER_LEVEL=1;
+export const defenseDamageMultiplier=defense=>100/(100+Math.max(0,defense||0));
+export const defenseReduction=defense=>1-defenseDamageMultiplier(defense);
 export const ATTACK_DEFAULTS=Object.freeze({arrowDamage:32,arrowInterval:.38,arrowRange:420,arrowSpeed:640,arrowLife:.82,magnet:105,maxArrowTargets:4,maxArrowProjectiles:4});
 const rank=(g,id)=>Math.max(0,g.build?.getRank?.(id)??g.levels?.[id]??0);
 const boundedRank=(g,id,cap)=>Math.min(cap,rank(g,id));
@@ -25,8 +28,9 @@ export function resolveCharacterStats(game) {
   return {
     attack:COMBAT_REFERENCE_ATTACK*attackMultiplier,attackMultiplier,
     externalDamageMultiplier,damageMultiplier:attackMultiplier*externalDamageMultiplier,
-    // Reserved attributes have neutral values until a real source grants them.
-    defense:Math.max(0,game.build?.attributes?.defense??0),criticalChance:0,criticalMultiplier:1,
+    defense:Math.max(0,(game.build?.attributes?.defense??0)+Math.max(0,p.level-1)*CHARACTER_DEFENSE_PER_LEVEL+effectTotal(game,'toughness','defense')+effectTotal(game,'endlessToughness','defense')),
+    // Critical attributes remain neutral until a real source grants them.
+    criticalChance:0,criticalMultiplier:1,
     maxHp:p.maxHp,currentHp:p.hp,
     regen:effectTotal(game,'regen','healthRegen')+effectTotal(game,'endlessRegen','healthRegen'),
     moveSpeed:hero.baseSpeed*moveMultiplier,moveMultiplier,
