@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Island } from './dist/islands.js';
+import { COAST_RULES } from './dist/placement-rules.js';
 import { IslandArt, traceIslandContour } from './dist/island-art.js';
 import { ImmersionArt } from './dist/immersion-art.js';
 function recording(){const calls=[],stack=[],ctx={globalAlpha:1};for(const name of ['beginPath','moveTo','lineTo','closePath','fill','stroke','fillRect','translate','clip','ellipse'])ctx[name]=(...args)=>calls.push([name,...args]);ctx.save=()=>stack.push(ctx.globalAlpha);ctx.restore=()=>{ctx.globalAlpha=stack.pop();};ctx.createLinearGradient=(...args)=>{calls.push(['gradient',...args]);return{addColorStop(...args){calls.push(['stop',...args]);}};};return{ctx,calls,stack};}
@@ -8,7 +9,7 @@ const draw=(options={})=>{const rec=recording();assert(art.draw(rec.ctx,island,{
 const before=draw();assert.deepEqual(draw(),before,'paused coast has identical geometry, highlights and ripples');assert.notDeepEqual(draw({time:12}),before);assert.deepEqual(draw({reduced:true,time:10}),draw({reduced:true,time:200}));
 assert(before.filter(c=>c[0]==='ground').length===1,'regional ground is drawn exactly once');
 assert(before.length<6000,'visible shoreline work stays bounded rather than painting all-island textures');
-const shape=art._shape(island);assert.equal(shape.outer,island.points);assert.equal(shape.shallow,island.contour(100));assert.equal(shape.grass,island.contour(135));
+const shape=art._shape(island);assert.equal(shape.outer,island.points);assert.equal(shape.shallow,island.contour(COAST_RULES.shallowWidth));assert.equal(shape.grass,island.contour(COAST_RULES.inlandInset));
 const expected=recording();traceIslandContour(expected.ctx,island.points);const first=before.findIndex(c=>c[0]==='beginPath');assert.deepEqual(before.slice(first,first+expected.calls.length),expected.calls,'outer coast uses the exact shared collision outline');
 const inland=draw({camX:0,camY:0});assert.deepEqual(inland,[['ground']],'inland ground has no radial road overlay');
 const random=Math.random;Math.random=()=>{throw new Error('coast art cannot consume simulation RNG');};try{draw();draw({width:390,height:760});}finally{Math.random=random;}

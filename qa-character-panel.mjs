@@ -41,8 +41,8 @@ assert.equal(value(attr,'damageBonus'),'+68.75%','fury and low-health relic mult
 assert.equal(value(attr,'moveSpeed'),'175.82','current movement includes feather and terrain');
 assert.equal(value(attr,'magnet'),'320','timed pickup buff overrides base pickup range');
 assert.equal(value(item(panel('weapons'),'arrow'),'damage'),'129.17','local arrow power and role/buff scale once');
-assert.equal(value(item(panel('weapons'),'orbit'),'damage'),'136.62','arrow-only power does not leak to orbit');
-assert.match(item(panel('weapons'),'orbit'),/每 0.5 秒 造成 20.49 伤害，持续 2 秒；单层刷新/,'bleed preview uses the source hit damage, including current buffs');
+assert.equal(value(item(panel('weapons'),'orbit'),'damage'),'186.3','arrow-only power does not leak to orbit');
+assert.match(item(panel('weapons'),'orbit'),/每 0.5 秒 造成 27.95 伤害，持续 2 秒；单层刷新/,'bleed preview uses the source hit damage, including current buffs');
 assert.equal(value(item(panel('weapons'),'orbit'),'range'),'74—129','base leveling does not inflate orbit radius');
 assert.equal(value(item(panel('weapons'),'orbit'),'rotation'),'2.17 秒','rotation rate stays fixed while blades grow');
 assert.doesNotMatch(item(panel('weapons'),'arrow'),/同轮对同一目标/,'a single arrow does not need a multishot cap explanation');

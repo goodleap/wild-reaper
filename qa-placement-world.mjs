@@ -5,7 +5,7 @@ import {Environment,waterObstacleFootprint} from './dist/environment.js';
 import {Adventure} from './dist/adventure.js';
 import {Settlements} from './dist/settlements.js';
 import {RelicSites} from './dist/relic-sites.js';
-import {placementAllowed,COAST_RULES} from './dist/placement-rules.js';
+import {placementAllowed,surfaceAllows,COAST_RULES} from './dist/placement-rules.js';
 import {getWaterContours,waterBounds,waterIntersectsCircle,waterIntersectsCapsule} from './dist/water-geometry.js';
 
 const CELL=520;
@@ -30,6 +30,7 @@ let waterCount=0,largeCount=0,mushroomCount=0,hazardCount=0,naturalCount=0,unloa
 const report=[];
 for(const region of ['forest','marsh','ruins'])for(const seed of [0,7]){
   const g=world(region,seed),env=g.environment,island=g.terrain.island,snapshots=new Map(),waters=[];
+  for(const [name,p] of Object.entries(island.plan))assert(surfaceAllows(island,'structure',p),`${region}:${seed}:${name} planned building and entrance reserve remain inland`);
   for(const [tx,ty] of coordinates){
     const mud=env._mudAt(tx,ty);snapshots.set(`${tx},${ty}`,waterSignature(mud));if(!mud)continue;
     waters.push(mud);waterCount++;if(mud.scale>=2.5)largeCount++;
@@ -38,11 +39,12 @@ for(const region of ['forest','marsh','ruins'])for(const seed of [0,7]){
     // center or sampled ellipse cannot establish this for bent/rotated lakes.
     for(let i=0;i<ring.length;i++){
       const a=ring[i],b=ring[(i+1)%ring.length];
-      assert(island.containsCapsule(a.x,a.y,b.x,b.y,8,147),`${region}:${seed}:${mud.id} shoreline bank overlaps beach`);
+      assert(island.containsCapsule(a.x,a.y,b.x,b.y,8,COAST_RULES.inlandInset+COAST_RULES.waterSetback),`${region}:${seed}:${mud.id} shoreline bank overlaps beach`);
     }
     const b=waterBounds(mud,60);
     for(const prop of g.terrain.query(b.minX,b.minY,b.maxX,b.maxY)){
       const f=waterObstacleFootprint(prop);naturalCount++;
+      assert(surfaceAllows(island,prop.type==='rock'?'stone':prop.type==='tree'?'vegetation':'debris',f),`${region}:${seed}:${prop.type} stays in its coastal habitat`);
       assert(!waterIntersectsCapsule(mud,f.ax,f.ay,f.bx,f.by,f.r),`${region}:${seed}:${mud.id} intersects ${prop.type} roots/body`);
     }
   }
@@ -54,13 +56,13 @@ for(const region of ['forest','marsh','ruins'])for(const seed of [0,7]){
     const props=env._mushroomsAt(tx,ty,{ignoreObjectives:true});mushroomSnapshots.set(`${tx},${ty}`,structuredClone(props));
     for(const prop of props){
       mushrooms++;mushroomCount++;
-      assert(island.contains(prop.x,prop.y,prop.r+135),`${region}:${seed}:${prop.id} root footprint lies on beach`);
+      assert(island.contains(prop.x,prop.y,prop.r+COAST_RULES.inlandInset),`${region}:${seed}:${prop.id} root footprint lies on beach`);
       for(const mud of waters)assert(!waterIntersectsCircle(mud,prop.x,prop.y,prop.r),`${region}:${seed}:${prop.id} grows in ${mud.id}`);
     }
     const hazard=env.mechanisms._candidate(tx,ty);hazardSnapshots.set(`${tx},${ty}`,waterSignature(hazard));
     if(hazard){
       hazards++;hazardCount++;
-      assert(island.contains(hazard.x,hazard.y,hazard.r+135),`${region}:${seed}:${hazard.id} spills onto the beach`);
+      assert(island.contains(hazard.x,hazard.y,hazard.r+COAST_RULES.inlandInset),`${region}:${seed}:${hazard.id} spills onto the beach`);
       if(hazard.type==='vine')for(const mud of waters)assert(!waterIntersectsCircle(mud,hazard.x,hazard.y,hazard.r),`${hazard.id} grows in ${mud.id}`);
     }
   }

@@ -68,8 +68,8 @@ g.dungeon.active={id:'room'};g._clock+=.025;g.attacks.updateOrbit();assert.equal
 g.dungeon.active=null;g._clock+=.025;g.attacks.updateOrbit();assert.equal(g.orbitals[0].trail.count,1);
 g.build.setEquipped('orbit',false);g.attacks.updateOrbit();assert.equal(g.attacks._orbitTrails.size,0);
 g.build.setEquipped('orbit',true);g.attacks.updateOrbit();assert.equal(g.orbitals[0].trail.count,1);
-g.levels.orbit=5;g._clock+=.025;g.attacks.updateOrbit();assert.equal(g.attacks._orbitTrails.size,4);assert(g.orbitals.every(b=>b.trail.count===1));
-for(let n=0;n<1000;n++){g._clock+=.016;g.player.x+=1;g.attacks.updateOrbit();}assert.equal(g.attacks._orbitTrails.size,4);assert(g.orbitals.every(b=>b.trail.count<=TRAIL_CAPACITY));
+g.levels.orbit=5;g._clock+=.025;g.attacks.updateOrbit();assert.equal(g.attacks._orbitTrails.size,6);assert(g.orbitals.every(b=>b.trail.count===1));
+for(let n=0;n<1000;n++){g._clock+=.016;g.player.x+=1;g.attacks.updateOrbit();}assert.equal(g.attacks._orbitTrails.size,6);assert(g.orbitals.every(b=>b.trail.count<=TRAIL_CAPACITY));
 g.attacks.clearTrails();assert.equal(g.attacks._orbitTrails.size,0);
 
 // The projectile body keeps its familiar shape without adding its previous

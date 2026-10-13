@@ -4,13 +4,14 @@ import { Terrain } from './dist/terrain.js';
 import { COAST_RULES, PLACEMENT_POLICIES, surfaceAt, surfaceAllows, placementAllowed, groundFootprint, footprintBounds } from './dist/placement-rules.js';
 const island=new Island(),edge=island._edges[0];
 const coast=(inset,r=0)=>({x:(edge.a.x+edge.b.x)/2+edge.nx*inset,y:(edge.a.y+edge.b.y)/2+edge.ny*inset,r});
-for(const [d,label] of [[-20,'sea'],[50,'shallow'],[115,'beach'],[170,'inland']]){const p=coast(d);assert.equal(surfaceAt(island,p.x,p.y),label);}
+for(const [d,label] of [[-20,'sea'],[50,'shallow'],[115,'beach'],[150,'beach'],[190,'inland']]){const p=coast(d);assert.equal(surfaceAt(island,p.x,p.y),label);}
 assert.equal(COAST_RULES.inlandInset,COAST_RULES.shallowWidth+COAST_RULES.beachWidth);
 assert(surfaceAllows(island,'stone',coast(115,3)));
 for(const kind of ['vegetation','debris','water','structure','loot','hazard','wetlandHazard'])assert(!surfaceAllows(island,kind,coast(115,3)),`${kind} cannot occupy beach`);
-assert(surfaceAllows(island,'vegetation',coast(150,4)));
-assert(!surfaceAllows(island,'water',coast(150,8)),'pool bank includes inland coast setback');
-assert(surfaceAllows(island,'water',coast(170,8)));
+assert(surfaceAllows(island,'vegetation',coast(COAST_RULES.inlandInset+8,4)));
+for(const kind of ['vegetation','water','structure'])assert(!surfaceAllows(island,kind,coast(150,3)),`${kind} avoids the newly widened beach`);
+assert(!surfaceAllows(island,'water',coast(COAST_RULES.inlandInset+12,8)),'pool bank includes inland coast setback');
+assert(surfaceAllows(island,'water',coast(COAST_RULES.inlandInset+24,8)));
 const aquatic={surface:'coastal',water:'allow'};
 assert(surfaceAllows(island,aquatic,coast(50,4)));assert(!surfaceAllows(island,aquatic,coast(-5,4)));
 assert(!surfaceAllows(island,'new-unregistered-kind',{x:0,y:0,r:5}));

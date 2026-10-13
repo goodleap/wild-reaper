@@ -82,7 +82,14 @@ const nine={
 assert(Object.values(nine).every(picks=>picks.length===9));
 const late={heavy:measure('sword',nine.heavy,[[90,0,38]]),orbit:measure('orbit',nine.orbit,[[90,0,38]]),arrow:measure('arrow',nine.arrow,[[90,0,38]])};
 assert(late.heavy.dps>late.arrow.dps,'equally funded multi-arrow piercing cannot displace heavy sword in close single-target output');
+assert(late.heavy.dps>late.orbit.dps*1.5,'six surrounding blades retain a material focused-output disadvantage to the equally funded heavy sword');
 assert(late.arrow.dps>single.arrow.dps,'coverage investments still add output on a large single target');
+const evolvedSurround=measure('orbit',Array(5).fill('orbit'),circle);
+assert(evolvedSurround.dps>surroundingOrbit.dps,'the sixth blade and evolution improve sustained surrounding damage despite the shared hit interval');
+for(const distance of [60,90]) {
+  const positions=[[distance,0,9]],previous=measure('orbit',Array(4).fill('orbit'),positions,30),evolved=measure('orbit',Array(5).fill('orbit'),positions,30);
+  assert(evolved.dps>previous.dps,'evolution does not reduce sustained small-body contact damage on the original orbit');
+}
 
 function arrowArena({branch=null,shield=0,obstacles=[]}={}) {
   const g=equip(arena(obstacles),'arrow',['arrow','multishot','multishot','multishot',...(branch?[`branch:arrow:${branch}`]:[])]);

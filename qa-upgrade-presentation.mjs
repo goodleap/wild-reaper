@@ -47,9 +47,9 @@ for(const id of ['orbit','pulse','lightning']){
 for(const owned of [0,1,2,3,4]){
   const current=game();current.levels.orbit=owned;
   const choice=find(current,'orbit'),model=presentUpgrade(choice,current);
-  const expected=[['基础伤害','环绕利刃','环绕半径'],['基础伤害'],['环绕利刃'],['基础伤害'],['环绕利刃','新增效果']][owned];
+  const expected=[['基础伤害','环绕利刃','环绕半径'],['基础伤害','环绕利刃'],['环绕利刃'],['基础伤害','环绕利刃'],['基础伤害','环绕利刃','新增效果']][owned];
   assert.deepEqual(model.rows.map(row=>row.label),expected,'orbit upgrades list only new or changed effects');
-  if(owned===2||owned===4)assert.doesNotMatch(model.summary,/伤害|半径/,'extra blades do not imply free damage or range growth');
+  if(owned===2)assert.doesNotMatch(model.summary,/伤害|半径/,'extra blades do not imply free damage or range growth');
   if(owned===4)assert.match(model.summary,/每 3 秒扩张收拢/,'the fifth level clearly adds the existing evolution');
   assert(current.chooseUpgrade(choice.id));
   const actual=weaponStats(current,'orbit');

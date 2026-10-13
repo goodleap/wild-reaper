@@ -10,7 +10,7 @@ export const defenseDamageMultiplier=defense=>100/(100+Math.max(0,defense||0));
 export const defenseReduction=defense=>1-defenseDamageMultiplier(defense);
 export const ATTACK_DEFAULTS=Object.freeze({arrowDamage:32,arrowInterval:.38,arrowRange:420,arrowSpeed:640,arrowLife:.82,arrowSideDamage:.45,arrowVolleyTarget:1.45,magnet:105,maxArrowTargets:4,maxArrowProjectiles:4});
 export const ORBIT_BLEED_RATIO=.15;
-const ORBIT_DAMAGE=Object.freeze([30,30,36,36,44,44]);
+const ORBIT_DAMAGE=Object.freeze([30,30,36,36,44,60]);
 const rank=(g,id)=>Math.max(0,g.build?.getRank?.(id)??g.levels?.[id]??0);
 const boundedRank=(g,id,cap)=>Math.min(cap,rank(g,id));
 // Catalog effects are the source of truth for every selectable modifier.
@@ -90,7 +90,7 @@ export function weaponStats(game,id) {
     const baseDamage=ORBIT_DAMAGE[level]*(1+effectTotal(game,'orbitPower','baseDamageBonus'));
     const damage=scalePlayerDamage(game,baseDamage,{weaponId:id});
     return {id,equipped:equipped&&level>0,level,baseDamage,damage,baseBleedDamage:baseDamage*ORBIT_BLEED_RATIO,bleedDamage:damage*ORBIT_BLEED_RATIO,
-      count:2+Math.floor((Math.max(1,level)-1)/2),radius:74+effectTotal(game,'orbitRadius','radius'),
+      count:1+Math.max(1,level),radius:74+effectTotal(game,'orbitRadius','radius'),
       rotationSpeed:2.9,hitInterval:.42,knockback:weaponKnockbackDistance()};
   }
   return null;

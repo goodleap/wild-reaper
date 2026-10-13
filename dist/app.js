@@ -1152,6 +1152,8 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   drawCoins();drawSuperFields();
   combatArt.drawStormGround(ctx,game.storm,combatOptions);
   for(const e of game.effects)if(sceneVisible(e)&&effectInView(e))combatVfx.drawBurst(ctx,e,combatOptions,'ground');
+  // Waiting swords sit behind the hero; launched swords use the air pass below.
+  for(const e of game.effects)if(e.type==='superBurst'&&e.skillId==='swords')effects(e);
   for(const e of game.effects)if(e.type==='ring'||e.type==='rescueWarning')effects(e);drawRescueGround();
   drawAdventurePickups();drawEnemyTelegraphs();drawEnvironmentWarnings();drawRegionMechanisms();drawEliteGroundEffects();drawBossGroundEffects();
   ctx.restore();ctx.restore();
@@ -1160,8 +1162,12 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   drawSuperFields(true);drawEnemyBullets();
   drawGuardianBarrier(ctx,game,p,combatOptions);
   for(const b of game.bullets)if(sceneVisible(b)&&Math.abs(b.x-p.x)<width/2+100&&Math.abs(b.y-p.y)<height/2+100){drawWeaponTrail(ctx,b,combatOptions);combatArt.drawArrow(ctx,b,combatOptions);}
+  for(const sword of game.superSkills?.swordFlights||[]){
+    if(!sceneVisible(sword)||Math.abs(sword.x-p.x)>width/2+100||Math.abs(sword.visualY-p.y)>height/2+100)continue;
+    superArt.drawSwordFlight(ctx,sword,combatOptions);
+  }
   for(const b of game.orbitals){drawWeaponTrail(ctx,b,combatOptions);propArt.drawBlade(ctx,b,combatOptions);}
-  for(const e of game.effects)if(e.type!=='ring'&&e.type!=='rescueWarning'&&e.type!=='eliteSummon'&&e.type!=='swordSlash')effects(e);
+  for(const e of game.effects)if(e.type!=='ring'&&e.type!=='rescueWarning'&&e.type!=='eliteSummon'&&e.type!=='swordSlash'&&!(e.type==='superBurst'&&e.skillId==='swords'))effects(e);
   drawStorm();combatArt.drawStormAir(ctx,game.storm,combatOptions);
   ctx.restore();
   const exposure=stormExposure(game.storm);if(exposure>0){ctx.fillStyle=`rgba(177,219,255,${exposure})`;ctx.fillRect(0,0,width,height);}

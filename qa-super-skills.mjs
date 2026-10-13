@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { SUPER_SKILLS, SUPER_RULES, getSuperSkillStats } from './dist/super-skills.js';
+import { swordFormationAnchor } from './dist/sword-flight.js';
 let seed=739151;Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(terrain=new Terrain({obstacles:[]})){
  const g=new Game({terrain,adventure:false,encounters:false,environment:false,settlements:false});
@@ -53,21 +54,21 @@ for(const def of SUPER_SKILLS){
 const meteor=arena();acquire(meteor,'meteor');const marked=enemy(meteor);meteor.superSkills.cooldowns.meteor=0;advance(meteor,.025);
 assert(meteor.superSkills.fields.every(f=>f.stage==='warning'));advance(meteor,.65);assert.equal(marked.hp,10000,'stars show a real warning before impact');assert(!meteor.events.some(e=>e.type==='superImpact'));advance(meteor,.4);
 assert.equal(meteor.events.filter(e=>e.type==='superImpact'&&e.skillId==='meteor').length,2,'both landing events coincide with damage');
-const swords=arena();acquire(swords,'swords');const small=enemy(swords,80),royal=enemy(swords,200,0,'boss');swords.superSkills.cooldowns.swords=0;advance(swords,.3);assert(royal.hp<10000);assert.equal(small.hp,10000,'royal swords prioritize the Boss');
-const staged=arena();acquire(staged,'swords');const duelist=enemy(staged);staged.superSkills.cooldowns.swords=0;advance(staged,.175);assert.equal(duelist.hp,10000);advance(staged,.025);assert.equal(duelist.hp,9876);advance(staged,.175);assert.equal(duelist.hp,9876);advance(staged,.05);assert.equal(duelist.hp,9752);advance(staged,.5);assert.equal(duelist.hp,9504);
+const swords=arena();acquire(swords,'swords');const small=enemy(swords,80),royal=enemy(swords,200,0,'boss');swords.superSkills.cooldowns.swords=0;advance(swords,1);assert(royal.hp<10000);assert.equal(small.hp,10000,'royal swords prioritize the Boss');
+const staged=arena();acquire(staged,'swords');const duelist=enemy(staged);staged.superSkills.cooldowns.swords=0;advance(staged,.175);assert.equal(duelist.hp,10000);advance(staged,.025);assert.equal(duelist.hp,10000,'a released sword must travel before damage');assert.equal(staged.superSkills.swordFlights.length,1);advance(staged,.225);assert.equal(staged.superSkills.swordFlights.length,2,'release cadence remains staggered');advance(staged,1.8);assert.equal(duelist.hp,9504);
 const walking=arena();acquire(walking,'swords');enemy(walking,260);walking.superSkills.cooldowns.swords=0;advance(walking,.025);
 const formation=walking.effects.find(e=>e.type==='superBurst'&&e.skillId==='swords'),castPosition={x:walking.player.x,y:walking.player.y};let firstSword;
 for(let i=0;i<9;i++){
  walking.player.x+=2;walking.player.y+=1;advance(walking,.025);assert.equal(formation.x,walking.player.x);assert.equal(formation.y,walking.player.y);
- const strike=walking.effects.find(e=>e.type==='superSword');
- if(strike&&!firstSword){firstSword=strike;const a=-Math.PI+.35;assert(Math.abs(strike.x-(formation.x+Math.cos(a)*35))<1e-8);assert(Math.abs(strike.y-(formation.y-13+Math.sin(a)*25))<1e-8);assert.equal(formation.released,1);}
+ const strike=walking.superSkills.swordFlights[0];
+ if(strike&&!firstSword){firstSword=strike;const anchor=swordFormationAnchor(walking.player,0,4);assert(Math.abs(strike.x-anchor.x)<1e-8);assert(Math.abs(strike.visualY-anchor.y)<1e-8);assert.equal(formation.released,1);}
 }
 assert(firstSword);assert.equal(formation.castX,castPosition.x);assert.equal(formation.castY,castPosition.y,'only the seal remains at the cast position');
 walking.status='paused';const pausedFormation=structuredClone(formation);advance(walking,.3);assert.deepEqual(formation,pausedFormation);
 const completeCast={domain:[152,207,262],meteor:[290,555,675],swords:[496,780,1128],vortex:[216,296,376]};
 for(const def of SUPER_SKILLS)for(let level=1;level<=3;level++){
  const g=arena();for(let i=0;i<level;i++)acquire(g,def.id);const target=enemy(g),sleeper=enemy(g,155,5,'boss');sleeper.rescueSpawnGrace=10;g.superSkills.cooldowns[def.id]=0;
- advance(g,['domain','vortex'].includes(def.id)?3.4:1.6);
+ advance(g,['domain','vortex'].includes(def.id)?3.4:def.id==='swords'?2.6:1.6);
  assert.equal(10000-target.hp,completeCast[def.id][level-1],`${def.id} Lv.${level} complete cast output`);assert.equal(sleeper.hp,10000);
 }
 const barrier=new Terrain({obstacles:[{id:'super-wall',type:'log',structureType:'castle-wall',x:100,y:19.8,r:18,halfLength:220,angle:Math.PI/2}]});

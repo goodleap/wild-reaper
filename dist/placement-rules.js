@@ -2,7 +2,8 @@ import { getWaterContours, waterIntersectsCircle, waterIntersectsCapsule } from 
 
 // Generation and shoreline art share these bands. Movement may enter the
 // shallows; ordinary land objects must clear the entire beach as well.
-export const COAST_RULES=Object.freeze({shallowWidth:100,beachWidth:35,inlandInset:135,waterSetback:12});
+const shallowWidth=100,beachWidth=63;
+export const COAST_RULES=Object.freeze({shallowWidth,beachWidth,inlandInset:shallowWidth+beachWidth,waterSetback:12});
 const policy=(surface,water='avoid',coastSetback=0,waterGap=water==='avoid'?8:0)=>Object.freeze({surface,water,coastSetback,waterGap});
 export const PLACEMENT_POLICIES=Object.freeze({
   vegetation:policy('inland'),stone:policy('dry'),debris:policy('inland'),

@@ -189,9 +189,13 @@ export class CombatAttacks {
     this._orbitTrailClock=g._clock;this._orbitTrailPlayerX=p.x;this._orbitTrailPlayerY=p.y;
     const cycle=(g._clock-(g._orbitEvolutionStartedAt||0))%3;
     const surge=g.evolutions.orbit&&cycle<.9?Math.sin(Math.PI*cycle/.9):0,radius=stats.radius+55*surge;
+    const radialSpeed=g.evolutions.orbit&&cycle<.9?55*Math.PI/.9*Math.cos(Math.PI*cycle/.9):0;
+    // The blade points along its path around the hero, including the outward
+    // and inward portions of the evolved orbit. No extra decorative spin.
+    const tangentOffset=Math.atan2(radius*stats.rotationSpeed,radialSpeed);
     for(let i=0;i<stats.count;i++) {
       const a=g._clock*stats.rotationSpeed+i*TAU/stats.count;
-      const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a,evolved:g.evolutions.orbit,surge};
+      const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a,heading:a+tangentOffset,evolved:g.evolutions.orbit,surge};
       const origin={x:blade.x,y:blade.y,groundY:blade.y+groundOffset(p,true)};
       let trail=this._orbitTrails.get(i);if(!trail){trail=new WeaponTrail('orbit');this._orbitTrails.set(i,trail);}syncTrailScene(trail,g);
       if(!clearPath(g,p,origin,{source:'orbit',radius:blade.r})){trail.clear();continue;}

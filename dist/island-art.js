@@ -1,10 +1,13 @@
 import { COAST_RULES } from './placement-rules.js';
 // Coast geometry comes from Islands: depth colors mark the walkable edge,
-// the inner 100 units are shallow water, and the next 35 units are dry beach.
+// shallow water and the wider dry beach share the placement-rule widths.
 // Textures are sampled only in visible world-space cells. No island bitmap.
 const TAU=Math.PI*2;
 // 304 aligns both sample grids; 256 chunks retain a 4K viewport's working set.
 const DETAIL_CHUNK=304,DETAIL_LIMIT=256,GRAIN_CELL=19,SEA_CELL=76;
+// A wider sand band keeps roughly the former number of marks per coast length.
+// Thin once at chunk creation; visible frames only replay the cached points.
+const GRAIN_COVERAGE=Math.min(1,35/COAST_RULES.beachWidth);
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const PALETTES={
   forest:{deep:'#193e48',sea:'#25535a',shallow:'#537e71',sand:'#97996d',grain:'#d8cc98'},
@@ -28,7 +31,7 @@ export class IslandArt {
     const shallow=island.shallowWidth??COAST_RULES.shallowWidth,inland=shallow+COAST_RULES.beachWidth;
     for(let gy=cy*16;gy<(cy+1)*16;gy++)for(let gx=cx*16;gx<(cx+1)*16;gx++){
       const seed=hash(gx+17,gy+island.seed),x=gx*GRAIN_CELL+seed*18,y=gy*GRAIN_CELL+hash(gx-31,gy)*18;
-      if(island.contains(x,y,shallow+1)&&!island.contains(x,y,inland+4))tile.grain.push({gx,gy,seed,x,y});
+      if(hash(gx+103,gy-61)<=GRAIN_COVERAGE&&island.contains(x,y,shallow+1)&&!island.contains(x,y,inland+4))tile.grain.push({gx,gy,seed,x,y});
     }
     for(let gy=cy*4;gy<(cy+1)*4;gy++)for(let gx=cx*4;gx<(cx+1)*4;gx++){
       const seed=hash(gx+island.seed,gy),x=gx*SEA_CELL+seed*45,y=gy*SEA_CELL+hash(gy,gx+9)*63;

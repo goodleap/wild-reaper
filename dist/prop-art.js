@@ -262,6 +262,10 @@ export class PropArt {
     c.drawImage(image.canvas,b.x-image.ox*s,b.y-image.oy*s,image.w*s,image.h*s);return true;
   }
   drawBlade(c,b,options=OPTIONS){
-    const evolved=!!b.evolved,image=this._frame(evolved?'blade:evolved':'blade:normal'),s=evolved?1.12:1;c.save();c.translate(b.x,b.y);c.rotate((b.angle||0)+(options.reduced?0:options.time||0));c.scale(s,s);c.drawImage(image.canvas,-image.ox,-image.oy,image.w,image.h);c.restore();return true;
+    const evolved=!!b.evolved,image=this._frame(evolved?'blade:evolved':'blade:normal'),s=evolved?1.12:1;
+    // Sprite tip is local -Y; align it to the simulated travel direction in
+    // every motion mode. Animation time must not rotate it away from the path.
+    const heading=Number.isFinite(b.heading)?b.heading:(b.angle||0)+Math.PI/2;
+    c.save();c.translate(b.x,b.y);c.rotate(heading+Math.PI/2);c.scale(s,s);c.drawImage(image.canvas,-image.ox,-image.oy,image.w,image.h);c.restore();return true;
   }
 }

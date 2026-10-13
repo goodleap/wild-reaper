@@ -2,6 +2,7 @@ import { groundOffset } from './terrain.js';
 import { SUPER_SKILL_DEFS } from './combat-catalog.js';
 import { scalePlayerDamage } from './combat-stats.js';
 import { isGrounded } from './height-rules.js';
+import { SWORD_FLIGHT_RULES, swordFormationAnchor, createSwordFlight, advanceSwordFlight } from './sword-flight.js';
 
 const freeze=Object.freeze;
 export const SUPER_SKILLS=SUPER_SKILL_DEFS;
@@ -51,7 +52,7 @@ const upgradeDescription=(id,level,branch)=>{
 export class SuperSkills {
   constructor(game) {
     this.game=game;this.owned=game.build.superLevels;this.cooldowns={};this.pending=null;
-    this.fields=[];this._volleys=[];this._erosion=new Map();this._runicShots=[];this._runicCooldown=0;this._id=0;
+    this.fields=[];this._volleys=[];this.swordFlights=[];this._erosion=new Map();this._runicShots=[];this._runicCooldown=0;this._id=0;
   }
 
   offer(source,regionId=this.game.region?.id) {
@@ -76,7 +77,7 @@ export class SuperSkills {
     }
     const arrow=this.game.build.getWeapon('arrow'),currentLevel=this.game.build.getRank('arrowRune');
     if(arrow?.branch!=='ricochet'&&currentLevel<SUPER_RULES.maxLevel) {
-      const rune=freeze({id:'runeArrow',name:'符文穿击',desc:currentLevel?'强化贯穿符文的伤害并缩短充能间隔':`${arrow?.baseRank?'':'获得翠羽飞矢；'}飞矢转为穿透路线，射击时周期性释放强力符文射线`,icon:'✧',color:'#89ddd8',category:'weapon',ownerId:'arrow',tier:'super',abilityTier:'super',source:'region',rewardTier:'区域武器宝藏',kind:currentLevel?'武器专属强化':'武器专属能力',upgradeKind:currentLevel?'modifier':'acquisition',level:currentLevel+1,currentLevel,acquired:currentLevel>0,automatic:true,runic:true});
+      const rune=freeze({id:'runeArrow',name:'符文穿击',desc:currentLevel?'强化贯穿符文的伤害并缩短充能间隔':`${arrow?.baseRank?'':'获得翠羽飞矢；'}飞矢转为穿透路线，射击时周期性释放强力符文重箭`,icon:'✧',color:'#89ddd8',category:'weapon',ownerId:'arrow',tier:'super',abilityTier:'super',source:'region',rewardTier:'区域武器宝藏',kind:currentLevel?'武器专属强化':'武器专属能力',upgradeKind:currentLevel?'modifier':'acquisition',level:currentLevel+1,currentLevel,acquired:currentLevel>0,automatic:true,runic:true});
       if(regionId==='ruins')choices.unshift(rune);else choices.push(rune);
     }
     return choices;
@@ -348,15 +349,27 @@ export class SuperSkills {
       volley.tick+=volley.interval;volley.remaining--;
       const index=volley.index++;
       if(formation)formation.released=volley.count-volley.remaining;
-      const a=-Math.PI+.35+(index/(volley.count-1))*(Math.PI-.7),x=p.x+Math.cos(a)*35,y=p.y-13+Math.sin(a)*25;
+      const anchor=swordFormationAnchor(p,index,volley.count),{x,y}=anchor;
       const origin={x,y:y+groundOffset(p,true),groundY:y+groundOffset(p,true)};
       if(!this._lineClear(this._foot(),origin,9,'projectile'))continue;
       const target=this._targets(origin,430,{strongest:true,skillId:'swords'})[0];
-      if(!target)continue;
-      g._effect(x,y,'superSword',.34,9,DEFINITIONS.get('swords').color,undefined,{x2:target.x,y2:target.y,skillId:'swords',seed:++this._id});
-      this._damage(target,volley.damage,origin);
+      if(!target||this.swordFlights.length>=SWORD_FLIGHT_RULES.maxFlights)continue;
+      this.swordFlights.push(createSwordFlight({id:++this._id,anchor,groundLift:groundOffset(p,true),target,targetPoint:this._swordPoint(target),damage:volley.damage}));
     }
     this._volleys=this._volleys.filter(volley=>volley.remaining>0);
+  }
+  _swordPoint(target){const point=this._foot(target);return {...point,lift:point.y-target.y};}
+  _updateSwordFlights(dt){
+    for(const flight of this.swordFlights)advanceSwordFlight(flight,dt,{
+      pointOf:target=>this._swordPoint(target),
+      blocked:(from,to,r)=>!this._lineClear(from,to,r,'projectile'),
+      onImpact:(arrived,origin,damageTarget)=>{
+        const {x,visualY:y,groundY}=arrived,angle=arrived.visualAngle??arrived.angle;
+        this.game._effect(x,y,'superSword',.28,9,DEFINITIONS.get('swords').color,undefined,{x2:x,y2:y,groundY,angle,impactOnly:true,skillId:'swords',seed:arrived.id,blocked:arrived.reason==='blocked'});
+        if(damageTarget)this._damage(arrived.target,arrived.damage,origin);
+      }
+    });
+    this.swordFlights=this.swordFlights.filter(flight=>!flight.done);
   }
 
   movementMultiplier(enemy) {
@@ -365,14 +378,14 @@ export class SuperSkills {
     return (enemy.superSlowUntil||0)>this.game._clock?(enemy.superSlowFactor??1):1;
   }
   clearScene() {
-    this.fields=[];this._volleys=[];this._erosion.clear();this._runicShots=[];
+    this.fields=[];this._volleys=[];this.swordFlights=[];this._erosion.clear();this._runicShots=[];
     for(const enemy of this.game.enemies)for(const key of ['superRootUntil','superSlowUntil','superSlowFactor'])delete enemy[key];
     this.game.effects=this.game.effects.filter(effect=>!effect.skillId||(!DEFINITIONS.has(effect.skillId)&&effect.skillId!=='runeArrow'));
   }
   update(dt) {
-    if(this.game.status!=='playing'||!Number.isFinite(dt)||dt<=0)return;
+    if(this.game.status!=='playing'||this.game.sceneTransition?.active||!Number.isFinite(dt)||dt<=0)return;
     dt=Math.min(.05,dt);
-    this._updateErosion(dt);this._updateFields(dt);this._updateVolleys(dt);this._updateRunic(dt);
+    this._updateErosion(dt);this._updateFields(dt);this._updateSwordFlights(dt);this._updateVolleys(dt);this._updateRunic(dt);
     for(const skill of SUPER_SKILLS) {
       const level=this.owned[skill.id];if(!level)continue;
       this.cooldowns[skill.id]=Math.max(0,(this.cooldowns[skill.id]||0)-dt);

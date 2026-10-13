@@ -14,7 +14,7 @@ class DirectIslandArt extends IslandArt {
     for(let gy=Math.floor(view.minY/cell)-margin;gy<=Math.floor(view.maxY/cell);gy++)for(let gx=Math.floor(view.minX/cell)-margin;gx<=Math.floor(view.maxX/cell);gx++){
       if(grain){
         const seed=hash(gx+17,gy+island.seed),x=gx*19+seed*18,y=gy*19+hash(gx-31,gy)*18;
-        if(island.contains(x,y,shallow+1)&&!island.contains(x,y,inland+4))result.push({gx,gy,seed,x,y});
+        if(hash(gx+103,gy-61)<=Math.min(1,35/COAST_RULES.beachWidth)&&island.contains(x,y,shallow+1)&&!island.contains(x,y,inland+4))result.push({gx,gy,seed,x,y});
       }else{
         const seed=hash(gx+island.seed,gy),x=gx*76+seed*45,y=gy*76+hash(gy,gx+9)*63;
         if(!island.isDry(x,y))result.push({gx,gy,seed,x,y});

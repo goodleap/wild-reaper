@@ -43,7 +43,7 @@ assert.equal(onlyFlight.companions._castQuake(groundAlly),false,'a ground spell 
 for(const skill of ['swords','vortex'])for(const [obstacle,canCross] of [[low,true],[high,false]]){
   const g=arena([obstacle]),target=enemy(g,140);
   assert.equal(g.superSkills._cast(skill,1),canCross,`${skill} acquisition uses its propagation profile`);
-  for(let i=0;i<35;i++){g.superSkills._updateFields(.05);g.superSkills._updateVolleys(.05);}
+  for(let i=0;i<35;i++)g.superSkills.update(.05);
   assert.equal(target.hp<10000,canCross,`${skill} applies its cast only along a reachable route`);
 }
 const roots=arena(),groundTarget=enemy(roots,100),flyingTarget=enemy(roots,110,0,'bat');
@@ -57,6 +57,7 @@ assert(swordWall.superSkills._cast('swords',1));
 swordWall.player.x=0;swordWall.superSkills._updateVolleys(.2);
 assert.equal(swordVictim.hp,10000,'a sword release checks the caster-to-formation path before its target path');
 assert(!swordWall.effects.some(effect=>effect.type==='superSword'),'a blocked formation slot never emits a sword through the wall');
+assert.equal(swordWall.superSkills.swordFlights.length,0,'a blocked release cannot leave a hidden flying sword');
 const falling=arena([{type:'rock',x:60,y:0,r:35,heightBand:'high'}]),meteorTarget=enemy(falling,140);
 assert(falling.superSkills._cast('meteor',1),'falling meteors can target across outdoor natural cover');
 for(let i=0;i<25;i++)falling.superSkills._updateFields(.05);
