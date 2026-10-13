@@ -192,7 +192,7 @@ assert(maxStep<30,'ordinary following does not teleport through nearby obstacles
 // tree. The ally must settle at another clear point instead of orbiting forever.
 const resting=arena(),restingAlly=rescue(resting,'warden');
 Object.assign(resting.player,{x:0,y:0,facing:0});
-Object.assign(restingAlly,{x:-180,y:0,_navTimer:0,_navObstacle:null,_navSide:0});
+Object.assign(restingAlly,{x:-240,y:0,_navTimer:0,_navObstacle:null,_navSide:0});
 resting.terrain=new Terrain({obstacles:[{id:'trailing-tree',type:'tree',x:-95,y:19.8,r:25}]});
 for(let i=0;i<600;i++) {
   resting.update(1/60);

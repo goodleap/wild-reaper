@@ -4,7 +4,7 @@ import { placementAllowed } from './placement-rules.js';
 import { resetLocomotion, updateLocomotion } from './locomotion.js';
 import { defenseDamageMultiplier } from './combat-stats.js';
 import { movementProfile } from './height-rules.js';
-import { COMPANIONS, COMPANION_RULES, companionDefinition as definition } from './companion-catalog.js';
+import { COMPANIONS, COMPANION_RULES, COMPANION_FOLLOW_RULES, companionDefinition as definition } from './companion-catalog.js';
 export { COMPANIONS } from './companion-catalog.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive, objectivePointSafe } from './event-scheduling.js';
 
@@ -119,8 +119,6 @@ export class Companions {
     const point=Number.isFinite(x)&&Number.isFinite(y)?{x,y}:this._foot();
     const member={...def,id:++g._id,kind,heroId:kind,isCompanion:true,x:point.x,y:point.y-def.groundOffset,hp:def.maxHp,state:'active',flying:!!def.flying,invuln:0,remaining:Infinity,maxDuration:Infinity,facing:g.player.facing,moving:false,_attack:.6,_echoes:[],_stuckFor:0,_scan:0,sourceId};
     this._resetFollowing(member);this.members.push(member);g._friendlySnapshot=null;
-    if(this.members.length===1){this._formationFacing=g.player.facing;this._leaderPosition=this._foot();}
-    for(const other of this.members)other._followTarget=null;
     if(!Number.isFinite(x)||!Number.isFinite(y)||!g.terrain.isFree(point.x,point.y,member.r,movementProfile(member)))this._safeReturn(member);
     member.rescuedFace=.65;
     if(this.members.length===1){this.nextPayrollAt=(g.runTime??g.time)+COMPANION_RULES.payrollInterval;this.graceUntil=0;this.unpaidCost=0;}
@@ -134,7 +132,6 @@ export class Companions {
     const [member]=this.members.splice(index,1);member._echoes=[];this.game._friendlySnapshot=null;
     this.game._emit('companionLeft',{id:member.id,name:member.name,kind:member.kind,reason});
     this.game._effect(member.x,member.y+member.groundOffset,'ring',.45,30,definition(member.kind).color);
-    for(const other of this.members)other._followTarget=null;
     if(!this.members.length){this.graceUntil=0;this.unpaidCost=0;}
     return true;
   }
@@ -164,13 +161,15 @@ export class Companions {
   _resetFollowing(active) {
     active._navTimer=0;active._navObstacle=null;active._navSide=0;
     active._navProgressTimer=0;active._navProgressX=undefined;active._navProgressY=undefined;
-    active._stuckFor=0;active._following=false;active._followSpeed=0;active._followTarget=null;
+    active._stuckFor=0;active._following=false;active._followSpeed=0;active._followMode=null;active._coastTarget=null;
     resetLocomotion(active);
   }
   _safeReturn(active) {
-    const g=this.game,p=this._foot(),def=definition(active.kind),preferred=def.followDistance;
+    const g=this.game,p=this._foot(),foot=this._foot(active),def=definition(active.kind),preferred=def.followDistance;
+    // Arrival/recovery needs one safe point, not a permanent formation slot.
+    const fromAngle=distance(foot,p)>1?Math.atan2(foot.y-p.y,foot.x-p.x):g.player.facing+Math.PI;
     for(const radius of [preferred,preferred+24,Math.max(84,preferred*.72),76,52])for(let i=0;i<16;i++) {
-      const angle=(this._formationFacing??g.player.facing)+Math.PI+def.followAngle+i*TAU/16,x=p.x+Math.cos(angle)*radius,y=p.y+Math.sin(angle)*radius;
+      const angle=fromAngle+i*TAU/16,x=p.x+Math.cos(angle)*radius,y=p.y+Math.sin(angle)*radius;
       if(!g.terrain.isFree(x,y,active.r+3,movementProfile(active))||!this._hazardFree(x,y,active.r))continue;
       if(g.terrain.firstBlocker(p.x,p.y,x,y,0,movementProfile(active)))continue;
       if(g.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.y+groundOffset(e)-y)<e.r+active.r+12))continue;
@@ -180,67 +179,47 @@ export class Companions {
     }
     return false;
   }
-  _updateFormation(dt) {
-    const p=this._foot(),previous=this._leaderPosition;this._leaderPosition=p;
-    this._formationFacing??=this.game.player.facing;
-    if(!previous||!(dt>0))return;
-    const dx=p.x-previous.x,dy=p.y-previous.y;
-    // Only real travel changes the loose formation. Aim, idle facing and
-    // blocked movement cannot make the whole party orbit its leader.
-    if(Math.hypot(dx,dy)<.5)return;
-    const delta=Math.atan2(Math.sin(Math.atan2(dy,dx)-this._formationFacing),Math.cos(Math.atan2(dy,dx)-this._formationFacing));
-    this._formationFacing+=Math.max(-1.5*dt,Math.min(1.5*dt,delta));
-  }
   _follow(active,dt) {
-    const g=this.game,p=this._foot(),def=definition(active.kind),angle=(this._formationFacing??g.player.facing)+Math.PI+def.followAngle;
-    let target=active._followTarget;
-    // A stationary player's preferred trailing spot can fall inside a tree or
-    // its steering clearance. Pick a clear slot and retain it while the player
-    // rests, including turns made against a wall that do not actually travel.
-    if(!target||Math.hypot(p.x-target.playerX,p.y-target.playerY)>=12) {
-      target=null;
-      // Open ground keeps roles spread out; cramped entries may contract into
-      // shorter clear slots, then expand again once their leader moves out.
-      for(const radius of [def.followDistance,def.followDistance+24,Math.max(84,def.followDistance*.72),62]) {
-        for(const turn of [0,.6,-.6,1.2,-1.2,Math.PI]) {
-          const x=p.x+Math.cos(angle+turn)*radius,y=p.y+Math.sin(angle+turn)*radius;
-          if(g.terrain.isFree(x,y,active.r+8,movementProfile(active))&&!g.terrain.firstBlocker(p.x,p.y,x,y,0,movementProfile(active))&&!this.members.some(other=>other!==active&&other._followTarget&&distance(other._followTarget,{x,y})<active.r+other.r+24)){target={x,y};break;}
-        }
-        if(target)break;
-      }
-      // If no slot fits, hold a clear existing position instead of choosing
-      // the hero's exact feet and piling every member onto the same point.
-      target??=distance(this._foot(active),p)<240?this._foot(active):{...p};target.playerX=p.x;target.playerY=p.y;active._followTarget=target;
-    }
-    if(active.state==='active'&&active.workTarget&&distance(p,active.workTarget)<220)target=active.workTarget;
+    const g=this.game,p=this._foot(),def=definition(active.kind),rules=COMPANION_FOLLOW_RULES;
+    let target=p,mode='leader';
+    if(active.state==='active'&&active.workTarget&&distance(p,active.workTarget)<220){target=active.workTarget;mode='task';}
     else if(active.state==='active'&&active.kind==='dog'&&active.treasureTarget&&(g.runTime??g.time)<active._leadUntil){
       const dx=active.treasureTarget.x-p.x,dy=active.treasureTarget.y-p.y,length=Math.hypot(dx,dy)||1,lead=Math.min(185,length);
       const point={x:p.x+dx/length*lead,y:p.y+dy/length*lead};
-      if(g.terrain.isFree(point.x,point.y,active.r+5,movementProfile(active)))target=point;
+      if(g.terrain.isFree(point.x,point.y,active.r+5,movementProfile(active))){target=point;mode='task';}
     }else if(active.state==='active'&&active._meleeTarget?.hp>0&&distance(p,this._foot(active._meleeTarget))<210){
       const ef=this._foot(active._meleeTarget),af=this._foot(active),dx=af.x-ef.x,dy=af.y-ef.y,length=Math.hypot(dx,dy)||1;
-      target={x:ef.x+dx/length*70,y:ef.y+dy/length*70};
+      target={x:ef.x+dx/length*70,y:ef.y+dy/length*70};mode='task';
+    }
+    // Jobs approach their own objective. Finishing a job never forces a return
+    // to the hero while the member is already inside its normal leash.
+    if(active._followMode!==mode){
+      active._followMode=mode;active._following=false;active._followSpeed=0;
+      active._navTimer=0;active._navObstacle=null;active._coastTarget=null;active._stuckFor=0;
     }
     const foot=this._foot(active),d=distance(foot,target),oldX=active.x,oldY=active.y;
-    // The wide restart threshold keeps a settled ally from chasing every tiny
-    // correction. Arrival slows naturally without changing the collision path.
-    if(active._following&&d<=12)active._following=false;
-    else if(!active._following&&d>=30)active._following=true;
+    const stop=mode==='task'?rules.taskStop:def.followDistance;
+    const start=mode==='task'?rules.taskStart:stop+rules.restartGap;
+    // Leader movement inside this band does not issue a move order. A follower
+    // that does fall behind walks toward the current position, not a trail or
+    // an angular slot, then keeps whichever clear position it reaches.
+    if(active._following&&d<=stop)active._following=false;
+    else if(!active._following&&d>start){active._following=true;active._navTimer=0;}
     if(active._following&&dt>0) {
-      const desiredSpeed=Math.min(Math.max(definition(active.kind).speed,g.player.speed*(active.kind==='golem'?1.05:1.18)),Math.max(40,(d-12)*7));
-      const acceleration=1000*dt;
-      active._followSpeed=Math.max(active._followSpeed-acceleration,Math.min(active._followSpeed+acceleration,desiredSpeed));
+      const desiredSpeed=Math.min(Math.max(def.speed,g.player.speed*(active.kind==='golem'?1.05:1.18)),Math.max(40,(d-stop)*7));
+      const acceleration=1000*dt,previousSpeed=active._followSpeed||0;
+      active._followSpeed=Math.max(previousSpeed-acceleration,Math.min(previousSpeed+acceleration,desiredSpeed));
       active.speed=active._followSpeed;
       g._moveEnemy(active,dt,target);
       const moved=Math.hypot(active.x-oldX,active.y-oldY);
       if(moved>.001)active.facing=Math.atan2(active.y-oldY,active.x-oldX);
-      active._stuckFor=moved<.3&&d>100?active._stuckFor+dt:0;
+      active._stuckFor=moved<.3&&d>stop+20?active._stuckFor+dt:0;
     }else {active._stuckFor=0;active._followSpeed=0;}
     updateLocomotion(active,oldX,oldY,dt);
-    // Recovery is reserved for an unseen stranded ally; visible followers walk
-    // around scenery instead of snapping back across the screen.
+    // Only unseen stranded allies can recover; visible followers use the same
+    // terrain steering as before, without snapping to a formation position.
     if((distance(this._foot(active),p)>550||active._stuckFor>3)&&!g._inView(active,40)) {
-      if(this._safeReturn(active))g._effect(active.x,active.y+groundOffset(active,true),'ring',.35,26,definition(active.kind).color);
+      if(this._safeReturn(active))g._effect(active.x,active.y+groundOffset(active,true),'ring',.35,26,def.color);
     }
   }
   _leave() {return this.active?this.dismiss(this.active.id,'dismissed'):false;}
@@ -267,7 +246,6 @@ export class Companions {
     const g=this.game;if(g.status!=='playing')return;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
     this._payroll();
-    this._updateFormation(dt);
     for(const active of this.members) {
       for(const key of ['castFace','rescuedFace','hurtFace','hurtFlash','invuln'])active[key]=Math.max(0,(active[key]||0)-dt);
       if(active.state==='recovering'){
@@ -320,9 +298,9 @@ export class Companions {
     if(!(dt>0))return;
     for(let i=0;i<this.members.length;i++)for(let j=i+1;j<this.members.length;j++){
       const a=this.members[i],b=this.members[j];
-      // Flying companions need visual breathing room as well. Movement still
-      // uses each unit's own collision profile, so this adds no air blocker.
-      const af=this._foot(a),bf=this._foot(b),dx=bf.x-af.x,dy=bf.y-af.y,d=Math.hypot(dx,dy),minimum=Math.max(54,a.r+b.r+22);
+      // Resolve actual contact locally; nearby allies do not spread into slots.
+      // Each member retains its own ground/air collision profile.
+      const af=this._foot(a),bf=this._foot(b),dx=bf.x-af.x,dy=bf.y-af.y,d=Math.hypot(dx,dy),minimum=a.r+b.r+COMPANION_FOLLOW_RULES.contactGap;
       if(d>=minimum)continue;
       const angle=d>.001?Math.atan2(dy,dx):(i+j)*2.4,push=Math.min((minimum-d)*.5,35*dt);
       this.game._moveEntity(a,-Math.cos(angle)*push,-Math.sin(angle)*push);this.game._moveEntity(b,Math.cos(angle)*push,Math.sin(angle)*push);
@@ -343,7 +321,7 @@ export class Companions {
     const previous=member.treasureTarget?.id;
     member.treasureTarget=nearest?{id:nearest.id,x:nearest.x,y:nearest.y,name:nearest.name||'遗迹'}:null;
     member.cue=nearest?'发现宝藏':'';
-    if(nearest&&previous!==nearest.id){member._leadUntil=(g.runTime??g.time)+3;member._followTarget=null;g._emit('companionFound',{name:nearest.name||'遗迹',kind:'dog'});}
+    if(nearest&&previous!==nearest.id){member._leadUntil=(g.runTime??g.time)+3;g._emit('companionFound',{name:nearest.name||'遗迹',kind:'dog'});}
   }
   _scout(member) {
     const g=this.game;let nearest=null,priority=-Infinity,count=0;
@@ -415,7 +393,6 @@ export class Companions {
   }
   onSceneChange() {
     this.game._friendlySnapshot=null;const p=this._foot();
-    this._formationFacing=this.game.player.facing;this._leaderPosition=p;
     for(const active of this.members){active._echoes=[];active.workTarget=null;active._meleeTarget=null;active.scoutTarget=null;active.treasureTarget=null;active.scoutCount=0;active.cue='';active._scan=0;active.x=p.x;active.y=p.y-active.groundOffset;this._resetFollowing(active);this._safeReturn(active);}
   }
   onRegionChange() {
