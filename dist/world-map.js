@@ -4,7 +4,7 @@ import { traceIslandContour } from './island-art.js';
 export const WORLD_MAP_RULES=Object.freeze({range:900,discoveryRadius:340,explorationCell:100});
 const TAU=Math.PI*2;
 const BUILDINGS=new Set(['supply','occupied','castle','angel']);
-const RELICS=new Set(['hunt','rescue','rune']);
+const RELICS=new Set(['hunt','rescue','rune','dogcamp','stonevault']);
 const COMPLETED=new Set(['cleared','completed','claimed','spent','failed']);
 const FONT='"PingFang SC",system-ui,sans-serif';
 const positive=(value,fallback)=>Number.isFinite(value)&&value>0?value:fallback;
@@ -12,9 +12,9 @@ export function minimapBounds(width,height,insets={}){
   const compact=width<600||height<430,size=compact?104:128,margin=compact?10:16;
   return {x:width-size-margin-(insets.right||0),y:margin+(insets.top||0),width:size,height:size,margin};
 }
-export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',portal:'传送门',exit:'荒野出口',chest:'宝箱',boss:'首领'});
+export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',dogcamp:'旅犬营地',stonevault:'封石宝库',portal:'传送门',exit:'荒野出口',chest:'宝箱',boss:'首领'});
 export function landmarkLabel(marker){return marker.name||LANDMARK_NAMES[marker.type]||'遗迹';}
-export function landmarkState(marker){if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
+export function landmarkState(marker){if(marker.type==='stonevault')return marker.completed?'已领取':marker.gateOpen?'通路已开启 · 宝藏待领取':'封石阻挡 · 需要岩灵';if(marker.type==='dogcamp')return marker.completed?'已招募':'可招募寻宝小狗';if(marker.type==='rescue'&&marker.appearance==='golemaltar')return marker.completed?'岩灵已唤醒':'唤醒岩灵试炼';if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
 // Discovery lives on each region-owned landmark. A map instance never keeps a
@@ -70,7 +70,7 @@ export class WorldMap {
       if(distance>range)continue;
       const active=type==='portal'&&site.state==='active';
       const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored);
-      result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,name:type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||''});
+      result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,gateOpen:!!site.gateOpen,appearance:site.appearance,kind:site.kind,name:type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||''});
     }
     // Bright active gates remain readable when a sanctuary is nearby.
     return result.sort((a,b)=>Number(a.active)-Number(b.active));
@@ -205,6 +205,13 @@ export class WorldMap {
       ctx.beginPath();ctx.ellipse(0,-3.8,2,.9,0,0,TAU);ctx.stroke();
     } else if(marker.type==='supply'||marker.type==='occupied') {
       ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(0,-3.7);ctx.lineTo(4,0);ctx.lineTo(3,0);ctx.lineTo(3,3.5);ctx.lineTo(-3,3.5);ctx.lineTo(-3,0);ctx.closePath();ctx.fill();ctx.stroke();
+    } else if(marker.type==='dogcamp') {
+      for(const [px,py,r] of [[-2.8,-2.3,1],[-.9,-3.5,1],[1.3,-3.1,1],[3,-1.7,1]]){ctx.beginPath();ctx.arc(px,py,r,0,TAU);ctx.fillStyle=color;ctx.fill();}
+      ctx.beginPath();ctx.ellipse(0,1,2.6,2,0,0,TAU);ctx.fillStyle=color;ctx.fill();
+    } else if(marker.type==='stonevault') {
+      ctx.beginPath();ctx.moveTo(-5,4);ctx.lineTo(-5,-3);ctx.lineTo(0,-5);ctx.lineTo(5,-3);ctx.lineTo(5,4);ctx.closePath();ctx.fill();ctx.stroke();
+      if(!marker.gateOpen){ctx.fillStyle='#b6a88e';ctx.beginPath();ctx.moveTo(-3,3);ctx.lineTo(-2,-1);ctx.lineTo(2,-2);ctx.lineTo(3,3);ctx.closePath();ctx.fill();}
+      else {segment(ctx,-1.4,3,-1.4,0);segment(ctx,-1.4,0,1.4,0);segment(ctx,1.4,0,1.4,3);}
     } else if(marker.type==='castle') {
       ctx.beginPath();ctx.moveTo(-5,4);ctx.lineTo(-5,-4);ctx.lineTo(-2.5,-4);ctx.lineTo(-2.5,-1.5);ctx.lineTo(2.5,-1.5);ctx.lineTo(2.5,-4);ctx.lineTo(5,-4);ctx.lineTo(5,4);ctx.closePath();ctx.fill();ctx.stroke();
       ctx.beginPath();ctx.moveTo(-1.1,4);ctx.lineTo(-1.1,1);ctx.lineTo(1.1,1);ctx.lineTo(1.1,4);ctx.stroke();

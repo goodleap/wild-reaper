@@ -42,10 +42,10 @@ for(const kind of ['stormcaller','warden']){
   const g=arena(),camp=g.companions.spawn(kind,250,19.8);assert(camp);
   for(const e of g.enemies.filter(e=>camp.guardIds.includes(e.id)))g._hurtEnemy(e,e.hp+1);
   g.player.x=camp.x;g.player.y=camp.y-groundOffset(g.player,true);g.update(0);
-  const ally=g.companions.active;assert(ally);assert.equal(ally.rescuedFace,.65);assert.equal(ally.hurtFace,undefined);
+  const ally=g.companions.active;assert(ally);assert.equal(ally.rescuedFace,.65);assert.equal(ally.hurtFace||0,0);
   g.enemies=[];const e=g._spawnEnemy('slime',1);Object.assign(e,{x:ally.x+90,y:ally.y,hp:10000,maxHp:10000,speed:0});
-  ally._attack=0;g.companions.resolve();assert.equal(ally.castFace,.25,'A real successful cast triggers focus.');
+  ally._attack=0;g._rebuildGrid();g.companions.resolve();assert.equal(ally.castFace,kind==='warden'?.3:.25,'A real successful cast triggers focus.');
   if(kind==='stormcaller')assert.equal(ally.castFacing,0);
-  advance(g,.3);assert.equal(ally.castFace,0);assert(ally.rescuedFace<.65);
+  advance(g,.3);assert(ally.castFace<1e-8);assert(ally.rescuedFace<.65);
 }
 console.log('Character state QA passed: actual-damage faces, protection/entry isolation, pause, cast/rescue expressions, resolved beetle stride and heading.');

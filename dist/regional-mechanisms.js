@@ -1,6 +1,7 @@
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { isGrounded } from './height-rules.js';
+import { friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from './friendly-combat.js';
 // Ground hazards and marsh immersion share the movement altitude rule.
 // Poison clouds remain airborne hazards and do not use this exemption.
 export { isGrounded } from './height-rules.js';
@@ -26,7 +27,7 @@ const segmentDistance=(x,y,x1,y1,x2,y2)=>{
 export class RegionalMechanisms {
   constructor(environment,{generation=true}={}){
     this.environment=environment;this.game=environment.game;this.region=environment.region;this.generation=generation;
-    this.props=[];this._used=new UsedLocations();this._refreshClock=0;this._fixtureId=0;this._gasCooldown=0;this._gasEnemyClock=1;
+    this.props=[];this._used=new UsedLocations();this._refreshClock=0;this._fixtureId=0;this._gasCooldown=0;this._gasAllyCooldowns=new Map();this._gasEnemyClock=1;
     if(generation)this._refresh(true);
   }
   _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer||entity.isCompanion||entity.isCaptive||entity.isTownNpc)};}
@@ -173,14 +174,27 @@ export class RegionalMechanisms {
   _gasDamage(dt){
     const g=this.game,active=this.props.filter(o=>o.type==='gas'&&o.state==='active'&&this._visible(o));
     this._gasCooldown=Math.max(0,this._gasCooldown-dt);this._gasEnemyClock=Math.max(0,this._gasEnemyClock-dt);
+    const targets=friendlyTargets(g),cooldowns=this._gasAllyCooldowns;
+    for(const [ally,remaining] of cooldowns){
+      if(!targets.includes(ally)||!isFriendlyActive(g,ally))cooldowns.delete(ally);
+      else cooldowns.set(ally,Math.max(0,remaining-dt));
+    }
     if(!active.length)return;
-    // One shared clock caps overlapping clouds at one player hit per second.
-    if(this._gasCooldown<=1e-9&&active.some(o=>distance(o,this._foot())<=o.r)){
-      this._gasCooldown=REGIONAL_MECHANISM_RULES.gasInterval;g._hurtPlayer(REGIONAL_MECHANISM_RULES.gasPlayerDamage);
+    const exposed=point=>active.some(o=>distance(o,point)<=o.r&&!g.terrain.firstBlocker(o.x,o.y,point.x,point.y,0,'sight'));
+    // Each friendly has one clock across every overlapping cloud. A teammate
+    // entering later never borrows the hero's immunity or multiplies damage.
+    for(const ally of targets){
+      if(g.status!=='playing')return;
+      if(!isFriendlyActive(g,ally))continue;
+      const remaining=ally===g.player?this._gasCooldown:cooldowns.get(ally)||0;
+      if(remaining>1e-9||!exposed(friendlyFoot(ally)))continue;
+      if(ally===g.player)this._gasCooldown=REGIONAL_MECHANISM_RULES.gasInterval;
+      else cooldowns.set(ally,REGIONAL_MECHANISM_RULES.gasInterval);
+      damageFriendly(g,ally,REGIONAL_MECHANISM_RULES.gasPlayerDamage,'gas');
     }
     if(g.status!=='playing'||this._gasEnemyClock>1e-9)return;
     this._gasEnemyClock=REGIONAL_MECHANISM_RULES.gasInterval;
-    for(const enemy of [...g.enemies])if(enemy.hp>0&&g._inView(enemy)&&active.some(o=>distance(o,this._foot(enemy,false))<=o.r))
+    for(const enemy of [...g.enemies])if(enemy.hp>0&&g._inView(enemy)&&exposed(this._foot(enemy,false)))
       g._hurtEnemy(enemy,REGIONAL_MECHANISM_RULES.gasEnemyDamage,0,g.player,'gas');
   }
   update(dt){

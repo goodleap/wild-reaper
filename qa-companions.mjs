@@ -12,7 +12,7 @@ function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
   // Preserve arrow fixtures while excluding unrelated default-sword damage.
   g.levels.arrow=1;g.build.setEquipped('sword',false);
-  g.enemies=[];g.gems=[];g.events=[];g.effects=[];
+  g.enemies=[];g.gems=[];g.events=[];g.effects=[];g.gold=1000;
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   // Pressure phases would otherwise shorten the suppressed wave timer.
   g._updatePressure=()=>{};
@@ -42,7 +42,7 @@ function travel(g) {
 }
 
 assert.deepEqual(HEROES.map(h=>h.id),['traveler']);
-assert.deepEqual(COMPANIONS.map(h=>h.id).sort(),['stormcaller','warden']);
+assert.deepEqual(COMPANIONS.map(h=>h.id).sort(),['dog','golem','owl','stormcaller','warden']);
 const original=new Game({hero:'stormcaller',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false});
 assert.equal(original.hero.id,'traveler');assert.equal(original.player.heroId,'traveler');
 assert.equal(original.player.hp,100);assert.equal(original.player.speed,220);assert.equal(original.player.skillCooldownMax,15);
@@ -69,13 +69,13 @@ assert.equal(access.rescuePower,0,'ranged clearing never grants a remote reward'
 const before={xp:xpTotal(access),level:access.player.level,damage:access._damageMultiplier()};
 atCamp(access);access.update(0);
 assert.equal(access.companions.camp,null);assert.equal(access.companions.active.kind,'stormcaller');
-assert.equal(access.companions.active.remaining,60);assert.equal(access.companions.active.maxDuration,60);
+assert.equal(access.companions.active.remaining,Infinity);assert.equal(access.companions.active.state,'active');
 assert.equal(access.rescuePower,1);assert.equal(access.companions.rescuedCount,1);
 assert(Math.abs(access._damageMultiplier()-before.damage-.08)<1e-12);
 assert.equal(xpTotal(access),before.xp);assert.equal(access.player.level,before.level);assert.equal(access.status,'playing','rescue growth never interrupts play with an upgrade choice');
 access._hurtEnemy(defeated,100);access.companions.onEnemyKilled(defeated);access.update(0);
 assert.equal(access.rescuePower,1);assert.equal(access.companions.rescuedCount,1);
-assert.equal(access.companions.spawn('warden',700,19.8),null,'only one temporary companion is active');
+assert.equal(access.companions.spawn('stormcaller',700,19.8),null,'duplicate companion kinds cannot be recruited');
 
 // The small permanent benefit changes actual weapon damage, survives departure,
 // and combines additively with ordinary +25% damage upgrades.
@@ -85,14 +85,15 @@ const arrowTarget=monster(access,access.player.x+150,access.player.y);access._sh
 assert.equal(access.bullets.length,1);assert(Math.abs(access.bullets[0].damage-32*1.58)<1e-10);
 access.bullets=[];access.enemies=[];
 const active=access.companions.active;
-advance(access,10);assert(Math.abs(active.remaining-50)<1e-8);
+advance(access,10);assert.equal(access.companions.active,active);
 for(const state of ['paused','upgrade','relic','dead']) {
   access.status=state;const frozen=structuredClone(active);const clock=access.time;
   advance(access,2,{x:1});access.companions.update(.05);access.companions.resolve();
   assert.deepEqual(active,frozen,`${state} freezes companion movement, attacks and remaining service time`);assert.equal(access.time,clock);
 }
 access.status='playing';advance(access,50.05);
-assert.equal(access.companions.active,null,'the temporary ally leaves at its promised duration');
+assert.equal(access.companions.active,active,'a paid companion remains beyond the old one-minute lifetime');
+assert(access.companions.dismiss(active.id));
 assert.equal(access.rescuePower,1);assert(Math.abs(access._damageMultiplier()-1.58)<1e-12,'the rescue benefit remains for the run after departure');
 assert.equal(arena().rescuePower,0,'a new run does not inherit earlier rescue rewards');
 
@@ -152,21 +153,13 @@ assert.equal(thunder.kills,beforeKill.kills+1);assert.equal(xpTotal(thunder),bef
 
 const quake=arena(),warden=rescue(quake,'warden');
 const close=monster(quake,warden.x+90,warden.y),far=monster(quake,warden.x+280,warden.y);
-warden._attack=0;quake.companions.resolve();
-const firstDamage=10000-close.hp;assert(firstDamage>=70,'the first advanced quake produces real damage');
+quake._rebuildGrid();warden._attack=0;quake.companions.resolve();
+const firstDamage=10000-close.hp;assert(firstDamage>=30&&firstDamage<60,'warden deals modest defensive pulse damage');
 assert.equal(far.hp,10000);assert(!close.bleed&&!close.shock);
-assert.equal(warden._echoes.length,1,'one cast queues only one delayed ground echo');
-const echo=warden._echoes[0];const echoPoint={x:echo.x,y:echo.y};
-// The companion can move after casting, but its delayed impact stays anchored
-// at the original ground point and cannot follow the player across the map.
-warden.x+=400;quake.player.x+=400;
-advance(quake,.3);assert.equal(10000-close.hp,firstDamage,'the delayed quake is visibly separated from the first impact');
-quake.status='paused';const pending=structuredClone(warden._echoes);advance(quake,2);assert.deepEqual(warden._echoes,pending);
-quake.status='playing';advance(quake,.075);
-assert(close.hp<10000-firstDamage,'the delayed ground echo damages enemies near its original cast');
-assert.equal(far.hp,10000);assert.equal(warden._echoes.length,0);
-assert(Number.isFinite(echoPoint.x)&&Number.isFinite(echoPoint.y));
-const afterEcho=close.hp;advance(quake,.5);assert.equal(close.hp,afterEcho,'a resolved echo cannot strike again');
+assert(close._weaponPush?.distance>0,'a defensive pulse shoves nearby attackers');
+assert.equal(warden._echoes.length,0,'defensive support no longer queues offensive quake echoes');
+assert.equal(quake.companions.protectionMultiplier(quake.player),.75,'nearby warden protects the hero');
+warden.x+=400;assert.equal(quake.companions.protectionMultiplier(quake.player),1,'protection has a bounded radius');
 
 // Support spells use the same death path that cancels Boss windups. An ally's
 // lethal hit resolves before an attack already due on this very frame.
@@ -254,7 +247,7 @@ assert.equal(pendingTravel.companions.camp,lostCamp,'an unfinished camp is resto
 const followingTravel=arena(),follower=rescue(followingTravel,'warden');
 advance(followingTravel,7);const remaining=follower.remaining;
 follower._attack=0;monster(followingTravel,follower.x+100,follower.y);followingTravel.companions.resolve();
-assert(follower._echoes.length);const attackCooldown=follower._attack;
+const attackCooldown=follower._attack;follower._echoes.push({x:0,y:0,life:2,regionIndex:0});
 travel(followingTravel);
 assert.equal(followingTravel.companions.active,follower,'an active rescued ally persists across a portal');
 assert.equal(follower.remaining,remaining);assert.equal(follower._attack,attackCooldown,'travel cannot reset the support attack cooldown');
@@ -294,9 +287,9 @@ for(let i=0;i<12;i++) {
   const helper=rescue(cycling,i%2?'warden':'stormcaller',cycling.player.x+350,cycling.player.y+19.8);
   assert.equal(cycling.rescuePower,i+1);assert.equal(cycling.companions.rescuedCount,i+1);
   assert.equal(cycling.companions.camp,null);assert(!cycling.enemies.some(e=>e.hp>0&&e.rescueId));
-  advance(cycling,60.1);assert.equal(cycling.companions.active,null);
+  advance(cycling,60.1);assert.equal(cycling.companions.active,helper);cycling.companions.dismiss(helper.id);assert.equal(cycling.companions.active,null);
   assert.equal(helper._echoes.length,0);assert(cycling.enemies.length<=180);assert(cycling.effects.length<=201);
   advance(cycling,45.1);
 }
 assert.equal(cycling.rescuePower,12);assert.equal(xpTotal(cycling),144);assert.equal(cycling.player.level,1);
-console.log('Companion mechanics: fixed protagonist, real guard combat/rescue, bounded temporary service, permanent run growth, lightning/quake damage, single rewards, interrupted Boss attacks, collision following, portal continuity, objective scheduling and long-run bounds passed.');
+console.log('Companion mechanics: fixed protagonist, real guard combat/rescue, persistent paid service, permanent run growth, lightning/defensive pulse damage, single rewards, interrupted Boss attacks, collision following, portal continuity, objective scheduling and long-run bounds passed.');

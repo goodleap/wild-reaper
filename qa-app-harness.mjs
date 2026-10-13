@@ -48,7 +48,7 @@ export function harness(search='',{storage=new Map()}={}){
   const sandbox={...modules,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value))},requestAnimationFrame(){scheduled++;},setTimeout:()=>0,clearTimeout(){},console};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
   const run=script=>vm.runInContext(script,sandbox);
-  run('let gameDraws=0,introDraws=0;renderGame=()=>{gameDraws++;};renderIntro=()=>{introDraws++;};');
+  run('const shippedRenderGame=renderGame;let gameDraws=0,introDraws=0;renderGame=()=>{gameDraws++;};renderIntro=()=>{introDraws++;};');
   let now=1000;
   const tick=(delta=1000/60)=>{const before=scheduled;run(`frame(${now+=delta})`);assert.equal(scheduled,before+1,'every callback schedules its successor without a frame-rate limiter');};
   return {nodes,listeners,document,window,navigator,run,tick,pauseColumn,storage,clockReads:()=>clockReads,drawImages:()=>drawImages,resize(width,height){viewport={...viewport,width,height};run('resize();');}};

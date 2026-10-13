@@ -10,6 +10,9 @@ import { drawGuardianBarrier, drawBarrierEffect } from './guardian-art.js';
 import { getStormGeometry, lightningPath, stormBrightness, stormImpactBrightness } from './storm-geometry.js';
 import { MonsterArt } from './monster-art.js';
 import { HumanoidArt } from './humanoid-art.js';
+import { CompanionArt, COMPANION_VISUALS } from './companion-art.js';
+import { companionDefinition } from './companion-catalog.js';
+import { armyPanelHTML } from './army-panel.js';
 import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
 import { WaterArt } from './water-art.js';
@@ -50,6 +53,7 @@ const combatArt=new CombatArt(()=>document.createElement('canvas'));
 const combatVfx=new CombatVfx(()=>document.createElement('canvas'));
 const monsterArt=new MonsterArt(()=>document.createElement('canvas'));
 const humanoidArt=new HumanoidArt(()=>document.createElement('canvas'));
+const companionArt=new CompanionArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
 const waterArt=new WaterArt(()=>document.createElement('canvas'));
 const islandArt=new IslandArt();
@@ -103,7 +107,7 @@ ${dpr.toFixed(2)}×${(canvas.width*canvas.height/1e6).toFixed(1)}M`;
 if(debugMode){$('game-version').textContent+=debugConfig.full?' · DEBUG FULL':' · DEBUG';$('game-version').setAttribute('aria-label','游戏版本，调试模式');}
 let width=1100,height=700,dpr=1,scaleX=1,scaleY=1,nativeDpr=0,game=null,paused=false,helpOpen=false,mapOpen=false,characterOpen=false,archiveOpen=false,runEnded=false;
 let mapReturnFocus=null,characterReturnFocus=null,characterTab='attributes',characterPointer=null;
-const characterTabs=['attributes','weapons','skills','status'];
+const characterTabs=['attributes','weapons','skills','army','status'];
 let archiveReturnFocus=null,archiveObserveAt=0,archiveMilestonesBefore=new Set();
 let archiveView={tab:'codex',category:'enemies',difficulty:'normal',selectedId:null};
 let archiveStorage=null;try{archiveStorage=localStorage;}catch{}
@@ -343,7 +347,7 @@ function renderCharacter(){
   $('character-note').textContent='时间已暂停 · 数值计入当前强化与增益';
   for(const tab of characterTabs){const button=$(`character-tab-${tab}`),active=tab===characterTab;button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;}
   $('character-content').setAttribute('aria-labelledby',`character-tab-${characterTab}`);
-  $('character-content').innerHTML=characterPanelHTML(game,characterTab);
+  $('character-content').innerHTML=characterTab==='army'?armyPanelHTML(game):characterPanelHTML(game,characterTab);
 }
 function openCharacter(tab='attributes'){
   if(!game||runEnded||helpOpen||archiveOpen||game.sceneTransition?.active||!['playing','relic','upgrade','super','shop'].includes(game.status))return;
@@ -399,11 +403,14 @@ function announceCombatEvents(events){
   else if(boss&&events.some(event=>event.type==='bloomWindup'))notify(boss?.bloomAttack?.kind==='fan'?'孢冠扇射 · 绕至侧面，借树石掩护':'孢爆将至 · 离开紫色预警圈',3);
   else if(events.some(event=>event.type==='bossWindup')||game.enemies.some(enemy=>(enemy.slam?.life>0||enemy.bloomAttack?.life>0)&&sceneVisible(enemy)))return;
   else if(pendingEvolutions.length&&(Date.now()>=toastUntil||toastPriority<2)){const evolution=pendingEvolutions.shift();notify(`${evolution.name} · ${evolution.weaponId==='orbit'?'武器已进化':'技能分支已解锁'}`,2);}
-  else if(events.some(event=>event.type==='companionJoined')){const joined=events.find(event=>event.type==='companionJoined');notify(`${joined.name}加入 · 助战60秒，援助之力 +1`,2);}
+  else if(events.some(event=>event.type==='companionJoined')){const joined=events.find(event=>event.type==='companionJoined');notify(`${joined.name}加入军团 · 每 30 秒支付维持费`,2);}
   else if(events.some(event=>event.type==='rescueReady'))notify('围困怪物已清除 · 靠近受困者完成解救',2);
   else if(events.some(event=>event.type==='rescueExpired'))notify('营救机会已错过 · 继续寻找其他旅人',1);
+  else if(events.some(event=>event.type==='companionUpkeepWarning'))notify('军团维持费不足 · 请及时补充金币',2);
+  else if(events.some(event=>event.type==='companionRecovering'))notify(`${events.find(event=>event.type==='companionRecovering').name}暂时退战 · 恢复后重新协助`,1);
+  else if(events.some(event=>event.type==='stonevaultOpened'))notify('岩灵击碎封石 · 秘藏入口已打开',2);
   else if(events.some(event=>event.type==='rescueAppeared'))notify('发现受困旅人 · 循指引清除围困怪物',1);
-  else if(events.some(event=>event.type==='companionLeft')){const left=events.find(event=>event.type==='companionLeft');notify(`${left.name}暂别 · 援助之力保留至本局结束`,1);}
+  else if(events.some(event=>event.type==='companionLeft')){const left=events.find(event=>event.type==='companionLeft');notify(`${left.name}离队${left.reason==='unpaid'?' · 金币不足':''}`,1);}
   else if(events.some(event=>event.type==='regionEnter'))notify(`已抵达${game.region.name} · 探索岛屿，寻找野生传送门`,2);
   else if(events.some(event=>event.type==='portalOpened'))notify(`传送门已激活 · 三界连通 ${game.regions.defeatedConnectionsCount??0}/3 · 可往返`,2);
   else if(events.some(event=>event.type==='encounterComplete'))notify('林间挑战完成 · 资源已入账，靠近拾取补给',2);
@@ -442,10 +449,16 @@ function updateEncounterHUD(){
   $('encounter-time').textContent=active.siteId?'遗迹':`${Math.max(0,Math.ceil(active.life))}秒`;
 }
 function updateCompanionHUD(){
-  const ally=game.companions?.active,power=game.rescuePower||0,visible=!runEnded&&!!(ally||power);
-  show('companion-status',visible);show('companion-detail',!!ally);show('rescue-power',power>0);
-  arena.classList.toggle('has-companion',!!ally&&!runEnded);arena.classList.toggle('has-rescue-power',power>0&&!runEnded);
-  if(ally){$('companion-icon').textContent=ally.kind==='stormcaller'?'ϟ':'◈';$('companion-name').textContent=`${ally.name} · ${ally.kind==='stormcaller'?'雷电':'地震'}`;$('companion-time').textContent=`${Math.ceil(ally.remaining)}s`;$('companion-fill').style.width=`${100*clamp(ally.remaining/ally.maxDuration,0,1)}%`;$('companion-status').classList.toggle('storm-companion',ally.kind==='stormcaller');}
+  const team=game.companions,members=team?.members||[],power=game.rescuePower||0,visible=!runEnded&&!!(members.length||power);
+  show('companion-status',visible);show('companion-detail',!!members.length);show('rescue-power',power>0);
+  arena.classList.toggle('has-companion',members.length>0&&!runEnded);arena.classList.toggle('has-rescue-power',power>0&&!runEnded);
+  if(members.length){
+    const fee=members.reduce((sum,m)=>sum+(companionDefinition(m.kind)?.upkeep||0),0),recovering=members.filter(m=>m.state==='recovering').length;
+    $('companion-icon').textContent='♟';$('companion-name').textContent=`军团 ${members.length} 位伙伴${recovering?`，${recovering} 位恢复中`:''}`;
+    $('companion-time').textContent=`${members.length} · ${fee}◉/30s`;
+    $('companion-status').classList.toggle('army-unpaid',!!team.graceUntil);
+    $('companion-status').title=`${members.map(m=>m.name).join('、')} · 点击主角详情查看军团`;
+  }
   $('rescue-power').textContent=`援助 Lv.${power} · 基础伤害 +${power*8}%`;
 }
 function updateHUD(){if(!game)return;
@@ -459,11 +472,20 @@ function updateHUD(){if(!game)return;
   try{renderSchedule.invalidate();arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;$('level-label').textContent=`LV. ${p.level}`;$('xp-caption').textContent=`${hudNumber(p.xp)} / ${hudNumber(p.xpNext)}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`${hudNumber(game.crystals||0)} / ${hudNumber(game.crystalsNext||0)}`;$('gold-label').textContent=hudNumber(game.gold||0);$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=width<600?`第 ${game.wave} 波`:waveProgressLabel();$('kills').textContent=game.kills;$('skill-button').title=`天雷轰击 · 超级技能 Lv.${game.build.getSkill('storm').level} · 空格 · 冷却 ${p.skillCooldownMax} 秒`;$('skill-label').textContent=p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪';$('skill-fill').style.width=`${100*clamp((p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1),0,1)}%`;$('touch-skill').classList.toggle('cooldown',p.skillCooldown>0);$('skill-button').disabled=p.skillCooldown>0;$('touch-skill').disabled=p.skillCooldown>0;$('skill-symbol').textContent=p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ';$('touch-skill-label').textContent=p.skillCooldown>0?'冷却中':'天雷';$('touch-skill').setAttribute('aria-label',p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击');const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',boss?.bossKind==='bloom');if(boss){$('boss-name').textContent=boss.dungeonBoss?'王城守望者 · 最终首领':`${boss.bossKind==='bloom'?'孢冠领主':'荒野领主'} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}finally{if(measureHud)frameHudMs+=cpuNow()-hudBegan;}
 }
 
+function debugArmyAction(recruit){
+  if(!debugMode||!game||runEnded||game.status!=='playing'||game.sceneTransition.active)return;
+  if(recruit){for(const kind of ['stormcaller','warden','dog','owl','golem'])game.companions.recruit(kind,{sourceId:'debug'});game.companions.onSceneChange();archive.observe(game);notify('五位伙伴已就位 · 主角详情可查看军团',2);}
+  else for(const member of [...game.companions.members])game.companions.dismiss(member.id,'dismissed');
+  updateHUD();if(characterOpen)renderCharacter();renderSchedule.invalidate();
+}
+$('debug-recruit-army').onclick=()=>debugArmyAction(true);
+$('debug-dismiss-army').onclick=()=>debugArmyAction(false);
 function refreshDiagnostics(){
   if(!diagnostics)return;
   show('debug-diagnostics');
   for(const mode of diagnosticModes)$(`diagnostic-${mode}`).setAttribute('aria-pressed',String(mode===diagnostics.mode));
   const ready=!!game&&game.status==='playing'&&!game.sceneTransition.active&&!runEnded;
+  $('debug-recruit-army').disabled=!ready;$('debug-dismiss-army').disabled=!ready;
   $('diagnostic-start').disabled=!ready;
   $('diagnostic-start').textContent='单组 15 秒';
   $('diagnostic-auto').disabled=!ready;
@@ -551,11 +573,13 @@ for(const [index,tab] of characterTabs.entries()){
   button.onclick=()=>{if(!characterOpen)return;characterTab=tab;renderCharacter();};
   button.addEventListener('keydown',e=>{
     if(!characterOpen||!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
-    e.preventDefault();e.stopPropagation();const next=e.key==='Home'?0:e.key==='End'?3:(index+(e.key==='ArrowRight'?1:3))%4;
+    e.preventDefault();e.stopPropagation();const next=e.key==='Home'?0:e.key==='End'?characterTabs.length-1:(index+(e.key==='ArrowRight'?1:characterTabs.length-1))%characterTabs.length;
     characterTab=characterTabs[next];renderCharacter();$(`character-tab-${characterTab}`).focus({preventScroll:true});
   });
 }
 $('character-content').addEventListener('click',e=>{
+  const dismiss=e.target.closest?.('button[data-dismiss-companion]');
+  if(dismiss&&characterOpen&&game?.status==='playing'){game.companions.dismiss(Number(dismiss.getAttribute('data-dismiss-companion')),'dismissed');renderCharacter();updateHUD();$('character-tab-army').focus({preventScroll:true});return;}
   const button=e.target.closest?.('button[data-weapon-id]');
   if(!button||button.disabled||!characterOpen||helpOpen||mapOpen||game?.status!=='playing')return;
   const id=button.getAttribute('data-weapon-id');
@@ -643,8 +667,9 @@ function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,
 // All three humanoids share the traveler's body envelope and grounded shadow.
 const HERO_VISUALS={traveler:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:{...ACTOR_VISUALS.player,top:40,halfWidth:39}};
 function actorVisual(entity,isPlayer=false,scaleOverride){
-  const type=isPlayer?'player':entity.type,shape=isPlayer?(HERO_VISUALS[entity.heroId||'traveler']||HERO_VISUALS.traveler):(ACTOR_VISUALS[type]||ACTOR_VISUALS.slime);
-  const scale=scaleOverride??(isPlayer?1.1:entity.r/shape.radius);
+  const companionShape=(entity.isCompanion||entity.isCaptive)&&COMPANION_VISUALS[entity.kind||entity.heroId];
+  const type=isPlayer?'player':entity.type,shape=companionShape||(isPlayer?(HERO_VISUALS[entity.heroId||'traveler']||HERO_VISUALS.traveler):(ACTOR_VISUALS[type]||ACTOR_VISUALS.slime));
+  const scale=scaleOverride??(companionShape?(entity.r||shape.radius)/shape.radius:isPlayer?1.1:entity.r/shape.radius);
   return {x:entity.x,y:entity.y,type,scale,immersion:game?.environment?.getImmersion(entity,isPlayer)||null,footY:entity.y+shape.foot*scale,orderId:isPlayer?-1:(entity.id||0),entity,isPlayer,shape};
 }
 function sortActors(actors){return actors.sort((a,b)=>a.footY-b.footY||a.orderId-b.orderId||a.x-b.x||a.type.localeCompare(b.type));}
@@ -839,15 +864,15 @@ function adventureSceneProps(camX,camY,viewWidth=width,viewHeight=height){
   if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type!=='merchant'&&Math.abs(site.x-camX)<viewWidth/2+200&&Math.abs(site.y-camY)<viewHeight/2+230)props.push({...site,isSettlement:true});
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest)&&sceneVisible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
   if(game.dungeon?.active?.kind==='hut')for(const prop of game.dungeon.active.props||[])if(visible(prop))props.push({...prop,isHutFurniture:true,sortY:prop.y+(prop.type==='rug'?-1000:0)});
-  if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])props.push(...(site.type==='hunt'?encounterArt.props(site):relicArt.props(site)).filter(visible));
+  if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[]){const special=site.type==='stonevault'||site.type==='dogcamp'||site.appearance==='golemaltar';props.push(...(special?companionArt.props(site):site.type==='hunt'?encounterArt.props(site):relicArt.props(site)).filter(visible));}
   if(game.encounters?.active?.type==='hunt'&&!game.encounters.active.siteId)props.push(...encounterArt.props(game.encounters.active).filter(visible));
   return props;
 }
 function drawAdventureShadowPaths(mask,props){
-  for(const prop of props){if(prop.isHutFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
+  for(const prop of props){if(prop.isHutFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'||prop.type==='companionSitePart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
     mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();}
 }
-function drawAdventureProp(prop){if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
+function drawAdventureProp(prop){if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
   if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'){relicArt.drawProp(ctx,prop,combatOptions);return;}
   if(prop.type==='huntMarker'){encounterArt.drawMarker(ctx,prop,combatOptions);return;}
   if(prop.isSettlement){drawSettlement(prop);return;}if(prop.isDungeonTreasure){drawDungeonChest(prop);return;}
@@ -987,6 +1012,7 @@ function drawObjectivePointers(){
   if(boss)draw(boss,null,boss.bossKind==='bloom'?'#ddb0e6':'#ebbd91');
   const camp=game.companions?.camp,portal=game.portal,encounter=game.encounters?.active,treasure=game.adventure?.treasure,targets=[];
   const distance=entity=>Math.hypot(entity.x-game.player.x,entity.y-game.player.y-ACTOR_VISUALS.player.foot*1.1);
+  for(const member of game.companions?.members||[]){const target=member.state==='active'&&(member.kind==='dog'?member.treasureTarget:member.scoutCount>=5||member.scoutTarget?.boss?member.scoutTarget:null);if(target)targets.push({entity:target,label:member.kind==='dog'?'寻宝犬发现':member.scoutTarget?.boss?'首领警戒':'敌群警戒',color:member.kind==='dog'?'#edca91':'#c2dceb',priority:1});}
   if(camp)targets.push({entity:camp,label:camp.state==='ready'?'解救':'营救',color:camp.state==='ready'?'#c8e8ae':'#e8c994',priority:distance(camp)<(camp.state==='ready'?100:240)?0:1});
   if(encounter)targets.push({entity:encounter,label:encounter.type==='hunt'?'猎区':'宝物精',color:encounter.type==='hunt'?'#bbd6b0':'#e8cf83',priority:distance(encounter)<(encounter.type==='hunt'?encounter.r:330)?0:1});
   if(treasure&&treasure.state!=='opened')targets.push({entity:treasure,label:'宝箱',color:'#e8cf83',priority:treasure.state==='active'&&distance(treasure)<600?0:2});
@@ -1001,7 +1027,7 @@ function drawRelicGround(){
   const p=game.player;
   for(const site of game.relicSites?.sites||[]){
     if(Math.abs(site.x-p.x)>width/2+280||Math.abs(site.y-p.y)>height/2+280)continue;
-    if(site.type==='hunt')encounterArt.drawGround(ctx,site,{...combatOptions,encounter:game.encounters?.active?.siteId===site.id?game.encounters.active:null});else relicArt.drawGround(ctx,site,combatOptions);
+    if(site.type==='hunt')encounterArt.drawGround(ctx,site,{...combatOptions,encounter:game.encounters?.active?.siteId===site.id?game.encounters.active:null});else if(!companionArt.drawGround(ctx,site,combatOptions))relicArt.drawGround(ctx,site,combatOptions);
     ctx.save();ctx.textAlign='center';ctx.font='600 10px system-ui';ctx.fillStyle=site.state==='cleared'?'#9eaf91':'#d7c79b';
     ctx.fillText(site.name+(site.state==='cleared'?' · 已完成':site.state==='active'?' · 挑战中':''),site.x,site.y-(site.type==='hunt'?245:site.type==='rune'?104:120));ctx.restore();
   }
@@ -1026,17 +1052,23 @@ function drawRescueGround(){
   ctx.globalAlpha=.9;ctx.textAlign='center';ctx.font='600 10px "PingFang SC",system-ui,sans-serif';ctx.fillStyle=color;ctx.fillText(ready?'靠近解救':`围困者 ${camp.remainingGuards} / ${camp.guardTotal}`,0,83);ctx.restore();
 }
 function drawCompanion(actor){
-  const e=actor.entity,captive=e.isCaptive,storm=e.heroId==='stormcaller',color=storm?'#c6c3ed':'#d9c28c';
+  const e=actor.entity,captive=e.isCaptive,storm=e.heroId==='stormcaller',color=companionDefinition(e.kind||e.heroId)?.color||'#d9c28c';
   if(!captive){ctx.save();ctx.strokeStyle=color;ctx.lineWidth=1.3;ctx.globalAlpha=.55;ctx.beginPath();ctx.ellipse(e.x,actor.footY,20,10,0,0,TAU);ctx.stroke();ctx.restore();}
   ctx.save();ctx.translate(actor.x,actor.y);ctx.scale(actor.scale,actor.scale);ctx.lineCap='round';ctx.lineJoin='round';
-  const pose=humanoidPose(e);humanoidArt.draw(ctx,storm?'stormcaller':'warden',{pose,entity:e,time:game?._clock??clock,reduced,pixelRatio:dpr});
+  const pose=humanoidPose(e);if(e.state==='recovering')ctx.globalAlpha=.58;const art=COMPANION_VISUALS[e.kind||e.heroId]?companionArt:humanoidArt;art.draw(ctx,e.kind||e.heroId||'warden',{pose,entity:e,time:game?._clock??clock,reduced,pixelRatio:dpr});
   if(captive&&e.state==='trapped'){
     // A low thorn restraint leaves the companion's face and class silhouette clear.
     for(const side of [-1,1]){line(side*24,-3,side*22,20,'#4c5139',4);line(side*24,-1,side*30,-7,'#8f8353',1.5);line(side*22,10,side*29,6,'#8f8353',1.5);}
     ctx.strokeStyle='#b29e68';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-24,7);ctx.quadraticCurveTo(0,16,24,7);ctx.moveTo(-24,13);ctx.quadraticCurveTo(0,21,24,13);ctx.stroke();
   }
   ctx.restore();
-  ctx.save();ctx.textAlign='center';ctx.font='600 9px "PingFang SC",system-ui,sans-serif';ctx.fillStyle=captive?(e.state==='ready'?'#d2ecb9':'#edd6ad'):color;ctx.shadowColor='#102017';ctx.shadowBlur=3;ctx.fillText(captive?`${e.name} · ${e.state==='ready'?'等待同行':'受困'}`:e.name,actor.x,actor.y-actor.shape.top*actor.scale-9);ctx.restore();
+  const target=e.state==='active'&&(e.kind==='dog'?e.treasureTarget:e.scoutCount>=5||e.scoutTarget?.boss?e.scoutTarget:null);
+  if(target&&(!game.dungeon?.active||sceneVisible(target))){
+    const angle=Math.atan2(target.y-actor.footY,target.x-e.x),label=e.kind==='dog'?'宝藏':e.scoutTarget?.boss?'首领':`敌群 ${e.scoutCount}`;
+    ctx.save();ctx.translate(e.x,actor.footY);ctx.rotate(angle);ctx.translate(29,0);ctx.strokeStyle=color;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-4,-4);ctx.lineTo(1,0);ctx.lineTo(-4,4);ctx.stroke();ctx.restore();
+    ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui';ctx.fillStyle=color;ctx.fillText(label,e.x,actor.footY+15);ctx.restore();
+  }
+  ctx.save();ctx.textAlign='center';ctx.font='600 9px "PingFang SC",system-ui,sans-serif';ctx.fillStyle=captive?(e.state==='ready'?'#d2ecb9':'#edd6ad'):color;ctx.shadowColor='#102017';ctx.shadowBlur=3;ctx.fillText(captive?`${e.name} · ${e.state==='ready'?'等待同行':e.kind==='golem'?'沉睡':'受困'}`:e.name+(e.state==='recovering'?' · 恢复中':''),actor.x,actor.y-actor.shape.top*actor.scale-9);if(!captive&&e.hp<e.maxHp&&e.state!=='recovering'){const y=actor.y-actor.shape.top*actor.scale-5;ctx.fillStyle='#182b23';ctx.fillRect(actor.x-14,y,28,3);ctx.fillStyle=color;ctx.fillRect(actor.x-14,y,28*Math.max(0,e.hp/e.maxHp),3);}ctx.restore();
 }
 // Phase advances in the simulation from distance actually travelled, including
 // collision and terrain slowing. Feet stay on their ground anchor while the
@@ -1266,7 +1298,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   combatOptions.viewBounds={minX:-offsetX,minY:-offsetY,maxX:width-offsetX,maxY:height-offsetY};
   combatVfx.beginFrame(combatOptions);
   background(camX-sx,camY-sy,false);
-  const actors=game.enemies.filter(sceneVisible).map(e=>actorVisual(e));actors.push(actorVisual(p,true));const ally=game.companions?.active,camp=game.companions?.camp;if(ally&&sceneVisible(ally))actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:site.id,castFace:site.castFace||0,facing:0};actors.push(actorVisual(npc,true));}if(camp)actors.push(actorVisual({...camp,y:camp.y-19.8,r:15,heroId:camp.kind,isCaptive:true},true));if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])if(site.type==='rescue'&&site.state==='ready')actors.push(actorVisual({x:site.x,y:site.y-19.8,r:15,heroId:site.kind,kind:site.kind,name:site.kind==='warden'?'守林人':'唤雷者',isCaptive:true},true));for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
+  const actors=game.enemies.filter(sceneVisible).map(e=>actorVisual(e));actors.push(actorVisual(p,true));const camp=game.companions?.camp;for(const ally of game.companions?.members||[])if(sceneVisible(ally))actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:site.id,castFace:site.castFace||0,facing:0};actors.push(actorVisual(npc,true));}if(camp){const definition=companionDefinition(camp.kind);actors.push(actorVisual({...camp,y:camp.y-(definition?.groundOffset??19.8),r:definition?.r||15,groundOffset:definition?.groundOffset??19.8,flying:!!definition?.flying,heroId:camp.kind,isCaptive:true},true));}if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])if((site.type==='rescue'||site.type==='dogcamp')&&site.state==='ready'){const definition=companionDefinition(site.kind);actors.push(actorVisual({x:site.x,y:site.y-(definition?.groundOffset??19.8),r:definition?.r||15,heroId:site.kind,kind:site.kind,name:definition?.name||'伙伴',groundOffset:definition?.groundOffset??19.8,flying:!!definition?.flying,state:site.appearance==='golemaltar'?'dormant':site.type==='dogcamp'?'ready':'trapped',isCaptive:true},true));};for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
   const terrain=terrainInView(camX,camY),adventureProps=adventureSceneProps(camX,camY);
   const vision=game.dungeon?.active?game.dungeon.vision:null;
   if(vision){
@@ -1344,7 +1376,7 @@ function syncSceneInput(){
 function bossFeedbackVisible(){return game.enemies.some(enemy=>enemy.type==='boss'&&enemy.hp>0&&sceneVisible(enemy));}
 function frameState(){return {game,scene:game?.dungeon?.active??game?.regionIndex??null,status:game?.status??'intro',paused,helpOpen,mapOpen,characterOpen,archiveOpen,runEnded,hidden:!!document.hidden};}
 const cpuNow=()=>globalThis.performance?.now?.()??Date.now();
-function updateGameFrame(dt){input.x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+(touch?.dx||0);input.y=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+(touch?.dy||0);input.skill=skillRequested;input.interact=portalRequested;skillRequested=false;portalRequested=false;game.update(dt,input);syncSceneInput();if((game.runTime??0)>=archiveObserveAt||game.status!=='playing'){observeArchive();archiveObserveAt=(game.runTime??0)+.25;}if(!game.sceneTransition.active)worldMap.discover(game,{viewportWidth:width,viewportHeight:height});let hitSound=false;for(const e of game.events){if(e.type==='superCast'||e.type==='superImpact')playSuperFeedback(e);if(e.type==='shoot')tone(700,.045,'triangle',.012,330);if(e.type==='swordSwing')tone(e.branch==='heavy'?240:430,.075,'triangle',.012,e.branch==='heavy'?80:140);if(e.type==='kill')hitSound=true;if(e.type==='hurt'){shake=8;tone(150,.1,'triangle',.055,70);}if(e.type==='skill'){updateHUD();shake=reduced?0:5;tone(85,.48,'triangle',.065,32);tone(720,.25,'sawtooth',.02,90);}if(e.type==='level')tone(650,.24,'sine',.05,1200);if(e.type==='evolution'){tone(620,.3,'sine',.045,1240);}if(e.type==='companionJoined')tone(540,.3,'sine',.035,1080);if(e.type==='encounterComplete')tone(540,.22,'sine',.03,880);if(e.type==='mushroomArmed')tone(480,.08,'sine',.012,650);if(e.type==='mushroomBlast')tone(120,.14,'triangle',.025,55);if(e.type==='bloomWindup'&&bossFeedbackVisible())tone(270,.28,'sine',.025,390);if(e.type==='bloomShot'&&bossFeedbackVisible())tone(400,.13,'triangle',.025,220);if(e.type==='bloomBurst'&&bossFeedbackVisible())tone(170,.3,'triangle',.035,70);if(e.type==='bossWindup'&&bossFeedbackVisible())tone(145,.24,'sine',.025,210);if(e.type==='bossSlam'&&bossFeedbackVisible()){shake=reduced?0:Math.max(shake,3);tone(90,.28,'triangle',.045,40);}if(e.type==='bossKill'){shake=reduced?0:Math.max(shake,4);tone(95,.35,'triangle',.045,40);}if(e.type==='boss'&&bossFeedbackVisible())tone(130,.5,'triangle',.07,75);if(e.type==='heal')tone(600,.1,'sine',.015,900);}if(hitSound)tone(170,.04,'triangle',.018,95);announceCombatEvents(game.events);game.events.length=0;}
+function updateGameFrame(dt){input.x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+(touch?.dx||0);input.y=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+(touch?.dy||0);input.skill=skillRequested;input.interact=portalRequested;skillRequested=false;portalRequested=false;game.update(dt,input);syncSceneInput();if((game.runTime??0)>=archiveObserveAt||game.status!=='playing'){observeArchive();archiveObserveAt=(game.runTime??0)+.25;}if(!game.sceneTransition.active)worldMap.discover(game,{viewportWidth:width,viewportHeight:height});let hitSound=false;for(const e of game.events){if(e.type==='superCast'||e.type==='superImpact')playSuperFeedback(e);if(e.type==='shoot')tone(700,.045,'triangle',.012,330);if(e.type==='swordSwing')tone(e.branch==='heavy'?240:430,.075,'triangle',.012,e.branch==='heavy'?80:140);if(e.type==='kill')hitSound=true;if(e.type==='hurt'){shake=8;tone(150,.1,'triangle',.055,70);}if(e.type==='skill'){updateHUD();shake=reduced?0:5;tone(85,.48,'triangle',.065,32);tone(720,.25,'sawtooth',.02,90);}if(e.type==='level')tone(650,.24,'sine',.05,1200);if(e.type==='evolution'){tone(620,.3,'sine',.045,1240);}if(e.type==='companionJoined'){archive.recordRecruit?.(game,e.kind);tone(540,.3,'sine',.035,1080);}if(e.type==='encounterComplete')tone(540,.22,'sine',.03,880);if(e.type==='mushroomArmed')tone(480,.08,'sine',.012,650);if(e.type==='mushroomBlast')tone(120,.14,'triangle',.025,55);if(e.type==='bloomWindup'&&bossFeedbackVisible())tone(270,.28,'sine',.025,390);if(e.type==='bloomShot'&&bossFeedbackVisible())tone(400,.13,'triangle',.025,220);if(e.type==='bloomBurst'&&bossFeedbackVisible())tone(170,.3,'triangle',.035,70);if(e.type==='bossWindup'&&bossFeedbackVisible())tone(145,.24,'sine',.025,210);if(e.type==='bossSlam'&&bossFeedbackVisible()){shake=reduced?0:Math.max(shake,3);tone(90,.28,'triangle',.045,40);}if(e.type==='bossKill'){shake=reduced?0:Math.max(shake,4);tone(95,.35,'triangle',.045,40);}if(e.type==='boss'&&bossFeedbackVisible())tone(130,.5,'triangle',.07,75);if(e.type==='heal')tone(600,.1,'sine',.015,900);}if(hitSound)tone(170,.04,'triangle',.018,95);announceCombatEvents(game.events);game.events.length=0;}
 function frame(now){
   const frameBegan=diagnostics?.running?cpuNow():0;frameHudMs=0;
   const capture=diagnostics?.running,fromX=capture?game?.player.x:0,fromY=capture?game?.player.y:0;

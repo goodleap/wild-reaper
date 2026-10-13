@@ -100,7 +100,7 @@
 .character-panel h2{font-size:23px;letter-spacing:1px;margin:7px 40px 5px 0}
 .character-panel>#character-note{flex:0 0 auto;font-size:11px;line-height:1.6;color:#a1b99a;margin:0 0 14px}
 .character-panel .close-button{width:44px;height:44px;top:7px;right:7px;font-size:26px;touch-action:manipulation}
-.character-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));flex:0 0 auto;gap:4px;padding:4px;background:#0b1f1770;border:1px solid #a8c69726;border-radius:9px;margin:0 0 13px}
+.character-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));flex:0 0 auto;gap:4px;padding:4px;background:#0b1f1770;border:1px solid #a8c69726;border-radius:9px;margin:0 0 13px}
 .character-tab{min-width:0;min-height:44px;padding:9px 7px;border:1px solid transparent;border-radius:6px;background:transparent;font-size:13px;font-weight:500;color:#a9c0a0;touch-action:manipulation}
 .character-tab:hover{background:#bada9810;color:#e0efcc}
 .character-tab[aria-selected="true"]{border-color:#bbdc9160;background:#c6ed911a;color:#e0f4c2}
@@ -179,3 +179,5 @@
   .character-panel>#character-done{margin-top:8px;min-height:44px;padding:8px 12px}
   .character-stat{padding:8px 11px}
 }
+
+#character-hud .army-unpaid .companion-heading{color:#f0b190}.army-member{border-left:3px solid var(--companion-color,#b9d5ab)}.army-member-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.army-member-head h3{margin:0}.army-state{font-size:11px;color:#b1d19f}.army-dismiss{padding:6px 10px;min-height:32px;white-space:nowrap}.army-wage-note{color:#e4be8b}.army-debug{margin-bottom:12px}

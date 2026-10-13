@@ -83,14 +83,13 @@ export class Dungeon {
   _clearScene(){
     const g=this.game;g.attacks?.clearTrails();g.bullets=[];g.enemyBullets=[];g.effects=[];g.orbitals=[];g.storm=null;g._pulseEchoes=[];g._grid.clear();
     g.superSkills?.clearScene();g.barrier?.clearScene();
-    if(g.companions?.active)g.companions.active._echoes=[];
+    for(const member of g.companions?.members||[])member._echoes=[];
     // No old warning may resolve at an unrelated position after a boundary.
     for(const enemy of g.enemies){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;clearBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
   }
   _placePlayer(point){
     const g=this.game,p=g.player;p.x=point.x;p.y=point.y-groundOffset(p,true);g._moveEntity(p,0,0,true);p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;resetLocomotion(p);
-    const active=g.companions?.active;
-    if(active){active.x=p.x;active.y=p.y;g.companions._resetFollowing?.(active);g.companions._safeReturn?.(active);}
+    g.companions?.onSceneChange?.();
   }
   _populate(state){
     const g=this.game,random=randomFor(state.seed^0x59B730D1),difficulty=1+Math.min(15,state.createdAt/120)*.32;

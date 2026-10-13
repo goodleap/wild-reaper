@@ -114,7 +114,7 @@ quakes._castPulse(10,20,100,40,0);
 const pulse=quakes.effects.find(e=>e.type==='ring');assert.equal(pulse.quake,true);assert.equal(pulse.x,10);assert.equal(pulse.y,20);assert.equal(pulse.r,100);assert.equal(quakeTarget.hp,960);
 assert.equal(pulse.groundY,20+groundOffset(quakes.player,true),'the visual ground origin uses the feet without changing the body-space cast coordinates');
 quakes.effects=[];const groundY=20+groundOffset(quakes.player,true);
-quakes.companions._quake(10,groundY,100,30,true,77);
+quakes._rebuildGrid();quakes.companions._quake(10,groundY,100,30,true,77);
 const allyPulse=quakes.effects.find(e=>e.type==='ring');assert.equal(allyPulse.quake,true);assert.equal(allyPulse.ally,true);assert.equal(allyPulse.echo,true);assert.equal(allyPulse.seed,77);
 assert.equal(allyPulse.x,10);assert.equal(allyPulse.y,groundY);assert.equal(allyPulse.r,100);assert.equal(quakeTarget.hp,930);
 assert.equal(allyPulse.groundY,groundY,'the companion quake already starts at its foot point');

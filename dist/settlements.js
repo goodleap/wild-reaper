@@ -3,6 +3,7 @@ import { placementAllowed } from './placement-rules.js';
 import { portalDoor } from './portal-geometry.js';
 import { RELICS } from './relics.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive } from './event-scheduling.js';
+import { friendlyTargets, friendlyFoot, isFriendlyActive } from './friendly-combat.js';
 
 const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -228,12 +229,17 @@ export class Settlements {
     return true;
   }
   _updateAngels(dt,p) {
-    const g=this.game,player=g.player;let inAura=false;
+    const g=this.game,healing=new Set(),targets=friendlyTargets(g);
     for(const site of this.sites)if(site.type==='angel') {
       site.castFace=Math.max(0,(site.castFace||0)-dt);
       site.healing=false;
-      const nearby=distance(p,site)<=ANGEL_RULES.guardRadius&&!g.terrain.firstBlocker(site.x,site.y,p.x,p.y,0,'projectile');
-      if(nearby){inAura=true;site.healing=player.hp<player.maxHp;}
+      for(const ally of targets){
+        if(!isFriendlyActive(g,ally)||ally.hp>=ally.maxHp)continue;
+        const point=friendlyFoot(ally);
+        if(distance(point,site)<=ANGEL_RULES.guardRadius&&!g.terrain.firstBlocker(site.x,site.y,point.x,point.y,0,'projectile')){
+          healing.add(ally);site.healing=true;
+        }
+      }
       site._attack=Math.max(0,(site._attack||0)-dt);
       if(site._attack>1e-8||!g._inView(site,ANGEL_RULES.guardRadius))continue;
       const canHit=enemy=>enemy.hp>0&&!enemy.trainingDummy&&!enemy.dungeonId&&!(enemy.rescueSpawnGrace>0)&&enemy.guardActive!==false&&g._inView(enemy)&&
@@ -253,7 +259,8 @@ export class Settlements {
     }
     // Overlapping havens never multiply healing; the aura stops at its real
     // world-space boundary and heals no one through a building foundation.
-    if(inAura&&dt>0&&player.hp>0&&player.hp<player.maxHp)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*ANGEL_RULES.healingPerSecond*dt);
+    if(dt>0)for(const ally of healing)if(isFriendlyActive(g,ally))
+      ally.hp=Math.min(ally.maxHp,ally.hp+ally.maxHp*ANGEL_RULES.healingPerSecond*dt);
   }
   update(dt) {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return;

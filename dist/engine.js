@@ -32,6 +32,7 @@ import { SceneTransition } from './scene-transition.js';
 import { spawnDebugWave } from './debug-wave.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
+import { friendlyTargets, friendlyFoot, isFriendlyActive, selectFriendlyTarget, damageFriendly, clearFriendlyPath } from './friendly-combat.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
@@ -111,6 +112,7 @@ export class Game {
     // crystals earned later still use the ordinary upgrade thresholds.
     if(this.debug)this.grantResources({gold:500},'debugStart');
     applyFullDebugBuild(this);spawnDebugTrainingDummy(this);
+    if(this.debugFull)for(const definition of COMPANIONS)this.companions.recruit?.(definition.id,{sourceId:'debugFull'});
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -234,7 +236,8 @@ export class Game {
   _moveEnemy(e,dt,target=null) {
     dt=Math.max(0,dt-(e._weaponPushTime||0));
     if(!(dt>0))return;
-    const x=e.x,y=e.y+groundOffset(e,!!e.isCompanion),rawX=target?.x??this.player.x,rawY=target?.y??this.player.y+groundOffset(this.player,true);
+    const pursued=target?null:selectFriendlyTarget(this,e),point=pursued?friendlyFoot(pursued):target;
+    const x=e.x,y=e.y+groundOffset(e,!!e.isCompanion),rawX=point.x,rawY=point.y;
     e._navTimer=(e._navTimer||0)-dt;
     if(e._navTimer<=0) {
       e._navTimer=.16+(e.id%4)*.025;e._coastTarget=null;
@@ -290,7 +293,7 @@ export class Game {
     e.slamRecovery=Math.max(0,(e.slamRecovery||0)-dt);
     if(e.slam){e.slam.life=Math.max(0,e.slam.life-dt);return true;}
     if(e.slamRecovery>0)return true;
-    const x=e.x,y=e.y+groundOffset(e),p=this.player;
+    const x=e.x,y=e.y+groundOffset(e),p=selectFriendlyTarget(this,e);
     if(e.slamCooldown<=0&&Math.hypot(x-p.x,y-p.y-groundOffset(p,true))<=165) {
       e.slam={x,y,r:115,life:1,maxLife:1};e.slamCooldown=7;this._emit('bossWindup');return true;
     }
@@ -300,9 +303,11 @@ export class Game {
     for(const e of this.enemies)if(e.type==='boss'&&e.hp>0&&e.slam&&e.slam.life<=0) {
       const slam=e.slam;e.slam=null;e.slamRecovery=.3;
       this._effect(slam.x,slam.y,'bossSlam',.5,slam.r,'#edaa78');this._emit('bossSlam');
-      const p=this.player;
-      const py=p.y+groundOffset(p,true);
-      if(isGrounded(p)&&Math.hypot(p.x-slam.x,py-slam.y)<slam.r+p.r&&!this.terrain.firstBlocker(slam.x,slam.y,p.x,py,0,'ground'))this._hurtPlayer(e.damage*1.3);
+      for(const target of friendlyTargets(this)){
+        if(!isFriendlyActive(this,target)||!isGrounded(target))continue;
+        const foot=friendlyFoot(target);
+        if(Math.hypot(foot.x-slam.x,foot.y-slam.y)<slam.r+target.r&&!this.terrain.firstBlocker(slam.x,slam.y,foot.x,foot.y,0,'ground'))damageFriendly(this,target,e.damage*1.3,e);
+      }
     }
   }
   _updateBoar(e,dt) {
@@ -325,7 +330,7 @@ export class Game {
       } else if(charge.life<=0)e.charge=null;
       return true;
     }
-    const p=this.player,x=e.x,y=e.y+groundOffset(e),dx=p.x-x,dy=p.y+groundOffset(p,true)-y,d=Math.hypot(dx,dy);
+    const p=selectFriendlyTarget(this,e),x=e.x,y=e.y+groundOffset(e),dx=p.x-x,dy=p.y+groundOffset(p,true)-y,d=Math.hypot(dx,dy);
     if(e.chargeCooldown<=0&&d>=90&&d<=320&&this._inView(e)) {
       e.charge={phase:'windup',life:.8,maxLife:.8,dx:dx/d,dy:dy/d,startX:x,startY:y,length:256};
       e.chargeCooldown=4.5;this._emit('boarWindup');return true;
@@ -335,7 +340,7 @@ export class Game {
   _updateSpore(e,dt) {
     e.castCooldown=Math.max(0,(e.castCooldown||0)-dt);
     if(e.cast){e.cast.life=Math.max(0,e.cast.life-dt);return true;}
-    const p=this.player,dx=p.x-e.x,dy=p.y+groundOffset(p,true)-e.y-groundOffset(e),distance=Math.hypot(dx,dy);
+    const p=selectFriendlyTarget(this,e),dx=p.x-e.x,dy=p.y+groundOffset(p,true)-e.y-groundOffset(e),distance=Math.hypot(dx,dy);
     if(this._inView(e)&&distance<=360&&!this.terrain.firstBlocker(e.x,e.y+groundOffset(e),p.x,p.y+groundOffset(p,true),6,'projectile')) {
       if(e.castCooldown<=0){e.cast={life:.65,maxLife:.65,angle:Math.atan2(dy,dx)};e.castCooldown=3.8;this._emit('sporeWindup');return true;}
       if(distance<=290)return true;
@@ -343,11 +348,15 @@ export class Game {
     return false;
   }
   _resolveEnemyAttacks(dt) {
-    const p=this.player,px=p.x,py=p.y+groundOffset(p,true);
+    const p=this.player,px=p.x,py=p.y+groundOffset(p,true),targets=friendlyTargets(this);
     for(const e of this.enemies)if(e.hp>0&&e.guardActive!==false) {
       if(e._chargeSegment) {
         const s=e._chargeSegment;
-        if(circleImpact(s.x,s.y,s.x2-s.x,s.y2-s.y,px,py,e.r+p.r)<Infinity)this._hurtPlayer(e.damage*1.3);
+        for(const target of targets){
+          if(!isFriendlyActive(this,target)||!isGrounded(target))continue;
+          const foot=friendlyFoot(target);
+          if(circleImpact(s.x,s.y,s.x2-s.x,s.y2-s.y,foot.x,foot.y,e.r+target.r)<Infinity&&clearFriendlyPath(this,e,target,'ground'))damageFriendly(this,target,e.damage*1.3,e);
+        }
         e._chargeSegment=null;
       }
       if(e.type==='spore'&&e.cast&&e.cast.life<=0) {
@@ -364,8 +373,13 @@ export class Game {
       let terrainHit=Infinity;
       for(const o of this.terrain.query(Math.min(b.x,b.x+dx)-b.r,Math.min(b.y,b.y+dy)-b.r,Math.max(b.x,b.x+dx)+b.r,Math.max(b.y,b.y+dy)+b.r))
         if(blocksObstacle(o,'projectile'))terrainHit=Math.min(terrainHit,obstacleImpact(o,b.x,b.y,dx,dy,b.r));
-      const playerHit=circleImpact(b.x,b.y,dx,dy,px,py,p.r+b.r);
-      if(playerHit<terrainHit){this._hurtPlayer(b.damage);b.life=0;}
+      let victim=null,friendlyHit=Infinity;
+      for(const target of targets){
+        if(!isFriendlyActive(this,target))continue;
+        const foot=friendlyFoot(target),hit=circleImpact(b.x,b.y,dx,dy,foot.x,foot.y,target.r+b.r);
+        if(hit<friendlyHit){friendlyHit=hit;victim=target;}
+      }
+      if(victim&&friendlyHit<terrainHit){damageFriendly(this,victim,b.damage,b);b.life=0;}
       else if(terrainHit<Infinity)b.life=0;
       else{b.x+=dx;b.y+=dy;b.life-=dt;}
     }
@@ -475,7 +489,7 @@ export class Game {
     if(this.environment?.generation)this.environment._refresh(true);
     if(this.environment?.mechanisms.generation)this.environment.mechanisms._refresh(true);
     if(this.adventure?.generation)this.adventure._refreshSupplies(true);
-    const active=this.companions.active;if(active){active._echoes=[];active.x=p.x;active.y=p.y;this.companions._resetFollowing(active);this.companions._safeReturn(active);}
+    this.companions.onSceneChange?.();
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
     this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});return true;
   }
@@ -573,10 +587,18 @@ export class Game {
       if(e.moving)e.visualFacing=Math.atan2(e.y-oldY,e.x-oldX);
     }
     if(input.skill && p.skillCooldown<=0) this._castStorm();
-    for(const e of this._nearby(p.x,p.y,85)) {
-      if(e.hp>0 && !e.trainingDummy && e.eventRole!=='treasure' && e.guardActive!==false && !e.charge && !e._chargeSegment && !e.slam && !(e.slamRecovery>0) && !e.bloomAttack && !(e.bloomRecovery>0) && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
-        this._hurtPlayer(e.damage);
-        if(this.status==='dead')return;
+    for(const target of friendlyTargets(this)){
+      if(!isFriendlyActive(this,target)||target.invuln>0)continue;
+      const foot=friendlyFoot(target);
+      for(const e of this._nearby(target.x,target.y,85)) {
+        if(e.hp<=0||e.trainingDummy||e.eventRole==='treasure'||e.guardActive===false||e.charge||e._chargeSegment||e.slam||e.slamRecovery>0||e.bloomAttack||e.bloomRecovery>0)continue;
+        if(!isGrounded(target)&&isGrounded(e))continue;
+        const enemyFoot=friendlyFoot(e);
+        if((foot.x-enemyFoot.x)**2+(foot.y-enemyFoot.y)**2<sq(target.r+e.r-3)&&clearFriendlyPath(this,e,target,movementProfile(e))){
+          damageFriendly(this,target,e.damage,e);
+          if(this.status==='dead')return;
+          if(target.invuln>0||!isFriendlyActive(this,target))break;
+        }
       }
     }
     this.attacks.updateBasic(dt);

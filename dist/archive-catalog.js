@@ -1,9 +1,10 @@
 import { WEAPON_DEFS, SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS } from './combat-catalog.js';
 import { WEAPON_BRANCHES } from './weapon-branches.js';
+import { companionDefinition } from './companion-catalog.js';
 
 export const ARCHIVE_CATEGORIES=Object.freeze([
   {id:'enemies',name:'怪物'},{id:'bosses',name:'首领'},{id:'weapons',name:'武器'},
-  {id:'skills',name:'技能'},{id:'weaponSkills',name:'武器技能'}
+  {id:'skills',name:'技能'},{id:'weaponSkills',name:'武器技能'},{id:'companions',name:'伙伴'}
 ]);
 const enemy=(id,name,role,description,advice,color)=>({id:`enemy:${id}`,category:'enemies',name,role,description,advice,color,type:id,source:'在荒野、事件与遗迹中遭遇'});
 const enemies=[
@@ -38,10 +39,26 @@ const weaponSkills=[
   {id:'weaponSkill:swordEnergy',category:'weaponSkills',ownerId:'sword',modifierId:'swordEnergy',name:'剑气',color:'#a9e4dc',tier:'regular',role:'长剑专属 · 短程延伸',description:'随挥砍释放多道略微发散的剑气，飞离剑身，延伸长剑的攻击距离。',growth:'升级增加剑气距离、威力和覆盖；同次挥砍对同一敌人只命中一次。',advice:'保持长剑的正面攻击节奏，用剑气打到稍远的敌人。',source:'长剑达到基础 3 级后，在灵晶成长中获得'},
   {id:'weaponSkill:arrowRune',category:'weaponSkills',ownerId:'arrow',modifierId:'arrowRune',name:'符文穿击',color:'#89ddd8',tier:'super',role:'飞矢专属 · 贯穿重箭',description:'穿透飞矢周期性释放强力符文重箭，沿弹道贯穿敌群。',growth:'获得时进入穿透路线；后续强化符文伤害并缩短触发间隔。',advice:'与穿透路线绑定，弹射路线无法获得；利用直线站位穿过更多敌人。',source:'从区域首领奖励获得；随后可用灵晶强化'}
 ];
+const companionCopy={
+  stormcaller:{role:'战斗 · 连锁雷电',description:'从自己的位置释放连锁闪电，协助清理敌群，提供稳定的远程支援。',advice:'让唤雷者跟随队伍进入战场，并留意它与目标之间的墙体。',source:'在营地解救被围困的唤雷者'},
+  warden:{role:'战斗 · 守护队伍',description:'守护附近的主角与伙伴，并用近身震击击退敌人，缓解队伍受到的围攻。',advice:'受到围攻时靠拢守林人；它的守护覆盖附近队友，离得太远便无法受益。',source:'在营地解救被围困的守林人'},
+  dog:{role:'冒险 · 寻宝向导',description:'嗅探附近的重要地点，往返引路，帮助队伍找到值得探索的目标。',advice:'留意小狗的行动方向；它擅长发现线索，具体的挑战仍需队伍共同完成。',source:'在荒野中遇见并招募小狗'},
+  owl:{role:'冒险 · 空中侦察',description:'飞行侦察附近的危险，提前提醒敌群的方向，让队伍有机会准备或绕行。',advice:'根据预警选择行进路线；猫头鹰不会看穿城堡中封闭的墙壁。',source:'在遗迹栖地解救猫头鹰'},
+  golem:{role:'战斗与探索 · 重击破障',description:'以沉重的近战攻击击退敌人，并能砸开封住特殊遗迹入口的岩石。',advice:'先唤醒岩灵，再带它返回封堵的遗迹；已经砸开的入口会保持畅通。',source:'完成古老石像的唤醒挑战'}
+};
+const companions=Object.entries(companionCopy).map(([kind,copy])=>{
+  const def=companionDefinition(kind);
+  return {id:`companion:${kind}`,category:'companions',kind,name:def.name,color:def.color,...copy};
+});
 const freezeEntry=entry=>Object.freeze({...entry,branches:Object.freeze((entry.branches||[]).map(Object.freeze))});
-export const ARCHIVE_ENTRIES=Object.freeze([...enemies,...bosses,...Object.values(WEAPON_DEFS).map(def=>equipment(def,'weapons')),...Object.values(SKILL_DEFS).map(def=>equipment(def,'skills')),...weaponSkills].map(freezeEntry));
+export const ARCHIVE_ENTRIES=Object.freeze([...enemies,...bosses,...Object.values(WEAPON_DEFS).map(def=>equipment(def,'weapons')),...Object.values(SKILL_DEFS).map(def=>equipment(def,'skills')),...weaponSkills,...companions].map(freezeEntry));
 export const ARCHIVE_IDS=Object.freeze(ARCHIVE_ENTRIES.map(entry=>entry.id));
 export const ARCHIVE_ENTRY_BY_ID=new Map(ARCHIVE_ENTRIES.map(entry=>[entry.id,entry]));
+
+export function companionArchiveId(companion){
+  const kind=typeof companion==='string'?companion:companion?.kind||companion?.heroId;
+  const id=`companion:${kind}`;return ARCHIVE_ENTRY_BY_ID.has(id)?id:null;
+}
 
 export function enemyArchiveId(enemy){
   if(!enemy||enemy.trainingDummy||enemy.type==='trainingDummy')return null;

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { armyPanelHTML } from './dist/army-panel.js';
 import { Game } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
 import { characterPanelHTML, characterPanelTitle } from './dist/character-panel.js';
@@ -85,9 +86,9 @@ g.relics.wardAmount=24;
 const state=panel('status');
 assert.match(state,/狂暴/);assert.match(state,/磁力涌动/);assert.match(state,/地形减速/);
 assert.match(state,/营救援助/);assert.match(state,/铁叶护符/);assert.match(state,/24/);
-assert.match(state,/高级地震/);assert.match(state,/12 秒/);
+assert.match(state,/军团 1 位伙伴/);const army=armyPanelHTML(g);assert.match(army,/守护脉冲/);
 assert.doesNotMatch(state,/<img/,'names are escaped before HTML insertion');
-assert.match(state,/&lt;img src=x onerror=bad\(\)&gt;/);
+assert.match(army,/&lt;img src=x onerror=bad\(\)&gt;/);assert.doesNotMatch(army,/<img/);
 const before=snapshot();for(const tab of ['attributes','weapons','skills','status'])panel(tab);
 assert.equal(snapshot(),before,'rendering progressed states remains read-only');
 

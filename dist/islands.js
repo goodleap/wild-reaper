@@ -28,7 +28,7 @@ export class Island {
     this._innerRadius=Math.sqrt(Math.min(...this._edges.map(e=>distanceSq(0,0,e.a.x,e.a.y,e.b.x,e.b.y))));
     this._contours=new Map([[0,this.points]]);
     const rotate=this.worldId*.52+(hash(this.seed+19)-.5)*.16;
-    const specs=[['merchant',.18,710,105],['supply',2.25,1050,125],['occupied',4.30,1730,225],['castle',2.80,2610,360],['hunt',.94,1830,280],['rescue',5.42,2060,240],['rune',3.73,2280,185]];
+    const specs=[['merchant',.18,710,105],['supply',2.25,1050,125],['occupied',4.30,1730,225],['castle',2.80,2610,360],['hunt',.94,1830,280],['rescue',5.42,2060,240],['rune',3.73,2280,185],['rescue-warden',3.80,1120,240],['dogcamp',.25,1430,115],['owlroost',2.91,1570,240],['golemaltar',4.62,2630,270],['stonevault',.13,2830,240]];
     const destinations=[0,1,2].filter(id=>id!==this.worldId);specs.push([`portal:${destinations[0]}`,1.73,3050,310],[`portal:${destinations[1]}`,5.69,3150,310]);
     const plan={};for(const [key,angle,radius,r] of specs){const a=angle+rotate;let d=radius;while(d>500&&!this.isDry(Math.cos(a)*d,Math.sin(a)*d,r+100))d-=40;plan[key]=Object.freeze({x:Math.cos(a)*d,y:Math.sin(a)*d,r});}
     this.plan=Object.freeze(plan);this.routes=Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));

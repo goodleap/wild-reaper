@@ -148,8 +148,8 @@ function status(game) {
   if(move.modifier<1)active.push(card('地形减速',grid([['当前移速',number(move.speed)],['地形速度系数',`${number(move.modifier)} 倍`]]),{meta:'离开影响区域后恢复'}));
   if(relics?.wardAmount>0)active.push(card('守护护罩',grid([['可抵消伤害',number(relics.wardAmount)]]),{meta:'下一次受击时消耗'}));
   if(game.barrier?.active)active.push(card('守护屏障',grid([['剩余护盾',number(game.barrier.remaining)],['剩余持续',seconds(game.barrier.life)]]),{meta:'自动防护 · 与技能共用同一护盾'}));
-  const ally=game.companions?.active;
-  const helper=ally?card(ally.name,grid([['助战剩余',seconds(ally.remaining)],['助战技能',ally.kind==='warden'?'高级地震':'高级雷电']]),{meta:'解救的伙伴'}):empty('当前没有同行伙伴。');
+  const members=game.companions?.members||[];
+  const helper=summary(members.length?`军团 ${members.length} 位伙伴 · 在「军团」页查看状态和维持费。`:'当前没有同行伙伴。');
   const permanent=game.rescuePower>0?card('营救援助',grid([['累计援助',`${game.rescuePower} 次`],['角色攻击加成',bonus(game.rescuePower*.08)]]),{meta:'本局持续生效，已计入角色攻击'}):'';
   const owned=(relics?.owned||[]).map(id=>RELICS.find(item=>item.id===id)).filter(Boolean);
   const relicHTML=owned.map(relic=>{

@@ -13,7 +13,7 @@ function arena(obstacles=[]){
   return g;
 }
 function enemy(g,x,y=0,type='slime'){
-  const e=g._spawnEnemy(type);Object.assign(e,{x,y:y-groundOffset(e),hp:10000,maxHp:10000,speed:0});return e;
+  const e=g._spawnEnemy(type);Object.assign(e,{x,y:y-groundOffset(e),hp:10000,maxHp:10000,speed:0});g._rebuildGrid();return e;
 }
 function ally(g,kind='stormcaller'){
   const a={id:999,kind,isCompanion:true,x:0,y:-groundOffset(g.player,true),r:15,_attack:0,_echoes:[]};
@@ -33,9 +33,8 @@ assert(chained.companions._castLightning(mage));assert(near.hp<10000);assert.equ
 for(const obstacle of [low,high]){
   const g=arena([obstacle]),warden=ally(g,'warden'),clear=enemy(g,-90),shielded=enemy(g,120),flyer=enemy(g,-50,0,'bat');
   assert(g.companions._castQuake(warden));assert(clear.hp<10000);assert.equal(shielded.hp,10000);assert.equal(flyer.hp,10000);
-  const echo=warden._echoes[0];warden.x=400;
-  g.companions._quake(echo.x,echo.y,echo.r,echo.damage,true,warden.id);
-  assert.equal(shielded.hp,10000,'anchored echoes do not leak across low cover');assert.equal(flyer.hp,10000);
+  assert.equal(warden._echoes.length,0,'defensive pulses do not queue offensive echoes');
+  assert(clear._weaponPush,'the reachable grounded attacker is shoved');
 }
 const onlyFlight=arena(),groundAlly=ally(onlyFlight,'warden');enemy(onlyFlight,60,0,'bat');
 assert.equal(onlyFlight.companions._castQuake(groundAlly),false,'a ground spell does not spend its cooldown on flying-only targets');
@@ -107,4 +106,4 @@ for(const next of ['burst','fan']){
   assert(Math.hypot(boss.x-start.x,boss.y-start.y)>0,'the Boss seeks an open route instead of holding its preferred firing distance');
 }
 
-console.log('Allied height: chain hops, ground-only quake/echoes, super propagation, dungeon meteor isolation, guardian aura/sky strikes and grounded Boss eruptions passed.');
+console.log('Allied height: chain hops, ground-only defensive pulse, super propagation, dungeon meteor isolation, guardian aura/sky strikes and grounded Boss eruptions passed.');

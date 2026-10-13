@@ -35,7 +35,7 @@ function finishHuntWaves(g) {
   }
 }
 const generated=world(),initial=structuredClone(generated.relicSites.sites);
-assert.deepEqual(initial.map(s=>s.type),['hunt','rescue']);
+assert.deepEqual(initial.map(s=>s.type),['hunt','rescue','rescue','dogcamp','rescue','rescue','stonevault']);
 assert(initial.every(s=>s.category==='relic'&&s.state==='ready'&&!s.discovered));
 assert(Math.hypot(initial[0].x-initial[1].x,initial[0].y-initial[1].y)>initial[0].r+initial[1].r);
 generated.time=1000;generated.companions.generation=true;generated.companions.update(0);
@@ -102,7 +102,7 @@ finishWarnings(rescue);
 for(const enemy of guards)rescue._hurtEnemy(enemy,enemy.hp+1);
 assert.equal(prison.progress,9);assert.equal(prison.state,'active');assert.equal(camp.state,'ready');assert.equal(rescue.rescuePower,0);
 feet(rescue,camp);assert(rescue.companions._join());
-assert.equal(prison.state,'cleared');assert.equal(rescue.rescuePower,1);assert.equal(rescue.companions.active.remaining,60);
+assert.equal(prison.state,'cleared');assert.equal(rescue.rescuePower,1);assert(rescue.companions.members.includes(rescue.companions.active));assert(rescue.companions.active.upkeep>0);
 assert(rescue.relicSites.sites.includes(prison),'opening the prison never deletes its permanent structure');
 for(const enemy of guards)rescue.companions.onEnemyKilled(enemy);
 assert.equal(rescue.companions._join(),false);assert.equal(rescue.rescuePower,1);

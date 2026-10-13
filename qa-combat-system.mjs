@@ -88,7 +88,7 @@ for(const power of [0,6]) {
   const g=arena();g.levels.power=power;g.player.level=40;g.rescuePower=5;
   const e=enemy(g),ally={id:'qa-ally',x:0,y:0,r:15,isCompanion:true,kind:'stormcaller',_echoes:[]};
   assert(g.companions._castLightning(ally));near(10000-e.hp,105,'companion damage uses its own caster');
-  e.hp=10000;e.shock=null;g.companions._castQuake({...ally,kind:'warden'});near(10000-e.hp,90,'companion quake uses its own caster');
+  e.hp=10000;e.shock=null;g._rebuildGrid();g.companions._castQuake({...ally,kind:'warden'});near(10000-e.hp,32,'companion defensive pulse uses its own caster');
   const angel={id:'qa-angel',type:'angel',x:0,y:groundOffset(g.player,true),_attack:0,state:'ready'};
   e.hp=10000;e.bleed=null;g.settlements.sites=[angel];g.settlements._updateAngels(.025,{x:0,y:angel.y});
   near(10000-e.hp,ANGEL_RULES.damage,'angel does not inherit main-character damage');

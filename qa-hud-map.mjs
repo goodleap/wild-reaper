@@ -1,41 +1,8 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import vm from 'node:vm';
-import { performance } from 'node:perf_hooks';
-// Exercise real UI handlers with a minimal DOM. No browser, preview server, or
-// rendering package is required for pause/input/fog-of-war invariants.
-const html=fs.readFileSync(new URL('./dist/index.html',import.meta.url),'utf8');
-let source=fs.readFileSync(new URL('./dist/app.js',import.meta.url),'utf8');
-const modules={};
-for(const match of source.matchAll(/^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"];?$/gm)){
-  const exports=await import(new URL(`./dist/${match[2].replace('./','')}`,import.meta.url));
-  for(const name of match[1].split(',').map(value=>value.trim()))modules[name]=exports[name];
-}
-source=source.replace(/^import[^\n]+;\s*$/gm,'');
-const gradient={addColorStop(){}};
-const drawing=new Proxy({measureText:text=>({width:String(text).length*6}),createLinearGradient:()=>gradient,createRadialGradient:()=>gradient},{get:(target,key)=>target[key]??(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
-const nodes={},listeners={},document={activeElement:null};
-class Element{
-  constructor(id='',tag='DIV',classes=''){this.id=id;this.tagName=tag;this.children=[];this.style={setProperty(name,value){this[name]=String(value);},getPropertyValue(name){return this[name]??'';}};this.attributes={};this.textContent='';this.isConnected=true;this.disabled=false;const set=new Set(classes.split(' ').filter(Boolean));this.classList={contains:name=>set.has(name),add:name=>set.add(name),remove:name=>set.delete(name),toggle:(name,on)=>{on=on??!set.has(name);on?set.add(name):set.delete(name);return on;}};}
-  getBoundingClientRect(){return {width:393,height:717,left:0,top:0};}
-  setAttribute(name,value){this.attributes[name]=String(value);}
-  getAttribute(name){return this.attributes[name];}
-  addEventListener(type,handler){listeners[`${this.id}:${type}`]=handler;}
-  focus(){document.activeElement=this;}
-  append(...children){this.children.push(...children);}
-  replaceChildren(...children){this.children=[...children];}
-  querySelector(){return this.children.find(child=>!child.disabled);}
-  querySelectorAll(){return this.children.filter(child=>child.tagName==='BUTTON'&&!child.disabled);}
-  contains(target){return target===this||this.children.some(child=>child.contains?.(target));}
-  getContext(){return drawing;}
-  setPointerCapture(){}
-}
-for(const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g))nodes[match[3]]=new Element(match[3],match[1].toUpperCase(),match[2].match(/class="([^"]*)"/)?.[1]||'');
-const findDescendant=(node,id)=>node.id===id?node:node.children.map(child=>findDescendant(child,id)).find(Boolean);
-Object.assign(document,{getElementById:id=>{const node=nodes[id]||Object.values(nodes).map(root=>findDescendant(root,id)).find(Boolean);assert(node,id);return node;},body:new Element(),createElement:tag=>new Element('',tag.toUpperCase()),querySelectorAll:()=>Object.values(nodes).filter(node=>node.classList.contains('modal-layer')),addEventListener:(type,handler)=>listeners[`document:${type}`]=handler});
-const sandbox={...modules,document,performance,window:{location:{search:'?debug'},devicePixelRatio:1,addEventListener:(type,handler)=>listeners[`window:${type}`]=handler},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
-vm.createContext(sandbox);vm.runInContext(source,sandbox);
-const run=script=>vm.runInContext(script,sandbox);
+import { harness } from './qa-app-harness.mjs';
+// Reuse the current app DOM model so input guards, debug controls and scene
+// tests share the same parent relationships and browser surface.
+const {nodes,listeners,document,run}=harness('?debug');
 const key=(code,repeat=false)=>listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat,target:nodes['game-canvas'],preventDefault(){}});
 nodes['start-button'].onclick();
 // Freeze rendering only: the actual frame, game clock, input and HUD run normally.
@@ -206,18 +173,16 @@ for(let i=1;i<=30;i++)run(`frame(${fpsNow+i*1000/60})`);
 assert.equal(fpsNode.textContent,'已暂停','returning from a background tab starts a fresh sample while preserving pause');
 // FPS is visible in ordinary play too, without enabling debug diagnostics.
 for(const search of ['','?debug=0','?debug=false']){
-  let fpsLookups=0;fpsNode.classList.add('hidden');fpsWrites=[];
-  const normalDocument={...document,getElementById:id=>{if(id==='debug-fps')fpsLookups++;return document.getElementById(id);}};
-  const normalSandbox={...sandbox,document:normalDocument,window:{...sandbox.window,location:{search}}};
-  vm.createContext(normalSandbox);vm.runInContext(source,normalSandbox);
-  assert(!fpsNode.classList.contains('hidden'));assert.equal(fpsLookups,1);
-  assert.equal(vm.runInContext('debugPerformanceNode',normalSandbox),null);
-  vm.runInContext('renderIntro=()=>{};renderGame=()=>{};startGame();game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;frame(1000);',normalSandbox);
-  for(let i=1;i<=60;i++)vm.runInContext(`frame(${1000+i*1000/60})`,normalSandbox);
-  assert.equal(fpsNode.textContent,'60 FPS');
-  vm.runInContext('pause();',normalSandbox);
-  for(let i=1;i<=31;i++)vm.runInContext(`frame(${2000+i*1000/60})`,normalSandbox);
-  assert.equal(fpsNode.textContent,'已暂停');
-  listeners['document:visibilitychange']();assert.equal(fpsNode.textContent,'-- FPS');
+  const normal=harness(search),normalFps=normal.nodes['debug-fps'];
+  assert(!normalFps.classList.contains('hidden'));
+  assert.equal(normal.run('debugPerformanceNode'),null);
+  normal.run('startGame();game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;frame(1000);');
+  for(let i=1;i<=60;i++)normal.run(`frame(${1000+i*1000/60})`);
+  assert.equal(normalFps.textContent,'60 FPS');
+  normal.run('pause();');
+  for(let i=1;i<=31;i++)normal.run(`frame(${2000+i*1000/60})`);
+  assert.equal(normalFps.textContent,'已暂停');
+  normal.listeners['document:visibilitychange']();assert.equal(normalFps.textContent,'-- FPS');
 }
+
 console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity, clean re-press behavior, all-mode live FPS and debug-only diagnostics with paused labeling and visibility resets passed.');

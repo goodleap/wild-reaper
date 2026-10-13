@@ -1,6 +1,7 @@
 import { groundOffset } from './terrain.js';
 import { groundFootprint, surfaceAllows, placementAllowed } from './placement-rules.js';
 import { RegionalMechanisms, isGrounded } from './regional-mechanisms.js';
+import { friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from './friendly-combat.js';
 import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, waterIntersectsCapsule, getWaterContours, WATER_SHAPES } from './water-geometry.js';
 export { isGrounded } from './regional-mechanisms.js';
 
@@ -9,7 +10,7 @@ const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const WEAPON_SOURCES=new Set(['sword','arrow','runeArrow','orbit','pulse','echo','lightning','storm']);
 export const ENVIRONMENT_BALANCE=Object.freeze({maxProps:20,maxMuds:12,mushroomFuse:.9,blastRadius:82,mudMultiplier:.74,safeRadius:240,despawnDistance:1800});
-const BODY_HEIGHTS=Object.freeze({slime:[34,16],beetle:[40,18],brute:[55,26],boar:[49,22],spore:[52,20],boss:[109,49]});
+const BODY_HEIGHTS=Object.freeze({slime:[34,16],beetle:[40,18],brute:[55,26],boar:[49,22],spore:[52,20],boss:[109,49],dog:[30,12],golem:[62,21]});
 const humanoid=entity=>!!(entity.isCompanion||entity.isCaptive||entity.isTownNpc);
 const intersects=(a,b)=>a.maxX>=b.minX&&a.minX<=b.maxX&&a.maxY>=b.minY&&a.minY<=b.maxY;
 const boundsDistance=(b,p)=>Math.hypot(Math.max(b.minX-p.x,0,p.x-b.maxX),Math.max(b.minY-p.y,0,p.y-b.maxY));
@@ -202,7 +203,8 @@ export class Environment {
     // Only the sprite sinks: movement, collision and ordering keep their feet.
     for(const patch of this.muds){const d=waterDepth(patch,point.x,point.y);if(d>depth){depth=d;mud=patch;}}
     if(!mud)return null;
-    const human=isPlayer||humanoid(entity),body=BODY_HEIGHTS[entity.type]||[34,16];
+    const bodyKey=entity.isCompanion||entity.isCaptive?entity.kind||entity.heroId:entity.type;
+    const human=isPlayer||(humanoid(entity)&&!BODY_HEIGHTS[bodyKey]),body=BODY_HEIGHTS[bodyKey]||[34,16];
     const radius=Number.isFinite(entity.r)&&entity.r>0?entity.r:15;
     const maxSink=human?16:Math.min(18,body[0]*radius/body[1]*.35);
     return {x:point.x,footY:point.y,waterY:point.y,depth,sink:maxSink*depth,maxSink,width:human?14:Math.max(5,Math.min(35,radius*.83)),mud};
@@ -245,8 +247,13 @@ export class Environment {
     const damage=90*(1+Math.min(Math.max(g.time,0),600)/1200);
     // Raw damage avoids recursively creating bleeding, shock, or new attacks.
     // Snapshotting also survives treasure/event kill handlers replacing arrays.
-    for(const enemy of [...g.enemies])if(enemy.hp>0&&distance(this._foot(enemy,false),prop)<=r+enemy.r)g._hurtEnemy(enemy,damage,0,g.player,'mushroom');
-    if(distance(this._foot(),prop)<=r+g.player.r)g._hurtPlayer(12);
+    const reaches=(entity,point)=>distance(point,prop)<=r+entity.r&&!g.terrain.firstBlocker(prop.x,prop.y,point.x,point.y,0,'projectile');
+    for(const enemy of [...g.enemies])if(enemy.hp>0&&reaches(enemy,this._foot(enemy,false)))g._hurtEnemy(enemy,damage,0,g.player,'mushroom');
+    // The airborne blast reaches low-flying bodies, while solid walls stop it.
+    for(const ally of friendlyTargets(g)){
+      if(g.status!=='playing')break;
+      if(isFriendlyActive(g,ally)&&reaches(ally,friendlyFoot(ally)))damageFriendly(g,ally,12,'mushroom');
+    }
     if(g.status!=='playing')return;
     for(const next of this.props)if(next!==prop&&distance(next,prop)<=r+(next.r||17))this._arm(next,'chain');
   }

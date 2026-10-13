@@ -1,4 +1,4 @@
-import { ARCHIVE_ENTRIES, enemyArchiveId, ownedArchiveEntries } from './archive-catalog.js';
+import { ARCHIVE_ENTRIES, enemyArchiveId, companionArchiveId, ownedArchiveEntries } from './archive-catalog.js';
 import { UPGRADE_DEFS } from './combat-catalog.js';
 
 export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive';
@@ -83,15 +83,34 @@ export class AdventureArchive {
     if(id.startsWith('boss:'))run.defeatedBosses++;
     this._dirty=true;return true;
   }
-  observe(game,{visibleEnemies=[]}={}){
+  recordRecruit(game,companion){
+    const run=this._eligible(game),id=companionArchiveId(companion);if(!run||!id)return false;
+    const entry=this._entry(run,id);if(run.acquired.has(id))return false;
+    run.acquired.add(id);entry.acquisitions=integer(entry.acquisitions+1);this._dirty=true;return true;
+  }
+  _observeCompanions(game,run){
+    for(const member of game.companions?.members||[])this.recordRecruit(game,member);
+    // Site discovery is already gated by the world map's exploration rules.
+    // Merely generating an unseen recruit must not unlock its archive entry.
+    for(const site of game.relicSites?.sites||[])if(site.discovered){
+      const id=companionArchiveId(site);if(id)this._entry(run,id);
+    }
+  }
+  observe(game,{visibleEnemies=[],visibleCompanions=[]}={}){
     const run=this._eligible(game);if(!run)return false;
     for(const enemy of visibleEnemies){if(enemy?.hp<=0)continue;const id=enemyArchiveId(enemy);if(id)this._entry(run,id);}
+    for(const companion of visibleCompanions){const id=companionArchiveId(companion);if(id)this._entry(run,id);}
+    const camp=game.companions?.camp;
+    if(camp&&!game.dungeon?.active&&!game.sceneTransition?.active&&game._inView?.(camp)){
+      const id=companionArchiveId(camp);if(id)this._entry(run,id);
+    }
     return this.checkpoint(game);
   }
   _snapshot(game,run){return {time:finite(game.runTime??game.time),kills:integer(game.kills),bossKills:Math.max(integer(game.bossKills),run.defeatedBosses),level:integer(game.player?.level,1e6),wave:integer(game.wave,1e6)};}
   checkpoint(game,{force=false}={}){
     const run=this._eligible(game);if(!run)return false;
     this._observeBuild(game,run);
+    this._observeCompanions(game,run);
     const snapshot=this._snapshot(game,run),totals=this.data.totals,best=this.data.best[run.difficulty];
     for(const key of ['time','kills','bossKills']){
       const delta=Math.max(0,snapshot[key]-run.counted[key]);

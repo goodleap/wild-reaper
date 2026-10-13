@@ -58,6 +58,7 @@ export function sceneryVisual(prop){
 
 
 export function groundOffset(entity,isPlayer=false) {
+  if(Number.isFinite(entity?.groundOffset))return entity.groundOffset;
   if(isPlayer) return 19.8;
   const offsets={slime:[14,16],bat:[20,11],beetle:[18,18],brute:[23,26],boar:[20,22],spore:[18,20],boss:[41,49],trainingDummy:[18,16]};
   const [offset,radius]=offsets[entity.type]||[0,entity.r||1];

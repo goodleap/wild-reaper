@@ -7,6 +7,7 @@ const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 export const RELIC_SITE_RULES=Object.freeze({huntGuards:24,rescueGuards:9,interactRadius:82,huntTouchRadius:26});
+export const ARMY_SITE_RULES=Object.freeze({dogCost:8,vaultGold:45,vaultCrystals:90,smashDuration:.9,smashReach:110});
 export const RESCUE_BUILDING=Object.freeze({halfWidth:63,back:-46,front:61,doorHalfWidth:34,wallRadius:8});
 
 // The site is the durable world object; the encounter/camp is only its battle.
@@ -20,23 +21,26 @@ export class RelicSites {
   }
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _obstacles(site) {
-    if(site.type!=='rescue')return [];
+    if((site.type!=='rescue'&&site.type!=='stonevault')||site.appearance==='golemaltar')return [];
     const b=RESCUE_BUILDING,segments=[['back',-b.halfWidth,b.back,b.halfWidth,b.back],['left',-b.halfWidth,b.back,-b.halfWidth,b.front],['right',b.halfWidth,b.back,b.halfWidth,b.front],['frontLeft',-b.halfWidth,b.front,-b.doorHalfWidth,b.front],['frontRight',b.doorHalfWidth,b.front,b.halfWidth,b.front]];
-    if(!site.gateOpen)segments.push(['gate',-b.doorHalfWidth,b.front,b.doorHalfWidth,b.front]);
-    return segments.map(([part,ax,ay,bx,by])=>({id:`${site.id}:collision:${part}`,type:'log',x:site.x+(ax+bx)/2,y:site.y+(ay+by)/2,halfLength:Math.hypot(bx-ax,by-ay)/2,angle:Math.atan2(by-ay,bx-ax),r:b.wallRadius,structureId:site.id,structureType:'rescue',relicSiteId:site.id,variant:'rescue-wall',visual:false}));
+    if(!site.gateOpen&&site.type!=='stonevault')segments.push(['gate',-b.doorHalfWidth,b.front,b.doorHalfWidth,b.front]);
+    const walls=segments.map(([part,ax,ay,bx,by])=>({id:`${site.id}:collision:${part}`,type:'log',x:site.x+(ax+bx)/2,y:site.y+(ay+by)/2,halfLength:Math.hypot(bx-ax,by-ay)/2,angle:Math.atan2(by-ay,bx-ax),r:b.wallRadius,structureId:site.id,structureType:'rescue',relicSiteId:site.id,variant:'rescue-wall',visual:false}));
+    if(site.type==='stonevault'&&!site.gateOpen)walls.push({id:`${site.id}:collision:stonegate`,type:'rock',x:site.x,y:site.y+b.front,r:37,structureId:site.id,structureType:'stonevault',relicSiteId:site.id,variant:'companion-stonegate',visual:false});
+    return walls;
   }
   _setStructures(){this.game.terrain.setStructures?.(this.sites.flatMap(site=>this._obstacles(site)),'relic');}
   openGate(siteId) {
-    const site=this.sites.find(s=>s.id===siteId&&s.type==='rescue');if(!site)return false;
+    const site=this.sites.find(s=>s.id===siteId&&(s.type==='rescue'||s.type==='stonevault'));if(!site)return false;
     site.gateOpen=true;this._setStructures();return true;
   }
   insideRescue(siteId,point,r=0) {
-    const site=this.sites.find(s=>s.id===siteId&&s.type==='rescue');if(!site?.gateOpen)return false;
+    const site=this.sites.find(s=>s.id===siteId&&(s.type==='rescue'||s.type==='stonevault'));if(!site?.gateOpen)return false;
+    if(site.appearance==='golemaltar')return distance(point,site)<=60-r*.25;
     const b=RESCUE_BUILDING;
     return Math.abs(point.x-site.x)<=b.halfWidth-b.wallRadius-r&&point.y>=site.y+b.back+b.wallRadius+r&&point.y<=site.y+b.front-b.wallRadius-r;
   }
   _valid(site) {
-    const g=this.game,clearance=site.type==='hunt'?245:site.type==='rescue'?135:100;
+    const g=this.game,clearance=site.type==='hunt'?245:site.type==='rescue'||site.type==='stonevault'?135:100;
     // A dry center is insufficient: include the stone rim and the front door.
     if(!placementAllowed(g,'structure',{x:site.x,y:site.y,r:Math.max(clearance,site.r+30)}))return false;
     if(!placementAllowed(g,'structure',{x:site.door.x,y:site.door.y,r:30}))return false;
@@ -52,17 +56,26 @@ export class RelicSites {
   }
   _generate() {
     const g=this.game,regionIndex=g.regionIndex||0,rotation=hash(regionIndex+71,23)*TAU;
-    const types=['hunt','rescue'];if(g.region?.id==='ruins'&&g.environment?.mechanisms)types.push('rune');
-    for(const [index,type] of types.entries()) {
+    const entries=[{key:'hunt',type:'hunt',name:'林间狩猎'},{key:'rescue',type:'rescue',kind:'stormcaller',name:'唤雷者囚牢',guardCount:9},
+      {key:'rescue-warden',type:'rescue',kind:'warden',name:'守林人囚牢',guardCount:9},
+      {key:'dogcamp',type:'dogcamp',kind:'dog',name:'旅犬营地'},
+      {key:'owlroost',type:'rescue',kind:'owl',appearance:'owlroost',name:'林间鸟笼',guardCount:3},
+      {key:'golemaltar',type:'rescue',kind:'golem',appearance:'golemaltar',name:'沉睡石像',guardCount:8},
+      {key:'stonevault',type:'stonevault',name:'封石宝库'}];
+    if(g.region?.id==='ruins'&&g.environment?.mechanisms)entries.push({key:'rune',type:'rune',name:'遗迹符文阵'});
+    for(const [index,entry] of entries.entries()) {
+      const {key,type}=entry;
       if(type==='hunt'&&g._features?.encounters===false)continue;
-      if(type==='rescue'&&g._features?.companions===false)continue;
-      const plan=g.terrain.island?.plan?.[type];
-      for(let i=0;i<(plan?33:384);i++) {
-        const angle=rotation+index*2.3+(i%32)*TAU/32,radius=530+Math.floor(i/32)*100;
+      if(!['hunt','rune'].includes(type)&&g._features?.companions===false)continue;
+      const plan=g.terrain.island?.plan?.[key];
+      for(let i=0;i<(plan?65:512);i++) {
+        const angle=rotation+index*2.3+(i%32)*TAU/32,radius=530+Math.floor(i/32)*120;
         const offset=i===0?0:Math.ceil(i/8)*20,localAngle=(i%8)*TAU/8;
         const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round(Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round(Math.sin(angle)*radius);
-        const hunt=type==='hunt',rune=type==='rune';
-        const site={id:`relic-site:${regionIndex}:${type}`,category:'relic',type,name:hunt?'林间狩猎':rune?'遗迹符文阵':'囚牢遗迹',x,y,r:hunt?210:rune?72:105,width:hunt?420:rune?96:128,depth:hunt?420:rune?82:66,sortY:y,door:{x,y:y+(hunt?190:rune?45:84)},interactRadius:RELIC_SITE_RULES.interactRadius,state:'ready',gateOpen:false,progress:0,goal:hunt?RELIC_SITE_RULES.huntGuards:rune?12:RELIC_SITE_RULES.rescueGuards,kind:regionIndex%2===0?'stormcaller':'warden',discovered:false,regionIndex,seed:hash(regionIndex+131,index+41)};
+        const hunt=type==='hunt',rune=type==='rune',dog=type==='dogcamp',vault=type==='stonevault';
+        const site={id:`relic-site:${regionIndex}:${key}`,category:'relic',...entry,x,y,r:hunt?210:rune?72:dog?62:105,width:hunt?420:rune?96:dog?90:128,depth:hunt?420:rune?82:dog?65:66,sortY:y,
+          door:{x,y:y+(hunt?190:rune?45:dog?36:vault?138:100)},interactRadius:RELIC_SITE_RULES.interactRadius,state:'ready',gateOpen:entry.appearance==='golemaltar',progress:0,
+          goal:hunt?RELIC_SITE_RULES.huntGuards:rune?12:entry.guardCount||0,discovered:false,regionIndex,seed:hash(regionIndex+131,index+41)};
         if(this._valid(site)){
           if(rune)site.mechanism={id:`${site.id}:support`,siteId:site.id,type:'rune',x,y,r:48,state:'idle',charge:0,remaining:0,maxRemaining:12};
           this.sites.push(site);break;
@@ -74,24 +87,42 @@ export class RelicSites {
     if(this.game.dungeon?.active)return true;
     return this.sites.every(site=>Math.hypot(x-site.x,y-site.y)>site.r+r+45);
   }
+  _member(kind){return this.game.companions?.members?.find(member=>member.kind===kind)||null;}
+  _golemFor(site) {
+    const g=this.game,member=g.companions?.combatants?.().find(ally=>ally.kind==='golem');
+    if(!member)return null;
+    const foot={x:member.x,y:member.y+groundOffset(member,true)},point={x:site.x,y:site.y+140};
+    if(distance(foot,point)>ARMY_SITE_RULES.smashReach)return null;
+    if(g.terrain.firstBlocker?.(foot.x,foot.y,point.x,point.y,member.r||20))return null;
+    return member;
+  }
   getInteraction() {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return null;
     const p=this._foot();let nearest=null,best=Infinity;
     for(const site of this.sites) {
-      const anchor=site.type==='hunt'?site:site.door,d=distance(p,anchor);if(d>site.interactRadius||d>=best)continue;
+      const anchor=site.type==='hunt'||site.type==='stonevault'&&site.gateOpen?site:site.door,d=distance(p,anchor);if(d>site.interactRadius||d>=best)continue;
       let enabled=site.state==='ready',label='',description='';
-      if(site.state==='cleared'){label='遗迹已完成';description=site.type==='rune'?'符文能量已耗尽，石台保留':'建筑与通路保留，宝藏不再刷新';}
+      if(site.state==='cleared'){label='遗迹已完成';description=site.type==='rune'?'符文能量已耗尽，石台保留':'建筑与通路保留，奖励不再刷新';}
       else if(site.state==='failed'){label='遗迹挑战已结束';description='守卫已散去，遗迹留在原地';}
-      else if(site.state==='active') {
+      else if(site.type==='dogcamp'){
+        label=this._member('dog')?'小狗已在队伍中':`招募寻宝小狗 · ${ARMY_SITE_RULES.dogCost} 金币`;
+        enabled=enabled&&!this._member('dog')&&g.gold>=ARMY_SITE_RULES.dogCost;
+        description='提供路粮，小狗会带路寻找附近宝藏';
+      } else if(site.type==='stonevault'){
+        if(site.gateOpen){enabled=site.state==='opened';label='走入宝库领取珍藏';description=`${ARMY_SITE_RULES.vaultGold} 金币 / ${ARMY_SITE_RULES.vaultCrystals} 灵晶`;}
+        else if(site.state==='opening'){enabled=false;label='岩灵正在击碎封石';description='守在门前，通路将永久开启';}
+        else {enabled=!!this._golemFor(site);label=enabled?'岩灵击碎封石':this._member('golem')?'带岩灵靠近宝库正门':'封石宝库 · 需要岩灵';description='寻找沉睡石像，唤醒伙伴后返回';}
+      } else if(site.state==='active') {
         const camp=site.type==='rescue'&&g.companions?.camp;
-        label=site.type==='hunt'?`狩猎守卫 ${site.progress}/${site.goal}`:site.type==='rune'?`符文支援 ${Math.ceil(site.mechanism.remaining)} 秒`:camp?.siteId===site.id&&camp.state==='ready'?'靠近伙伴完成解救':`囚牢守卫 ${site.progress}/${site.goal}`;
+        label=site.type==='hunt'?`狩猎守卫 ${site.progress}/${site.goal}`:site.type==='rune'?`符文支援 ${Math.ceil(site.mechanism.remaining)} 秒`:camp?.siteId===site.id&&camp.state==='ready'?'靠近伙伴完成解救':`${site.appearance==='golemaltar'?'唤醒试炼':'囚牢守卫'} ${site.progress}/${site.goal}`;
         description=site.type==='rune'?'符文正在自动轰击附近怪物':'离开后进度保留，返回可继续挑战';
       } else if(site.type==='hunt') {label='走进中央纹章开启狩猎';description='击败 24 名遗迹守卫 · 72 灵晶 / 18 金币';}
       else if(site.type==='rune') {label='激活遗迹符文阵';description='一次性 12 秒符文支援 · 自动攻击附近怪物';}
-      else {label='挑战囚牢守卫';description='击败 9 名强化守卫，解救伙伴并提升援助之力';}
-      if(enabled&&site.type!=='rune') {
-        const busy=site.type==='hunt'?!!g.encounters?.active:!!g.companions?.camp||!!g.companions?.active;
-        if(busy||!canStartObjective(g)){enabled=false;description=busy?'先完成当前挑战或等待同行伙伴离开':'附近战斗尚未结束，稍后再开启遗迹';}
+      else {label=site.kind==='golem'?'触碰古坛唤醒岩灵':site.kind==='owl'?'驱散守卫解救猫头鹰':'挑战囚牢守卫';description=`击败 ${site.goal} 名守卫，招募伙伴`;
+        if(this._member(site.kind)){enabled=false;label='该伙伴已在队伍中';}}
+      if(enabled&&(site.type==='hunt'||site.type==='rescue')) {
+        const busy=site.type==='hunt'?!!g.encounters?.active:!!g.companions?.camp;
+        if(busy||!canStartObjective(g)){enabled=false;description=busy?'先完成当前遗迹挑战':'附近战斗尚未结束，稍后再开启遗迹';}
       }
       nearest={id:site.id,siteId:site.id,type:'relic',relicType:site.type,category:'relic',label,description,x:anchor.x,y:anchor.y,enabled,...(site.type==='hunt'?{touchRadius:RELIC_SITE_RULES.huntTouchRadius}:{})};best=d;
     }
@@ -101,6 +132,22 @@ export class RelicSites {
     const current=this.getInteraction();if(!current||current.id!==id||!current.enabled)return false;
     const site=this.sites.find(s=>s.id===id),g=this.game;
     if(site.type==='hunt'&&distance(this._foot(),site)>RELIC_SITE_RULES.huntTouchRadius)return false;
+    if(site.type==='dogcamp') {
+      if(g.gold<ARMY_SITE_RULES.dogCost||this._member('dog'))return false;
+      const member=g.companions?.recruit('dog',{x:site.x,y:site.y,sourceId:site.id});if(!member)return false;
+      g.gold-=ARMY_SITE_RULES.dogCost;site.state='cleared';site.discovered=true;beginRelicActivation(site);return true;
+    }
+    if(site.type==='stonevault') {
+      if(site.gateOpen){
+        if(site.state!=='opened'||!this.insideRescue(site.id,this._foot(),g.player.r))return false;
+        site.state='cleared';g.grantResources({gold:ARMY_SITE_RULES.vaultGold,crystals:ARMY_SITE_RULES.vaultCrystals},'stonevault');
+        g._emit('stonevaultClaimed',{siteId:site.id});g._effect(site.x,site.y,'ring',.7,90,'#ead18e');return true;
+      }
+      const member=this._golemFor(site);if(!member)return false;
+      site.state='opening';site.openProgress=0;site.discovered=true;site.workerId=member.id;
+      member.workTarget={x:site.x,y:site.y+140,sourceId:site.id};member.castFace=.9;beginRelicActivation(site);
+      g._emit('stonevaultOpening',{siteId:site.id});return true;
+    }
     if(site.type==='rune') {
       if(!g.environment?.mechanisms.activateRune(site.mechanism))return false;
       site.state='active';site.discovered=true;beginRelicActivation(site);return true;
@@ -122,6 +169,18 @@ export class RelicSites {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
     for(const site of this.sites)if(site.type!=='hunt')advanceRelicActivation(site,dt);
+    for(const site of this.sites)if(site.type==='stonevault'&&site.state==='opening') {
+      const member=this._golemFor(site);
+      if(!member||member.id!==site.workerId||distance(this._foot(),site.door)>220){
+        const previous=g.companions?.members?.find(ally=>ally.id===site.workerId);if(previous?.workTarget?.sourceId===site.id)delete previous.workTarget;
+        site.state='ready';site.openProgress=0;continue;
+      }
+      site.openProgress=Math.min(ARMY_SITE_RULES.smashDuration,(site.openProgress||0)+dt);member.castFace=.2;
+      if(site.openProgress>=ARMY_SITE_RULES.smashDuration){
+        delete member.workTarget;site.state='opened';this.openGate(site.id);beginRelicActivation(site);
+        g._effect(site.x,site.y+61,'ring',.55,74,'#d1c093',undefined,{quake:true,groundY:site.y+61,ally:true});g._emit('stonevaultOpened',{siteId:site.id});
+      }
+    }
     for(const site of this.sites)if(site.type==='rune'&&site.state==='active') {
       g.environment?.mechanisms._rune(site.mechanism,dt);
       site.progress=site.goal-site.mechanism.remaining;

@@ -3,6 +3,8 @@ import { MonsterArt } from './monster-art.js';
 import { CombatArt } from './combat-art.js';
 import { drawSwordBlade } from './sword-art.js';
 import { drawOrbitBlade } from './prop-art.js';
+import { HumanoidArt } from './humanoid-art.js';
+import { CompanionArt, COMPANION_VISUALS } from './companion-art.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number=value=>Math.max(0,Math.floor(Number(value)||0)).toLocaleString('zh-CN');
@@ -17,6 +19,7 @@ export function archiveMilestones(data={}){
   const totals=data.totals||{},entries=data.entries||{};
   const branches=Object.values(entries).reduce((sum,entry)=>sum+(Array.isArray(entry.branches)?entry.branches.length:0),0);
   const skills=knownCount(data,'skills')+knownCount(data,'weaponSkills');
+  const companions=ARCHIVE_ENTRIES.filter(entry=>entry.category==='companions'&&entries[entry.id]?.acquisitions>0).length;
   return [
     {id:'first-victory',name:'踏出第一步',description:'累计击败 1 个敌人',progress:totals.kills||0,target:1},
     {id:'field-notes',name:'林间观察者',description:'发现 6 种怪物',progress:knownCount(data,'enemies'),target:6},
@@ -25,6 +28,7 @@ export function archiveMilestones(data={}){
     {id:'survivor',name:'长路未尽',description:'单局存活 10 分钟',progress:Math.floor(bestTime(data)),target:600,unit:'time'},
     {id:'branch-explorer',name:'另辟蹊径',description:'体验 3 种武器或技能分支',progress:branches,target:3},
     {id:'skill-explorer',name:'力量的回响',description:'获得 6 种技能或武器技能',progress:skills,target:6},
+    {id:'fellow-travelers',name:'并肩前行',description:'招募 3 种伙伴',progress:companions,target:3},
     {id:'veteran',name:'荒野历练',description:'累计击败 1,000 个敌人',progress:totals.kills||0,target:1000}
   ].map(item=>({...item,progress:Math.min(item.target,Math.max(0,item.progress)),complete:item.progress>=item.target}));
 }
@@ -47,15 +51,16 @@ function vectorArt(entry){
 }
 function portrait(entry,known,large=false){
   if(!known)return `<span class="archive-art archive-unknown${large?' archive-art-large':''}" aria-hidden="true">?</span>`;
-  return `<span class="archive-art${large?' archive-art-large':''}" style="--archive-accent:${entry.color}">${enemyEntry(entry)||entry.category==='weapons'?`<canvas width="256" height="224" data-archive-art="${entry.id}" aria-hidden="true"></canvas>`:vectorArt(entry)}</span>`;
+  return `<span class="archive-art${large?' archive-art-large':''}" style="--archive-accent:${entry.color}">${enemyEntry(entry)||entry.category==='weapons'||entry.category==='companions'?`<canvas width="256" height="224" data-archive-art="${entry.id}" aria-hidden="true"></canvas>`:vectorArt(entry)}</span>`;
 }
 function entryButton(entry,data,selected){
-  const known=seen(data,entry),record=data.entries?.[entry.id]||{},status=!known?'未发现':enemyEntry(entry)?record.defeats?'已击败':'已发现':'已获得';
+  const known=seen(data,entry),record=data.entries?.[entry.id]||{},status=!known?'未发现':enemyEntry(entry)?record.defeats?'已击败':'已发现':entry.category==='companions'?record.acquisitions?'已同行':'已发现':'已获得';
   return `<button type="button" class="archive-card${known?'':' is-unknown'}${selected?' is-selected':''}" data-archive-entry="${entry.id}" aria-pressed="${selected}" aria-label="${escape(known?entry.name:'未发现条目')}，${status}">${portrait(entry,known)}<strong>${known?escape(entry.name):'未发现'}</strong><small>${status}</small></button>`;
 }
 function detailHTML(entry,data){
   const known=seen(data,entry),record=data.entries?.[entry.id]||{};
-  if(!known)return `<section class="archive-detail archive-detail-unknown" data-archive-detail tabindex="-1">${portrait(entry,false,true)}<h3>尚未发现</h3><p>${enemyEntry(entry)?'在冒险中遇见它，便能留下第一份记录。':'在冒险中获得这项能力，便能查看它的特色与成长路线。'}</p></section>`;
+  if(!known)return `<section class="archive-detail archive-detail-unknown" data-archive-detail tabindex="-1">${portrait(entry,false,true)}<h3>尚未发现</h3><p>${enemyEntry(entry)||entry.category==='companions'?'在冒险中遇见它，便能留下第一份记录。':'在冒险中获得这项能力，便能查看它的特色与成长路线。'}</p></section>`;
+  if(entry.category==='companions')return `<section class="archive-detail" data-archive-detail tabindex="-1"><div class="archive-detail-heading">${portrait(entry,true,true)}<div><span class="archive-kicker">${escape(entry.role)}</span><h3>${escape(entry.name)}</h3><p class="archive-source">${escape(entry.source)}</p></div></div><p class="archive-description">${escape(entry.description)}</p><div class="archive-entry-stats"><span>同行对局 <strong>${number(record.acquisitions)}</strong></span></div><div class="archive-detail-section"><h4>同行提示</h4><p>${escape(entry.advice)}</p></div><p class="archive-small-note">招募后自动跟随与行动，定期消耗金币维持；在角色面板中查看队伍状态与费用。</p></section>`;
   const combat=enemyEntry(entry),defeated=record.defeats>0;
   return `<section class="archive-detail" data-archive-detail tabindex="-1"><div class="archive-detail-heading">${portrait(entry,true,true)}<div><span class="archive-kicker">${escape(entry.role)}${entry.tier==='super'?' · 超级':''}</span><h3>${escape(entry.name)}</h3><p class="archive-source">${escape(entry.source)}</p></div></div><p class="archive-description">${escape(entry.description)}</p><div class="archive-entry-stats">${combat?`<span>累计击败 <strong>${number(record.defeats)}</strong></span>`:`<span>获得对局 <strong>${number(record.acquisitions)}</strong></span><span>最高等级 <strong>Lv.${number(record.maxLevel)}</strong></span>`}</div>${entry.growth?`<div class="archive-detail-section"><h4>成长方式</h4><p>${escape(entry.growth)}</p></div>`:''}${entry.branches.length?`<div class="archive-detail-section"><h4>可选分支 <small>每局选择一条</small></h4><div class="archive-branches">${entry.branches.map(branch=>`<div class="archive-branch"><strong>${escape(branch.name)}${record.branches?.includes(branch.id)?'<span>已体验</span>':''}</strong><p>${escape(branch.description)}</p></div>`).join('')}</div></div>`:''}${entry.evolution&&entry.ownerId==='orbit'?`<div class="archive-detail-section"><h4>${escape(entry.evolution.name)}${record.evolved?'<small>已达成</small>':''}</h4><p>${escape(entry.evolution.desc)}</p></div>`:''}<div class="archive-detail-section"><h4>${combat?'战斗心得':'搭配提示'}</h4><p${combat&&!defeated?' class="archive-muted"':''}>${combat&&!defeated?'首次击败后解锁。':escape(entry.advice)}</p></div>${combat?'<p class="archive-small-note">同类怪物可能出现精英变体，留意护盾、迅捷或召唤标记。</p>':''}</section>`;
 }
@@ -78,7 +83,7 @@ export function archivePanelHTML(data={},options={}){
   return `<div class="archive-overview"><span>每次冒险，都留下新的发现</span><strong>已发现 ${progress}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${[['codex','图鉴'],['records','记录'],['milestones','里程碑']].map(([id,label])=>`<button type="button" data-archive-tab="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
 }
 
-let monsterArt=null,combatArt=null;
+let monsterArt=null,combatArt=null,humanoidArt=null,companionArt=null;
 function drawWeaponPortrait(ctx,entry){
   ctx.translate(64,56);ctx.lineJoin='round';ctx.lineCap='round';
   // Reuse the gameplay vectors, drawn directly at the portrait resolution.
@@ -95,6 +100,15 @@ function drawWeaponPortrait(ctx,entry){
     drawOrbitBlade(ctx);
   }
 }
+function drawCompanionPortrait(ctx,entry){
+  const human=entry.kind==='stormcaller'||entry.kind==='warden';
+  const shape=COMPANION_VISUALS[entry.kind],top=human?42:shape?.top||33,foot=human?18:shape?.foot||16;
+  const scale=Math.min(1.4,88/(top+foot));
+  ctx.translate(64,56+(top-foot)*scale/2);ctx.scale(scale,scale);
+  const options={entity:{id:entry.kind,kind:entry.kind,heroId:entry.kind,facing:0,isCompanion:true},time:1,reduced:true,pixelRatio:2};
+  if(human){humanoidArt ||= new HumanoidArt();humanoidArt.draw(ctx,entry.kind,options);}
+  else {companionArt ||= new CompanionArt();companionArt.draw(ctx,entry.kind,options);}
+}
 // Paint on panel changes only. The archive has no RAF or gameplay-frame work.
 export function drawArchiveArt(container){
   const canvases=container?.querySelectorAll?.('canvas[data-archive-art]')||[];
@@ -103,6 +117,7 @@ export function drawArchiveArt(container){
     if(!entry||!ctx)continue;
     ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.scale(canvas.width/128,canvas.height/112);
     if(entry.category==='weapons'){drawWeaponPortrait(ctx,entry);ctx.restore();continue;}
+    if(entry.category==='companions'){drawCompanionPortrait(ctx,entry);ctx.restore();continue;}
     monsterArt ||= new MonsterArt();ctx.translate(64,65);
     const scale=entry.type==='boss'?.78:1.38;ctx.scale(scale,scale);
     monsterArt.draw(ctx,{type:entry.type,bossKind:entry.bossKind,id:0,x:0,y:0,r:entry.type==='boss'?49:18,hp:1,hit:0,walkPhase:0,visualFacing:0},{time:0,reduced:true,playerX:1});ctx.restore();

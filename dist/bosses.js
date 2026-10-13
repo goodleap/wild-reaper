@@ -1,5 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { isGrounded } from './height-rules.js';
+import { selectFriendlyTarget, friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from './friendly-combat.js';
 
 export const BLOOM_BOSS = Object.freeze({
   name:'孢冠领主',range:430,preferredMin:230,preferredMax:300,
@@ -23,7 +24,7 @@ export function clearBossAttacks(enemy) {
 }
 
 function groundState(game,enemy) {
-  const p=game.player,x=enemy.x,y=enemy.y+groundOffset(enemy);
+  const p=selectFriendlyTarget(game,enemy),x=enemy.x,y=enemy.y+groundOffset(enemy);
   const px=p.x,py=p.y+groundOffset(p,true),dx=px-x,dy=py-y;
   return {x,y,px,py,dx,dy,distance:Math.hypot(dx,dy)};
 }
@@ -122,13 +123,17 @@ export function resolveBloomBoss(game,enemy) {
     }
     if(offsets.length)game._emit('bloomShot');
   } else {
-    let hit=false;
+    const hit=new Set();
     for(const circle of attack.circles) {
       game._effect(circle.x,circle.y,'bloomBurst',.65,circle.r,'#c498ed');
-      if(isGrounded(game.player)&&Math.hypot(state.px-circle.x,state.py-circle.y)<circle.r+game.player.r&&
-        !game.terrain.firstBlocker(circle.x,circle.y,state.px,state.py,0,'ground'))hit=true;
+      for(const target of friendlyTargets(game)){
+        if(hit.has(target)||!isFriendlyActive(game,target)||!isGrounded(target))continue;
+        const foot=friendlyFoot(target);
+        if(Math.hypot(foot.x-circle.x,foot.y-circle.y)<circle.r+target.r&&
+          !game.terrain.firstBlocker(circle.x,circle.y,foot.x,foot.y,0,'ground'))hit.add(target);
+      }
     }
-    if(hit)game._hurtPlayer(enemy.damage*.85);
+    for(const target of hit)damageFriendly(game,target,enemy.damage*.85,enemy);
     game._emit('bloomBurst');
   }
   return true;

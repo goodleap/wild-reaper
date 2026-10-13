@@ -23,6 +23,7 @@ export const ATTACK_SOURCES=Object.freeze({
   companionLightning:Object.freeze({owner:'ally',skillId:'lightning',shock:true}),
   companionPulse:Object.freeze({owner:'ally',skillId:'pulse',consumeBleed:true}),
   companionEcho:Object.freeze({owner:'ally',skillId:'pulse',consumeBleed:true}),
+  companionGolem:Object.freeze({owner:'ally',skillId:'golem'}),
   super:Object.freeze({owner:'player',tier:'super'}),
   relic:Object.freeze({owner:'player',kind:'relic'}),
   conduction:Object.freeze({owner:'reaction',kind:'secondary'}),
@@ -32,7 +33,7 @@ export const ATTACK_SOURCES=Object.freeze({
 });
 const RAW_SOURCE=Object.freeze({owner:'external'});
 export const attackSource=source=>ATTACK_SOURCES[source]||RAW_SOURCE;
-const PROPAGATION_PROFILES=Object.freeze({pulse:'ground',echo:'ground',companionPulse:'ground',companionEcho:'ground',storm:'overhead',angel:'overhead'});
+const PROPAGATION_PROFILES=Object.freeze({pulse:'ground',echo:'ground',companionPulse:'ground',companionEcho:'ground',companionGolem:'ground',storm:'overhead',angel:'overhead'});
 export const attackProfile=source=>PROPAGATION_PROFILES[source]||'projectile';
 
 export class CombatResolution {
@@ -150,6 +151,7 @@ export class CombatResolution {
     const g=this.game;
     const p=g.player;if(p.invuln>0||g.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
     amount*=defenseDamageMultiplier(resolveCharacterStats(g).defense);
+    amount*=g.companions?.protectionMultiplier?.(p)??1;
     amount=g.relics?.modifyIncomingDamage(amount)??amount;
     amount=g.barrier?.absorbDamage(amount)??amount;
     const previousHp=p.hp;

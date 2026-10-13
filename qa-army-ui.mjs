@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {harness} from './qa-app-harness.mjs';
+import {armyPanelHTML} from './dist/army-panel.js';
+const h=harness('?debug');h.run('startGame();debugArmyAction(true);');
+assert.equal(h.run('game.companions.members.length'),5);h.run('shippedRenderGame();');
+assert.match(h.nodes['companion-time'].textContent,/5 · 12◉\/30s/);
+h.run('openCharacter("army");');assert.match(h.nodes['character-content'].innerHTML,/岩灵/);assert.match(h.nodes['character-content'].innerHTML,/猫头鹰/);
+const before=h.run('JSON.stringify([game.runTime,game.gold,game.companions.members.map(m=>[m.x,m.y,m.hp])])');for(let i=0;i<90;i++)h.tick();assert.equal(h.run('JSON.stringify([game.runTime,game.gold,game.companions.members.map(m=>[m.x,m.y,m.hp])])'),before,'army panel freezes movement, damage and wages');
+const dismissed=h.run('game.companions.members.find(m=>m.kind==="dog").id');
+const node={getAttribute:()=>String(dismissed)};
+h.listeners['character-content:click']({target:{closest:selector=>selector.includes('data-dismiss-companion')?node:null}});
+assert.equal(h.run('game.companions.members.length'),4,'DOM string identifier dismisses exactly one numeric member id');assert.equal(h.run('game.companions.members.some(m=>m.kind==="dog")'),false);assert.match(h.nodes['companion-time'].textContent,/4 · 11◉/);
+h.listeners['character-tab-status:keydown']({key:'ArrowRight',preventDefault(){},stopPropagation(){}});assert.equal(h.run('characterTab'),'attributes','tab navigation wraps across all five tabs');
+h.listeners['character-tab-attributes:keydown']({key:'End',preventDefault(){},stopPropagation(){}});assert.equal(h.run('characterTab'),'status');
+h.run('closeCharacter();debugArmyAction(false);');assert.equal(h.run('game.companions.members.length'),0);assert(h.nodes['companion-status'].classList.contains('hidden'));
+assert.match(armyPanelHTML({status:'playing',companions:{members:[{id:12,kind:'dog',name:'<img src=x>',hp:4,maxHp:100,state:'active'}]}}),/&lt;img src=x&gt;/);
+const normal=harness();normal.run('startGame();debugArmyAction(true);');assert.equal(normal.run('game.companions.members.length'),0,'debug action is unavailable in ordinary runs');
+const full=harness('?debug=full');full.run('startGame();');assert.equal(full.run('game.companions.members.length'),5);assert.equal(full.run('archive.data.entries["companion:golem"].acquisitions'),1);
+for(const kind of ['dog','owl','golem']){full.run(`{const site=game.relicSites.sites.find(s=>s.kind==='${kind}');game.player.x=site.x;game.player.y=site.y+100;shippedRenderGame();}`);}
+console.log('Army UI: compact HUD, five-tab panel, pause isolation, safe dismissal, full-debug and archive integration passed (VM DOM).');
