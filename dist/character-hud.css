@@ -94,7 +94,7 @@
 @media(prefers-reduced-motion:reduce){#arena.playing #portal-action{animation:none}}
 
 /* Expanded character details share the map's visual language and retain full reading size. */
-#character-overlay{align-items:center;overflow:hidden}
+#character-overlay{overflow:hidden}
 .character-panel{position:relative;display:flex;flex-direction:column;flex-shrink:0;width:min(720px,100%);max-height:100%;min-height:0;padding:24px;border:1px solid #8da78070;border-radius:16px;background:linear-gradient(145deg,#21382d,#14251e);box-shadow:0 20px 80px #0006;text-align:left}
 .character-panel>.eyebrow{flex:0 0 auto;margin-right:40px;font-size:9px;letter-spacing:2px}
 .character-panel h2{font-size:23px;letter-spacing:1px;margin:7px 40px 5px 0}

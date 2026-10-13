@@ -200,7 +200,7 @@ function bullet(c,bloom){
   path(c,[[-3,-2],[-.2,-3.8],[2.2,-3]],'#ffe5e1d0',.75);oval(c,2,-1.9,1,1,'#fff3e2');oval(c,-1,2,1.1,.8,'#6b3e704c');
 }
 
-function blade(c,evolved){
+export function drawOrbitBlade(c,evolved=false){
   const edge=evolved?'#f5dca1':'#eef2e9',trim=evolved?'#c8a969':'#a5b7b7';
   // A narrow throwing knife: angular steel facets, a small guard and a short
   // wrapped grip. Its local -Y tip stays aligned by drawBlade's travel heading.
@@ -234,7 +234,7 @@ export class PropArt {
     else if(key.startsWith('mushroom'))mushroom(c,key==='mushroom:armed');
     else if(key.startsWith('pickup'))pickup(c,key.slice(7));
     else if(key.startsWith('bullet'))bullet(c,key==='bullet:bloom');
-    else if(key.startsWith('blade'))blade(c,key==='blade:evolved');
+    else if(key.startsWith('blade'))drawOrbitBlade(c,key==='blade:evolved');
     const pixels=canvas.width*canvas.height;
     while(this.pixels+pixels>PIXEL_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);}
     image={canvas,w,h,ox,oy,pixels};this.cache.set(key,image);this.pixels+=pixels;this.builds++;return image;

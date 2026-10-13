@@ -28,7 +28,7 @@ export function swordSlashPose(e,game={},options={}){
   return {x,y,sortY:finite(actor?.footY,finite(e.groundY,y+18*scale))+Math.sin(angle)*8*scale,angle,lockedAngle,start,arc,age,windup,hitTime,swing,tail,opacity,grip,length,tip,meleeRange,radius,energyRank,heavy,sweep:e.branch==='sweep',scale};
 }
 
-function blade(ctx,length,width,alpha,heavy){
+export function drawSwordBlade(ctx,length,width,alpha=1,heavy=false){
   ctx.globalAlpha=alpha;ctx.lineJoin='round';
   ctx.fillStyle='#29392f';ctx.beginPath();ctx.moveTo(1,-1.9);ctx.lineTo(10,-1.9);ctx.lineTo(11,1.9);ctx.lineTo(1,1.9);ctx.closePath();ctx.fill();
   ctx.strokeStyle='#aaa78b';ctx.lineWidth=.75;ctx.beginPath();for(let x=3;x<9;x+=2.7){ctx.moveTo(x,-1.4);ctx.lineTo(x+.8,1.4);}ctx.stroke();
@@ -71,6 +71,6 @@ export function drawSwordSlash(ctx,e,game={},options={}){
   const {age,windup,angle,opacity,grip,length,heavy}=p;
   ctx.save();ctx.translate(p.x,p.y);ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=0;
   if(age>=windup&&p.swing>0)steelSweep(ctx,p,reduced,dense);
-  ctx.save();ctx.rotate(angle);ctx.translate(grip,0);blade(ctx,length,heavy?3.6:2.45,opacity,heavy);ctx.restore();
+  ctx.save();ctx.rotate(angle);ctx.translate(grip,0);drawSwordBlade(ctx,length,heavy?3.6:2.45,opacity,heavy);ctx.restore();
   ctx.restore();return true;
 }

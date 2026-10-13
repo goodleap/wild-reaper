@@ -1,5 +1,8 @@
 import { ARCHIVE_CATEGORIES, ARCHIVE_ENTRIES, ARCHIVE_ENTRY_BY_ID } from './archive-catalog.js';
 import { MonsterArt } from './monster-art.js';
+import { CombatArt } from './combat-art.js';
+import { drawSwordBlade } from './sword-art.js';
+import { drawOrbitBlade } from './prop-art.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number=value=>Math.max(0,Math.floor(Number(value)||0)).toLocaleString('zh-CN');
@@ -29,8 +32,6 @@ export function archiveMilestones(data={}){
 function vectorArt(entry){
   const id=entry.modifierId||entry.ownerId||'',sword='<path d="M24 43 46 10 52 6 51 14 29 47Z" fill="currentColor" opacity=".72"/><path d="m25 43 25-35M20 41l13 9M25 47l-8 11"/>',arrow='<path d="m12 52 39-39m-11 0h11v11M12 43v9h9M17 38v9h9"/>';
   const paths={
-    sword,arrow,
-    orbit:'<circle cx="32" cy="32" r="18" opacity=".24" stroke-dasharray="3 5"/><path d="m27 7 8-3-3 17-4-5Zm27 34 4 8-17-2 5-5ZM10 45 2 42l13-11v7Z" fill="currentColor"/><path d="m28 17-3 5m21 20-6-1m-25-3 2-5"/>',
     barrier:'<path d="m32 7 21 8v17c0 12-12 22-21 26-9-4-21-14-21-26V15Z" fill="currentColor" opacity=".13"/><path d="m32 7 21 8v17c0 12-12 22-21 26-9-4-21-14-21-26V15Zm0 8v33m-13-28 13-5 13 5"/>',
     pulse:'<ellipse cx="32" cy="40" rx="26" ry="13" opacity=".38"/><ellipse cx="32" cy="37" rx="17" ry="9"/><path d="m22 28 10-16 10 16m-10-16v27M12 31l-4-5m48 0-4 5"/>',
     lightning:'<path d="m38 6-20 28h13l-5 24 22-32H34Z" fill="currentColor" opacity=".72"/><path d="m15 16-8 8 7 5m35 13 8-8-7-5" opacity=".6"/>',
@@ -46,7 +47,7 @@ function vectorArt(entry){
 }
 function portrait(entry,known,large=false){
   if(!known)return `<span class="archive-art archive-unknown${large?' archive-art-large':''}" aria-hidden="true">?</span>`;
-  return `<span class="archive-art${large?' archive-art-large':''}" style="--archive-accent:${entry.color}">${enemyEntry(entry)?`<canvas width="256" height="224" data-archive-art="${entry.id}" aria-hidden="true"></canvas>`:vectorArt(entry)}</span>`;
+  return `<span class="archive-art${large?' archive-art-large':''}" style="--archive-accent:${entry.color}">${enemyEntry(entry)||entry.category==='weapons'?`<canvas width="256" height="224" data-archive-art="${entry.id}" aria-hidden="true"></canvas>`:vectorArt(entry)}</span>`;
 }
 function entryButton(entry,data,selected){
   const known=seen(data,entry),record=data.entries?.[entry.id]||{},status=!known?'未发现':enemyEntry(entry)?record.defeats?'已击败':'已发现':'已获得';
@@ -77,15 +78,32 @@ export function archivePanelHTML(data={},options={}){
   return `<div class="archive-overview"><span>每次冒险，都留下新的发现</span><strong>已发现 ${progress}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${[['codex','图鉴'],['records','记录'],['milestones','里程碑']].map(([id,label])=>`<button type="button" data-archive-tab="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
 }
 
-let monsterArt=null;
+let monsterArt=null,combatArt=null;
+function drawWeaponPortrait(ctx,entry){
+  ctx.translate(64,56);ctx.lineJoin='round';ctx.lineCap='round';
+  // Reuse the gameplay vectors, drawn directly at the portrait resolution.
+  // Only framing changes: no enlarged sprite cache or separate icon geometry.
+  if(entry.ownerId==='sword'){
+    ctx.rotate(-Math.PI/4);ctx.scale(1.65,1.65);ctx.translate(-30,0);
+    drawSwordBlade(ctx,60,2.45);
+  }else if(entry.ownerId==='arrow'){
+    combatArt ||= new CombatArt();
+    ctx.rotate(-Math.PI/4);ctx.scale(2.65,2.65);
+    combatArt.drawArrow(ctx,{x:2.5,y:0,angle:0},{reduced:true});
+  }else if(entry.ownerId==='orbit'){
+    ctx.rotate(Math.PI/4);ctx.scale(2.6,2.6);ctx.translate(0,2.5);
+    drawOrbitBlade(ctx);
+  }
+}
 // Paint on panel changes only. The archive has no RAF or gameplay-frame work.
 export function drawArchiveArt(container){
   const canvases=container?.querySelectorAll?.('canvas[data-archive-art]')||[];
   for(const canvas of canvases){
     const entry=ARCHIVE_ENTRY_BY_ID.get(canvas.dataset?.archiveArt),ctx=canvas.getContext?.('2d');
     if(!entry||!ctx)continue;
-    monsterArt ||= new MonsterArt();
-    ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.scale(canvas.width/128,canvas.height/112);ctx.translate(64,65);
+    ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.scale(canvas.width/128,canvas.height/112);
+    if(entry.category==='weapons'){drawWeaponPortrait(ctx,entry);ctx.restore();continue;}
+    monsterArt ||= new MonsterArt();ctx.translate(64,65);
     const scale=entry.type==='boss'?.78:1.38;ctx.scale(scale,scale);
     monsterArt.draw(ctx,{type:entry.type,bossKind:entry.bossKind,id:0,x:0,y:0,r:entry.type==='boss'?49:18,hp:1,hit:0,walkPhase:0,visualFacing:0},{time:0,reduced:true,playerX:1});ctx.restore();
   }
