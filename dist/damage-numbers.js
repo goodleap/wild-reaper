@@ -1,4 +1,4 @@
-import { ACTOR_VISUALS } from './actor-visuals.js';
+import { actorShape } from './actor-visuals.js';
 
 export const DAMAGE_NUMBERS=Object.freeze({fontSize:14,life:.72,riseSpeed:14,globalLimit:48,targetLimit:6,mergeWindow:.12});
 const LANES=Object.freeze([
@@ -11,7 +11,7 @@ const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 // Numbers begin beside the upper body, not above the name and crown.
 // Their six compact lanes avoid a growing tower of text on large enemies.
 export function damageNumberAnchor(enemy) {
-  const shape=ACTOR_VISUALS[enemy.type]||ACTOR_VISUALS.slime;
+  const shape=actorShape(enemy);
   const scale=(enemy.r||shape.radius)/shape.radius;
   return {x:enemy.x,y:enemy.y-shape.top*scale*.52+2};
 }
@@ -41,7 +41,7 @@ export function emitDamageNumber(game,enemy,amount,source='raw') {
   if(remove>=0)effects.splice(remove,1);
   const sequence=Number.isInteger(enemy._damageNumberSequence)?enemy._damageNumberSequence:0;
   const lane=LANES[sequence%LANES.length],anchor=damageNumberAnchor(enemy);
-  const text=String(Math.round(amount)),shape=ACTOR_VISUALS[enemy.type]||ACTOR_VISUALS.slime;
+  const text=String(Math.round(amount)),shape=actorShape(enemy);
   const scale=(enemy.r||shape.radius)/shape.radius,named=enemy.affix||enemy.rescueId||enemy.trainingDummy||enemy.type==='boss'||enemy.name||enemy.elite;
   const spacing=clamp(shape.halfWidth*scale*.72+text.length*DAMAGE_NUMBERS.fontSize*.26,named?40:24,named?72:44);
   enemy._damageNumberSequence=(sequence+1)%LANES.length;

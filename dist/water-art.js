@@ -1,15 +1,10 @@
+import { REGIONS } from './world-definitions.js';
 // The visible shore and gameplay water share one contour. Large pools are
 // rasterized in small world-space tiles, never as an enlarged tiny puddle.
 import { getWaterContours, traceWaterPath, waterBounds, containsWater } from './water-geometry.js';
 
 const TAU=Math.PI*2,TILE=192,BLEED=2,PAD=24,PIXEL_LIMIT=2*1024*1024;
-const WORLD_WATER={
-  beach:{bank:'#a5956bb0',rim:'#d8c99f',top:'#6eaa9b',deep:'#377d7b',light:'#daf3d0'},
-  city:{bank:'#626a5990',rim:'#a3ab8c',top:'#759d8d',deep:'#456e69',light:'#d6e5c8'},
-  mountain:{bank:'#637b697d',rim:'#a8baa2',top:'#779f9a',deep:'#3c787c',light:'#e0edd5'},
-  snow:{bank:'#729a9c70',rim:'#d2e1d5',top:'#b8d7d3',deep:'#7eafb6',light:'#f1f9e5'},
-  volcano:{bank:'#202730ab',rim:'#7c7c6b',top:'#567c77',deep:'#335454',light:'#c3d1ba'}
-};
+const WORLD_WATER=Object.freeze(Object.fromEntries(REGIONS.filter(world=>world.art.water).map(world=>[world.id,world.art.water])));
 const random=seed=>{let n=(seed*2654435761)>>>0;return()=>{n^=n<<13;n^=n>>>17;n^=n<<5;return(n>>>0)/4294967296;};};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 function stroke(c,points,color,width=1){c.beginPath();for(let i=0;i<points.length;i++)c[i?'lineTo':'moveTo'](points[i][0],points[i][1]);c.strokeStyle=color;c.lineWidth=width;c.stroke();}

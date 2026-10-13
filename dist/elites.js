@@ -1,3 +1,5 @@
+import { ELITE_ELIGIBLE_TYPES, ENCOUNTER_SEQUENCES } from './encounter-definitions.js';
+import { enemyDefinition } from './enemy-definitions.js';
 import { groundOffset } from './terrain.js';
 
 export const ELITE_RULES=Object.freeze({
@@ -10,7 +12,7 @@ export const ELITE_AFFIXES=Object.freeze({
   swift:Object.freeze({id:'swift',name:'迅捷',color:'#e6cf89'}),
   summoner:Object.freeze({id:'summoner',name:'召唤',color:'#cbb0e2'})
 });
-const ELIGIBLE=new Set(['slime','beetle','brute']);
+const ELIGIBLE=new Set(ELITE_ELIGIBLE_TYPES);
 const distanceSq=(ax,ay,bx,by)=>(ax-bx)**2+(ay-by)**2;
 
 export class Elites {
@@ -98,7 +100,7 @@ export class Elites {
   }
 
   _summonPoint(enemy,slot) {
-    const game=this.game,p=game.player,r=16,px=p.x,py=p.y+groundOffset(p,true);
+    const game=this.game,p=game.player,r=enemyDefinition(ENCOUNTER_SEQUENCES.eliteSummon.fallback).r,px=p.x,py=p.y+groundOffset(p,true);
     const x=enemy.x,y=enemy.y+groundOffset(enemy),seed=enemy.id*2.399963+slot*Math.PI;
     for(let i=0;i<18;i++) {
       const angle=seed+i*Math.PI/3,distance=58+Math.floor(i/6)*28;
@@ -126,7 +128,7 @@ export class Elites {
       const room=this._summonRoom(enemy);let count=0;
       for(let slot=0;slot<room;slot++) {
         const point=this._summonPoint(enemy,slot);if(!point)continue;
-        const summoned=game._spawnEnemy('slime',1);
+        const summoned=game._spawnEnemy(ENCOUNTER_SEQUENCES.eliteSummon.fallback,1);
         summoned.x=point.x;summoned.y=point.y-groundOffset(summoned);
         summoned.summoned=true;summoned.summonerId=enemy.id;summoned.xp=0;
         summoned._navTimer=0;count++;

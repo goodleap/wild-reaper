@@ -5,27 +5,7 @@ import { REGIONS, regionFor, normalizeWorldIndex, worldNeighbors } from './world
 export { REGIONS, WORLD_IDS, regionFor, normalizeWorldIndex, worldNeighbors, WORLD_CONNECTIONS } from './world-definitions.js';
 export const worldConnectionId=(a,b)=>[normalizeWorldIndex(a),normalizeWorldIndex(b)].sort((x,y)=>x-y).join(':');
 
-// Keep the old forest probabilities and population cap. Other regions change
-// the mix of ordinary spawns, never the frequency or unlock time.
-export function regionEnemyType(game,roll) {
-  const t=game._difficultyTime?.()??game.time,late=Math.max(0,t-150)/60;
-  const brute=t>60?Math.min(.15,.07+late*.006):0;
-  const bat=t>23?Math.min(.8,.35+late*.033):0;
-  const beetle=t>12?Math.max(.65,Math.min(.8,.35+late*.033)+.1):0;
-  const boar=t>=30&&game.enemies.filter(e=>e.type==='boar'&&e.hp>0).length<5?.06:0;
-  const spore=t>=45&&game.enemies.filter(e=>e.type==='spore'&&e.hp>0).length<4?.05:0;
-  if(game.region.id==='forest') {
-    let type=roll<brute?'brute':roll<bat?'bat':roll<beetle?'beetle':'slime';
-    if(boar&&roll>.89&&roll<=.95)type='boar';
-    else if(spore&&roll>.95)type='spore';
-    return type;
-  }
-  const weights={brute,bat:Math.max(0,bat-brute),beetle:Math.max(0,beetle-bat),slime:Math.max(.01,1-beetle-boar-spore),boar,spore};
-  let total=0;for(const type of Object.keys(weights)){weights[type]*=game.region.enemyWeights[type];total+=weights[type];}
-  let cursor=roll*total;
-  for(const [type,weight] of Object.entries(weights)){cursor-=weight;if(cursor<0)return type;}
-  return 'slime';
-}
+export { ordinaryEnemyType as regionEnemyType } from './encounter-definitions.js';
 
 export const PORTAL_RULES=Object.freeze({engageRadius:420,leashRadius:630,interactRadius:82});
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});

@@ -1,9 +1,9 @@
 import { groundOffset } from './terrain.js';
+import { enemyDefinition } from './enemy-definitions.js';
+import { DEBUG_WAVE_TYPES } from './encounter-definitions.js';
 
 const TAU=Math.PI*2;
 export const DEBUG_WAVE_RULES=Object.freeze({count:40,minRadius:220,maxRadius:305,entranceGap:Math.PI/2});
-const TYPES=['slime','beetle','slime','brute','beetle','slime'];
-const RADII={slime:16,beetle:18,brute:26};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function segmentDistance(point,a,b) {
   const dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy;
@@ -22,7 +22,7 @@ export function spawnDebugWave(game) {
   const {count,entranceGap}=DEBUG_WAVE_RULES,arc=TAU-entranceGap;
   const points=[];
   for(let i=0;i<count;i++) {
-    const type=TYPES[i%TYPES.length],r=RADII[type];
+    const type=DEBUG_WAVE_TYPES[i%DEBUG_WAVE_TYPES.length],r=enemyDefinition(type).r;
     const angle=gateAngle+entranceGap*.5+(i+.5)*arc/count;
     const radii=i%2?[285,250,305,220]:[250,285,220,305];
     let chosen=null;

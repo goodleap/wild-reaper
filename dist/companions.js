@@ -1,3 +1,4 @@
+import { rescueGuardType } from './encounter-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { resetLocomotion, updateLocomotion } from './locomotion.js';
@@ -72,7 +73,7 @@ export class Companions {
     const guardPoints=site?this._guardPoints(site,guards):null;if(site&&!guardPoints)return null;
     const camp={id:`rescue:${++g._id}`,kind,name:def.name,...point,r:24,state:'trapped',siteId,category:siteId?'relic':'random',engageRadius:siteId?520:OBJECTIVE_RULES.campEngage,guardIds:[],guardTotal:guards,remainingGuards:guards,life:RESCUE_RULES.campDuration,maxLife:RESCUE_RULES.campDuration,_remaining:new Set()};
     for(let i=0;i<guards;i++) {
-      const angle=-Math.PI/2+i*TAU/guards,enemy=g._spawnEnemy(siteId&&i%4===0?'brute':i%3===0?'beetle':'slime',1);
+      const angle=-Math.PI/2+i*TAU/guards,enemy=g._spawnEnemy(rescueGuardType(i,!!siteId),1);
       if(!enemy){g.enemies=g.enemies.filter(e=>e.rescueId!==camp.id);return null;}
       enemy.rescueId=camp.id;enemy.eventRole='rescueGuard';enemy.xp=2;
       enemy.relicSiteId=siteId;enemy.hp*=siteId?1.8:1.25;enemy.maxHp=enemy.hp;enemy.guardActive=false;

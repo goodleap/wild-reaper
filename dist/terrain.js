@@ -1,6 +1,7 @@
+import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
-import { WORLD_IDS } from './world-definitions.js';
+import { worldForId } from './world-definitions.js';
 import { biomeZone } from './biome-layout.js';
 const CELL=520, TAU=Math.PI*2, EPS=.02;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -79,8 +80,8 @@ export function sceneryVisual(prop){
 export function groundOffset(entity,isPlayer=false) {
   if(Number.isFinite(entity?.groundOffset))return entity.groundOffset;
   if(isPlayer) return 19.8;
-  const offsets={slime:[14,16],bat:[20,11],beetle:[18,18],brute:[23,26],boar:[20,22],spore:[18,20],boss:[41,49],trainingDummy:[18,16]};
-  const [offset,radius]=offsets[entity.type]||[0,entity.r||1];
+  const visual=enemyVisual(entity);
+  const offset=visual?.foot??(entity.type==='trainingDummy'?18:0),radius=visual?.radius??(entity.type==='trainingDummy'?16:entity.r||1);
   return offset*(entity.r/radius);
 }
 function axis(o) {
@@ -114,7 +115,7 @@ function obstacle(spec,index=0) {
 
 export class Terrain {
   constructor({obstacles,cacheLimit=192,region='forest',seed=0,island=null}={}) {
-    this.region=WORLD_IDS.includes(region)?region:'forest';
+    this.world=worldForId(region);this.region=this.world.id;
     this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
     this.cacheLimit=Math.max(16,Math.min(512,cacheLimit));this._cache=new Map();
     this._fixed=obstacles===undefined?null:obstacles.map((o,i)=>obstacle(o,i));
@@ -129,96 +130,22 @@ export class Terrain {
     this._structures=[...this._structureOwners.values()].flat();
     return this._structures;
   }
-  _hash(x,y=0){const index=WORLD_IDS.indexOf(this.region),offset=index===1?419:index===2?811:index>2?index*431:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
+  _hash(x,y=0){const offset=this.world.terrain.hashOffset;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _worldCell(tx,ty){
     const key=`${tx},${ty}`,zone=biomeZone(this.region,(tx+.5)*CELL,(ty+.5)*CELL,this.seed),items=[];
-    const roll=(n)=>this._hash(tx+n*17+137,ty+n*31+251);
-    const add=(type,variant,x,y,extra={})=>{
+    const hash=(x,y=0)=>this._hash(x,y),roll=n=>hash(tx+n*17+137,ty+n*31+251);
+    const add=prop=>items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
+    const place=(type,variant,x,y,extra={})=>{
       const index=items.length,seed=roll(index+7),size=.8+roll(index+13)*.36;
-      const prop={id:`${this.region}:${key}:${index}`,region:this.region,zone:zone.id,type,variant,x:tx*CELL+x,y:ty*CELL+y,r:type==='tree'?19*size:type==='rock'?34*size:18,scale:size,seed,angle:0,treeForm:index%5,rockForm:index%3,logForm:index%3,...extra};
-      items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
+      add({id:`${this.region}:${key}:${index}`,region:this.region,zone:zone.id,type,variant,x:tx*CELL+x,y:ty*CELL+y,r:type==='tree'?19*size:type==='rock'?34*size:18,scale:size,seed,angle:0,treeForm:index%5,rockForm:index%3,logForm:index%3,...extra});
     };
-    if(this.region==='beach'){
-      if(zone.id==='palms'){
-        add('tree','world-palm',135,125);add('tree','world-palm',365,370,{scale:.78+roll(9)*.35});
-        if(roll(2)>.45)add('rock','world-reef',355,135,{r:28+roll(8)*13,rockForm:1});
-      }else if(zone.id==='reefs'){
-        add('rock','world-reef',135,145,{r:44+roll(2)*16,rockForm:2});add('rock','world-reef',365,360,{r:31+roll(3)*17,rockForm:1});
-        if(roll(4)>.5)add('log','world-driftwood',365,125,{halfLength:44,r:12,angle:.22});
-      }else{
-        if(roll(1)>.35)add('log','world-driftwood',150,160,{halfLength:48+roll(4)*18,r:12+roll(6)*4,angle:roll(5)*.7-.35});
-        if(roll(2)>.65)add('rock','world-reef',365,355,{r:26+roll(3)*12,rockForm:1});
-      }
-    }else if(this.region==='city'){
-      if(zone.id==='plaza'){
-        if(roll(2)>.45)add('log','world-city-wall',145,145,{halfLength:42,r:15,angle:0});
-        if(roll(3)>.6)add('tree','world-pine',375,370,{scale:.8,r:17});
-      }else{
-        add('log','world-building',172,155,{halfLength:54+roll(2)*10,r:28+roll(5)*5,scale:1});
-        add('log','world-building',355,365,{halfLength:50+roll(3)*8,r:28+roll(6)*4,scale:1});
-        if(zone.id==='courtyard')add('tree','world-pine',360,140,{scale:.7,r:15});
-        else if(roll(8)>.45)add('log','world-city-wall',145,360,{halfLength:43,r:14,angle:Math.PI/2});
-      }
-    }else if(this.region==='mountain'){
-      if(zone.id==='pass'){
-        add('log','world-ridge',125,245,{halfLength:128,r:30+roll(2)*7,angle:Math.PI/2});
-        add('log','world-ridge',395,255,{halfLength:105+roll(3)*18,r:30,angle:Math.PI/2});
-      }else if(zone.id==='summit'){
-        add('log','world-ridge',150,140,{halfLength:76+roll(2)*17,r:35,angle:.28});
-        add('rock','world-reef',370,365,{r:54+roll(3)*15,rockForm:2});
-      }else{
-        add('tree','world-pine',135,135);add('rock','world-reef',365,365,{r:46+roll(3)*12,rockForm:2});
-        if(roll(4)>.55)add('tree','world-pine',365,135,{scale:.75,r:16});
-      }
-    }else if(this.region==='snow'){
-      if(zone.id==='pines'){
-        add('tree','world-snowpine',135,125,{scale:1.08,r:23});add('tree','world-snowpine',365,365,{scale:.86,r:19});
-        if(roll(3)>.5)add('rock','world-ice',365,125,{r:28,rockForm:1});
-      }else if(zone.id==='icefield'){
-        if(roll(2)>.3)add('rock','world-ice',140,140,{r:35+roll(3)*13,rockForm:2});
-        if(roll(4)>.6)add('rock','world-ice',370,365,{r:29+roll(5)*13,rockForm:0});
-      }else{
-        add('rock','world-ice',365,350,{r:41+roll(3)*16,rockForm:1});
-        if(roll(4)>.5)add('tree','world-snowpine',135,135,{scale:.83,r:18});
-      }
-    }else if(this.region==='volcano'){
-      if(zone.id==='basalt'){
-        add('log','world-ridge',155,135,{halfLength:78,r:32,angle:-.2});add('rock','world-basalt',365,365,{r:51,rockForm:2});
-      }else if(zone.id==='vents'){
-        add('rock','world-basalt',135,145,{r:36+roll(2)*13,rockForm:2});
-        if(roll(3)>.35)add('rock','world-basalt',370,365,{r:31+roll(4)*13,rockForm:0});
-      }else{
-        add('tree','world-charred',145,125,{scale:.84+roll(2)*.3,r:18});
-        if(roll(3)>.35)add('rock','world-basalt',365,355,{r:39,rockForm:1});
-      }
-    }
+    this.world.terrain.generate({tx,ty,key,region:this.region,hash,roll,zone,add,place,treeProfiles:TREE_PROFILES,cell:CELL,settings:this.world.terrain});
     return items;
   }
   _cell(tx,ty) {
     const key=`${tx},${ty}`;
     if(this._cache.has(key)){const value=this._cache.get(key);this._cache.delete(key);this._cache.set(key,value);return value;}
-    const themed=WORLD_IDS.indexOf(this.region)>=3,items=themed?this._worldCell(tx,ty):[],n=this._hash(tx+31,ty+17),marsh=this.region==='marsh',ruins=this.region==='ruins';
-    if(!themed){
-    if(n>.62){
-      const size=this._hash(tx+91,ty+43),scale=size<.86?.70+size*.64:1.28+(size-.86)/.14*.22;
-      const treeForm=Math.floor(this._hash(tx+57,ty+101)*5),crownWidth=.93+this._hash(tx+37,ty+89)*.14,crownHeight=.96+this._hash(tx+13,ty+109)*.08;
-      const visual=ruins?{region:this.region,variant:'pillar'}:marsh?{region:this.region,variant:'dead-tree'}:{};
-      const prop={id:`${ruins?'pillar':'tree'}:${key}`,type:ruins?'rock':'tree',x:tx*CELL+110,y:ty*CELL+50,r:24*scale*(ruins?1:TREE_PROFILES[treeForm].trunkWidth),scale,seed:n,treeForm,rockForm:treeForm,crownWidth,crownHeight,...visual};
-      items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
-    }
-    // Keep the two occupied quarters and boss-width passages. Sizes vary by
-    // an independent seed, so shape, location and growth do not repeat together.
-    const x=tx*CELL+240+this._hash(tx+71,ty+13)*90,y=ty*CELL+245+this._hash(tx+19,ty+81)*85,seed=this._hash(tx+41,ty+63),size=this._hash(tx+113,ty+59);
-    if(seed>.49){
-      const visual=ruins?{region:this.region,variant:'wall'}:marsh?{region:this.region,variant:'sunken-log'}:{};
-      const prop={id:`log:${key}`,type:'log',x,y,r:12+size*10,halfLength:35+size*43,angle:this._hash(tx+83,ty+23)*TAU,scale:1,seed,logForm:Math.floor(this._hash(tx+59,ty+29)*3),...visual};
-      items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
-    }else{
-      const scale=size<.9?.60+size*.91:1.45+(size-.9)*3.5,r=36*scale,rockForm=Math.floor(this._hash(tx+97,ty+137)*5),visual=ruins?{region:this.region,variant:'slab'}:marsh?{region:this.region,variant:'moss-rock'}:{};
-      const prop={id:`rock:${key}`,type:'rock',x,y,r,scale,seed,rockForm,...visual};
-      items.push(obstacle({...prop,visual:sceneryVisual(prop)}));
-    }
-    }
+    const items=this._worldCell(tx,ty);
     const clear=items.filter(o=>{
       const q=this.closestPoint(o,0,0);if(Math.hypot(q.x,q.y)<=190+o.r)return false;
       if(!this.island)return true;

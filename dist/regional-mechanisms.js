@@ -1,3 +1,4 @@
+import { worldForId } from './world-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { isGrounded } from './height-rules.js';
@@ -26,7 +27,7 @@ const segmentDistance=(x,y,x1,y1,x2,y2)=>{
 
 export class RegionalMechanisms {
   constructor(environment,{generation=true}={}){
-    this.environment=environment;this.game=environment.game;this.region=environment.region;this.generation=generation;
+    this.environment=environment;this.game=environment.game;this.region=environment.region;this.rules=worldForId(this.region).environment.mechanism;this.generation=generation;
     this.props=[];this._used=new UsedLocations();this._refreshClock=0;this._fixtureId=0;this._gasCooldown=0;this._gasAllyCooldowns=new Map();this._gasEnemyClock=1;
     if(generation)this._refresh(true);
   }
@@ -35,10 +36,10 @@ export class RegionalMechanisms {
   _candidate(tx,ty){
     // Rune support now belongs to a permanent, deliberately activated relic.
     // The roaming cache only owns renewable woodland/marsh hazards.
-    if(!['forest','marsh'].includes(this.region))return null;
+    if(!this.rules)return null;
     const env=this.environment,seed=env._hash(tx+1423,ty+1451);
-    if(seed>.64)return null;
-    const type=this.region==='marsh'?'gas':this.region==='ruins'?'rune':'vine',r=REGIONAL_MECHANISM_RULES[`${type}Radius`];
+    if(seed>this.rules.chance)return null;
+    const type=this.rules.type,r=REGIONAL_MECHANISM_RULES[`${type}Radius`];
     // Choose a cell's single stable point before considering dynamic objectives.
     // A removed chest therefore cannot relocate a previously seen mechanism.
     for(let i=0;i<6;i++){
@@ -87,7 +88,7 @@ export class RegionalMechanisms {
     if(![x,y,r].every(Number.isFinite)||r<0)return false;
     const overlaps=o=>o.type!=='rune'&&o.state!=='cut'&&Math.hypot(o.x-x,o.y-y)<o.r+r+12;
     if(this.props.some(overlaps))return false;
-    if(!this.generation||this.region==='ruins')return true;
+    if(!this.generation||!this.rules)return true;
     const margin=r+REGIONAL_MECHANISM_RULES.gasRadius+12;
     for(let tx=Math.floor((x-margin)/CELL);tx<=Math.floor((x+margin)/CELL);tx++)for(let ty=Math.floor((y-margin)/CELL);ty<=Math.floor((y+margin)/CELL);ty++){
       const prop=this._candidate(tx,ty);

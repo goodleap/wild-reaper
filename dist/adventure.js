@@ -1,3 +1,4 @@
+import { treasureGuardianType } from './encounter-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { WORLD_IDS } from './world-definitions.js';
@@ -153,7 +154,7 @@ export class Adventure {
     if(g.enemies.length>=180)return;
     const p=this._foot(),dx=t.x-p.x,dy=t.y-p.y,d=Math.hypot(dx,dy)||1;
     const point=this._safePoint(t.x+dx/d*75,t.y+dy/d*75,40);if(!point)return;
-    const type=this._treasureCount%2===0&&g.enemies.filter(e=>e.type==='boar'&&e.hp>0).length<5?'boar':'brute';
+    const type=treasureGuardianType(this._treasureCount,g.enemies);
     const enemy=g._spawnEnemy(type,1);
     if(!enemy)return;
     enemy.elite=true;enemy.guardianId=t.id;enemy.guardActive=true;enemy.guardReturnTarget=null;

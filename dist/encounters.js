@@ -1,3 +1,5 @@
+import { arenaGuardType as guardType, ENCOUNTER_SEQUENCES } from './encounter-definitions.js';
+import { enemyDefinition } from './enemy-definitions.js';
 import { groundOffset } from './terrain.js';
 import { canStartObjective, objectivePointSafe } from './event-scheduling.js';
 import { placementAllowed } from './placement-rules.js';
@@ -6,8 +8,7 @@ const TAU=Math.PI*2;
 const TYPES=['treasure','hunt'];
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export const ARENA_ACTIVATION_RULES=Object.freeze({warmup:.7,batchSize:3,batchInterval:1.25,warning:.45,spawnGrace:.3,spawnDistance:150,enemyLimit:180});
-const guardType=index=>index%8===0?'brute':index%3===0?'beetle':'slime';
-const guardRadius=type=>type==='brute'?26:type==='beetle'?18:16;
+const guardRadius=type=>enemyDefinition(type).r;
 
 // Optional objectives have distinct resource identities: chase for gold, hunt
 // for skill crystals. Rewards are detached before payment to prevent repeats.
@@ -50,7 +51,7 @@ export class Encounters {
     const life=type==='hunt'?40:35;
     const active={id:`encounter:${++this._id}`,type,...point,r:210,life,maxLife:life,goal,progress:0,enemyId:null,state:'active',siteId,category:relic?'relic':'random'};
     if(type==='treasure') {
-      const enemy=g._spawnEnemy('beetle',1);if(!enemy)return null;
+      const enemy=g._spawnEnemy(ENCOUNTER_SEQUENCES.treasureRunner.fallback,1);if(!enemy)return null;
       enemy.eventRole='treasure';enemy.eventId=active.id;
       enemy.r=18;enemy.hp=enemy.maxHp=160*(1+Math.min(g._difficultyTime?.()??g.time,600)*.001);
       enemy.speed=(g.easy?106:118);enemy.damage=0;enemy.xp=16;

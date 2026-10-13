@@ -1,3 +1,4 @@
+import { REGIONS } from './world-definitions.js';
 import { biomeZone, CITY_BLOCK, CITY_STREET_HALF_WIDTH } from './biome-layout.js';
 
 // Theme artwork is generated once in bounded, world-independent sprite tiles.
@@ -8,13 +9,7 @@ const rng=seed=>{let n=(seed*2654435761)>>>0;return()=>{n^=n<<13;n^=n>>>17;n^=n<
 const poly=(c,points,fill,edge=null,width=1)=>{c.beginPath();points.forEach(([x,y],i)=>c[i?'lineTo':'moveTo'](x,y));c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(edge){c.strokeStyle=edge;c.lineWidth=width;c.stroke();}};
 const stroke=(c,points,color,width=1)=>{c.beginPath();points.forEach(([x,y],i)=>c[i?'lineTo':'moveTo'](x,y));c.strokeStyle=color;c.lineWidth=width;c.stroke();};
 const oval=(c,x,y,rx,ry,color,angle=0)=>{c.beginPath();c.ellipse(x,y,rx,ry,angle,0,TAU);c.fillStyle=color;c.fill();};
-export const WORLD_ART_PALETTES=Object.freeze({
-  beach:{floor:'#b8ad80',light:'#e9d3a0',dark:'#827d59',detail:'#6d9365'},
-  city:{floor:'#65685f',light:'#a3a28d',dark:'#474d49',detail:'#8f8470'},
-  mountain:{floor:'#687369',light:'#a9b5a4',dark:'#465b53',detail:'#9b9e80'},
-  snow:{floor:'#b7c9c9',light:'#e6efdf',dark:'#8aabae',detail:'#6c8e85'},
-  volcano:{floor:'#423f40',light:'#79706a',dark:'#292c31',detail:'#97674d'}
-});
+export const WORLD_ART_PALETTES=Object.freeze(Object.fromEntries(REGIONS.filter(world=>world.art.ground).map(world=>[world.id,world.art.ground])));
 const forms=['world-palm','world-pine','world-snowpine','world-charred','world-reef','world-ice','world-basalt','world-building','world-city-wall','world-ridge','world-driftwood'];
 function flake(c,x,y,size,color){stroke(c,[[x-size,y],[x+size,y]],color,.6);stroke(c,[[x,y-size*.5],[x,y+size*.5]],color,.6);}
 function texturedFace(c,points,r,count,light,dark){c.save();poly(c,points,null);c.clip();for(let i=0;i<count;i++){const x=-100+r()*200,y=-150+r()*190;stroke(c,[[x,y],[x+1+r()*4,y-.5+r()]],i%3?dark:light,.5+r()*.7);}c.restore();}

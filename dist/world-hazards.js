@@ -1,3 +1,4 @@
+import { worldForId } from './world-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { isGrounded } from './height-rules.js';
@@ -16,14 +17,14 @@ export const WORLD_HAZARD_RULES=Object.freeze({maxProps:6,safeRadius:310,hitInte
 // leaving a world freezes its timers without retaining scene-global targets.
 export class WorldHazards {
   constructor(environment,{generation=true}={}){
-    this.environment=environment;this.game=environment.game;this.region=environment.region;this.generation=generation;
+    this.environment=environment;this.game=environment.game;this.region=environment.region;this.rules=worldForId(this.region).environment;this.generation=generation;
     this.props=[];this._clock=0;this._refreshClock=.5;this._cooldowns=new WeakMap();
     if(generation)this._refresh(true);
   }
   _visible(prop,margin=0){const g=this.game,r=prop.patch?Math.max(prop.patch.rx,prop.patch.ry):prop.r||0;return Math.abs(prop.x-g.player.x)<=g.viewWidth*.5+r+margin&&Math.abs(prop.y-g.player.y)<=g.viewHeight*.5+r+margin;}
   _candidate(tx,ty){
-    const type=this.region==='mountain'?'rockfall':this.region==='volcano'?'vent':null;if(!type)return null;
-    const env=this.environment,seed=env._hash(tx+2053,ty+2081);if(seed>.46)return null;
+    const hazard=this.rules.hazard;if(hazard?.source!=='terrain')return null;const type=hazard.type;
+    const env=this.environment,seed=env._hash(tx+2053,ty+2081);if(seed>hazard.chance)return null;
     const r=WORLD_HAZARD_RULES[type].radius;
     for(let i=0;i<5;i++){
       const x=tx*CELL+90+env._hash(tx+2089+i*29,ty+2111)*340,y=ty*CELL+90+env._hash(tx+2129,ty+2131+i*31)*340;
@@ -42,13 +43,13 @@ export class WorldHazards {
     const pools=this.environment.muds;
     this.props=this.props.filter(o=>Math.abs(o.x-p.x)<halfW+180&&Math.abs(o.y-p.y)<halfH+180&&this._clear(o)&&(o.type!=='tide'||pools.includes(o.patch))).slice(0,WORLD_HAZARD_RULES.maxProps);
     const ids=new Set(this.props.map(o=>o.id)),candidates=[];
-    if(this.region==='beach'){
+    if(this.rules.hazard?.source==='water'){
       for(const patch of pools){
         if(patch.kind&&patch.kind!=='water')continue;
         const o={id:`tide:${patch.id}`,type:'tide',x:patch.x,y:patch.y,r:Math.max(patch.rx,patch.ry),patch,seed:patch.seed||0,state:'idle',remaining:3+(patch.seed||0)*4,maxRemaining:7,warning:0};
         if(!ids.has(o.id)&&this._clear(o))candidates.push(o);
       }
-    }else if(this.region==='mountain'||this.region==='volcano'){
+    }else if(this.rules.hazard?.source==='terrain'){
       for(let tx=Math.floor((p.x-halfW)/CELL);tx<=Math.floor((p.x+halfW)/CELL);tx++)for(let ty=Math.floor((p.y-halfH)/CELL);ty<=Math.floor((p.y+halfH)/CELL);ty++){
         const o=this._candidate(tx,ty);if(o&&!ids.has(o.id)&&this._clear(o)&&(initial||!this._visible(o,24)))candidates.push(o);
       }
@@ -73,11 +74,11 @@ export class WorldHazards {
   isHazardFree(x,y,r=0){
     if(![x,y,r].every(Number.isFinite)||r<0)return false;
     if(this.props.some(o=>o.type==='tide'?waterIntersectsCircle(o.patch,x,y,r+12):distance(o,{x,y})<o.r+r+16))return false;
-    if(this.region==='volcano'){
+    if(this.rules.damagingSurface){
       const box={minX:x-r-12,minY:y-r-12,maxX:x+r+12,maxY:y+r+12};
-      if(this.environment.watersInBounds(box).some(o=>o.kind==='lava'&&waterIntersectsCircle(o,x,y,r+12)))return false;
+      if(this.environment.watersInBounds(box).some(o=>o.kind===this.rules.damagingSurface&&waterIntersectsCircle(o,x,y,r+12)))return false;
     }
-    if(!this.generation||!['mountain','volcano'].includes(this.region))return true;
+    if(!this.generation||this.rules.hazard?.source!=='terrain')return true;
     const margin=r+80;
     for(let tx=Math.floor((x-margin)/CELL);tx<=Math.floor((x+margin)/CELL);tx++)for(let ty=Math.floor((y-margin)/CELL);ty<=Math.floor((y+margin)/CELL);ty++){
       const o=this._candidate(tx,ty);if(o&&distance(o,{x,y})<o.r+r+16)return false;
@@ -86,7 +87,7 @@ export class WorldHazards {
   }
   _damage(){
     const g=this.game,hazards=this.props.filter(o=>o.state==='active'&&o.type!=='tide'&&this._visible(o));
-    if(this.region==='volcano')for(const patch of this.environment.muds)if(patch.kind==='lava'&&this._visible({x:patch.x,y:patch.y,patch})&&this._clear({x:patch.x,y:patch.y,patch}))hazards.push({type:'lava',x:patch.x,y:patch.y,patch});
+    if(this.rules.damagingSurface)for(const patch of this.environment.muds)if(patch.kind===this.rules.damagingSurface&&this._visible({x:patch.x,y:patch.y,patch})&&this._clear({x:patch.x,y:patch.y,patch}))hazards.push({type:'lava',x:patch.x,y:patch.y,patch});
     if(!hazards.length)return;
     const contact=(entity,point)=>{
       if((this._cooldowns.get(entity)||0)>this._clock)return null;

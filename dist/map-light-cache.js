@@ -1,16 +1,10 @@
+import { REGIONS } from './world-definitions.js';
 const SPACING=1080,SEARCH_MARGIN=850,BASE_SCALE=.5,PADDING=2,PIXEL_LIMIT=4_194_304;
 export const MAP_SUN_ANGLE=Math.atan2(325,840);
 export const MAP_SUN_DIRECTION=Object.freeze({x:-Math.sin(MAP_SUN_ANGLE),y:Math.cos(MAP_SUN_ANGLE)});
 const hash=(x,y)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
-const palette=(id,rgb,glow,strength,clear=`rgba(${rgb},0)`)=>Object.freeze({id,rgb,glow,strength,clear});
-export const MAP_LIGHT_PALETTES=Object.freeze({
-  forest:palette('forest','225,237,172','#c7d98a12',1,'#e3ebaf00'),
-  beach:palette('beach','246,225,184','#f2d8a80c',.60),
-  city:palette('city','240,229,211','#eee0c60a',.48),
-  mountain:palette('mountain','219,235,239','#d8e8eb09',.46),
-  snow:palette('snow','216,240,255','#d4f1ff08',.35),
-  volcano:palette('volcano','247,171,110','#f5a86806',.20)
-});
+
+export const MAP_LIGHT_PALETTES=Object.freeze(Object.fromEntries(REGIONS.filter(world=>world.art.light).map(world=>[world.id,world.art.light])));
 const paletteFor=region=>Object.prototype.hasOwnProperty.call(MAP_LIGHT_PALETTES,region)?MAP_LIGHT_PALETTES[region]:MAP_LIGHT_PALETTES.forest;
 
 // Geometry is world-fixed. Bounds include both the long beam and its ground

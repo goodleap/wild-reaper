@@ -1,8 +1,9 @@
+import { WAVE_PATTERNS, SPECIAL_ENEMY_CAPS, waveEnemyType, cappedEncounterType } from './encounter-definitions.js';
 import { optionalFightNearby } from './event-scheduling.js';
 
 // Small, finite attacks give the player an approach to read, a group to defeat,
 // and a genuine pause. Ordinary exploration spawns remain owned by Game.
-export const WAVE_RULES=Object.freeze({initialRest:20,exploration:12,warning:3,attackLimit:24,spawnWindow:8,clearRest:8,escapeRest:6,firstWaveSize:22,waveSizeStep:4,maxWaveSize:56,maxEnemies:180,boarCap:5,sporeCap:4,lootRadius:500});
+export const WAVE_RULES=Object.freeze({initialRest:20,exploration:12,warning:3,attackLimit:24,spawnWindow:8,clearRest:8,escapeRest:6,firstWaveSize:22,waveSizeStep:4,maxWaveSize:56,maxEnemies:180,boarCap:SPECIAL_ENEMY_CAPS.boar,sporeCap:SPECIAL_ENEMY_CAPS.spore,lootRadius:500});
 
 const DIRECTIONS=[
   {id:'east',label:'东侧',angle:0},
@@ -10,7 +11,7 @@ const DIRECTIONS=[
   {id:'west',label:'西侧',angle:Math.PI},
   {id:'north',label:'北侧',angle:-Math.PI/2}
 ];
-const PATTERNS=['兽群推进','疾翼掠袭','冲锋夹击'];
+const PATTERNS=WAVE_PATTERNS.map(pattern=>pattern.name);
 
 export class WaveDirector {
   constructor(game) {
@@ -56,20 +57,14 @@ export class WaveDirector {
     g._emit?.('siege',{wave:this.count,direction:this.direction.id,directionLabel:this.direction.label});
   }
   _type(index) {
-    const g=this.game,t=g._difficultyTime?.()??g.time;
-    if(this.pattern===0)return index%5===4&&t>=60?'brute':index%3===0?'beetle':'slime';
-    if(this.pattern===1)return index%3===2?'beetle':'bat';
-    if(index%5===0&&t>=30)return 'boar';
-    if(index%5===4&&t>=45)return 'spore';
-    return index%3===1?'beetle':'slime';
+    const g=this.game;return waveEnemyType(this.pattern,index,g._difficultyTime?.()??g.time);
   }
   _spawnBatch() {
     const g=this.game;
     this._nextBatchAt=g.time+1.2;
     for(let i=0;i<this._batchSize&&this.spawned<this.total&&g.enemies.length<WAVE_RULES.maxEnemies;i++) {
       let type=this._type(this.spawned);
-      const cap=type==='boar'?WAVE_RULES.boarCap:type==='spore'?WAVE_RULES.sporeCap:Infinity;
-      if(Number.isFinite(cap)&&g.enemies.filter(e=>e.type===type&&e.hp>0).length>=cap)type='beetle';
+      if(SPECIAL_ENEMY_CAPS[type]!=null)type=cappedEncounterType(type,{[type]:g.enemies.filter(e=>e.type===type&&e.hp>0).length},'wave');
       // Alternate ranks across a 69-degree entry corridor. The opposite side
       // stays open instead of surrounding the player with a random ring.
       const slot=(this.spawned*5)%11,spread=(slot-5)*.12;

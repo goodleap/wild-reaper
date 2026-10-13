@@ -12,7 +12,10 @@ import { Island } from './islands.js';
 import { waterIntersectsCircle } from './water-geometry.js';
 import { Adventure } from './adventure.js';
 import { Encounters } from './encounters.js';
-import { initBoss, updateBloomBoss, resolveBloomBoss, clearBossAttacks } from './bosses.js';
+import { initBoss, updateBoss, resolveBossSlams, resolveBossPhase, clearBossAttacks } from './bosses.js';
+import { enemyDefinition } from './enemy-definitions.js';
+import { initializeEnemyBehavior, updateEnemyBehavior, resolveEnemyBehavior, updateBoar, updateSpore } from './enemy-behaviors.js';
+import { SPECIAL_ENEMY_CAPS } from './encounter-definitions.js';
 import { HEROES, getHero } from './heroes.js';
 import { CombatStatus } from './combat-status.js';
 import { Environment } from './environment.js';
@@ -44,7 +47,7 @@ const decorativeEffects=new Set(['hit','damage','defeat','arrowRicochet']);
 const protectedEffect=e=>e.type==='rescueWarning'||(e.type==='defeat'&&e.boss);
 // Visual variation must never consume the combat/loot random stream.
 const feedbackSeed = (x,y,time,id=0) => (Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
-export const BALANCE=Object.freeze({firstXp:40,xpBase:110,xpLinear:65,xpCurve:8,firstBossAt:120,bossInterval:150,arrowDamage:32,arrowInterval:.38,arrowRange:420,magnet:105,spawnBase:1.05,spawnGrowth:.018,spawnMax:10.5,maxEnemyBullets:60,boarCap:5,sporeCap:4});
+export const BALANCE=Object.freeze({firstXp:40,xpBase:110,xpLinear:65,xpCurve:8,firstBossAt:120,bossInterval:150,arrowDamage:32,arrowInterval:.38,arrowRange:420,magnet:105,spawnBase:1.05,spawnGrowth:.018,spawnMax:10.5,maxEnemyBullets:60,boarCap:SPECIAL_ENEMY_CAPS.boar,sporeCap:SPECIAL_ENEMY_CAPS.spore});
 export function xpCost(level) {
   if(level<=1)return BALANCE.firstXp;
   const n=level-2;return Math.round(BALANCE.xpBase+BALANCE.xpLinear*n+BALANCE.xpCurve*Math.pow(n,1.3));
@@ -167,7 +170,7 @@ export class Game {
     return exploration+(this.regions?.endlessUnlocked?Math.floor(Math.max(0,this.time-this.regions.endlessStartedAt)/50):0);
   }
   _findSpawnPoint(type='slime',angle,radius) {
-    const r=({slime:16,beetle:18,bat:11,brute:26,boar:22,spore:20,boss:49})[type]||18,p=this.player;
+    const r=enemyDefinition(type).r,p=this.player;
     const halfW=Math.max(390,this.viewWidth*.5+65),halfH=Math.max(290,this.viewHeight*.5+65);
     const directed=Number.isFinite(angle),start=directed?angle:rand(0,TAU);
     // A directed warning keeps its side even if the player runs to the coast.
@@ -191,8 +194,8 @@ export class Game {
     const halfW=Math.max(390,this.viewWidth*.5+65),halfH=Math.max(290,this.viewHeight*.5+65);
     const edge=1/Math.max(Math.abs(Math.cos(a))/halfW,Math.abs(Math.sin(a))/halfH);
     const distance=radius||edge;
-    const defs={slime:[16,26,85,9,4],beetle:[18,43,100,12,6],bat:[11,24,145,7,4],brute:[26,115,60,17,13],boar:[22,80,75,14,7],spore:[20,65,55,12,7],boss:[49,this.easy?1700:2300,49,22,160]};
-    const [r,hp,speed,damage,xp]=defs[type];
+    const definition=enemyDefinition(type),{r,baseSpeed:speed,damage,xp}=definition;
+    const hp=this.easy?(definition.easyHp??definition.baseHp):definition.baseHp;
     // Radius 1 is the authored-encounter factory: its owner immediately sets a
     // prevalidated door/room/guardian position. Ordinary spawns must be offscreen.
     const islandSpawn=this.terrain.island&&radius!==1;
@@ -210,7 +213,7 @@ export class Game {
         this._moveEntity(enemy,0,0);
       }
     }
-    if(type==='boss')initBoss(enemy);
+    initializeEnemyBehavior(enemy);
     this.enemies.push(enemy);return enemy;
   }
   _hitEnemy(enemy,amount,knockback=0,origin=this.player,source='arrow') {return this.combat.hit(enemy,amount,knockback,origin,source);}
@@ -278,8 +281,9 @@ export class Game {
         const wd=Math.hypot(wx-x,wy-y)||1;nx=(wx-x)/wd;ny=(wy-y)/wd;detouring=true;
       }
     }
-    const wobble=!detouring&&e.type==='bat'?Math.sin(this._clock*5+e.phase)*.52:0;
-    const speed=e.speed*(e.type==='boss'?1+Math.max(0,Math.sin(this._clock*.85))*1.15:1)*(this.environment?.movementMultiplier(e,!!e.isCompanion)||1)*(this.elites?.movementMultiplier(e)||1)*this._branchMovementMultiplier(e);
+    const definition=e.isCompanion?null:enemyDefinition(e.type);
+    const wobble=!detouring&&definition?.wobble?Math.sin(this._clock*definition.wobble.frequency+e.phase)*definition.wobble.amplitude:0;
+    const speed=e.speed*(definition?.surge?1+Math.max(0,Math.sin(this._clock*definition.surge.frequency))*definition.surge.amplitude:1)*(this.environment?.movementMultiplier(e,!!e.isCompanion)||1)*(this.elites?.movementMultiplier(e)||1)*this._branchMovementMultiplier(e);
     this._moveEntity(e,(nx-ny*wobble)*speed*dt,(ny+nx*wobble)*speed*dt);
     e._navProgressTimer=(e._navProgressTimer||0)+dt;
     if(e._navProgressTimer>.9) {
@@ -289,86 +293,14 @@ export class Game {
   }
   _updatePressure(dt=0) { this.waveDirector.update(dt); }
   _hurtPlayer(amount) {return this.combat.damagePlayer(amount);}
-  _updateBoss(e,dt) {
-    if(e.bossKind==='bloom')return updateBloomBoss(this,e,dt);
-    e.slamCooldown=Math.max(0,(e.slamCooldown||0)-dt);
-    e.slamRecovery=Math.max(0,(e.slamRecovery||0)-dt);
-    if(e.slam){e.slam.life=Math.max(0,e.slam.life-dt);return true;}
-    if(e.slamRecovery>0)return true;
-    const x=e.x,y=e.y+groundOffset(e),p=selectFriendlyTarget(this,e);
-    if(e.slamCooldown<=0&&Math.hypot(x-p.x,y-p.y-groundOffset(p,true))<=165) {
-      e.slam={x,y,r:115,life:1,maxLife:1};e.slamCooldown=7;this._emit('bossWindup');return true;
-    }
-    return false;
-  }
-  _resolveBossSlams() {
-    for(const e of this.enemies)if(e.type==='boss'&&e.hp>0&&e.slam&&e.slam.life<=0) {
-      const slam=e.slam;e.slam=null;e.slamRecovery=.3;
-      this._effect(slam.x,slam.y,'bossSlam',.5,slam.r,'#edaa78');this._emit('bossSlam');
-      for(const target of friendlyTargets(this)){
-        if(!isFriendlyActive(this,target)||!isGrounded(target))continue;
-        const foot=friendlyFoot(target);
-        if(Math.hypot(foot.x-slam.x,foot.y-slam.y)<slam.r+target.r&&!this.terrain.firstBlocker(slam.x,slam.y,foot.x,foot.y,0,'ground'))damageFriendly(this,target,e.damage*1.3,e);
-      }
-    }
-  }
-  _updateBoar(e,dt) {
-    e.chargeCooldown=Math.max(0,(e.chargeCooldown||0)-dt);e._chargeSegment=null;
-    const charge=e.charge;
-    if(charge) {
-      charge.life=Math.max(0,charge.life-dt);
-      if(charge.phase==='windup') {
-        if(charge.life<=0){charge.phase='rush';charge.life=charge.maxLife=.8;}
-        return true;
-      }
-      if(charge.phase==='stunned') {if(charge.life<=0)e.charge=null;return true;}
-      const x=e.x,y=e.y+groundOffset(e);
-      const speed=320*(this.environment?.movementMultiplier(e)||1)*this._branchMovementMultiplier(e);
-      const movement=this._moveEntity(e,charge.dx*speed*dt,charge.dy*speed*dt);
-      e._chargeSegment={x,y,x2:e.x,y2:e.y+groundOffset(e)};
-      if(movement.blocked) {
-        charge.phase='stunned';charge.life=charge.maxLife=1.2;this._emit('boarStun');
-        this._effect(e.x,e.y,'ring',.3,35,'#ead59c');
-      } else if(charge.life<=0)e.charge=null;
-      return true;
-    }
-    const p=selectFriendlyTarget(this,e),x=e.x,y=e.y+groundOffset(e),dx=p.x-x,dy=p.y+groundOffset(p,true)-y,d=Math.hypot(dx,dy);
-    if(e.chargeCooldown<=0&&d>=90&&d<=320&&this._inView(e)) {
-      e.charge={phase:'windup',life:.8,maxLife:.8,dx:dx/d,dy:dy/d,startX:x,startY:y,length:256};
-      e.chargeCooldown=4.5;this._emit('boarWindup');return true;
-    }
-    return false;
-  }
-  _updateSpore(e,dt) {
-    e.castCooldown=Math.max(0,(e.castCooldown||0)-dt);
-    if(e.cast){e.cast.life=Math.max(0,e.cast.life-dt);return true;}
-    const p=selectFriendlyTarget(this,e),dx=p.x-e.x,dy=p.y+groundOffset(p,true)-e.y-groundOffset(e),distance=Math.hypot(dx,dy);
-    if(this._inView(e)&&distance<=360&&!this.terrain.firstBlocker(e.x,e.y+groundOffset(e),p.x,p.y+groundOffset(p,true),6,'projectile')) {
-      if(e.castCooldown<=0){e.cast={life:.65,maxLife:.65,angle:Math.atan2(dy,dx)};e.castCooldown=3.8;this._emit('sporeWindup');return true;}
-      if(distance<=290)return true;
-    }
-    return false;
-  }
+  _updateBoss(e,dt) {return updateBoss(this,e,dt);}
+  _resolveBossSlams() {resolveBossSlams(this);}
+  _updateBoar(e,dt) {return updateBoar(this,e,dt);}
+  _updateSpore(e,dt) {return updateSpore(this,e,dt);}
   _resolveEnemyAttacks(dt) {
     const p=this.player,px=p.x,py=p.y+groundOffset(p,true),targets=friendlyTargets(this);
-    for(const e of this.enemies)if(e.hp>0&&e.guardActive!==false) {
-      if(e._chargeSegment) {
-        const s=e._chargeSegment;
-        for(const target of targets){
-          if(!isFriendlyActive(this,target)||!isGrounded(target))continue;
-          const foot=friendlyFoot(target);
-          if(circleImpact(s.x,s.y,s.x2-s.x,s.y2-s.y,foot.x,foot.y,e.r+target.r)<Infinity&&clearFriendlyPath(this,e,target,'ground'))damageFriendly(this,target,e.damage*1.3,e);
-        }
-        e._chargeSegment=null;
-      }
-      if(e.type==='spore'&&e.cast&&e.cast.life<=0) {
-        const cast=e.cast;e.cast=null;
-        if(this._inView(e)&&Math.hypot(px-e.x,py-e.y-groundOffset(e))<=430&&this.enemyBullets.length<BALANCE.maxEnemyBullets) {
-          this.enemyBullets.push({id:++this._id,type:'spore',x:e.x,y:e.y+groundOffset(e),r:6,vx:Math.cos(cast.angle)*140,vy:Math.sin(cast.angle)*140,life:4.5,maxLife:4.5,color:'#d4a4e5',damage:e.damage});
-          this._emit('sporeShot');
-        }
-      }
-    }
+    const context={targets,px,py,maxEnemyBullets:BALANCE.maxEnemyBullets};
+    for(const e of this.enemies)if(e.hp>0&&e.guardActive!==false)resolveEnemyBehavior(this,e,context);
     for(const b of this.enemyBullets) {
       if(b.life<=0)continue;
       const dx=b.vx*dt,dy=b.vy*dt;
@@ -550,7 +482,7 @@ export class Game {
     }
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
-      if(e.type==='beetle'){e._walkStartX=e.x;e._walkStartY=e.y;}
+      if(!e.trainingDummy&&enemyDefinition(e.type).locomotion){e._walkStartX=e.x;e._walkStartY=e.y;}
       e.hit=Math.max(0,e.hit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
       e._weaponPushTime=updateWeaponKnockback(this,e,dt);
       if(e.trainingDummy)continue;
@@ -564,7 +496,7 @@ export class Game {
         if(e.guardReturnTarget)this._moveEnemy(e,dt,e.guardReturnTarget);
         continue;
       }
-      const handled=e.type==='boss'?this._updateBoss(e,dt):e.type==='boar'?this._updateBoar(e,dt):e.type==='spore'?this._updateSpore(e,dt):false;
+      const handled=updateEnemyBehavior(this,e,dt);
       if(!handled)this._moveEnemy(e,dt);
     }
     this._rebuildGrid();
@@ -584,7 +516,7 @@ export class Game {
     }
     // Beetle feet and heading follow resolved movement, including detours and
     // separation. Paused, blocked and dormant beetles never crawl in place.
-    for(const e of this.enemies)if(e.type==='beetle'&&e.hp>0){
+    for(const e of this.enemies)if(e.hp>0&&!e.trainingDummy&&enemyDefinition(e.type).locomotion){
       const oldX=e._walkStartX??e.x,oldY=e._walkStartY??e.y;
       updateLocomotion(e,oldX,oldY,dt);
       if(e.moving)e.visualFacing=Math.atan2(e.y-oldY,e.x-oldX);
@@ -612,7 +544,7 @@ export class Game {
     this.elites.resolve();
     // Every weapon can interrupt a windup with a killing blow on this frame.
     this._resolveBossSlams();
-    for(const e of this.enemies)if(e.type==='boss'&&e.bossKind==='bloom')resolveBloomBoss(this,e);
+    resolveBossPhase(this,'ranged');
     this._resolveEnemyAttacks(dt);
     if(this.status==='dead')return;
     this.enemies=this.enemies.filter(e=>e.hp>0 && (e.trainingDummy||e.type==='boss'||e.dungeonId||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));

@@ -1,3 +1,4 @@
+import { enemyVisual } from './enemy-visuals.js';
 import { worldArchiveHTML, WORLD_ARCHIVE_WORLDS, WORLD_ARCHIVE_LOCATIONS } from './world-archive.js';
 import { ARCHIVE_CATEGORIES, ARCHIVE_ENTRIES, ARCHIVE_ENTRY_BY_ID, ARCHIVE_TABS } from './archive-catalog.js';
 import { MonsterArt } from './monster-art.js';
@@ -120,7 +121,7 @@ export function drawArchiveArt(container){
     if(entry.category==='weapons'){drawWeaponPortrait(ctx,entry);ctx.restore();continue;}
     if(entry.category==='companions'){drawCompanionPortrait(ctx,entry);ctx.restore();continue;}
     monsterArt ||= new MonsterArt();ctx.translate(64,65);
-    const scale=entry.type==='boss'?.78:1.38;ctx.scale(scale,scale);
-    monsterArt.draw(ctx,{type:entry.type,bossKind:entry.bossKind,id:0,x:0,y:0,r:entry.type==='boss'?49:18,hp:1,hit:0,walkPhase:0,visualFacing:0},{time:0,reduced:true,playerX:1});ctx.restore();
+    const visual=enemyVisual(entry),scale=visual?.portraitScale??1.38;ctx.scale(scale,scale);
+    monsterArt.draw(ctx,{type:entry.type,bossKind:entry.bossKind,id:0,x:0,y:0,r:visual?.portraitRadius??18,hp:1,hit:0,walkPhase:0,visualFacing:0},{time:0,reduced:true,playerX:1});ctx.restore();
   }
 }

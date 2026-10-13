@@ -1,3 +1,5 @@
+import { ENEMY_DEFS } from './enemy-definitions.js';
+
 // Screen-space foot offsets remain in terrain.js. These bands describe which
 // solid volumes intersect movement and attacks, independently of sprite depth.
 const LOW_CREST=32;
@@ -6,7 +8,7 @@ const RUINS_CREST=[28.6/30,17/30,44/30,7/36,21/30];
 const WORLD_ROCK_CREST=[46/36,28/36,58/36,39/36,42/36];
 
 export function isGrounded(entity){
-  return !!entity&&entity.flying!==true&&entity.type!=='bat'&&entity.type!=='angel'&&entity.kind!=='angel'&&entity.townKind!=='angel';
+  return !!entity&&entity.flying!==true&&ENEMY_DEFS[entity.type]?.movement!=='air'&&entity.type!=='angel'&&entity.kind!=='angel'&&entity.townKind!=='angel';
 }
 
 export function movementProfile(entity){return entity&&!isGrounded(entity)?'air':'ground';}

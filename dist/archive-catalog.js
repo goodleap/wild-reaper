@@ -1,3 +1,5 @@
+import { ENEMY_DEFS, ENEMY_CODEX_IDS } from './enemy-definitions.js';
+import { BOSS_DEFS } from './boss-definitions.js';
 import { WEAPON_DEFS, SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS } from './combat-catalog.js';
 import { WEAPON_BRANCHES } from './weapon-branches.js';
 import { companionDefinition } from './companion-catalog.js';
@@ -7,18 +9,9 @@ export const ARCHIVE_CATEGORIES=Object.freeze([
   {id:'enemies',name:'怪物'},{id:'bosses',name:'首领'},{id:'weapons',name:'武器'},
   {id:'skills',name:'技能'},{id:'weaponSkills',name:'武器技能'},{id:'companions',name:'伙伴'}
 ]);
-const enemy=(id,name,role,description,advice,color)=>({id:`enemy:${id}`,category:'enemies',name,role,description,advice,color,type:id,source:'在荒野、事件与遗迹中遭遇'});
-const enemies=[
-  enemy('slime','绿叶史莱姆','地面 · 近身','成群接近的林间生物，单体威胁不高，却会逐渐压缩走位空间。','边移动边清理前方，避免被四面的史莱姆包围。','#a9cb84'),
-  enemy('bat','夜翼蝙蝠','飞行 · 快速','移动轻快的飞行敌人，可以越过水面和低矮障碍。','留意侧后方的追击；低矮石块挡不住它，利用高大障碍拉开距离。','#b9b1cf'),
-  enemy('beetle','硬壳甲虫','地面 · 追击','贴地爬行的甲虫，比史莱姆更结实，会持续逼近。','提前清理行进路线上的甲虫，避免在障碍附近被围堵。','#d5ba7c'),
-  enemy('brute','林地巨兽','地面 · 强壮','体型大、生命厚重、步伐较慢，近身接触更危险。','保留退路，利用远程攻击或集中伤害削减生命，不要硬挤过去。','#b7bd86'),
-  enemy('boar','冲锋野猪','地面 · 冲撞','蓄力后沿锁定方向高速冲锋，撞上障碍时会短暂眩晕。','看准蓄力方向向侧面避开，也可以诱导它撞向树石。','#c9a982'),
-  enemy('spore','孢子菇','地面 · 远程','在中距离蓄力发射孢子，借助敌群从后方施压。','横向移动躲开孢子，利用高大树石挡住弹道，寻找机会近身。','#d7aed8')
-];
+const enemies=ENEMY_CODEX_IDS.map(id=>({id:`enemy:${id}`,category:'enemies',...ENEMY_DEFS[id].codex,type:id}));
 const bosses=[
-  {id:'boss:ancient',name:'荒野领主',role:'区域首领 · 震地',description:'守卫世界传送门的巨大领主，逼近后会蓄力发动范围震击。',advice:'离开震地预警区，在攻击后的停顿中反击；击败后领取奖励并激活传送门。',type:'boss',bossKind:'ancient',color:'#e7bc8a',source:'区域传送门的守卫'},
-  {id:'boss:bloom',name:'孢冠领主',role:'区域首领 · 远程',description:'以扇形孢子弹和定点孢爆封锁走位，并尝试保持攻击距离。',advice:'绕向扇射侧面，离开地面孢爆预警；高大障碍可以遮挡飞行孢子。',type:'boss',bossKind:'bloom',color:'#d7aada',source:'区域传送门的守卫'},
+  ...Object.values(BOSS_DEFS).map(def=>({id:`boss:${def.id}`,name:def.name,...def.codex,type:'boss',bossKind:def.id})),
   {id:'boss:castle',name:'王城守望者',role:'城堡首领 · 最终挑战',description:'驻守旧王城迷宫深处的强敌，击败后才能开启王城宝藏。',advice:'先确认房间退路，根据震地或孢子预警闪避；击败守卫后前往宝箱领取城堡奖励。',type:'boss',bossKind:'ancient',color:'#ddbd89',source:'旧王城迷宫深处'}
 ].map(def=>({...def,category:'bosses'}));
 const copy={
@@ -63,7 +56,7 @@ export function companionArchiveId(companion){
 
 export function enemyArchiveId(enemy){
   if(!enemy||enemy.trainingDummy||enemy.type==='trainingDummy')return null;
-  if(enemy.type==='boss')return enemy.dungeonBoss?'boss:castle':enemy.bossKind==='bloom'?'boss:bloom':'boss:ancient';
+  if(enemy.type==='boss')return enemy.dungeonBoss?'boss:castle':`boss:${enemy.bossKind||'ancient'}`;
   const id=`enemy:${enemy.type}`;return ARCHIVE_ENTRY_BY_ID.has(id)?id:null;
 }
 export function ownedArchiveEntries(build){

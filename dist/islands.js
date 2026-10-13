@@ -1,3 +1,4 @@
+import { ISLAND_SITE_RESERVATIONS } from './worlds/site-reservations.js';
 import { COAST_RULES } from './placement-rules.js';
 import { WORLD_IDS, regionFor, worldNeighbors } from './world-definitions.js';
 // Deterministic island outlines are shared by coast paint, collision, spawning
@@ -16,7 +17,7 @@ function segmentDistanceSq(ax,ay,bx,by,cx,cy,dx,dy){
 export class Island {
   constructor({region='forest',seed=0}={}){
     this.region=WORLD_IDS.includes(region)?region:'forest';this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
-    this.worldId=WORLD_IDS.indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.beachWidth=this.region==='beach'?180:COAST_RULES.beachWidth;this.routeRadius=80;
+    this.worldId=WORLD_IDS.indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.beachWidth=regionFor(this.worldId).coast.beachWidth??COAST_RULES.beachWidth;this.routeRadius=80;
     const profile=regionFor(this.worldId).profile;
     const phase=profile.phase+(hash(this.seed+11)-.5)*.36;
     this.points=Object.freeze(Array.from({length:COUNT},(_,i)=>{
@@ -29,7 +30,7 @@ export class Island {
     this._innerRadius=Math.sqrt(Math.min(...this._edges.map(e=>distanceSq(0,0,e.a.x,e.a.y,e.b.x,e.b.y))));
     this._contours=new Map([[0,this.points]]);
     const rotate=this.worldId*.52+(hash(this.seed+19)-.5)*.16;
-    const specs=[['merchant',.18,710,105],['supply',2.25,1050,125],['occupied',4.30,1730,225],['castle',2.80,2610,360],['hunt',.94,1830,280],['rescue',5.42,2060,240],['rune',3.73,2280,185],['rescue-warden',3.80,1120,240],['dogcamp',.25,1430,115],['owlroost',2.91,1570,240],['golemaltar',4.62,2630,270],['stonevault',.13,2830,240]];
+    const specs=ISLAND_SITE_RESERVATIONS;
     const plan={};for(const [key,angle,radius,r] of specs){const a=angle+rotate;let d=radius;while(d>500&&!this.isDry(Math.cos(a)*d,Math.sin(a)*d,r+100))d-=40;plan[key]=Object.freeze({x:Math.cos(a)*d,y:Math.sin(a)*d,r});}
     // Reserve every graph endpoint before natural objects and sites generate.
     // Even the four-way world gets distinct dry approaches, rather than having

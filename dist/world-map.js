@@ -9,16 +9,7 @@ const BUILDINGS=new Set(['supply','occupied','castle','angel']);
 const RELICS=new Set(['hunt','rescue','rune','dogcamp','stonevault']);
 const COMPLETED=new Set(['cleared','completed','claimed','spent','failed']);
 const FONT='"PingFang SC",system-ui,sans-serif';
-const MAP_COASTS=Object.freeze({
-  forest:{land:'#476246',sand:'#919a6b',sea:'#264e54',shallow:'#507776'},
-  marsh:{land:'#4a5e50',sand:'#7f896b',sea:'#294b51',shallow:'#507776'},
-  ruins:{land:'#666d65',sand:'#969985',sea:'#345360',shallow:'#507776'},
-  beach:{sand:'#dfc998',sea:'#347a88',shallow:'#75c1c3'},
-  city:{sand:'#ad9d80',sea:'#425f66',shallow:'#72928c'},
-  mountain:{sand:'#8f9e8d',sea:'#3c6878',shallow:'#79a3a6'},
-  snow:{sand:'#a7c7cf',sea:'#416e84',shallow:'#85bdcf'},
-  volcano:{sand:'#937366',sea:'#453c48',shallow:'#776a71'}
-});
+const MAP_COASTS=Object.freeze(Object.fromEntries(REGIONS.map(world=>[world.id,world.art.mapCoast])));
 const MAP_PALETTES=Object.freeze(Object.fromEntries(REGIONS.map(region=>[region.id,Object.freeze({land:region.colors.light,sand:region.colors.accent,sea:'#345360',shallow:'#507776',...MAP_COASTS[region.id]})])));
 const positive=(value,fallback)=>Number.isFinite(value)&&value>0?value:fallback;
 export function minimapBounds(width,height,insets={}){
