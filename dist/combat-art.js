@@ -94,70 +94,71 @@ export class CombatArt {
 
   _quakeGeometry(e){
     if(this.quakes.has(e))return this.quakes.get(e);
-    const seed=effectSeed(e),r=e.r||100,cracks=[],debris=[],dust=[],edge=[];
+    const seed=effectSeed(e),r=Math.max(1,e.r||100),debris=[],dust=[],edge=[];
     for(let i=0;i<8;i++){
-      const a=(i+noise(seed,i)*.58)*TAU/8,dx=Math.cos(a),dy=Math.sin(a),points=[];
-      for(let j=0;j<6;j++){const f=.06+j*.176,jitter=j?(noise(seed,i*13+j)-.5)*r*.19:0;points.push({x:dx*r*f-dy*jitter,y:dy*r*f+dx*jitter,f});}
-      const forkAt=2+Math.floor(noise(seed,i+140)*2),origin=points[forkAt],side=noise(seed,i+150)>.5?1:-1;
-      const fork=[origin,{x:origin.x+dx*r*.1-dy*side*r*.08,y:origin.y+dy*r*.1+dx*side*r*.08,f:origin.f+.12},{x:origin.x+dx*r*.18-dy*side*r*.16,y:origin.y+dy*r*.18+dx*side*r*.16,f:origin.f+.24}];
-      const segments=[];for(const line of [points,fork])for(let j=1;j<line.length;j++){
-        const a=line[j-1],b=line[j],length=Math.hypot(b.x-a.x,b.y-a.y)||1,nx=-(b.y-a.y)/length,ny=(b.x-a.x)/length,width=(1-a.f)*3.5+.35,nextWidth=(1-b.f)*3.5+.25;
-        segments.push({a,b,nx,ny,width,nextWidth,edge:j%3!==1});
-      }
-      cracks.push({points,fork,segments});
-      const distance=r*(.35+noise(seed,i+160)*.49);debris.push({x:dx*distance,y:dy*distance,dx,dy,size:2.8+noise(seed,i+170)*4.2,rotation:noise(seed,i+180)*TAU,delay:.04+noise(seed,i+190)*.23});
+      const a=(i+noise(seed,i)*.58)*TAU/8,distance=r*(.32+noise(seed,i+160)*.46);
+      debris.push({dx:Math.cos(a),dy:Math.sin(a),distance,size:Math.min(r*.024,1.1+noise(seed,i+170)*1.6),rotation:noise(seed,i+180)*TAU,delay:.012+distance/r*.075,lift:Math.min(r*.04,2.5+noise(seed,i+190)*3.5)});
     }
-    for(let i=0;i<18;i++){const a=i*TAU/18+noise(seed,i+230)*.13;dust.push({dx:Math.cos(a),dy:Math.sin(a),distance:r*(.5+noise(seed,i+250)*.39),size:3+noise(seed,i+270)*7,tilt:noise(seed,i+290)*Math.PI});}
-    for(let i=0;i<=48;i++){const a=i*TAU/48,rr=r*(.975+(i%2?.018:-.012));edge.push({x:Math.cos(a)*rr,y:Math.sin(a)*rr});}
-    const geometry={cracks,debris,dust,edge};this.quakes.set(e,geometry);return geometry;
+    for(let i=0;i<14;i++){
+      const a=i*TAU/14+noise(seed,i+230)*.18,distance=r*(.4+noise(seed,i+250)*.4);
+      dust.push({dx:Math.cos(a),dy:Math.sin(a),distance,size:Math.min(r*.035,2.2+noise(seed,i+270)*3),tilt:noise(seed,i+290)*Math.PI,delay:.01+distance/r*.075});
+    }
+    // A slightly uneven pressure front stays continuous and reads as force,
+    // without cutting radial faults or leaving a crater in the terrain.
+    for(let i=0;i<64;i++){const a=i*TAU/64,rr=.986+noise(seed,i+320)*.014;edge.push({x:Math.cos(a)*rr,y:Math.sin(a)*rr});}
+    const geometry={r,debris,dust,edge};this.quakes.set(e,geometry);return geometry;
   }
 
-  _traceCrack(ctx,points,reveal){
-    if(reveal<=points[0].f)return;
-    ctx.moveTo(points[0].x,points[0].y);
-    for(let i=1;i<points.length;i++){
-      const a=points[i-1],b=points[i];if(b.f<=reveal)ctx.lineTo(b.x,b.y);
-      else{const f=clamp((reveal-a.f)/(b.f-a.f));ctx.lineTo(a.x+(b.x-a.x)*f,a.y+(b.y-a.y)*f);break;}
-    }
-  }
-
-  _faults(ctx,cracks,reveal,bevel=false){
-    for(const crack of cracks)for(const s of crack.segments){
-      if(s.a.f>=reveal||(bevel&&!s.edge))continue;
-      const f=clamp((reveal-s.a.f)/(s.b.f-s.a.f)),x=s.a.x+(s.b.x-s.a.x)*f,y=s.a.y+(s.b.y-s.a.y)*f,w=s.width+(s.nextWidth-s.width)*f;
-      ctx.moveTo(s.a.x+s.nx*s.width,s.a.y+s.ny*s.width);ctx.lineTo(x+s.nx*w,y+s.ny*w);
-      if(!bevel){ctx.lineTo(x-s.nx*w,y-s.ny*w);ctx.lineTo(s.a.x-s.nx*s.width,s.a.y-s.ny*s.width);ctx.closePath();}
-    }
+  _quakeCrest(ctx,edge,r){
+    ctx.beginPath();ctx.moveTo(edge[0].x*r,edge[0].y*r);
+    for(let i=1;i<edge.length;i++)ctx.lineTo(edge[i].x*r,edge[i].y*r);
+    ctx.closePath();
   }
 
   _quake(ctx,e,t,reduced,dense){
-    const g=this._quakeGeometry(e),control=e.control||e.branch==='control',fade=(1-t)**.68,reveal=reduced?1:ease(t/.53),dustProgress=reduced?.65:ease(t/.77);
+    const g=this._quakeGeometry(e),control=e.control||e.branch==='control',echo=!!e.echo,age=t*e.maxLife,travel=reduced?1:ease(age/.12),fade=(1-t)**1.35;
+    const crest=control?'#b9ddc6':echo?'#d8cfac':'#c4c3a0',edge=control?'#e0f2d8':echo?'#f1e2bb':'#e4e3c3',dustColor=control?'#a9bda5':'#b7b094';
     ctx.translate(e.x,e.groundY??e.y);
-    // Tapered dark fissures and broken stone bevels carry the ordinary quake;
-    // a narrow magical core belongs only to the crowd-control branch.
-    // All endpoints remain inside the actual damage radius.
-    ctx.beginPath();this._faults(ctx,g.cracks,reveal);ctx.globalAlpha=fade*.92;ctx.fillStyle='#152920';ctx.fill();
-    ctx.beginPath();this._faults(ctx,g.cracks,reveal,true);ctx.globalAlpha=fade*.65;ctx.strokeStyle=control?'#95bba5':'#a7ac89';ctx.lineWidth=1.1;ctx.stroke();
-    if(control){ctx.beginPath();for(let i=0;i<g.cracks.length;i++){this._traceCrack(ctx,g.cracks[i].points,reveal);if(!dense||i%2===0)this._traceCrack(ctx,g.cracks[i].fork,reveal);}ctx.globalAlpha=fade*(reduced?.26:.42);ctx.strokeStyle='#b9ead5';ctx.lineWidth=.8;ctx.stroke();}
-    // Sparse, broken pressure crests replace the old uninterrupted circle.
-    if(!reduced){
-      const expansion=clamp(.22+ease(t/.5)*.78);ctx.save();ctx.scale(expansion,expansion);ctx.beginPath();
-      for(let i=0;i<g.edge.length-1;i++){if(i%8===0)ctx.moveTo(g.edge[i].x,g.edge[i].y);else if(i%8<=4)ctx.lineTo(g.edge[i].x,g.edge[i].y);}
-      ctx.strokeStyle=control?'#beeedd':'#bebd98';ctx.globalAlpha=fade*.29;ctx.lineWidth=2.3;ctx.stroke();ctx.restore();
+    // Damage is instantaneous across the real radius. This quiet onset wash
+    // marks that whole area before the visible pressure front reaches its edge.
+    const flash=(1-clamp(age/.085))**2;
+    if(flash>0){
+      ctx.beginPath();ctx.arc(0,0,g.r,0,TAU);ctx.globalAlpha=flash*(reduced?.035:.085);ctx.fillStyle=edge;ctx.fill();
+      this._quakeCrest(ctx,g.edge,Math.max(0,g.r-.7));ctx.globalAlpha=flash*(reduced?.12:.22);ctx.lineWidth=1;ctx.strokeStyle=crest;ctx.stroke();
     }
-    // A restrained boundary is retained only for the crowd-control branch.
-    if(control){ctx.beginPath();path(ctx,g.edge);ctx.globalAlpha=fade*.26;ctx.strokeStyle='#ade7d0';ctx.lineWidth=1;ctx.stroke();}
-    const dustLimit=dense?8:g.dust.length;
+    // Travel finishes in 120 ms regardless of the effect's remaining settling
+    // lifetime. The rim then thins in place, with all strokes inside the AoE.
+    const width=Math.min(g.r*.11,(reduced?3:clamp(g.r*.09,7,14))*(.28+.72*(1-t))),rim=(width+2)*.5,radius=Math.max(0,g.r-rim)*(.14+.86*travel);
+    if(!reduced){
+      // A broad wake trails the fast leading edge. Its uneven inner boundary
+      // breaks up like compressed dust, then clears before the grit settles.
+      const pressure=(1-clamp((age-.045)/.26))**1.25,band=Math.min(radius*.48,g.r*.17);
+      if(pressure>0){
+        ctx.beginPath();ctx.moveTo(g.edge[0].x*radius,g.edge[0].y*radius);
+        for(let i=1;i<g.edge.length;i++)ctx.lineTo(g.edge[i].x*radius,g.edge[i].y*radius);
+        ctx.lineTo(g.edge[0].x*radius,g.edge[0].y*radius);ctx.lineTo(g.edge[0].x*Math.max(0,radius-band*.82),g.edge[0].y*Math.max(0,radius-band*.82));
+        for(let i=g.edge.length-1;i>=0;i--){const inner=Math.max(0,radius-band*(.82+(i*7%11)/55));ctx.lineTo(g.edge[i].x*inner,g.edge[i].y*inner);}
+        ctx.closePath();ctx.fillStyle=control?'#b3c4a5':'#c7bc93';ctx.globalAlpha=pressure*(dense?.2:.28);ctx.fill();
+      }
+    }
+    this._quakeCrest(ctx,g.edge,radius);ctx.strokeStyle='#435044';ctx.globalAlpha=fade*(reduced?.18:.38);ctx.lineWidth=width+2;ctx.stroke();
+    ctx.strokeStyle=crest;ctx.globalAlpha=fade*(reduced?.43:.83);ctx.lineWidth=width;ctx.stroke();
+    this._quakeCrest(ctx,g.edge,Math.min(g.r-.5,radius+width*.28));ctx.strokeStyle=edge;ctx.globalAlpha=fade*(reduced?.35:.87);ctx.lineWidth=Math.min(g.r*.025,reduced?.8:1.35);ctx.stroke();
+    if(echo||control){
+      this._quakeCrest(ctx,g.edge,Math.max(0,radius-width*(echo?1.45:.9)-g.r*(echo?.027:.012)));ctx.strokeStyle=echo?edge:'#8fc9ad';ctx.globalAlpha=fade*(reduced?.17:echo?.42:.3);ctx.lineWidth=reduced?.7:echo?Math.max(.9,width*.35):1;ctx.stroke();
+    }
+    const dustLimit=reduced?4:dense?6:g.dust.length;
     for(let i=0;i<dustLimit;i++){
-      const d=g.dust[i],distance=d.distance*dustProgress,x=d.dx*distance,y=d.dy*distance,size=d.size*(.55+dustProgress*.55);
-      ctx.save();ctx.translate(x,y);ctx.rotate(d.tilt);ctx.globalAlpha=fade*(reduced?.08:.13);ctx.fillStyle=control?'#a6bba8':'#bbb39a';
+      const d=g.dust[i];if(age<d.delay)continue;
+      const elapsed=age-d.delay,p=clamp(elapsed/Math.min(.34,e.maxLife-d.delay)),spread=reduced?.5:ease(p),distance=d.distance+g.r*.025*spread,x=d.dx*distance,y=d.dy*distance-(reduced?0:Math.sin(p*Math.PI)*g.r*.022),size=d.size*(reduced?1:1.7)*(.8+spread*.45);
+      ctx.save();ctx.translate(x,y);ctx.rotate(d.tilt);ctx.globalAlpha=(1-p)**1.35*clamp(elapsed/.018)*(reduced?.055:.39);ctx.fillStyle=dustColor;
       ctx.beginPath();ctx.moveTo(-size,0);ctx.bezierCurveTo(-size*1.4,-size*.6,-size*.3,-size*.8,0,-size*.45);ctx.bezierCurveTo(size*.3,-size*1.2,size*1.1,-size*.7,size*1.15,0);ctx.bezierCurveTo(size*1.5,size*.25,size*.2,size*.8,-size*.2,size*.4);ctx.bezierCurveTo(-size*1.2,size*.65,-size*1.45,size*.1,-size,0);ctx.fill();ctx.restore();
     }
-    for(let i=0;i<(dense?5:g.debris.length);i++){
-      const d=g.debris[i],p=reduced?.58:clamp((t-d.delay)/(1-d.delay));if(!reduced&&t<d.delay)continue;
-      const lift=reduced?0:Math.sin(p*Math.PI)*(5+d.size*1.1),spread=reduced?1:.75+.25*ease(p),x=d.x*spread,y=d.y*spread;
-      ctx.save();ctx.translate(x,y-lift);ctx.rotate(d.rotation+(reduced?0:p*.8));ctx.globalAlpha=fade*.82;ctx.fillStyle='#566b51';shard(ctx,d.size);
-      ctx.fillStyle=control?'#a6c5ac':'#adb68c';ctx.beginPath();polygon(ctx,[[-d.size*.65,-d.size*.35],[d.size*.45,-d.size*.6],[0,0]]);ctx.fill();ctx.restore();
+    for(let i=0;i<(reduced?3:dense?4:g.debris.length);i++){
+      const d=g.debris[i];if(age<d.delay)continue;
+      const p=clamp((age-d.delay)/Math.min(.24,e.maxLife*.52)),lift=reduced?0:Math.sin(p*Math.PI)*d.lift*1.6,distance=d.distance+(reduced?0:g.r*.024*ease(p)),x=d.dx*distance,y=d.dy*distance,size=d.size*(reduced?1:1.75);
+      ctx.save();ctx.translate(x,y-lift);ctx.rotate(d.rotation+(reduced?0:p*.65));ctx.globalAlpha=fade*clamp((age-d.delay)/.012)*(reduced?.32:.95);ctx.fillStyle='#4d5e40';shard(ctx,size);
+      ctx.fillStyle=control?'#c7d7b1':'#d0cc9d';ctx.beginPath();polygon(ctx,[[-size*.65,-size*.35],[size*.45,-size*.6],[0,0]]);ctx.fill();ctx.restore();
     }
   }
 

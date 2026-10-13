@@ -61,11 +61,18 @@ try{
   for(const e of fixtures){
     const renderer=new CombatVfx();renderer.beginFrame({particleBudget:0});const ctx=context();renderer.drawBurst(ctx,e,{},'ground');renderer.drawBurst(ctx,e,{},'air');assert(ctx.calls.some(c=>c[0]==='fill'||c[0]==='stroke'),'budget exhaustion keeps the attack shape');assert.equal(renderer.stats.particles,0);
   }
+  // Meteor ground feedback is transient heat, not a dark pit or healing cracks.
+  const meteor=fixtures.find(e=>e.skillId==='meteor');
+  for(const reduced of [false,true]){
+    const renderer=new CombatVfx(),ctx=context();renderer.beginFrame({reduced,particleBudget:0});renderer.drawBurst(ctx,meteor,{reduced},'ground');
+    assert(ctx.calls.some(c=>c[0]==='fill'&&c.at(-2)==='#eca56a'),'a warm band remains readable without decorative particles');
+    assert(!ctx.calls.some(c=>['fill','stroke'].includes(c[0])&&['#403a36','#9f714e'].includes(c[c[0]==='fill'?c.length-2:c.length-1])),'no crater or ground-crack pass');
+  }
   // Broken pressure crests stay inside the actual ground footprint, including
   // their line width. Boss defeat deliberately has no pressure-circle warning.
   for(const e0 of fixtures)for(const r of [1,12,86,240])for(const progress of [0,.08,.3,.7,.99]){
     const e={...e0,r,life:e0.maxLife*(1-progress)},renderer=new CombatVfx(),ctx=context();renderer.beginFrame({particleBudget:0});renderer.drawBurst(ctx,e,{},'ground');
-    const arcs=ctx.calls.filter(c=>c[0]==='arc');for(const call of arcs)assert(call[3]+call[7]*.5<=r+.00001,'pressure stroke fits the damage radius');
+    const arcs=ctx.calls.filter(c=>c[0]==='arc');for(const call of arcs)assert(call[3]+call.at(-3)*.5<=r+.00001,'pressure stroke fits the damage radius');
     if(e.boss)assert.equal(arcs.length,0,'boss defeat is not an enemy telegraph');
   }
   // With an actual canvas factory, nine fixed palettes bound the bitmap cache.

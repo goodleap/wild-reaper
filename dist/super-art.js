@@ -1,6 +1,7 @@
 import { drawSwordFlight } from './sword-flight-art.js';
 import { swordFormationAnchor } from './sword-flight.js';
 import { FieldVectorArt } from './field-vector-art.js';
+import { RoyalSwordArt, ROYAL_SWORD_SIZE } from './royal-sword-art.js';
 
 // Super-skill artwork is presentation only. Simulation life supplies every phase;
 // hit positions, footprints, and timings remain owned by SuperSkills.
@@ -18,7 +19,7 @@ function shard(ctx,x,y,a,size,color){ctx.save();ctx.translate(x,y);ctx.rotate(a)
 function glyph(ctx,x,y,a,size,index,color){ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.strokeStyle=color;ctx.lineWidth=1.05;ctx.beginPath();if(index%3===0){line(ctx,-size,-size,size,size);line(ctx,size,-size,-size,size);line(ctx,0,-size*1.5,0,size*1.5);}else if(index%3===1){ctx.moveTo(0,-size*1.4);ctx.lineTo(size,0);ctx.lineTo(0,size*1.4);ctx.lineTo(-size,0);ctx.closePath();line(ctx,-size*1.5,0,size*1.5,0);}else{line(ctx,-size,-size,-size,size);line(ctx,size,-size,size,size);line(ctx,-size,-size,size,0);line(ctx,-size,size,size,0);}ctx.stroke();ctx.restore();}
 
 export class SuperArt {
-  constructor(makeCanvas=()=>document.createElement('canvas'),vectorOptions={}){this.vectors=new FieldVectorArt(vectorOptions);this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this.geometry=new WeakMap();this.geometryBuilds=0;}
+  constructor(makeCanvas=()=>document.createElement('canvas'),vectorOptions={}){this.vectors=new FieldVectorArt(vectorOptions);this.swordVectors=new RoyalSwordArt(vectorOptions);this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this.geometry=new WeakMap();this.geometryBuilds=0;}
   get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:LIMIT*4,builds:this.builds,geometryBuilds:this.geometryBuilds,vectorEntries:this.vectors.stats.entries,vectorPathBuilds:this.vectors.stats.pathBuilds,vectorCommands:this.vectors.stats.commands};}
   get diagnostics(){return this.cacheStats;}
   _sprite(key,w,h,paint){
@@ -47,11 +48,6 @@ export class SuperArt {
     ctx.fillStyle='#8f554c';polygon(ctx,[[-21,-15],[-7,-29],[12,-28],[1,-6],[-29,1]]);ctx.fillStyle='#b46b4c';polygon(ctx,[[12,-28],[28,-8],[24,15],[1,-6]]);ctx.fillStyle='#594149';polygon(ctx,[[-29,1],[1,-6],[4,30],[-18,20]]);
     ctx.strokeStyle='#f3a36a';ctx.lineJoin='round';ctx.lineWidth=2.6;ctx.beginPath();ctx.moveTo(-7,-29);ctx.lineTo(-4,-12);ctx.lineTo(6,-3);ctx.lineTo(1,11);ctx.lineTo(4,30);ctx.moveTo(6,-3);ctx.lineTo(20,-7);ctx.lineTo(28,-8);ctx.moveTo(1,11);ctx.lineTo(-13,10);ctx.lineTo(-18,20);ctx.stroke();ctx.strokeStyle='#ffe2a4';ctx.lineWidth=.8;ctx.stroke();
     ctx.fillStyle='#e9a77a';polygon(ctx,[[-21,-15],[-7,-29],[-10,-19],[-17,-12]]);ellipse(ctx,15,6,4,2.7,'#382e3c');ellipse(ctx,-12,-7,3,2,'#593849');
-  });}
-  _sword(){return this._sprite('royal-sword',112,48,ctx=>{
-    ctx.translate(41,24);ctx.lineJoin='round';ctx.fillStyle='#798a9460';polygon(ctx,[[-10,-5],[32,-7],[64,0],[32,7],[-10,5]]);ctx.fillStyle='#c4c5aa';polygon(ctx,[[-7,-4],[30,-4.5],[57,0],[30,4.5],[-7,4]]);ctx.fillStyle='#fff4cc';polygon(ctx,[[-7,-4],[30,-4.5],[57,0],[-7,0]]);ctx.fillStyle='#d9e9d9';polygon(ctx,[[-7,0],[57,0],[30,4.5],[-7,4]]);ctx.strokeStyle='#fff9e3';ctx.lineWidth=.8;ctx.beginPath();line(ctx,-3,0,50,0);ctx.stroke();
-    ctx.fillStyle='#9e8754';polygon(ctx,[[-13,-3],[-20,-11],[-12,-9],[-7,-5],[-7,5],[-12,9],[-20,11],[-13,3]]);ctx.fillStyle='#f0d78f';polygon(ctx,[[-16,-8],[-12,-9],[-7,-5],[-7,5],[-12,9],[-16,8],[-10,3],[-10,-3]]);ctx.fillStyle='#6c706b';polygon(ctx,[[-28,-2],[-13,-2],[-13,2],[-28,2]]);ctx.strokeStyle='#d6bc75';ctx.lineWidth=1;ctx.beginPath();for(let x=-27;x<-14;x+=3)line(ctx,x,-2,x+1.5,2);ctx.stroke();ctx.fillStyle='#e8d09a';polygon(ctx,[[-35,0],[-30,-5],[-26,0],[-30,5]]);ellipse(ctx,-10,0,2.8,3.2,'#e1ffff');
-    ctx.strokeStyle='#e3db9a';ctx.lineWidth=.7;ctx.beginPath();line(ctx,1,-2,5,0);line(ctx,5,0,1,2);line(ctx,8,-2,12,0);line(ctx,12,0,8,2);ctx.stroke();
   });}
   _data(e){
     if(this.geometry.has(e))return this.geometry.get(e);
@@ -157,7 +153,7 @@ export class SuperArt {
     ctx.globalAlpha=fade*.3;ctx.drawImage(this._glow('#a5fff0'),-18,-18,36,36);ctx.globalAlpha=fade*.8;glyph(ctx,0,0,Math.PI/4,5,1,'#d7fff2');
     ctx.globalAlpha=fade*.8;ctx.fillStyle='#ebfff1';polygon(ctx,[[length-7,0],[length-2,-2],[length,-9],[length+2,-2],[length+7,0],[length+2,2],[length,9],[length-2,2]]);
   }
-  drawSwordFlight(ctx,flight,options={}){return drawSwordFlight(ctx,flight,this._sword(),options);}
+  drawSwordFlight(ctx,flight,options={}){return drawSwordFlight(ctx,flight,this.swordVectors,options);}
   _swordHit(ctx,e,t,reduced,dense){
     if(e.impactOnly){
       const fade=(1-t)**.9,spread=reduced?10:7+t*14;ctx.translate(e.x2??e.x,e.y2??e.y);ctx.rotate(e.angle||0);
@@ -169,20 +165,18 @@ export class SuperArt {
     const dx=e.x2-e.x,dy=e.y2-e.y,a=Math.atan2(dy,dx),length=Math.hypot(dx,dy),fade=(1-t)**.7;
     ctx.translate(e.x,e.y);ctx.rotate(a);ctx.globalAlpha=fade*(reduced?.16:.28);ctx.fillStyle='#f2dda2';polygon(ctx,[[0,0],[length*.35,-3],[length,-8],[length+5,0],[length,8],[length*.35,3]]);
     ctx.globalAlpha=fade*.85;ctx.strokeStyle='#ffedc2';ctx.lineWidth=2;ctx.beginPath();line(ctx,0,0,length,0);ctx.stroke();
-    ctx.translate(length,0);ctx.globalAlpha=fade;ctx.drawImage(this._sword(),-101,-27.6,128.8,55.2);ctx.globalAlpha=fade*.3;ctx.drawImage(this._glow('#ffdda1'),-36,-36,72,72);
+    ctx.translate(length,0);ctx.globalAlpha=fade;this.swordVectors.draw(ctx);ctx.globalAlpha=fade*.3;ctx.drawImage(this._glow('#ffdda1'),-36,-36,72,72);
     ctx.globalAlpha=fade*.86;ctx.fillStyle='#fff5d8';const spread=reduced?14:12+t*22;polygon(ctx,[[-spread,-spread*.8],[-2,-3],[spread*.72,-spread], [3,0],[spread,spread*.8],[1,3],[-spread*.7,spread],[-3,0]]);
     if(!reduced&&!dense){ctx.globalAlpha=fade*.65;ctx.strokeStyle='#ecd69f';ctx.lineWidth=1.1;ctx.beginPath();for(let i=0;i<5;i++){const angle=i*TAU/5+.3,rr=8+t*23;line(ctx,Math.cos(angle)*rr,Math.sin(angle)*rr,Math.cos(angle)*(rr+5),Math.sin(angle)*(rr+5));}ctx.stroke();}
   }
   _meteorImpact(ctx,e,t,data,reduced,dense){
     const r=e.r||86,fade=(1-t)**.75,spread=reduced?.66:smooth(t/.7),flash=reduced?.18:Math.max(0,1-t*4);
     ctx.translate(e.x,e.y);
-    // A scorched, faceted crater replaces the old post-impact falling stone.
-    ctx.globalAlpha=fade*.7;ctx.fillStyle='#3b3435';ctx.beginPath();for(let i=0;i<14;i++){const a=i*TAU/14,rr=r*(.4+noise(data.seed,i)*.13);ctx[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr*.65);}ctx.closePath();ctx.fill();
-    ctx.globalAlpha=fade*.72;ctx.strokeStyle='#b27652';ctx.lineWidth=2;ctx.stroke();ctx.strokeStyle='#f1b77a';ctx.lineWidth=.85;ctx.stroke();
-    ctx.globalAlpha=fade*.85;ctx.strokeStyle='#6a4a3c';ctx.lineWidth=2.5;ctx.beginPath();for(let i=0;i<(dense?4:7);i++){const p=data.particles[i],a=p.a,rr=r*(.5+p.r*.28);ctx.moveTo(Math.cos(a)*r*.27,Math.sin(a)*r*.2);ctx.lineTo(Math.cos(a+.1)*rr*.67,Math.sin(a+.1)*rr*.5);ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr*.72);}ctx.stroke();ctx.strokeStyle='#f5bc7e';ctx.lineWidth=.8;ctx.stroke();
+    // Keep the fallback consistent with the layered CombatVfx path: a brief
+    // fire burst, warm pressure front and settling fragments over intact ground.
     ctx.globalAlpha=flash*.55;ctx.drawImage(this._glow('#ffe2ad'),-r,-r,r*2,r*2);
     // A short, faceted flame crown carries the initial impact. It stays inside
-    // the blast footprint, then leaves the crater and outward debris visible.
+    // the blast footprint, then leaves only the outward debris visible.
     ctx.globalAlpha=flash*(reduced?.25:.8);ctx.fillStyle='#f6bc78';
     for(let i=0;i<(dense?4:6);i++){const p=data.particles[i],xx=Math.cos(p.a)*r*.25,yy=Math.sin(p.a)*r*.16,h=(reduced?14:30+p.size*3)*(1-t);polygon(ctx,[[xx-7,yy+4],[xx-5,yy-h*.34],[xx-8,yy-h*.55],[xx-1,yy-h*.4],[xx+3,yy-h],[xx+8,yy-h*.28],[xx+7,yy+4]]);}
     ctx.globalAlpha=fade*.5;ctx.fillStyle='#e5b986';ctx.beginPath();for(let i=0;i<24;i++){const a=i*TAU/24,rr=r*(.24+spread*.7)*(i%2?.93:1);ctx[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr);}for(let i=23;i>=0;i--){const a=i*TAU/24,rr=r*(.20+spread*.7)*(i%2?.93:1);ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}ctx.closePath();ctx.fill();
@@ -209,7 +203,7 @@ export class SuperArt {
     ctx.translate(e.x,e.y);ctx.globalAlpha=fade*.13;ctx.drawImage(this._glow('#ffdda1'),-46,-49,92,92);
     for(let i=released;i<count;i++){
       const anchor=swordFormationAnchor({x:e.x,y:e.y},i,count);
-      ctx.save();ctx.translate(anchor.x-e.x,anchor.y-e.y);ctx.rotate(anchor.angle);ctx.globalAlpha=fade*(reduced?.46:.58);ctx.drawImage(this._sword(),-41.125,-10,47,20);ctx.restore();
+      ctx.save();ctx.translate(anchor.x-e.x,anchor.y-e.y);ctx.rotate(anchor.angle);ctx.globalAlpha=fade*(reduced?.46:.58);this.swordVectors.draw(ctx,ROYAL_SWORD_SIZE.waiting.width,ROYAL_SWORD_SIZE.waiting.height);ctx.restore();
     }
     // A low crown-shaped seal stays at the casting location while the swords
     // launch from the player's current position. It never fills the screen.

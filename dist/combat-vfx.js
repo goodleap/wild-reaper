@@ -60,15 +60,14 @@ export class CombatVfx {
   }
   _data(e){
     let data=this.geometry.get(e);if(data)return data;
-    const seed=seedFor(e),values=new Float32Array(28*8),boundary=new Float32Array(16*2);
+    const seed=seedFor(e),values=new Float32Array(28*8);
     for(let i=0;i<28;i++){
       const a=i*2.39996323+noise(seed,i)*.52,at=i*8;
       values[at]=Math.cos(a);values[at+1]=Math.sin(a);values[at+2]=.24+noise(seed,i+40)*.53;
       values[at+3]=.65+noise(seed,i+80)*.7;values[at+4]=noise(seed,i+120)*TAU;
       values[at+5]=.5+noise(seed,i+160)*.5;values[at+6]=noise(seed,i+200)*.045;values[at+7]=.6+noise(seed,i+240)*.4;
     }
-    for(let i=0;i<16;i++){const a=i*TAU/16,r=.37+noise(seed,i+280)*.12;boundary[i*2]=Math.cos(a)*r;boundary[i*2+1]=Math.sin(a)*r*.73;}
-    data={values,boundary,phase:noise(seed,320)*TAU};this.geometry.set(e,data);this.geometryBuilds++;return data;
+    data={values,phase:noise(seed,320)*TAU};this.geometry.set(e,data);this.geometryBuilds++;return data;
   }
   _atlas(name){
     if(!this.makeCanvas)return null;
@@ -151,15 +150,11 @@ export class CombatVfx {
     if(defeat){
       // The defeated boss leaves a compact dissolve, never an attack boundary.
       if(!dense&&!reduced){ctx.save();ctx.scale(1,.55);this._glow(ctx,name,r*.72,fade*.13);ctx.restore();}
+    }else if(e.skillId==='meteor'){
+      this._meteorHeat(ctx,r,elapsed,data.phase,fade,reduced,dense);
     }else{
-      if(e.skillId==='meteor'){
-        ctx.globalAlpha=fade*.6;ctx.fillStyle='#403a36';ctx.beginPath();
-        for(let i=0;i<16;i++)ctx[i?'lineTo':'moveTo'](data.boundary[i*2]*r,data.boundary[i*2+1]*r);
-        ctx.closePath();ctx.fill();ctx.globalAlpha=fade*.58;ctx.strokeStyle='#b68159';ctx.lineWidth=Math.min(3,r*.04);ctx.stroke();
-        ctx.globalAlpha=fade*.78;ctx.strokeStyle='#f4c58b';ctx.lineWidth=Math.min(.85,r*.016);ctx.stroke();
-      }
-      if(e.type==='bossSlam'||e.skillId==='meteor'){
-        const spread=reduced?1:ease(elapsed/.12);ctx.globalAlpha=fade*.55;ctx.strokeStyle=e.type==='bossSlam'?'#63775b':'#9f714e';ctx.lineWidth=Math.min(1.4,r*.025);ctx.beginPath();
+      if(e.type==='bossSlam'){
+        const spread=reduced?1:ease(elapsed/.12);ctx.globalAlpha=fade*.55;ctx.strokeStyle='#63775b';ctx.lineWidth=Math.min(1.4,r*.025);ctx.beginPath();
         for(let i=0;i<(dense?4:7);i++){
           const at=i*8,dx=data.values[at],dy=data.values[at+1],length=r*(.42+data.values[at+2]*.35)*spread;
           ctx.moveTo(dx*r*.14,dy*r*.14);ctx.lineTo(dx*length*.55-dy*r*.035,dy*length*.55+dx*r*.035);ctx.lineTo(dx*length,dy*length);
@@ -183,6 +178,28 @@ export class CombatVfx {
       ctx.globalAlpha=dustFade*(defeat?.1:.2);
       if(atlas)ctx.drawImage(atlas,48,0,48,48,x-size,y-size*.6,size*2,size*1.2);
       else{ctx.fillStyle=colors.dust;ctx.beginPath();ctx.ellipse(x,y,size*.75,size*.4,0,0,TAU);ctx.fill();}
+    }
+  }
+  _meteorHeat(ctx,r,elapsed,phase,fade,reduced,dense){
+    // A warm blast front passes over intact ground; it leaves no temporary pit.
+    // Two batched vector contours keep the heat readable without refraction or
+    // a full-scene buffer. Soft light reuses the existing bounded fire atlas.
+    const flash=clamp(1-elapsed/.19),progress=reduced?.9:ease(elapsed/.2);
+    if(!reduced&&!dense&&flash>0)this._glow(ctx,'fire',r*(.32+.3*progress),flash*.2);
+    const alpha=fade*(reduced?.3:clamp(1-elapsed/.47));if(alpha<=0)return;
+    const edgeWidth=Math.min(1.15,r*.022),outer=Math.max(.001,r*(.12+.85*progress)-edgeWidth*.5);
+    const band=Math.min(r*.1,9)*(1-progress*.78),inner=Math.max(.001,outer-band),count=dense?4:6;
+    ctx.lineWidth=edgeWidth;ctx.beginPath();
+    for(let i=0;i<count;i++){
+      const start=phase+i*TAU/count+.025,end=start+TAU/count*(i%2?.87:.75);
+      ctx.moveTo(Math.cos(start)*outer,Math.sin(start)*outer);ctx.arc(0,0,outer,start,end);
+      ctx.lineTo(Math.cos(end)*inner,Math.sin(end)*inner);ctx.arc(0,0,inner,end,start,true);ctx.closePath();
+    }
+    ctx.globalAlpha=alpha*.36;ctx.fillStyle='#eca56a';ctx.fill();
+    this._pressure(ctx,outer,phase,count,alpha*.7,edgeWidth,'#ffe0a3');
+    if(!reduced&&!dense){
+      const after=clamp((elapsed-.025)/.09)*alpha;
+      this._pressure(ctx,outer*.76,phase+.18,5,after*.23,Math.min(r*.025,1.5),'#e8b98a');
     }
   }
   _eruption(ctx,e,elapsed,name,data,dense){

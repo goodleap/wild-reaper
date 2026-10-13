@@ -3,6 +3,7 @@ import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { SWORD_FLIGHT_RULES, swordFormationAnchor, createSwordFlight, advanceSwordFlight } from './dist/sword-flight.js';
 import { drawSwordFlight } from './dist/sword-flight-art.js';
+import { RoyalSwordArt, ROYAL_SWORD_SIZE } from './dist/royal-sword-art.js';
 
 function arena(){
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false});
@@ -93,8 +94,29 @@ advance(runaway,2.6);assert.equal(expiring.reason,'expired');assert.equal(runawa
 const dense=arena();enemy(dense,280);for(let i=0;i<300;i++){dense.superSkills._cast('swords',3);advance(dense,.025);assert(dense.superSkills.swordFlights.length<=SWORD_FLIGHT_RULES.maxFlights);assert(dense.superSkills.swordFlights.every(f=>f.trail.length<=SWORD_FLIGHT_RULES.trailPoints));}
 
 const render=arena(),renderTarget=enemy(render),renderFlight=launch(render,renderTarget);advance(render,.12);
-const snapshot=structuredClone(renderFlight);let draws=0,saves=0;
-const ctx=new Proxy({save(){saves++;},restore(){saves--;},drawImage(){draws++;}},{get(object,key){return key in object?object[key]:(()=>{});},set(object,key,value){object[key]=value;return true;}});
-for(const options of [{},{reduced:true},{dense:true}])drawSwordFlight(ctx,renderFlight,{},options);
-assert.equal(draws,3);assert.equal(saves,0);assert.deepEqual(renderFlight,snapshot,'rendering cannot update flight simulation');
-console.log('Sword flight: distributed anchors, delayed single hits, moving pursuit, frozen defeat points, high/low cover, pause and scene cleanup, finite flight/trail budgets passed.');
+const snapshot=structuredClone(renderFlight),paths=[],calls=[];let saves=0;
+const pathMethods=['moveTo','lineTo','bezierCurveTo','closePath'];
+const sword=new RoyalSwordArt({makePath:()=>{const path={commands:[]};for(const method of pathMethods)path[method]=(...args)=>path.commands.push([method,...args]);paths.push(path);return path;}});
+const ctx=new Proxy({save(){saves++;},restore(){saves--;},drawImage(){assert.fail('sword body must be vector');}},{get(object,key){return key in object?object[key]:(...args)=>calls.push([key,...args]);},set(object,key,value){object[key]=value;return true;}});
+const warmStats=sword.stats;
+for(const options of [{},{reduced:true},{dense:true}])drawSwordFlight(ctx,renderFlight,sword,options);
+assert.equal(saves,0);assert.deepEqual(renderFlight,snapshot,'rendering cannot update flight simulation');
+assert.deepEqual(sword.stats,warmStats,'drawing reuses its precompiled paths');
+for(const path of paths)assert.equal(calls.filter(c=>(c[0]==='fill'||c[0]==='stroke')&&c[1]===path).length,3,'each render reuses the same Path2D objects');
+assert.deepEqual(calls.filter(c=>c[0]==='translate'),Array(3).fill(['translate',renderFlight.x,renderFlight.visualY]));
+assert(calls.filter(c=>c[0]==='rotate').every(c=>c[1]===(renderFlight.visualAngle??renderFlight.angle)),'body follows the curve tangent');
+const blade=paths[0].commands.filter(c=>c[0]!=='closePath').map(c=>c.slice(1)),[baseUpper,shoulderUpper,tip,shoulderLower,baseLower]=blade;
+assert.deepEqual(tip,[0,0],'visible tip is the shared transform origin');
+assert.equal(baseUpper[1],shoulderUpper[1]);assert.equal(baseLower[1],shoulderLower[1],'both blade sides stay parallel');
+assert.equal(-baseUpper[1],baseLower[1]);assert.equal(shoulderUpper[0],shoulderLower[0]);
+assert(-shoulderUpper[0]<(shoulderUpper[0]-baseUpper[0])*.25,'only a short section tapers to the point');
+for(const age of [0,.18]){
+  calls.length=0;drawSwordFlight(ctx,{...renderFlight,age},sword);
+  const size=age?ROYAL_SWORD_SIZE.flight:ROYAL_SWORD_SIZE.waiting,oldSize=age?[128.8,55.2]:[47,20];
+  assert.equal(size.width,oldSize[0]*.8);assert.equal(size.height,oldSize[1]*.8);
+  assert.deepEqual(calls.find(c=>c[0]==='scale'),['scale',size.width/112,size.height/48],'waiting and flying sizes are both reduced by twenty percent');
+}
+const fallback=new RoyalSwordArt({makePath:()=>null});calls.length=0;fallback.draw(ctx);
+assert.deepEqual(calls.filter(c=>pathMethods.includes(c[0])),paths.flatMap(path=>path.commands),'headless fallback draws the same prebuilt geometry');
+assert.equal(saves,0);
+console.log('Sword flight: pursuit, contact, cover, pause/cleanup, finite budgets, shared crisp vector tip geometry and reusable paths passed.');
