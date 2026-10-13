@@ -64,7 +64,9 @@ export function weaponStats(game,id) {
     const energy=getUpgradeDefinition('swordEnergy').rankBonuses[energyRank-1];
     const energyBonus=energy?.damageBonus||0,meleeRange=88+level*4+(sweep?18:0);
     const baseDamage=(54+level*10)*(heavy?1.85:1)*(1+effectTotal(game,'swordMastery','baseDamageBonus')+energyBonus);
-    return {id,level,equipped:equipped&&level>0,branch,energyRank,energyBonus,meleeRange,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
+    const damage=scalePlayerDamage(game,baseDamage,{weaponId:id});
+    return {id,level,equipped:equipped&&level>0,branch,energyRank,energyBonus,meleeRange,baseDamage,damage,
+      energyCount:energy?.count||0,energySpread:energy?.spread||0,energySpeed:440,energyDamage:energy?damage*.8:0,
       interval:(.72-Math.max(0,level-1)*.025)*(heavy?1.38:1)-effectTotal(game,'swordMastery','intervalReduction'),
       range:meleeRange+(energy?.range||0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,hitTime:.115,duration:.28,knockback:weaponKnockbackDistance(heavy?{distance:20}:undefined)};
   }

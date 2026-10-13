@@ -75,9 +75,9 @@ function weapons(game) {
       if(item.branch==='ricochet')rows.push(['弹射次数',number(s.maxBounces),'bounces'],['弹射范围','150','chainRange']);
       if(s.runic){rows.push(['符文穿击伤害',number(s.runicDamage),'runicDamage'],['符文触发间隔',seconds(s.runicInterval),'runicInterval']);notes.push('符文穿击：飞矢专属能力，自动贯穿沿途敌人；卸下飞矢时停用');}
     }else if(item.id==='sword') {
-      rows.push(['挥砍伤害',number(s.damage),'damage'],['攻击间隔',seconds(s.interval),'interval'],[s.energyRank?'攻击覆盖距离':'挥砍距离',number(s.range),'range'],['挥砍角度',`${number(s.arc*180/Math.PI)}°`,'arc']);
+      rows.push(['挥砍伤害',number(s.damage),'damage'],['攻击间隔',seconds(s.interval),'interval'],['挥砍距离',number(s.meleeRange),'range'],['挥砍角度',`${number(s.arc*180/Math.PI)}°`,'arc']);
       notes.push('近身定向爆发；自动朝敌人挥砍，移动方向不限制攻击方向');
-      if(s.energyRank){rows.push(['剑气等级',`${s.energyRank} / 3`,'swordEnergyRank'],['剑气伤害增幅',bonus(s.energyBonus),'swordEnergyBonus']);notes.push('剑气随挥剑扩大覆盖，增幅已计入挥砍伤害；卸下长剑时停用');}
+      if(s.energyRank){rows.push(['剑气等级',`${s.energyRank} / 3`,'swordEnergyRank'],['每轮剑气',`${s.energyCount} 道`,'swordEnergyCount'],['剑气伤害',number(s.energyDamage),'swordEnergyDamage'],['剑气覆盖距离',number(s.range),'swordEnergyRange'],['长剑伤害增幅',bonus(s.energyBonus),'swordEnergyBonus']);notes.push('剑气向前分散飞行；同次挥砍对每个目标最多命中一次；卸下长剑时停用');}
       if(item.branch==='heavy')notes.push('重斩集中处理强敌，攻击节奏更慢');
       else if(item.branch==='sweep')notes.push('横扫覆盖更宽的敌群');
     }else if(item.id==='orbit') {

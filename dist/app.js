@@ -5,6 +5,7 @@ import { CombatArt } from './combat-art.js';
 import { CombatVfx } from './combat-vfx.js';
 import { drawWeaponTrail } from './weapon-trails.js';
 import { drawSwordSlash, swordSlashPose } from './sword-art.js';
+import { drawSwordEnergy } from './sword-energy-art.js';
 import { drawGuardianBarrier, drawBarrierEffect } from './guardian-art.js';
 import { getStormGeometry, lightningPath, stormBrightness, stormImpactBrightness } from './storm-geometry.js';
 import { MonsterArt } from './monster-art.js';
@@ -1114,6 +1115,12 @@ function drawDungeonChest(prop){
   ctx.fillText(claimed?'已领取':locked?'击败最终首领':royal?'王城宝藏':prop.hut?'屋内补给':'支路宝箱',0,claimed?-77:-48);ctx.restore();
 }
 function drawWorldMap(){worldMap.draw(ctx,game,minimapBounds(width,height,hudInsets));}
+function drawSwordEnergyWaves(){
+  for(const wave of game.attacks?.sword?.energyWaves||[]){
+    if(wave.delay>0||wave.life<=0||!sceneVisible(wave)||!effectInView(wave))continue;
+    drawSwordEnergy(ctx,wave,combatOptions);
+  }
+}
 function drawCoins(){for(const coin of game.coins||[]){if(!sceneVisible(coin))continue;if(Math.abs(coin.x-game.player.x)>width/2+20||Math.abs(coin.y-game.player.y)>height/2+20)continue;ellipse(coin.x,coin.y+5,5,2,'#172a1855');ellipse(coin.x,coin.y,4.5,5.5,'#a08037');ellipse(coin.x-.7,coin.y-.8,3.2,4.2,'#e7c469');line(coin.x,coin.y-2.5,coin.x,coin.y+2,'#fff0aa',1);}}
 function drawSuperFields(air=false){
   for(const field of game.superSkills?.fields||[]){if(!sceneVisible(field))continue;
@@ -1167,6 +1174,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   drawSuperFields(true);drawEnemyBullets();
   drawGuardianBarrier(ctx,game,p,combatOptions);
   for(const b of game.bullets)if(sceneVisible(b)&&Math.abs(b.x-p.x)<width/2+100&&Math.abs(b.y-p.y)<height/2+100){drawWeaponTrail(ctx,b,combatOptions);combatArt.drawArrow(ctx,b,combatOptions);}
+  drawSwordEnergyWaves();
   for(const sword of game.superSkills?.swordFlights||[]){
     if(!sceneVisible(sword)||Math.abs(sword.x-p.x)>width/2+100||Math.abs(sword.visualY-p.y)>height/2+100)continue;
     superArt.drawSwordFlight(ctx,sword,combatOptions);

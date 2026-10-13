@@ -87,8 +87,8 @@ export function presentUpgrade(choice,game) {
   const base=stats=>stats.primaryBaseDamage??stats.baseDamage;
   if(id==='swordEnergy'){
     Object.assign(model,{action:current?'升级':'新获得',weaponAbility:true,scope:'长剑 · 武器专属能力',levelLabel:current?`${current} → ${next} 阶`:'获得 1 阶',note:'随长剑生效 · 最高 3 阶'});
-    model.rows=[change('挥砍基础伤害',base(before),base(after)),change('攻击覆盖距离',before.range,after.range)];
-    model.summary=current?`挥砍伤害 ${pair(base(before),base(after))}，覆盖 ${pair(before.range,after.range)}。`:`挥剑附带剑气，伤害 ${pair(base(before),base(after))}、覆盖 ${pair(before.range,after.range)}。`;
+    model.rows=[change('挥砍基础伤害',base(before),base(after)),change('剑气覆盖距离',before.energyRank?before.range:null,after.range)];
+    model.summary=`斩出 ${after.energyCount} 道飞行剑气，${current?'伤害':'挥砍伤害'} ${pair(base(before),base(after))}，覆盖 ${before.energyRank?pair(before.range,after.range):num(after.range)}。`;
     return finish('rare');
   }
   if(id==='runeArrow'||id==='arrowRune'){

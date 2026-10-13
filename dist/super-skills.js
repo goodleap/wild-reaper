@@ -15,6 +15,8 @@ const DOMAIN_BRANCHES=freeze({
 });
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+// Rank authored enemy identity, never its remaining health (including dummies).
+const targetTier=enemy=>enemy.type==='boss'?2:enemy.elite||enemy.affix?1:0;
 const segmentDistance=(x,y,x1,y1,x2,y2)=>{
   const dx=x2-x1,dy=y2-y1,length=dx*dx+dy*dy;
   const t=length?clamp(((x-x1)*dx+(y-y1)*dy)/length,0,1):0;
@@ -170,18 +172,23 @@ export class SuperSkills {
     const effective=profile==='overhead'&&this.game.dungeon?.active?'projectile':profile;
     return !this.game.terrain?.firstBlocker(from.x,from.y,to.x,to.y,r,effective);
   }
+  _compareTargets(a,b,origin,priority=true) {
+    return (priority?targetTier(b)-targetTier(a):0)||distance(origin,this._foot(a))-distance(origin,this._foot(b));
+  }
   _targets(origin=this._foot(),range=420,{strongest=false,skillId='swords'}={}) {
     const profile=PROPAGATION[skillId]||'projectile';
     const targets=this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,origin)&&distance(origin,this._foot(enemy))<=range&&this._lineClear(origin,this._foot(enemy),0,profile));
-    targets.sort((a,b)=>strongest?(Number(b.type==='boss')-Number(a.type==='boss')||b.hp-a.hp||distance(origin,this._foot(a))-distance(origin,this._foot(b))):distance(origin,this._foot(a))-distance(origin,this._foot(b)));
+    targets.sort((a,b)=>this._compareTargets(a,b,origin,strongest));
     return targets;
   }
   _center(targets,r) {
-    // Only a small nearest subset is considered, independent of the live horde
-    // cap. Dense groups receive a useful cast without an O(n²) screen scan.
+    // The input is tier/distance ordered, so a distant eligible Boss cannot
+    // disappear behind a dense ordinary crowd's sample budget. Only centers
+    // on the highest tier compete; density breaks ties within that tier.
     let best=targets[0],score=-1;
     const sample=targets.slice(0,18);
     for(const target of sample.slice(0,6)) {
+      if(targetTier(target)!==targetTier(targets[0]))break;
       const at=this._foot(target),count=sample.reduce((n,enemy)=>n+(distance(at,this._foot(enemy))<=r),0);
       if(count>score){best=target;score=count;}
     }
@@ -196,7 +203,7 @@ export class SuperSkills {
   _areaTargets(field,limit=SUPER_RULES.maxTargets) {
     const profile=field.profile||PROPAGATION[field.skillId]||'projectile';
     return this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,field)&&distance(field,this._foot(enemy))<=field.r+enemy.r&&this._lineClear(field,this._foot(enemy),0,profile))
-      .sort((a,b)=>distance(field,this._foot(a))-distance(field,this._foot(b))).slice(0,limit);
+      .sort((a,b)=>this._compareTargets(a,b,field)).slice(0,limit);
   }
   _damage(enemy,amount,origin,kind='super') {
     // Raw damage deliberately bypasses bleed, shock and lightning refunds.
@@ -208,7 +215,7 @@ export class SuperSkills {
   }
 
   _cast(id,level) {
-    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,420,{strongest:id==='swords',skillId:id});
+    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,420,{strongest:true,skillId:id});
     if(!targets.length)return false;
     const stats=getSuperSkillStats(id,level,this._branch());
     if(!stats)return false;
@@ -237,7 +244,7 @@ export class SuperSkills {
     } else if(id==='swords') {
       if(this._volleys.length>=2)return false;
       const formationId=++this._id;
-      this._volleys.push({skillId:id,formationId,remaining:stats.count,count:stats.count,index:0,tick:.16,interval:stats.interval,damage});
+      this._volleys.push({skillId:id,formationId,remaining:stats.count,count:stats.count,index:0,tick:.16,interval:stats.interval,damage,targetHits:new Map()});
       g._effect(p.x,p.y,'superBurst',.16+stats.count*stats.interval,48,DEFINITIONS.get(id).color,undefined,{skillId:id,count:stats.count,interval:stats.interval,released:0,castX:p.x,castY:p.y,seed:formationId});
     } else if(id==='vortex') {
       const {radius,duration,interval,pull}=stats;
@@ -352,8 +359,16 @@ export class SuperSkills {
       const anchor=swordFormationAnchor(p,index,volley.count),{x,y}=anchor;
       const origin={x,y:y+groundOffset(p,true),groundY:y+groundOffset(p,true)};
       if(!this._lineClear(this._foot(),origin,9,'projectile'))continue;
-      const target=this._targets(origin,430,{strongest:true,skillId:'swords'})[0];
+      const targets=this._targets(origin,430,{strongest:true,skillId:'swords'});
+      let target=null,fewest=Infinity;
+      for(const candidate of targets) {
+        if(targetTier(candidate)!==targetTier(targets[0]))break;
+        const hits=volley.targetHits.get(candidate.id)||0;
+        if(hits<fewest){target=candidate;fewest=hits;}
+        if(!hits)break;
+      }
       if(!target||this.swordFlights.length>=SWORD_FLIGHT_RULES.maxFlights)continue;
+      volley.targetHits.set(target.id,fewest+1);
       this.swordFlights.push(createSwordFlight({id:++this._id,anchor,groundLift:groundOffset(p,true),target,targetPoint:this._swordPoint(target),damage:volley.damage}));
     }
     this._volleys=this._volleys.filter(volley=>volley.remaining>0);

@@ -59,13 +59,13 @@ for(const angle of [0,Math.PI/2,Math.PI,-Math.PI/2]) {
   const visual=g.effects.find(e=>e.type==='swordSlash');assert(Math.abs(visual.angle-angle)<1e-8);
 }
 
-// Sword energy adds reach to the same strike; overlapping blade/energy never
-// apply damage twice, and acquiring a rank cannot mutate an in-flight swing.
+// Melee and independent flying energy share one cast ledger. Distant damage
+// waits for travel, and acquiring a rank cannot mutate a committed swing.
 const energy=arena(),inner=enemy(energy,55),outer=enemy(energy,140);
 const energyStats={...stats,range:135,meleeRange:95,energyRank:2,energyBonus:.14};swing(energy,energyStats);
-assert.equal(inner.hp,9930);assert.equal(outer.hp,9930);
-energy.attacks.sword.update(.08,energyStats);assert.equal(inner.hp,9930);assert.equal(outer.hp,9930);
-const energyEffect=energy.effects.find(e=>e.type==='swordSlash');assert.equal(energyEffect.meleeRange,95);assert.equal(energyEffect.r,135);assert.equal(energyEffect.energyRank,2);
+assert.equal(inner.hp,9930);assert.equal(outer.hp,10000);
+energy.attacks.sword.update(.22,energyStats);assert.equal(inner.hp,9930);assert.equal(outer.hp,9944);
+const energyEffect=energy.effects.find(e=>e.type==='swordSlash');assert.equal(energyEffect.meleeRange,95);assert.equal(energyEffect.r,95);assert.equal(energyEffect.energyRank,2);
 const acquireLate=arena(),lateInner=enemy(acquireLate,55),lateOuter=enemy(acquireLate,140);
 acquireLate.attacks.sword.update(0,stats);acquireLate.attacks.sword.update(stats.hitTime,energyStats);
 assert.equal(lateInner.hp,9930);assert.equal(lateOuter.hp,10000,'upgrades are effective from the next attack');
@@ -76,13 +76,13 @@ for(const height of [null,'low','high']) {
   const resolved=weaponStats(g,'sword'),calls=new Map(),hitEnemy=g._hitEnemy.bind(g);
   g._hitEnemy=(target,...args)=>{calls.set(target.id,(calls.get(target.id)||0)+1);return hitEnemy(target,...args);};
   assert.equal(intersectsSwordArc({x:0,y:0},distant,resolved.meleeRange,resolved.arc,0),false,'the target is beyond the unmodified blade');
-  swing(g,resolved);g.attacks.sword.update(.08,resolved);
+  swing(g,resolved);g.attacks.sword.update(.23,resolved);
   assert(Math.abs(10000-close.hp-resolved.damage)<1e-8);assert.equal(calls.get(close.id),1,'blade and energy share one damage application');
   if(height==='high'){assert.equal(distant.hp,10000);assert.equal(calls.get(distant.id),undefined,'sword energy respects tall occluders');}
-  else {assert(Math.abs(10000-distant.hp-resolved.damage)<1e-8);assert.equal(calls.get(distant.id),1,'real sword energy reaches beyond the base blade through low cover');}
+  else {assert(Math.abs(10000-distant.hp-resolved.energyDamage)<1e-8);assert.equal(calls.get(distant.id),1,'real sword energy reaches beyond the base blade through low cover');}
 }
 const outerOnly=arena(),onlyTarget=enemy(outerOnly,130);outerOnly.build.increment('sword');outerOnly.build.increment('sword');outerOnly.build.increment('swordEnergy');
-swing(outerOnly,weaponStats(outerOnly,'sword'));assert(onlyTarget.hp<10000,'energy reach participates in target acquisition');
+swing(outerOnly,weaponStats(outerOnly,'sword'));assert.equal(onlyTarget.hp,10000);outerOnly.attacks.sword.update(.23,weaponStats(outerOnly,'sword'));assert(onlyTarget.hp<10000,'energy reach participates in acquisition but damage waits for travel');
 
 // Idle polling avoids burning a full attack cooldown and begins a real swing
 // within one short poll after a target arrives.

@@ -112,8 +112,13 @@ energyGame.levels.sword=3;energyGame.levels.swordEnergy=2;energyGame._refreshWea
 const energySnapshot=JSON.stringify(energyGame.build.serialize()),energyPanel=characterPanelHTML(energyGame,'weapons'),energySword=item(energyPanel,'sword');
 assert.equal(value(energySword,'swordEnergyRank'),'2 / 3');
 assert.equal(value(energySword,'swordEnergyBonus'),'+14%');
-assert.equal(value(energySword,'range'),'132','weapon details include the sword-energy coverage');
-assert.match(energySword,/攻击覆盖距离|卸下长剑时停用/);
+assert.equal(value(energySword,'range'),'100','melee reach remains distinct from flying energy');
+assert.equal(value(energySword,'swordEnergyRange'),'180');
+assert.equal(value(energySword,'swordEnergyCount'),'3 道');
+assert.equal(value(energySword,'swordEnergyDamage'),'76.61');
+assert.match(energySword,/向前分散飞行/);
+assert.match(energySword,/每个目标最多命中一次/);
+assert.doesNotMatch(energySword,/NaN|undefined|随挥剑扩大/);
 assert.doesNotMatch(characterPanelHTML(energyGame,'skills'),/剑气/,'sword energy remains under its weapon');
 assert.equal(JSON.stringify(energyGame.build.serialize()),energySnapshot,'opening energy details does not alter rank');
 console.log('Character panel: effective stats, source isolation, super skills, equipment guards, safe rendering passed.');

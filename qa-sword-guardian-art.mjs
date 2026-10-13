@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import {drawSwordSlash,swordSlashPose} from './dist/sword-art.js';
+import {drawSwordEnergy} from './dist/sword-energy-art.js';
 import {drawGuardianBarrier,drawBarrierEffect} from './dist/guardian-art.js';
 
 function recorder(){
   const calls=[],stack=[];let state={globalAlpha:1,lineWidth:1,shadowBlur:0,fillStyle:'#000',strokeStyle:'#000',lineCap:'butt',lineJoin:'miter'};
   const ctx={calls,save(){stack.push({...state});calls.push(['save']);},restore(){assert(stack.length);state=stack.pop();calls.push(['restore']);},get depth(){return stack.length;}};
-  for(const name of ['translate','rotate','beginPath','closePath','moveTo','lineTo','bezierCurveTo','quadraticCurveTo','arc','fill','stroke'])ctx[name]=(...args)=>{
+  for(const name of ['translate','rotate','scale','beginPath','closePath','moveTo','lineTo','bezierCurveTo','quadraticCurveTo','arc','fill','stroke'])ctx[name]=(...args)=>{
     for(const value of args)if(typeof value==='number')assert(Number.isFinite(value),`${name} must use finite coordinates`);
     if(name==='arc')assert(args[2]>=0);calls.push([name,...args,{...state}]);
   };
@@ -32,7 +33,8 @@ try{
     const e={...attack,angle},pose=swordSlashPose(e,{player:owner},{actor});
     assert(Math.abs(pose.angle-angle)<1e-9,'the blade meets the locked direction exactly at damage time');
     assert(pose.grip>=12&&pose.grip<=23,'the hilt remains near the body without a distant orbit');
-    assert(pose.tip>=80&&pose.tip<=92,'physical sword stays close to the unchanged melee reach');
+    assert(pose.tip>=70&&pose.tip<=84,'shorter physical sword retains the near-body pivot');
+    assert(Math.abs(pose.length-92*.74*.88)<1e-9,'the physical blade is shortened by twelve percent');
     assert.equal(pose.x,owner.x);assert.equal(pose.y,owner.y);
     if(Math.sin(angle)<-.5)assert(pose.sortY<actor.footY,'upward sword is behind its owner');
     if(Math.sin(angle)>.5)assert(pose.sortY>actor.footY,'downward sword is in front of its owner');
@@ -45,8 +47,23 @@ try{
     const enhanced={...e,r:124,energyRank:2},energyPose=swordSlashPose(enhanced,{}, {actor});
     assert.equal(energyPose.length,pose.length);assert.equal(energyPose.grip,pose.grip,'energy upgrades retain the same physical blade');
     const energy=recorder();drawSwordSlash(energy,enhanced,{}, {actor,pose:energyPose});
-    assert(energy.calls.some(c=>c[0]==='fill'&&c.at(-1)?.fillStyle==='#bfeaf0'),'an acquired upgrade paints the cyan energy blade');
-    assert(energy.calls.length<230,'energy uses a fixed small geometry budget');
+    assert.deepEqual(energy.calls,base.calls,'an acquired upgrade no longer attaches energy to the physical sword');
+    assert(energy.calls.length<230,'steel uses a fixed small geometry budget');
+  }
+  const currentPose=swordSlashPose(attack,{}, {actor}),previousPose=swordSlashPose({...attack,attackAge:attack.attackAge-1/60},{}, {actor});
+  const moving=recorder();drawSwordSlash(moving,attack,{}, {actor,pose:currentPose});
+  const sweepArcs=moving.calls.filter(c=>c[0]==='arc');
+  assert(sweepArcs.some(c=>c[4]<=previousPose.angle&&c[5]>=previousPose.angle),'the recent-time steel trail bridges the previous 60 FPS blade position');
+  assert(sweepArcs.some(c=>Math.abs(c[5]-currentPose.angle)<1e-9),'steel sweep meets the current blade');
+  for(const reduced of [false,true])for(const dense of [false,true])for(const branch of [undefined,'heavy'])for(const age of [.001,.04,.18,.319]){
+    const wave=Object.freeze({type:'swordEnergy',x:120,y:90,angle:.3,r:20,age,life:.32-age,maxLife:.32,branch}),ctx=recorder();
+    assert(drawSwordEnergy(ctx,wave,{reduced,dense}));assert.equal(ctx.depth,0);assert.equal(ctx.globalAlpha,1);
+    assert(ctx.calls.length<70,'independent energy uses a bounded number of vector paths');
+    assert(ctx.calls.some(c=>c[0]==='fill'&&c.at(-1)?.fillStyle===(branch==='heavy'?'#f6dba4':'#cbefed')),'traveling energy has a clear thick body');
+    const repeated=recorder();drawSwordEnergy(repeated,wave,{reduced,dense});assert.deepEqual(repeated.calls,ctx.calls,'energy draw is deterministic and preserves simulation data');
+  }
+  for(const wave of [{delay:.03,life:.3,maxLife:.3},{done:true,life:.3,maxLife:.3},{life:0,maxLife:.3}]){
+    const ctx=recorder();assert(drawSwordEnergy(ctx,wave));assert.equal(ctx.calls.length,0,'delayed and ended projectiles are not painted');
   }
   const explicitAge=recorder(),differentLife=recorder();
   drawSwordSlash(explicitAge,attack,{}, {actor});drawSwordSlash(differentLife,{...attack,life:.13},{}, {actor});
@@ -69,4 +86,4 @@ try{
     }
   }
 }finally{Math.random=oldRandom;}
-console.log('Sword / guardian artwork: bounded finite geometry, near-body directional blades, optional upgraded energy, actor-relative sinking, depth sorting, attack-clock pause stability, isolated state and reduced-motion shells passed.');
+console.log('Sword / guardian artwork: bounded finite geometry, near-body directional blades, independent traveling energy, continuous steel sweep, actor-relative sinking, depth sorting, attack-clock pause stability, isolated state and reduced-motion shells passed.');

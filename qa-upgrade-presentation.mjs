@@ -165,6 +165,7 @@ for(const branch of [null,'sweep','heavy'])for(const owned of [0,1,2]){
   const actual=weaponStats(current,'sword');
   assert.equal(after(model.rows[0]),Number(actual.baseDamage.toFixed(2)));
   assert.equal(after(model.rows[1]),actual.range);
+  assert.match(model.summary,new RegExp(`${actual.energyCount} 道飞行剑气`));
   assert.equal(current.build.getWeapon('sword').baseRank,baseRank,'energy rank does not disguise an extra sword base level');
   assert.deepEqual(current.build.getSkillLoadout().map(item=>item.id),skillIds,'energy does not create a skill slot');
   examplesForNew.push(model);
