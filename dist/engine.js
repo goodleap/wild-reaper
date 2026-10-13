@@ -464,7 +464,7 @@ export class Game {
     if(!this.regions.restoreWorld(this.regionIndex)) {
       this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex,island:new Island({region:this.region.id,seed:this.regionIndex})});this.enemies=[];this.gems=[];this.coins=[];
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.discoveredMap=new Set();
-      this.companions.camp=null;this.companions.generation=this._features.companions;this.companions.nextAt=this.time+35;
+      this.companions.camps=[];this.companions.generation=this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();
       this._moveEntity(p,0,0,true);
       if(this._features.environment)this.environment=new Environment(this);

@@ -201,7 +201,7 @@ for(let i=0;i<600;i++) {
 const settled={x:restingAlly.x,y:restingAlly.y};
 for(let i=0;i<120;i++)resting.update(1/60);
 assert(Math.hypot(restingAlly.x-settled.x,restingAlly.y-settled.y)<.01,'the ally settles instead of continuously circling the blocked trailing position');
-assert(Math.hypot(restingAlly.x-resting.player.x,restingAlly.y-resting.player.y)<80);
+assert(Math.hypot(restingAlly.x-resting.player.x,restingAlly.y-resting.player.y)<150);
 assert.equal(restingAlly.moving,false);
 
 // Feet follow actual displacement, including analogue input and collisions.

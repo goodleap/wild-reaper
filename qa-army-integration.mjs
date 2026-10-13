@@ -12,7 +12,7 @@ function checkArrival(g,members){
   assert(g.companions.members.includes(member),'scene changes retain companion identity');
   const foot=friendlyFoot(member),p=friendlyFoot(g.player);
   assert(g.terrain.isFree(foot.x,foot.y,member.r,movementProfile(member)),`${member.kind} lands outside solids`);
-  assert(Math.hypot(foot.x-p.x,foot.y-p.y)<160,`${member.kind} follows into the new scene`);
+  assert(Math.hypot(foot.x-p.x,foot.y-p.y)<=member.followDistance+25,`${member.kind} follows into the new scene`);
   assert(!g.terrain.firstBlocker(p.x,p.y,foot.x,foot.y,0,'sight'),`${member.kind} never spawns through an opaque wall`);
   assert.equal(member._echoes.length,0);
  }

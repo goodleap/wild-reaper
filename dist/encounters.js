@@ -13,20 +13,22 @@ const guardRadius=type=>type==='brute'?26:type==='beetle'?18:16;
 // for skill crystals. Rewards are detached before payment to prevent repeats.
 export class Encounters {
   constructor(game,{generation=true}={}) {
-    this.game=game;this.generation=generation;this.active=null;
+    this.game=game;this.generation=generation;this.activities=[];
     this.nextAt=game.time+70;this._id=0;this._nextType='treasure';
   }
   _foot(entity=this.game.player,isPlayer=true) {
     return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer)};
   }
+  get active(){return this.activities[0]||null;}
+  set active(value){this.activities=value?[value]:[];}
   _canStart() {
-    return canStartObjective(this.game,{skipEncounter:true});
+    return canStartObjective(this.game);
   }
   _point(x,y,type='treasure',allowReserved=false) {
     const g=this.game,p=this._foot(),chest=g.adventure?.treasure,hunt=type==='hunt',clearance=hunt?245:42;
     // A stone arena belongs on clear ground, not under an existing solid tree.
     // Search a few nearby rings without removing terrain or moving its props.
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&(allowReserved||!g.terrain.island?.isReserved(candidate.x,candidate.y,clearance))&&objectivePointSafe(g,candidate,hunt?245:210,{skipEncounter:true})&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?245:90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
+    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&(allowReserved||!g.terrain.island?.isReserved(candidate.x,candidate.y,clearance))&&(allowReserved||objectivePointSafe(g,candidate,hunt?245:210))&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?245:90)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,70)!==false&&
       !g.adventure?.props.some(o=>distance(o,candidate)<(hunt?245+(o.r||18):70))&&
       (!chest||distance(chest,candidate)>(hunt?290:180));
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;
@@ -40,7 +42,7 @@ export class Encounters {
   }
   spawn(type=this._nextType,x,y,{siteId=null}={}) {
     const g=this.game;
-    if(this.active||g.status!=='playing'||!TYPES.includes(type))return null;
+    if(g.status!=='playing'||g.dungeon?.active||!TYPES.includes(type)||this.activities.some(active=>siteId?active.siteId===siteId:!active.siteId))return null;
     if(type==='treasure'&&g.enemies.length>=180)return null;
     const relic=type==='hunt'&&!!siteId,goal=relic?24:12;
     if(siteId&&!g.relicSites?.sites.some(s=>s.id===siteId&&s.type==='hunt'&&s.state==='ready'))return null;
@@ -63,7 +65,7 @@ export class Encounters {
       active.spawnTimer=0;active.spawnWarnings=[];
       active.pendingGuards=Array.from({length:goal},(_,index)=>({index,type:guardType(index)}));
     }
-    this.active=active;this._nextType='treasure';
+    this.activities.push(active);this._nextType='treasure';
     g._emit(type==='hunt'?'encounterHunt':'encounterTreasure');
     if(!relic)g._effect(active.x,active.y,'ring',.75,type==='hunt'?80:48,'#e8ce85');
     return active;
@@ -128,11 +130,11 @@ export class Encounters {
     // A delayed wave never accumulates an overdue burst after a scene return.
     active.spawnTimer=active.spawnWarnings.length?rules.batchInterval:.2;
   }
-  _finish(success) {
-    const active=this.active;if(!active)return false;
+  _finish(success,active=this.active) {
+    const index=this.activities.indexOf(active);if(index<0)return false;
     const g=this.game;
     // Detach before reward hooks, so duplicate kill/cleanup calls cannot pay twice.
-    this.active=null;this.nextAt=g.time+95;
+    this.activities.splice(index,1);this.nextAt=g.time+95;
     g.enemies=g.enemies.filter(e=>e.eventId!==active.id);
     if(active.siteId&&!g.relicSites?.complete(active.siteId,success))success=false;
     if(success) {
@@ -145,27 +147,27 @@ export class Encounters {
     return true;
   }
   onEnemyKilled(enemy) {
-    const active=this.active;
+    const active=enemy.eventId?this.activities.find(item=>item.id===enemy.eventId):this.activities.find(item=>!item.siteId&&item.type==='hunt');
     if(!active||active.life<=0||this.game.status!=='playing'||!(enemy.hp<=0))return;
     if(active.type==='treasure') {
       if(enemy.eventId!==active.id||enemy.id!==active.enemyId||enemy.eventRole!=='treasure')return;
-      active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);this._finish(true);return;
+      active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);this._finish(true,active);return;
     }
     if(active.siteId) {
       if(enemy.eventId!==active.id||enemy.eventRole!=='huntGuard'||!active._remaining.delete(enemy.id))return;
       active.progress++;
       const site=this.game.relicSites?.sites.find(s=>s.id===active.siteId);if(site)site.progress=active.progress;
-      if(active.spawnedCount===active.goal&&!active.pendingGuards.length&&!active.spawnWarnings.length&&!active._remaining.size)this._finish(true);
+      if(active.spawnedCount===active.goal&&!active.pendingGuards.length&&!active.spawnWarnings.length&&!active._remaining.size)this._finish(true,active);
       return;
     }
     if(enemy.type==='boss'||enemy.guardianId||enemy.rescueId||enemy.elite||enemy.affix||enemy.summoned||enemy.eventRole||enemy._encounterCounted===active.id)return;
     if(distance(this._foot(),active)>active.r||distance(this._foot(enemy,false),active)>active.r)return;
     enemy._encounterCounted=active.id;active.progress++;
-    if(active.progress>=active.goal)this._finish(true);
+    if(active.progress>=active.goal)this._finish(true,active);
   }
   updateEnemy(enemy,dt) {
     if(enemy.eventRole==='huntGuard') {
-      const active=this.active,g=this.game;
+      const active=this.activities.find(item=>item.id===enemy.eventId),g=this.game;
       if(!active||active.id!==enemy.eventId||enemy.hp<=0||g.status!=='playing')return true;
       if(enemy.rescueSpawnGrace>0) {
         enemy.rescueSpawnGrace=Math.max(0,enemy.rescueSpawnGrace-Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0)));
@@ -182,7 +184,7 @@ export class Encounters {
       return true;
     }
     if(enemy.eventRole!=='treasure')return false;
-    const active=this.active,g=this.game;
+    const active=this.activities.find(item=>item.id===enemy.eventId),g=this.game;
     if(!active||active.id!==enemy.eventId||enemy.hp<=0||g.status!=='playing')return true;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
     const p=this._foot(),e=this._foot(enemy,false),d=distance(e,p);
@@ -209,26 +211,24 @@ export class Encounters {
   update(dt) {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active||g.sceneTransition?.active)return;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
-    const active=this.active;
-    if(active) {
+    const present=this.activities.some(active=>active.siteId)?new Set(g.enemies.filter(e=>e.hp>0&&e.eventId).map(e=>e.id)):null;
+    for(const active of [...this.activities]) {
       if(active.siteId) {
         // Only real lethal hits remove IDs. Scene/range cleanup must never
         // finish a relic or silently refresh its finite defenders.
-        const present=new Set(g.enemies.filter(e=>e.hp>0&&e.eventId===active.id).map(e=>e.id));
-        if([...active._remaining].some(id=>!present.has(id))){this._finish(false);return;}
+        if([...active._remaining].some(id=>!present.has(id))){this._finish(false,active);continue;}
         this._updateArena(active,dt);
-        return;
+        continue;
       }
       active.life=Math.max(0,active.life-dt);
       if(active.type==='treasure') {
         const enemy=g.enemies.find(e=>e.id===active.enemyId&&e.eventId===active.id&&e.hp>0);
         // A removed enemy is abandonment, not a successful kill.
-        if(!enemy){this._finish(false);return;}
+        if(!enemy){this._finish(false,active);continue;}
         active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);
       }
-      if(active.life<=0||distance(this._foot(),active)>1100)this._finish(false);
-      return;
+      if(active.life<=0||distance(this._foot(),active)>1100)this._finish(false,active);
     }
-    if(this.generation&&g.time>=this.nextAt&&this._canStart()&&!this.spawn())this.nextAt=g.time+5;
+    if(!this.activities.some(active=>!active.siteId)&&this.generation&&g.time>=this.nextAt&&this._canStart()&&!this.spawn())this.nextAt=g.time+5;
   }
 }

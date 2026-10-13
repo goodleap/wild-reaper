@@ -1,6 +1,5 @@
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
-import { canStartObjective } from './event-scheduling.js';
 import { beginRelicActivation, advanceRelicActivation } from './relic-activation.js';
 
 const TAU=Math.PI*2;
@@ -116,17 +115,13 @@ export class RelicSites {
         else if(site.state==='opening'){enabled=false;label='岩灵正在击碎封石';description='守在门前，通路将永久开启';}
         else {enabled=!!this._golemFor(site);label=enabled?'岩灵击碎封石':this._member('golem')?'带岩灵靠近宝库正门':'封石宝库 · 需要岩灵';description='寻找沉睡石像，唤醒伙伴后返回';}
       } else if(site.state==='active') {
-        const camp=site.type==='rescue'&&g.companions?.camp;
+        const camp=site.type==='rescue'&&g.companions?.campFor(site.id);
         label=site.type==='hunt'?`狩猎守卫 ${site.progress}/${site.goal}`:site.type==='rune'?`符文支援 ${Math.ceil(site.mechanism.remaining)} 秒`:camp?.siteId===site.id&&camp.state==='ready'?'靠近伙伴完成解救':`${site.appearance==='golemaltar'?'唤醒试炼':'囚牢守卫'} ${site.progress}/${site.goal}`;
         description=site.type==='rune'?'符文正在自动轰击附近怪物':'离开后进度保留，返回可继续挑战';
       } else if(site.type==='hunt') {label='走进中央纹章开启狩猎';description='击败 24 名遗迹守卫 · 72 灵晶 / 18 金币';}
       else if(site.type==='rune') {label='激活遗迹符文阵';description='一次性 12 秒符文支援 · 自动攻击附近怪物';}
       else {label=site.kind==='golem'?'触碰古坛唤醒岩灵':site.kind==='owl'?'驱散守卫解救猫头鹰':'挑战囚牢守卫';description=`击败 ${site.goal} 名守卫，招募伙伴`;
         if(this._member(site.kind)){enabled=false;label=site.kind==='golem'?'岩灵已在队伍中':'该伙伴已在队伍中';description='每种伙伴最多一名，无需重复解救或唤醒';}}
-      if(enabled&&(site.type==='hunt'||site.type==='rescue')) {
-        const busy=site.type==='hunt'?!!g.encounters?.active:!!g.companions?.camp;
-        if(busy||!canStartObjective(g)){enabled=false;label=busy?'先完成当前遗迹挑战':'先结束附近战斗，再激活遗迹';description=label;}
-      }
       nearest={id:site.id,siteId:site.id,type:'relic',relicType:site.type,category:'relic',label,description,x:anchor.x,y:anchor.y,enabled,...(site.type==='hunt'?{touchRadius:RELIC_SITE_RULES.huntTouchRadius}:site.appearance==='golemaltar'?{touchRadius:ARMY_SITE_RULES.altarTouchRadius}:{})};best=d;
     }
     return nearest;

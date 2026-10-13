@@ -100,8 +100,8 @@ export class AdventureArchive {
     const run=this._eligible(game);if(!run)return false;
     for(const enemy of visibleEnemies){if(enemy?.hp<=0)continue;const id=enemyArchiveId(enemy);if(id)this._entry(run,id);}
     for(const companion of visibleCompanions){const id=companionArchiveId(companion);if(id)this._entry(run,id);}
-    const camp=game.companions?.camp;
-    if(camp&&!game.dungeon?.active&&!game.sceneTransition?.active&&game._inView?.(camp)){
+    const camps=game.companions?.camps||(game.companions?.camp?[game.companions.camp]:[]);
+    for(const camp of camps)if(!game.dungeon?.active&&!game.sceneTransition?.active&&game._inView?.(camp)){
       const id=companionArchiveId(camp);if(id)this._entry(run,id);
     }
     return this.checkpoint(game);

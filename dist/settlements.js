@@ -52,9 +52,9 @@ export class Settlements {
     if(this.sites.some(s=>distance(center,this._bodyCenter(s))<clearance+s.width*.5+110))return false;
     if(g.adventure?.props.some(o=>distance(o,center)<clearance+35))return false;
     if(g.adventure?.treasure&&distance(g.adventure.treasure,center)<clearance+110)return false;
-    if(g.companions?.camp&&distance(g.companions.camp,center)<clearance+170)return false;
+    if(g.companions?.camps?.some(camp=>distance(camp,center)<clearance+170))return false;
     if((g.regions?.portals||(g.portal?[g.portal]:[])).some(portal=>distance(portal,center)<clearance+90))return false;
-    if(g.encounters?.active&&Number.isFinite(g.encounters.active.x)&&distance(g.encounters.active,center)<clearance+160)return false;
+    if(g.encounters?.activities?.some(active=>Number.isFinite(active.x)&&distance(active,center)<clearance+160))return false;
     // Check the actual broad footprint and its front approach instead of
     // demanding a huge empty circle, which is unsuitable for forest terrain.
     for(let x=site.x-site.width*.5-24;x<=site.x+site.width*.5+24;x+=24)
@@ -155,7 +155,6 @@ export class Settlements {
         if(site.type==='castle'){label=visited?'重返已探索古堡':'进入古堡迷宫';description=visited?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';}
         else if(site.type==='supply'){label=visited?'重返林间小屋':'进入林间小屋';description=visited?'补给已领取，可随时进出':'进入屋内搜寻补给箱';}
         else {label=visited?'重返清理过的小屋':'进入被占据的小屋';description=visited?'宝藏已领取，可随时进出':site.state==='cleared'?'守卫已清除，屋内宝箱等待领取':'清理屋内守卫，搜寻宝箱';}
-        if(g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false)){enabled=false;description='先击败当前区域首领';}
       }
       nearest={id:site.id,siteId:site.id,type:site.type,label,description,x:site.door.x,y:site.door.y,enabled};best=d;
     }

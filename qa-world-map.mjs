@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { WorldMap, WORLD_MAP_RULES, minimapBounds, landmarkLabel, landmarkState } from './dist/world-map.js';
+import { Dungeon } from './dist/dungeon.js';
+import { AdventureArchive } from './dist/adventure-archive.js';
 
 const map=new WorldMap();
 const site=(id,type,x,y=0,extra={})=>({id,type,x,y,state:'ready',discovered:false,...extra});
@@ -50,6 +52,42 @@ const indoor=map.draw(ctx,drawing,{width:128,height:128}),outdoor=map.draw(ctx,{
 assert.deepEqual(indoor.center,outdoor.center);assert.equal(indoor.scale,outdoor.scale,'castle map keeps wilderness world scale and player centering');
 assert.deepEqual(indoor.markers.map(marker=>marker.id),['exit']);assert.equal(discoveryWrites,0,'map redraw never explores rooms');
 assert.equal(balance,0);
+
+// Debug changes marker visibility only. It reuses the same supported site
+// types and nearby range, including all simultaneously active relic sites.
+for(const debugFull of [false,true]){
+  const debug=game();debug.debug=true;debug.debugFull=debugFull;
+  debug.settlements.sites=[site('unseen-house','supply',100),site('unseen-castle','castle',600),site('unmapped-merchant','merchant',80)];
+  debug.relicSites.sites=[site('unseen-altar','rescue',-400,0,{kind:'golem',appearance:'golemaltar',state:'active'}),site('unseen-prison','rescue',-500,0,{kind:'warden',state:'active'}),site('unseen-hunt','hunt',400,0,{state:'active'})];
+  debug.regions.portals=[site('unseen-gate','portal',700),site('outside-local-range','portal',1500)];
+  const archive=new AdventureArchive({storage:null});archive.begin(debug);
+  const before=JSON.stringify(archive.data),flags=[...debug.settlements.sites,...debug.relicSites.sites,...debug.regions.portals].map(s=>s.discovered);
+  const visible=map.draw(ctx,debug).markers.map(m=>m.id);
+  assert.deepEqual(visible,['unseen-house','unseen-castle','unseen-altar','unseen-prison','unseen-hunt','unseen-gate']);
+  assert.deepEqual(map.draw(ctx,debug,{expanded:true,width:420,height:420,range:2000}).markers.map(m=>m.id),[...visible,'outside-local-range']);
+  assert.deepEqual([...debug.settlements.sites,...debug.relicSites.sites,...debug.regions.portals].map(s=>s.discovered),flags,'debug map markers do not discover their sites');
+  archive.observe(debug);assert.equal(JSON.stringify(archive.data),before,'viewing debug landmarks cannot unlock companion archive entries');
+  debug.debug=false;assert.equal(map.getMarkers(debug).length,0,'normal map still requires actual discovery');
+}
+
+// Indoor debug uses the same read-only marker override, never the room or
+// wall discovery filter. Other getMap consumers retain their usual visibility.
+const castle=game();castle.regionIndex=0;castle.time=0;castle.player.r=15;
+castle.dungeon=new Dungeon(castle);castle.dungeon.active=castle.dungeon._makeState({id:'map-castle',seed:21});
+const castleState=castle.dungeon.active,knownEntrance=p=>Math.hypot(p.x-castleState.entrance.x,p.y-castleState.entrance.y)<1;
+castle.dungeon.vision={isExplored:(x,y)=>knownEntrance({x,y}),knownWallSegments:()=>[],getExploredRects:()=>[],update(){throw new Error('reading a debug map may not reveal rooms');}};
+const indoorBefore=castle.dungeon.getMap(),visitedBefore=[...castleState.visited];
+assert.equal(indoorBefore.landmarks.length,1);
+castle.debug=true;
+const indoorDebug=map.getMarkers(castle,{range:10000});
+assert.equal(indoorDebug.length,castleState.chests.length+3,'debug displays exit, side chests, treasury and boss');
+assert(indoorDebug.some(marker=>marker.type==='boss'));
+assert.deepEqual(castle.dungeon.getMap(),indoorBefore,'the marker override does not alter ordinary map data');
+assert.deepEqual([...castleState.visited],visitedBefore);assert.equal(castleState.bossDiscovered,undefined);
+const revealedMap=castle.dungeon.getMap({revealMarkers:true});
+for(const key of ['cells','walls','explored','boss','chests','treasure'])assert.deepEqual(revealedMap[key],indoorBefore[key],`${key} retains its exploration state`);
+castle.debug=false;assert.deepEqual(map.getMarkers(castle,{range:10000}).map(marker=>marker.id),indoorBefore.landmarks.map(marker=>marker.id));
+console.log('Debug map: supported generated landmarks reveal without changing fog, discovery, archive entries, normal-mode behavior or indoor exploration.');
 const indoorExpanded=map.draw(ctx,drawing,{width:420,height:420,expanded:true});
 assert.deepEqual(indoorExpanded.markers.map(marker=>marker.id),['exit'],'both map sizes use discovered landmarks only');
 drawing.dungeon.active.kind='hut';assert.equal(map.draw(ctx,drawing).markers[0].type,'exit','huts use the shared map as well');

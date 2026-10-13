@@ -78,7 +78,7 @@ export class Dungeon {
     const g=this.game,c=g.companions;
     return {terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,enemies:g.enemies,gems:g.gems,coins:g.coins,
       portal:g.portal,regionGrace:g.regionGrace,regionTransition:g.regionTransition,sceneKind:g.sceneKind,returnPoint:{...this._playerFoot()},door:{...this._door(site)},
-      spawn:g._spawn,superPending:g.superSkills?.pending,companionCamp:c?.camp,companionGeneration:c?.generation,companionNextAt:c?.nextAt,enteredClock:g._clock};
+      spawn:g._spawn,superPending:g.superSkills?.pending,companionCamps:c?.camps,companionGeneration:c?.generation,companionNextAt:c?.nextAt,enteredClock:g._clock};
   }
   _clearScene(){
     const g=this.game;g.attacks?.clearTrails();g.bullets=[];g.enemyBullets=[];g.effects=[];g.orbitals=[];g.storm=null;g._pulseEchoes=[];g._grid.clear();
@@ -124,7 +124,7 @@ export class Dungeon {
   }
   enter(site){
     const g=this.game;
-    if(!site||!site.id||this.active||g.status!=='playing'||!this._near(this._door(site),site.interactRadius||100)||g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false))return false;
+    if(!site||!site.id||this.active||g.status!=='playing'||!this._near(this._door(site),site.interactRadius||100))return false;
     const kind=site.type==='supply'||site.type==='occupied'?'hut':'castle';
     if(site.type&&!['supply','occupied','castle'].includes(site.type))return false;
     let state=this.states.get(site.id);
@@ -139,7 +139,7 @@ export class Dungeon {
     g.regionGrace=2;g.regionTransition={life:.7,maxLife:.7,name:state.name,from:g.region.id,to:state.kind};
     if(!state.adventure)state.adventure=new Adventure(g,{generation:false});
     g.adventure=state.adventure;g.adventure.furyTime=furyTime;g.adventure.magnetTime=magnetTime;
-    if(g.companions){g.companions.camp=null;g.companions.generation=false;}
+    if(g.companions){g.companions.camps=[];g.companions.generation=false;}
     this._placePlayer(state.landing||state.entrance);
     if(!state.populated){state.populated=true;if(state.kind==='hut')populateHut(g,state);else this._populate(state);}
     this._clearScene();g._refreshStats();g._refreshWeapons();this.update(0);
@@ -163,7 +163,7 @@ export class Dungeon {
     Object.assign(g,{terrain:world.terrain,adventure:world.adventure,environment:world.environment,encounters:world.encounters,enemies:world.enemies,gems:world.gems,coins:world.coins,portal:world.portal,sceneKind:world.sceneKind,_spawn:world.spawn});
     if(g.adventure){g.adventure.furyTime=furyTime;g.adventure.magnetTime=magnetTime;}
     if(g.superSkills)g.superSkills.pending=world.superPending??null;
-    if(g.companions){g.companions.camp=world.companionCamp;g.companions.generation=world.companionGeneration;g.companions.nextAt=Math.max(world.companionNextAt??0,g.companions.nextAt??0);}
+    if(g.companions){g.companions.camps=world.companionCamps||(world.companionCamp?[world.companionCamp]:[]);g.companions.generation=world.companionGeneration;g.companions.nextAt=Math.max(world.companionNextAt??0,g.companions.nextAt??0);}
     this.active=null;this._world=null;g.regionGrace=Math.max(2,world.regionGrace||0);g.regionTransition={life:.7,maxLife:.7,name:g.region.name,from:state.kind,to:g.region.id};
     this._clearScene();this._placePlayer(this._returnPoint(world));g._refreshStats();g._refreshWeapons();g._emit('dungeonExit',{name:state.name,cleared:state.rewardClaimed});return true;
   }
@@ -254,17 +254,18 @@ export class Dungeon {
     if(boss&&this.vision.isVisible(foot(boss)))state.bossDiscovered=true;
     this._saveScene();
   }
-  getMap(){
+  getMap({revealMarkers=false}={}){
     const state=this.active;if(!state)return null;const p=this._playerFoot(),known=point=>this.vision.isExplored(point.x,point.y);
+    const markable=point=>revealMarkers||known(point);
     const landmarks=[{id:`${state.id}:exit`,type:'exit',name:'荒野出口',...state.entrance,state:'active',completed:false}];
-    for(const chest of state.chests)if(known(chest))landmarks.push({...chest,type:'chest',name:state.kind==='hut'?'小屋补给':'古堡宝箱',completed:chest.state==='claimed'});
-    if(state.treasure&&known(state.treasure))landmarks.push({...state.treasure,type:'chest',name:'王城宝藏',completed:state.rewardClaimed});
-    if(state.bossDiscovered&&state.bossRoom)landmarks.push({id:`${state.id}:boss`,type:'boss',name:'旧王城守卫',x:state.bossRoom.x,y:state.bossRoom.y,state:state.bossDefeated?'cleared':'active',completed:state.bossDefeated});
+    for(const chest of state.chests)if(markable(chest))landmarks.push({...chest,type:'chest',name:state.kind==='hut'?'小屋补给':'古堡宝箱',completed:chest.state==='claimed'});
+    if(state.treasure&&markable(state.treasure))landmarks.push({...state.treasure,type:'chest',name:'王城宝藏',completed:state.rewardClaimed});
+    if((state.bossDiscovered||revealMarkers)&&state.bossRoom)landmarks.push({id:`${state.id}:boss`,type:'boss',name:'旧王城守卫',x:state.bossRoom.x,y:state.bossRoom.y,state:state.bossDefeated?'cleared':'active',completed:state.bossDefeated});
     return {kind:state.kind,cols:state.cols,rows:state.rows,cellSize:state.cellSize,originX:state.originX,originY:state.originY,bounds:state.bounds,
       cells:state.cells.map(c=>{const revealed=state.visited.has(c.id);return {...c,open:revealed?c.open:[],revealed,roomKind:revealed?state.rooms.get(c.id)?.kind:undefined,cleared:revealed&&(state.rooms.get(c.id)?.cleared??false)};}),playerCell:this._cellAt(p.x,p.y)?.id??state.entranceId,player:p,
       entrance:state.entranceId,boss:state.bossDiscovered?state.bossRoom?.id:null,bossDefeated:!!state.bossDiscovered&&state.bossDefeated,
       chests:state.chests.filter(known).map(c=>({cellId:c.cellId,state:c.state})),treasure:state.treasure&&known(state.treasure)?state.treasure.state:null,
-      walls:this.vision.knownWallSegments(),explored:this.vision.getExploredRects(),landmarks:landmarks.filter(known)};
+      walls:this.vision.knownWallSegments(),explored:this.vision.getExploredRects(),landmarks:landmarks.filter(markable)};
   }
   getPacing(){
     const state=this.active;if(!state)return null;

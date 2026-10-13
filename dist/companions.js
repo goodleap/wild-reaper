@@ -15,13 +15,16 @@ export const RESCUE_RULES=Object.freeze({firstAt:35,campDuration:70,interval:45,
 // actual lethal hit; expiration, range culling and scene replacement pay nothing.
 export class Companions {
   constructor(game,{generation=true}={}) {
-    this.game=game;this.generation=generation;this.camp=null;this.members=[];this._rescueSources=new Set();
+    this.game=game;this.generation=generation;this.camps=[];this.members=[];this._rescueSources=new Set();
     this.nextPayrollAt=(game.runTime??game.time)+COMPANION_RULES.payrollInterval;this.graceUntil=0;this.unpaidCost=0;
     this.rescuedCount=0;this.nextAt=game.time+RESCUE_RULES.firstAt;this._nextKind='stormcaller';
   }
   _foot(entity=this.game.player) {return {x:entity.x,y:entity.y+groundOffset(entity,entity===this.game.player||!!entity.isCompanion||!!entity.isCaptive)};}
+  get camp(){return this.camps[0]||null;}
+  set camp(value){this.camps=value?[value]:[];}
+  campFor(siteId){return this.camps.find(camp=>camp.siteId===siteId)||null;}
   _canStart() {
-    return canStartObjective(this.game,{skipCamp:true});
+    return canStartObjective(this.game);
   }
   _hazardFree(x,y,r=0) {
     const environment=this.game.environment;
@@ -31,7 +34,7 @@ export class Companions {
   }
   _point(x,y) {
     const g=this.game,p=this._foot();
-    const safe=q=>g.terrain.isFree(q.x,q.y,125)&&!g.terrain.island?.isReserved(q.x,q.y,125)&&this._hazardFree(q.x,q.y,105)&&objectivePointSafe(g,q,125,{skipCamp:true})&&
+    const safe=q=>g.terrain.isFree(q.x,q.y,125)&&!g.terrain.island?.isReserved(q.x,q.y,125)&&this._hazardFree(q.x,q.y,105)&&objectivePointSafe(g,q,125)&&
       !g.adventure?.props.some(o=>distance(o,q)<135)&&
       (!g.adventure?.treasure||distance(g.adventure.treasure,q)>240)&&
       (!g.portal||distance(g.portal,q)>180);
@@ -62,7 +65,7 @@ export class Companions {
     const site=siteId&&g.relicSites?.sites.find(s=>s.id===siteId&&s.type==='rescue'&&s.state==='ready');
     const guards=site?.guardCount??(siteId?9:RESCUE_RULES.guards);
     if(siteId&&!site)return null;
-    if(!def||g.status!=='playing'||this.camp||this.members.some(member=>member.kind===kind)||!this._canStart()||g.enemies.length+guards>180)return null;
+    if(!def||g.status!=='playing'||g.dungeon?.active||this.members.some(member=>member.kind===kind)||this.camps.some(camp=>siteId?camp.siteId===siteId:!camp.siteId)||(!siteId&&!this._canStart())||g.enemies.length+guards>180)return null;
     // A physical prison surrounds its NPC, so only its usable interior needs
     // clearance here. Random camps retain their original open-circle check.
     const point=site?(g.terrain.isFree(site.x,site.y,26)&&this._hazardFree(site.x,site.y,24)?{x:site.x,y:site.y}:null):this._point(x,y);if(!point)return null;
@@ -79,22 +82,22 @@ export class Companions {
       enemy._navTimer=0;g._moveEntity(enemy,0,0);
       camp.guardIds.push(enemy.id);camp._remaining.add(enemy.id);
     }
-    this.camp=camp;this._nextKind=kind==='stormcaller'?'warden':'stormcaller';
+    this.camps.push(camp);this._nextKind=kind==='stormcaller'?'warden':'stormcaller';
     g._emit('rescueAppeared',{name:def.name,kind});
     g._effect(camp.x,camp.y,'ring',.8,70,def.color);
     return camp;
   }
-  _clearCamp(expired=false) {
-    const camp=this.camp;if(!camp)return;
-    this.camp=null;
+  _clearCamp(expired=false,camp=this.camp) {
+    const index=this.camps.indexOf(camp);if(index<0)return false;
+    this.camps.splice(index,1);
     // Never simulate kills while discarding a camp's surviving guards.
     this.game.enemies=this.game.enemies.filter(e=>e.rescueId!==camp.id);
     this.game.relicSites?.complete(camp.siteId,false);
     this.nextAt=this.game.time+RESCUE_RULES.interval;
-    if(expired)this.game._emit('rescueExpired',{name:camp.name});
+    if(expired)this.game._emit('rescueExpired',{name:camp.name});return true;
   }
   onEnemyKilled(enemy) {
-    const camp=this.camp;
+    const camp=this.camps.find(item=>item.id===enemy.rescueId);
     if(!camp||camp.state!=='trapped'||this.game.status!=='playing'||enemy.hp>0||enemy.rescueId!==camp.id||!camp._remaining.delete(enemy.id))return;
     camp.remainingGuards=camp._remaining.size;
     const site=this.game.relicSites?.sites.find(s=>s.id===camp.siteId);if(site)site.progress=camp.guardTotal-camp.remainingGuards;
@@ -107,7 +110,7 @@ export class Companions {
   }
   get active() {return this.members[0]||null;}
   set active(value) {this.members=value?[value]:[];this.game._friendlySnapshot=null;}
-  get upkeep() {return this.members.reduce((sum,member)=>sum+(definition(member.kind)?.upkeep||0),0);}
+  get upkeep() {return this.members.reduce((sum,member)=>sum+(member.state==='recovering'?0:definition(member.kind)?.upkeep||0),0);}
   combatants() {return this.members.filter(member=>member.state==='active'&&member.hp>0);}
   recruit(kind,{x,y,sourceId=null,rescueBonus=false}={}) {
     const g=this.game,def=definition(kind);
@@ -115,6 +118,8 @@ export class Companions {
     const point=Number.isFinite(x)&&Number.isFinite(y)?{x,y}:this._foot();
     const member={...def,id:++g._id,kind,heroId:kind,isCompanion:true,x:point.x,y:point.y-def.groundOffset,hp:def.maxHp,state:'active',flying:!!def.flying,invuln:0,remaining:Infinity,maxDuration:Infinity,facing:g.player.facing,moving:false,_attack:.6,_echoes:[],_stuckFor:0,_scan:0,sourceId};
     this._resetFollowing(member);this.members.push(member);g._friendlySnapshot=null;
+    if(this.members.length===1){this._formationFacing=g.player.facing;this._leaderPosition=this._foot();}
+    for(const other of this.members)other._followTarget=null;
     if(!Number.isFinite(x)||!Number.isFinite(y)||!g.terrain.isFree(point.x,point.y,member.r,movementProfile(member)))this._safeReturn(member);
     member.rescuedFace=.65;
     if(this.members.length===1){this.nextPayrollAt=(g.runTime??g.time)+COMPANION_RULES.payrollInterval;this.graceUntil=0;this.unpaidCost=0;}
@@ -143,16 +148,16 @@ export class Companions {
     member.hp=Math.max(0,member.hp-amount*defenseDamageMultiplier(member.defense||0)*this.protectionMultiplier(member));
     member.invuln=COMPANION_RULES.hitImmunity;member.hurtFace=.25;member.hurtFlash=.2;
     g._effect(member.x,member.y,'hit',.2,member.r*.7,'#eaa486',undefined,{source,angle:0,strength:.4,seed:member.id});
-    if(member.hp<=0){g._friendlySnapshot=null;member.state='recovering';member.recovery=COMPANION_RULES.recoveryDuration;member._echoes=[];member._attack=.8;member.scoutTarget=null;member.treasureTarget=null;g._emit('companionRecovering',{name:member.name,kind:member.kind});}
+    if(member.hp<=0){g._friendlySnapshot=null;member.state='recovering';member.recovery=COMPANION_RULES.recoveryDuration;member._recoveryBlocked=false;member._echoes=[];member._attack=.8;member.workTarget=null;member._meleeTarget=null;member.scoutTarget=null;member.treasureTarget=null;g._emit('companionRecovering',{name:member.name,kind:member.kind,cost:definition(member.kind).recoveryCost});}
     return true;
   }
-  _join() {
-    const g=this.game,camp=this.camp;
+  _join(camp=this.camps.find(item=>item.state==='ready'&&distance(this._foot(),item)<=RESCUE_RULES.rescueRadius)) {
+    const g=this.game;
     if(!camp||camp.state!=='ready'||g.status!=='playing'||distance(this._foot(),camp)>RESCUE_RULES.rescueRadius)return false;
     if(camp.siteId&&!g.relicSites?.insideRescue(camp.siteId,this._foot(),g.player.r))return false;
-    if(this.members.some(member=>member.kind===camp.kind))return false;
-    this.camp=null;
+    if(!this.camps.includes(camp)||this.members.length>=COMPANION_RULES.maxMembers||this.members.some(member=>member.kind===camp.kind))return false;
     if(camp.siteId&&!g.relicSites?.complete(camp.siteId,true))return false;
+    this.camps.splice(this.camps.indexOf(camp),1);
     return !!this.recruit(camp.kind,{x:camp.x,y:camp.y,sourceId:camp.siteId||camp.id,rescueBonus:true});
   }
   _resetFollowing(active) {
@@ -162,38 +167,53 @@ export class Companions {
     resetLocomotion(active);
   }
   _safeReturn(active) {
-    const g=this.game,p=this._foot();
-    for(const radius of [52,76,104,135])for(let i=0;i<16;i++) {
-      const angle=g.player.facing+Math.PI+i*TAU/16,x=p.x+Math.cos(angle)*radius,y=p.y+Math.sin(angle)*radius;
+    const g=this.game,p=this._foot(),def=definition(active.kind),preferred=def.followDistance;
+    for(const radius of [preferred,preferred+24,Math.max(84,preferred*.72),76,52])for(let i=0;i<16;i++) {
+      const angle=(this._formationFacing??g.player.facing)+Math.PI+def.followAngle+i*TAU/16,x=p.x+Math.cos(angle)*radius,y=p.y+Math.sin(angle)*radius;
       if(!g.terrain.isFree(x,y,active.r+3,movementProfile(active))||!this._hazardFree(x,y,active.r))continue;
       if(g.terrain.firstBlocker(p.x,p.y,x,y,0,movementProfile(active)))continue;
       if(g.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.y+groundOffset(e)-y)<e.r+active.r+12))continue;
-      if(this.members.some(other=>other!==active&&distance(this._foot(other),{x,y})<other.r+active.r+8))continue;
+      if(this.members.some(other=>other!==active&&distance(this._foot(other),{x,y})<other.r+active.r+(radius>76?24:8)))continue;
       active.x=x;active.y=y-groundOffset(active,true);this._resetFollowing(active);
       return true;
     }
     return false;
   }
+  _updateFormation(dt) {
+    const p=this._foot(),previous=this._leaderPosition;this._leaderPosition=p;
+    this._formationFacing??=this.game.player.facing;
+    if(!previous||!(dt>0))return;
+    const dx=p.x-previous.x,dy=p.y-previous.y;
+    // Only real travel changes the loose formation. Aim, idle facing and
+    // blocked movement cannot make the whole party orbit its leader.
+    if(Math.hypot(dx,dy)<.5)return;
+    const delta=Math.atan2(Math.sin(Math.atan2(dy,dx)-this._formationFacing),Math.cos(Math.atan2(dy,dx)-this._formationFacing));
+    this._formationFacing+=Math.max(-1.5*dt,Math.min(1.5*dt,delta));
+  }
   _follow(active,dt) {
-    const g=this.game,p=this._foot(),slot=Math.max(0,this.members.indexOf(active)),angle=g.player.facing+Math.PI+[0,-.85,.85,-1.65,1.65][slot];
+    const g=this.game,p=this._foot(),def=definition(active.kind),angle=(this._formationFacing??g.player.facing)+Math.PI+def.followAngle;
     let target=active._followTarget;
     // A stationary player's preferred trailing spot can fall inside a tree or
     // its steering clearance. Pick a clear slot and retain it while the player
     // rests, including turns made against a wall that do not actually travel.
-    if(!target||Math.hypot(p.x-target.playerX,p.y-target.playerY)>=4) {
+    if(!target||Math.hypot(p.x-target.playerX,p.y-target.playerY)>=12) {
       target=null;
-      for(const radius of [54+(active.r>18?12:0),84,110]) {
+      // Open ground keeps roles spread out; cramped entries may contract into
+      // shorter clear slots, then expand again once their leader moves out.
+      for(const radius of [def.followDistance,def.followDistance+24,Math.max(84,def.followDistance*.72),62]) {
         for(const turn of [0,.6,-.6,1.2,-1.2,Math.PI]) {
           const x=p.x+Math.cos(angle+turn)*radius,y=p.y+Math.sin(angle+turn)*radius;
-          if(g.terrain.isFree(x,y,active.r+10,movementProfile(active))&&!this.members.some(other=>other!==active&&other._followTarget&&distance(other._followTarget,{x,y})<active.r+other.r+8)){target={x,y};break;}
+          if(g.terrain.isFree(x,y,active.r+8,movementProfile(active))&&!g.terrain.firstBlocker(p.x,p.y,x,y,0,movementProfile(active))&&!this.members.some(other=>other!==active&&other._followTarget&&distance(other._followTarget,{x,y})<active.r+other.r+24)){target={x,y};break;}
         }
         if(target)break;
       }
-      target??={...p};target.playerX=p.x;target.playerY=p.y;active._followTarget=target;
+      // If no slot fits, hold a clear existing position instead of choosing
+      // the hero's exact feet and piling every member onto the same point.
+      target??=distance(this._foot(active),p)<240?this._foot(active):{...p};target.playerX=p.x;target.playerY=p.y;active._followTarget=target;
     }
     if(active.state==='active'&&active.workTarget&&distance(p,active.workTarget)<220)target=active.workTarget;
     else if(active.state==='active'&&active.kind==='dog'&&active.treasureTarget&&(g.runTime??g.time)<active._leadUntil){
-      const dx=active.treasureTarget.x-p.x,dy=active.treasureTarget.y-p.y,length=Math.hypot(dx,dy)||1,lead=Math.min(105,length);
+      const dx=active.treasureTarget.x-p.x,dy=active.treasureTarget.y-p.y,length=Math.hypot(dx,dy)||1,lead=Math.min(185,length);
       const point={x:p.x+dx/length*lead,y:p.y+dy/length*lead};
       if(g.terrain.isFree(point.x,point.y,active.r+5,movementProfile(active)))target=point;
     }else if(active.state==='active'&&active._meleeTarget?.hp>0&&distance(p,this._foot(active._meleeTarget))<210){
@@ -225,7 +245,7 @@ export class Companions {
   _leave() {return this.active?this.dismiss(this.active.id,'dismissed'):false;}
   updateEnemy(enemy,dt) {
     if(!enemy.rescueId)return false;
-    const camp=this.camp,g=this.game;
+    const camp=this.camps.find(item=>item.id===enemy.rescueId),g=this.game;
     if(g.status!=='playing')return true;
     if(!camp||camp.id!==enemy.rescueId)return true;
     if(enemy.rescueSpawnGrace>0) {
@@ -234,7 +254,7 @@ export class Companions {
       return true;
     }
     const p=this._foot(),foot={x:enemy.x,y:enemy.y+groundOffset(enemy)};
-    const active=distance(p,camp)<camp.engageRadius&&distance(foot,camp)<(camp.siteId?520:250)&&!majorFightActive(g);
+    const active=distance(p,camp)<camp.engageRadius&&distance(foot,camp)<(camp.siteId?520:250)&&(!!camp.siteId||!majorFightActive(g));
     enemy.guardActive=active;enemy.guardReturnTarget=null;
     if(!active) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
@@ -246,24 +266,29 @@ export class Companions {
     const g=this.game;if(g.status!=='playing')return;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
     this._payroll();
+    this._updateFormation(dt);
     for(const active of this.members) {
       for(const key of ['castFace','rescuedFace','hurtFace','hurtFlash','invuln'])active[key]=Math.max(0,(active[key]||0)-dt);
       if(active.state==='recovering'){
         active.recovery=Math.max(0,active.recovery-dt);
-        if(active.recovery<=0){g._friendlySnapshot=null;active.hp=active.maxHp*.65;active.state='active';active.invuln=1;g._emit('companionRecovered',{name:active.name,kind:active.kind});}
+        if(active.recovery<=0){
+          const cost=definition(active.kind).recoveryCost;
+          if(g.gold>=cost){g.gold-=cost;g._friendlySnapshot=null;active.hp=active.maxHp*.65;active.state='active';active.invuln=1;active._recoveryBlocked=false;g._emit('companionRecovered',{name:active.name,kind:active.kind,cost});}
+          else if(!active._recoveryBlocked){active._recoveryBlocked=true;g._emit('companionRecoveryBlocked',{name:active.name,kind:active.kind,cost});}
+        }
       }
       this._follow(active,dt);active._attack-=dt;active._scan-=dt;
       for(const echo of active._echoes)echo.life-=dt;
       if(active.state==='active'&&active._scan<=0){if(active.kind==='dog')this._sniff(active);if(active.kind==='owl')this._scout(active);active._scan=active.kind==='dog'?1.5:.6;}
     }
     this._separate(dt);
-    if(this.camp) {
-      if(this.camp.siteId) {
-        const present=new Set(g.enemies.filter(e=>e.hp>0&&e.rescueId===this.camp.id).map(e=>e.id));
-        if([...this.camp._remaining].some(id=>!present.has(id)))this._clearCamp(true);
+    const present=this.camps.some(camp=>camp.siteId)?new Set(g.enemies.filter(e=>e.hp>0&&e.rescueId).map(e=>e.id)):null;
+    for(const camp of [...this.camps]) {
+      if(camp.siteId) {
+        if([...camp._remaining].some(id=>!present.has(id)))this._clearCamp(true,camp);
       }else {
-        this.camp.life=Math.max(0,this.camp.life-dt);
-        if(this.camp.life<=0||distance(this._foot(),this.camp)>1200)this._clearCamp(true);
+        camp.life=Math.max(0,camp.life-dt);
+        if(camp.life<=0||distance(this._foot(),camp)>1200)this._clearCamp(true,camp);
       }
     }
     // Fixed rescue ruins own generation and activation. Explicit spawn() is
@@ -271,13 +296,14 @@ export class Companions {
   }
   _payroll() {
     const g=this.game,now=g.runTime??g.time;if(!this.members.length)return;
+    if(!this.upkeep){this.graceUntil=0;this.unpaidCost=0;this.nextPayrollAt=now+COMPANION_RULES.payrollInterval;return;}
     if(this.graceUntil>0){
       this.unpaidCost=this.upkeep;
       if(g.gold>=this.unpaidCost){g.gold-=this.unpaidCost;this.graceUntil=0;this.unpaidCost=0;this.nextPayrollAt=(g.runTime??g.time)+COMPANION_RULES.payrollInterval;g._emit('companionPaid',{cost:this.upkeep});}
       else if(now>=this.graceUntil){
         // Retain cheaper members when the available purse can maintain them.
         let available=Math.max(0,g.gold),paid=0;
-        for(const member of [...this.members].sort((a,b)=>a.upkeep-b.upkeep||a.id-b.id)){
+        for(const member of this.members.filter(member=>member.state!=='recovering').sort((a,b)=>a.upkeep-b.upkeep||a.id-b.id)){
           if(available>=member.upkeep){available-=member.upkeep;paid+=member.upkeep;}
           else this.dismiss(member.id,'unpaid');
         }
@@ -292,8 +318,10 @@ export class Companions {
   _separate(dt) {
     if(!(dt>0))return;
     for(let i=0;i<this.members.length;i++)for(let j=i+1;j<this.members.length;j++){
-      const a=this.members[i],b=this.members[j];if(a.flying!==b.flying)continue;
-      const af=this._foot(a),bf=this._foot(b),dx=bf.x-af.x,dy=bf.y-af.y,d=Math.hypot(dx,dy),minimum=a.r+b.r+5;
+      const a=this.members[i],b=this.members[j];
+      // Flying companions need visual breathing room as well. Movement still
+      // uses each unit's own collision profile, so this adds no air blocker.
+      const af=this._foot(a),bf=this._foot(b),dx=bf.x-af.x,dy=bf.y-af.y,d=Math.hypot(dx,dy),minimum=Math.max(54,a.r+b.r+22);
       if(d>=minimum)continue;
       const angle=d>.001?Math.atan2(dy,dx):(i+j)*2.4,push=Math.min((minimum-d)*.5,35*dt);
       this.game._moveEntity(a,-Math.cos(angle)*push,-Math.sin(angle)*push);this.game._moveEntity(b,Math.cos(angle)*push,Math.sin(angle)*push);
@@ -386,6 +414,7 @@ export class Companions {
   }
   onSceneChange() {
     this.game._friendlySnapshot=null;const p=this._foot();
+    this._formationFacing=this.game.player.facing;this._leaderPosition=p;
     for(const active of this.members){active._echoes=[];active.workTarget=null;active._meleeTarget=null;active.scoutTarget=null;active.treasureTarget=null;active.scoutCount=0;active.cue='';active._scan=0;active.x=p.x;active.y=p.y-active.groundOffset;this._resetFollowing(active);this._safeReturn(active);}
   }
   onRegionChange() {

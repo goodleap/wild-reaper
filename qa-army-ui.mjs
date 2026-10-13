@@ -17,4 +17,10 @@ assert.match(armyPanelHTML({status:'playing',companions:{members:[{id:12,kind:'d
 const normal=harness();normal.run('startGame();debugArmyAction(true);');assert.equal(normal.run('game.companions.members.length'),0,'debug action is unavailable in ordinary runs');
 const full=harness('?debug=full');full.run('startGame();');assert.equal(full.run('game.companions.members.length'),5);assert.equal(full.run('archive.data.entries["companion:golem"].acquisitions'),1);
 for(const kind of ['dog','owl','golem']){full.run(`{const site=game.relicSites.sites.find(s=>s.kind==='${kind}');game.player.x=site.x;game.player.y=site.y+100;shippedRenderGame();}`);}
+full.run(`{const mage=game.companions.members.find(m=>m.kind==='stormcaller');mage.invuln=0;game.companions.takeDamage(mage,10000);updateCompanionHUD();openCharacter('army');}`);
+assert.match(full.nodes['companion-time'].textContent,/5 · 9◉\/30s/,'recovering companions are excluded from the displayed wage total');
+assert.match(full.nodes['character-content'].innerHTML,/60/,'the army panel exposes the recovery fee');
+full.run(`closeCharacter();openMap();`);
+assert.match(full.nodes['map-note'].textContent,/调试地标全显/);
+assert.match(full.nodes['expanded-map-canvas'].getAttribute('aria-label'),/迷雾保留/);
 console.log('Army UI: compact HUD, five-tab panel, pause isolation, safe dismissal, full-debug and archive integration passed (VM DOM).');

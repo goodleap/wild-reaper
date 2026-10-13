@@ -81,7 +81,7 @@ export class Regions {
       !g.environment?.props.some(o=>distance(o,{x,y})<(o.blastRadius||82)+80)&&
       !g.adventure?.props.some(o=>distance(o,{x,y})<100)&&
       (!g.adventure?.treasure||distance(g.adventure.treasure,{x,y})>220)&&
-      (!g.companions?.camp||distance(g.companions.camp,{x,y})>350)&&
+      !(g.companions?.camps||[]).some(camp=>distance(camp,{x,y})<=350)&&
       this.portals.every(portal=>distance(portal,{x,y})>(forward?600:110));
     if(planned&&safe(origin.x,origin.y))return {x:origin.x,y:origin.y};
     const radii=planned?[32,64,96]:forward?[1120,1270,1420,1570,1720,1870,2020,2170]:[90,150,220,300,400];
@@ -221,7 +221,7 @@ export class Regions {
     const enemies=g.enemies.filter(e=>e.hp>0&&(e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId));
     g.terrain._cache?.clear();
     const state={savedAt:g.time,savedClock:g._clock,terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,settlements:g.settlements,relicSites:g.relicSites,enemies,gems:g.gems,coins:g.coins,portals:this.portals,portal:g.portal,dungeonStates:g.dungeon.states,discoveredMap:g.discoveredMap,
-      companionCamp:g.companions.camp,companionNextAt:g.companions.nextAt,companionGeneration:g.companions.generation,bossDefeated:g.bossDefeated,nextBossAt:g.nextBossAt};
+      companionCamps:g.companions.camps,companionNextAt:g.companions.nextAt,companionGeneration:g.companions.generation,bossDefeated:g.bossDefeated,nextBossAt:g.nextBossAt};
     this.states.set(g.regionIndex,state);return state;
   }
   restoreWorld(index) {
@@ -229,7 +229,7 @@ export class Regions {
     const g=this.game,delta=g.time-state.savedAt,clockDelta=g._clock-state.savedClock;
     for(const key of ['terrain','adventure','environment','encounters','settlements','relicSites','enemies','gems','coins','portal','discoveredMap','bossDefeated','nextBossAt'])g[key]=state[key];
     this.portals=state.portals;g.dungeon.states=state.dungeonStates;
-    g.companions.camp=state.companionCamp;g.companions.generation=state.companionGeneration;g.companions.nextAt=state.companionNextAt+delta;
+    g.companions.camps=state.companionCamps||(state.companionCamp?[state.companionCamp]:[]);g.companions.generation=state.companionGeneration;g.companions.nextAt=state.companionNextAt+delta;
     if(g.adventure)g.adventure._nextTreasureAt+=delta;if(g.encounters)g.encounters.nextAt+=delta;
     for(const e of g.enemies)for(const key of ['superRootUntil','superSlowUntil','branchSlowUntil','shockUntil'])if(Number.isFinite(e[key]))e[key]+=clockDelta;
     this.states.delete(index);this._setStructures();this._syncConnections();g.settlements?.ensureAngels?.();return true;

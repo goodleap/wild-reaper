@@ -41,3 +41,20 @@ let grouped=map.draw(ctx,guarded,{width:420,height:420,expanded:true}).markers;a
 guarded.settlements.sites[0].discovered=false;grouped=map.draw(ctx,guarded,{width:420,height:420,expanded:true}).markers;assert(!landmarkState(grouped.find(m=>m.id==='gate')).includes('天使'),'an unseen guardian cannot leak into the gate description');
 guarded.settlements.sites[0].discovered=true;guarded.regions.portals[0].discovered=false;grouped=map.draw(ctx,guarded,{width:420,height:420,expanded:true}).markers;assert.deepEqual(grouped.map(m=>m.id),['angel:gate','angel:spawn'],'seeing a guardian alone cannot reveal its unknown portal');
 console.log('Full map gate markers: discovered guardians merge with their exact portal, spawn angels stay separate, local icons stay unchanged and hidden sites do not leak.');
+
+// Unknown debug landmarks sit over the existing fog; neither map size traces
+// new explored cells or generates new terrain merely to expose their markers.
+const debug=game();debug.debug=true;debug.debugFull=true;
+debug.regions.portals=[{id:'debug-near',x:300,y:0,state:'locked',discovered:false},{id:'debug-far',x:2000,y:0,state:'locked',discovered:false}];
+debug.settlements.sites=[{id:'debug-castle',type:'castle',x:-2200,y:0,state:'ready',discovered:false}];
+calls.length=0;const debugLocal=map.draw(ctx,debug,{width:128,height:128});
+assert.deepEqual(debugLocal.markers.map(marker=>marker.id),['debug-near']);
+assert.equal(calls.filter(call=>call[0]==='rect').length,0,'debug minimap retains the empty exploration clip');
+calls.length=0;const debugFull=map.draw(ctx,debug,{width:420,height:420,expanded:true});
+assert.deepEqual(debugFull.markers.map(marker=>marker.id),['debug-castle','debug-near','debug-far']);
+assert.equal(calls.filter(call=>call[0]==='rect').length,0,'debug full map retains the empty exploration clip');
+assert.equal(debugFull.explored,0);assert.equal(debug.terrain.island.explored,undefined);
+assert(debug.regions.portals.every(portal=>portal.discovered===false));assert.equal(debug.settlements.sites[0].discovered,false);
+debug.debug=false;assert.equal(map.draw(ctx,debug,{width:420,height:420,expanded:true}).markers.length,0);
+assert.equal(stack.length,0);
+console.log('Debug island map: full and nearby landmark visibility keeps unknown terrain opaque and normal maps unchanged.');

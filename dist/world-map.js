@@ -61,11 +61,13 @@ export class WorldMap {
     if(!game?.player)return [];
     range=positive(range,WORLD_MAP_RULES.range);const p=feet(game),result=[];
     if(game.dungeon?.active){
-      for(const marker of game.dungeon.getMap?.()?.landmarks||[]){const dx=marker.x-p.x,dy=marker.y-p.y,distance=Math.hypot(dx,dy);if(distance<=range)result.push({...marker,dx,dy,distance});}
+      for(const marker of game.dungeon.getMap?.({revealMarkers:game.debug===true})?.landmarks||[]){const dx=marker.x-p.x,dy=marker.y-p.y,distance=Math.hypot(dx,dy);if(distance<=range)result.push({...marker,dx,dy,distance});}
       return result;
     }
     for(const {site,type} of landmarks(game)) {
-      if(!site.discovered)continue;
+      // Debug exposes existing map landmarks without discovering their ground
+      // or unlocking archive entries. Generation and world visibility are unchanged.
+      if(!site.discovered&&game.debug!==true)continue;
       const dx=site.x-p.x,dy=site.y-p.y,distance=Math.hypot(dx,dy);
       if(distance>range)continue;
       const active=type==='portal'&&site.state==='active';
