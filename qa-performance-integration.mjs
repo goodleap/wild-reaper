@@ -59,7 +59,7 @@ for(const search of ['', '?debug']){
   const debugDetails=pauseColumn.children.filter(node=>node.id==='debug-performance');
   assert.equal(debugDetails.length,search?1:0,'performance detail is attached once in debug and absent on normal URLs');
   assert.equal(run('diagnostics===null'),!search,'ordinary URLs allocate no diagnostic capture');
-  if(!search){assert(nodes['debug-diagnostics'].classList.contains('hidden'));assert.equal(nodes['diagnostic-start'].onclick,undefined);}
+  if(!search){assert(nodes['debug-diagnostics'].classList.contains('hidden'));assert(nodes['diagnostic-live'].classList.contains('hidden'));assert.equal(nodes['diagnostic-start'].onclick,undefined);assert.equal(nodes['diagnostic-auto'].onclick,undefined);}
   nodes['start-button'].onclick();
   run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
   assert.equal(nodes['game-canvas'].width,786,'phone rendering retains native 2x detail within the pixel budget');
@@ -190,4 +190,61 @@ game.settlements.sites=[diagnosticHut];game.player.x=diagnosticHut.door.x;game.p
   let prevented=false;listeners['qa-app:selectstart']({target:output,cancelable:true,preventDefault(){prevented=true;}});
   assert.equal(prevented,false,'manual-copy textarea remains selectable under the game callout guard');
 }
-console.log('Performance integration: live cadence, retained scenes, input/time continuity, bounded buffers, debug-only 15-second capture, HUD/light controls, interruption/cancellation and clipboard fallback passed.');
+
+// A complete automatic comparison changes only its diagnostic mode between
+// stages. It must not pause, reset movement, or leave a 5-second manual default.
+{
+  const {nodes,run,tick,resize}=harness('?debug');
+  nodes['start-button'].onclick();
+  const quietGame=()=>run(`game=new Game({terrain:new game.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
+game.enemies=[];game.regionGrace=Infinity;game._spawn=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;game.viewWidth=width;game.viewHeight=height;updateHUD();`);
+  quietGame();tick();nodes['pause-button'].onclick();nodes['diagnostic-lights-off'].onclick();
+  const indicator=nodes['diagnostic-live'];let indicatorText=indicator.textContent,indicatorWrites=0;
+  Object.defineProperty(indicator,'textContent',{get:()=>indicatorText,set:value=>{indicatorText=value;indicatorWrites++;}});
+  nodes['diagnostic-auto'].onclick();
+  assert.equal(run('diagnostics.mode'),'default','automatic sampling always begins with the default mode');
+  assert.equal(run('paused'),false);assert(!indicator.classList.contains('hidden'));assert.match(indicator.textContent,/1\/3.*5 秒/);
+  run("keys.add('KeyD');game.gold=111;");tick();assert.equal(run('diagnostics.elapsedMs'),0,'the first automatic frame establishes its RAF baseline');
+  let frames=0,completed=0;
+  while(run('diagnostics.running')&&frames++<1000){
+    assert.equal(run('paused'),false);assert(run("keys.has('KeyD')"),'movement continues throughout all three stages');
+    if(run('diagnosticSequence.index')===2&&run('diagnostics.elapsedMs')>4980)run('game.gold=4321;');
+    tick();const reports=run('diagnostics.reports.length');
+    if(reports>completed&&reports<3){
+      completed=reports;assert.equal(run('paused'),false);assert(run("keys.has('KeyD')"));
+      assert.equal(run('diagnostics.elapsedMs'),0);assert.match(indicator.textContent,new RegExp(`${completed+1}/3`));
+      tick();assert.equal(run('diagnostics.elapsedMs'),0,'each newly selected stage excludes its first-frame interval');
+    }
+  }
+  assert(frames<1000);assert.equal(run('diagnostics.reports.length'),3);assert.equal(run('paused'),true);assert.equal(run('diagnosticSequence'),null);
+  const reports=JSON.parse(run('JSON.stringify(diagnostics.reports)'));
+  assert.deepEqual(reports.map(report=>report.mode),['default','hud-off','lights-off']);
+  assert.deepEqual(reports.map(report=>report.metadata.stage),['1/3','2/3','3/3']);
+  assert.equal(new Set(reports.map(report=>report.metadata.batch)).size,1);assert(reports[0].metadata.batch);
+  for(const report of reports){assert(report.activeMs>=5000&&report.activeMs<5020);assert.equal(report.metadata.capture,'全自动');assert.equal(report.movingRatio,1);}
+  assert.equal(indicatorWrites,3,'the live indicator writes only at automatic start and two stage changes');
+  assert(indicator.classList.contains('hidden'));assert.equal(run('diagnostics.mode'),'default');assert.equal(nodes['gold-label'].textContent,String(run('game.gold')),'completion refreshes the real HUD');
+
+  nodes['diagnostic-hud-off'].onclick();nodes['diagnostic-start'].onclick();
+  assert.equal(run('diagnosticSequence'),null);assert.equal(run('diagnostics.mode'),'hud-off');assert.match(indicator.textContent,/单组.*15 秒/);
+  for(let i=0;i<320;i++)tick();
+  assert(run('diagnostics.running'));assert.equal(run('diagnostics.reports.length'),3,'single-mode capture is still running after five seconds');
+  let manualFrames=0;while(run('diagnostics.running')&&manualFrames++<650)tick();
+  assert(manualFrames<650);const single=JSON.parse(run('JSON.stringify(diagnostics.reports[3])'));
+  assert(single.activeMs>=15000&&single.activeMs<15020);assert.equal(single.mode,'hud-off');assert.equal(single.metadata.capture,'单组');assert.equal(single.metadata.batch,undefined);
+
+  // Resize and a real entrance cancel the current automatic stage without
+  // losing completed results. Both restore the default visual controls.
+  const advanceToSecondStage=()=>{nodes['pause-button'].onclick();nodes['diagnostic-auto'].onclick();let n=0;while(run('diagnosticSequence?.index')===0&&n++<320)tick();assert(n<320);assert.equal(run('diagnostics.mode'),'hud-off');};
+  advanceToSecondStage();const beforeResize=run('JSON.stringify(diagnostics.reports)');resize(1512,850);
+  assert.equal(run('diagnostics.running'),false);assert.equal(run('diagnosticSequence'),null);assert.equal(run('diagnostics.mode'),'default');assert.equal(run('JSON.stringify(diagnostics.reports)'),beforeResize);assert(indicator.classList.contains('hidden'));
+  advanceToSecondStage();const beforeScene=run('JSON.stringify(diagnostics.reports)');
+  run(`const autoHut={id:'qa-auto-hut',type:'supply',name:'测试小屋',x:400,y:0,door:{x:400,y:30},width:54,depth:28,interactRadius:82,state:'ready',seed:1,guardIds:[]};
+game.settlements.sites=[autoHut];game.player.x=autoHut.door.x;game.player.y=autoHut.door.y-groundOffset(game.player,true);`);
+  tick();assert(run('game.sceneTransition.active'));assert.equal(run('diagnostics.running'),false);assert.equal(run('diagnosticSequence'),null);assert.equal(run('diagnostics.mode'),'default');assert.equal(run('JSON.stringify(diagnostics.reports)'),beforeScene);assert(indicator.classList.contains('hidden'));
+  quietGame();nodes['pause-button'].onclick();nodes['diagnostic-auto'].onclick();tick();tick();const beforeMode=run('JSON.stringify(diagnostics.reports)');
+  nodes['diagnostic-lights-off'].onclick();assert.equal(run('diagnostics.running'),false);assert.equal(run('diagnosticSequence'),null);assert.equal(run('diagnostics.mode'),'lights-off','explicit manual mode choice replaces the automatic sequence');assert.equal(run('JSON.stringify(diagnostics.reports)'),beforeMode);assert(indicator.classList.contains('hidden'));
+  advanceToSecondStage();const beforeDeath=run('JSON.stringify(diagnostics.reports)');run("game.status='dead';");tick();
+  assert.equal(run('runEnded'),true);assert.equal(run('diagnostics.running'),false);assert.equal(run('diagnosticSequence'),null);assert.equal(run('diagnostics.mode'),'default');assert(indicator.classList.contains('hidden'));assert.equal(run('JSON.stringify(diagnostics.reports)'),beforeDeath,'death stops the automatic comparison without discarding completed reports');
+}
+console.log('Performance integration: retained scenes, input/time continuity, buffers, manual 15-second and automatic 3×5-second capture, HUD/light controls, cancellations and clipboard fallback passed.');

@@ -33,6 +33,7 @@ export class FrameDiagnostics {
 
   get hudDisabled() { return this.mode === 'hud-off'; }
   get lightsDisabled() { return this.mode === 'lights-off'; }
+  get elapsedMs() { return this._elapsed; }
 
   setMode(mode) {
     if (!Object.hasOwn(MODE_LABELS, mode)) return false;
@@ -44,10 +45,13 @@ export class FrameDiagnostics {
     this._last = null; this._count = 0; this._elapsed = 0;
     this._moving = 0; this._over25 = 0; this._over50 = 0;
     this._metadata = {}; this._startedAt = null;
+    this._captureDurationMs = this.durationMs;
   }
 
-  start(metadata = {}) {
+  start(metadata = {}, options = {}) {
     this.cancel();
+    const durationMs = options?.durationMs;
+    if (Number.isFinite(durationMs) && durationMs > 0) this._captureDurationMs = durationMs;
     this._metadata = copyMetadata(metadata);
     this._startedAt = new Date().toISOString();
     this.running = true;
@@ -77,7 +81,7 @@ export class FrameDiagnostics {
     if (moving) this._moving++;
     if (elapsed > 25) this._over25++;
     if (elapsed > 50) this._over50++;
-    if (this._elapsed >= this.durationMs) return this._finish('duration');
+    if (this._elapsed >= this._captureDurationMs) return this._finish('duration');
     if (this._count >= FRAME_SAMPLE_CAPACITY) return this._finish('capacity');
     return null;
   }

@@ -40,6 +40,30 @@ for (let i = 1; i <= 150; i++) finished = d.sample(i * 100, active);
 assert.equal(finished.reason, 'duration'); assert.equal(finished.activeMs, 15000);
 assert.equal(d.running, false); assert.equal(d.reports.length, 2);
 
+// A short automatic leg never changes the duration of later manual captures.
+const short = new FrameDiagnostics();
+short.start({group:'short'}, {durationMs:5000});
+assert.equal(short.sample(100000, active), null); assert.equal(short.elapsedMs, 0);
+assert.equal(short.sample(104999, active), null); assert.equal(short.elapsedMs, 4999);
+const shortReport = short.sample(105000, active);
+assert.equal(shortReport.activeMs, 5000); assert.equal(short.durationMs, 15000);
+short.start(); short.sample(200000, active);
+assert.equal(short.sample(205000, active), null); assert.equal(short.running, true);
+assert.equal(short.sample(215000, active).activeMs, 15000);
+short.start({}, {durationMs:5000}); short.sample(0, active); short.sample(100, active);
+short.setMode('hud-off'); assert.equal(short.elapsedMs, 0);
+short.start({}, {durationMs:5000});
+assert.equal(short.sample(900000, active), null, 'mode transition time is not a sample');
+assert.equal(short.sample(905000, active).activeMs, 5000);
+for (const durationMs of [0,-1,NaN,Infinity,'5000',null,undefined]) {
+  short.start({}, {durationMs}); short.sample(0, active);
+  assert.equal(short.sample(5000, active), null, 'invalid override uses the configured duration');
+  assert.equal(short.sample(15000, active).activeMs, 15000);
+}
+short.start({}, {durationMs:5000}); short.cancel(); short.start(); short.sample(0, active);
+assert.equal(short.sample(5000, active), null, 'cancel clears the previous override');
+assert.equal(short.sample(15000, active).activeMs, 15000);
+
 d.start(); d.sample(0, active); d.sample(10, active);
 assert.equal(d.setMode('hud-off'), true); assert.equal(d.running, false);
 assert.equal(d.reports.length, 2); assert.equal(d.hudDisabled, true); assert.equal(d.lightsDisabled, false);
