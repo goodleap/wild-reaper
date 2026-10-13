@@ -1,4 +1,5 @@
-import { ARCHIVE_CATEGORIES, ARCHIVE_ENTRIES, ARCHIVE_ENTRY_BY_ID } from './archive-catalog.js';
+import { worldArchiveHTML, WORLD_ARCHIVE_WORLDS, WORLD_ARCHIVE_LOCATIONS } from './world-archive.js';
+import { ARCHIVE_CATEGORIES, ARCHIVE_ENTRIES, ARCHIVE_ENTRY_BY_ID, ARCHIVE_TABS } from './archive-catalog.js';
 import { MonsterArt } from './monster-art.js';
 import { CombatArt } from './combat-art.js';
 import { drawSwordBlade } from './sword-art.js';
@@ -78,9 +79,9 @@ function milestonesHTML(data){
   return `<div class="archive-milestones-heading"><h3>冒险的足迹</h3><span>${completed} / ${items.length} 已达成</span></div><p class="archive-small-note">记录探索与挑战的成果，不提供战斗属性加成。</p><div class="archive-milestones">${items.map(item=>`<div class="archive-milestone${item.complete?' is-complete':''}"><span class="archive-milestone-mark" aria-hidden="true">${item.complete?'✓':'◇'}</span><div><h4>${item.name}</h4><p>${item.description}</p><div class="archive-progress" role="progressbar" aria-label="${item.name}" aria-valuenow="${item.progress}" aria-valuemin="0" aria-valuemax="${item.target}"><i style="width:${Math.min(100,100*item.progress/item.target)}%"></i></div></div><span class="archive-milestone-status">${item.complete?'已达成':item.unit==='time'?`${Math.floor(item.progress/60)} / ${item.target/60} 分`:`${number(item.progress)} / ${number(item.target)}`}</span></div>`).join('')}</div>`;
 }
 export function archivePanelHTML(data={},options={}){
-  const tab=safeChoice(options.tab,['codex','records','milestones'],'codex'),category=safeChoice(options.category,ARCHIVE_CATEGORIES.map(item=>item.id),'enemies'),difficulty=safeChoice(options.difficulty,['normal','casual'],'normal');
+  const tab=safeChoice(options.tab,ARCHIVE_TABS.map(item=>item.id),'codex'),category=safeChoice(options.category,ARCHIVE_CATEGORIES.map(item=>item.id),'enemies'),difficulty=safeChoice(options.difficulty,['normal','casual'],'normal');
   const progress=`${knownCount(data)} / ${ARCHIVE_ENTRIES.length}`;
-  return `<div class="archive-overview"><span>每次冒险，都留下新的发现</span><strong>已发现 ${progress}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${[['codex','图鉴'],['records','记录'],['milestones','里程碑']].map(([id,label])=>`<button type="button" data-archive-tab="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
+  return `<div class="archive-overview"><span>${tab==='world'?'岛屿、遗迹与冒险据点':'每次冒险，都留下新的发现'}</span><strong>${tab==='world'?`${WORLD_ARCHIVE_WORLDS.length} 个世界 · ${WORLD_ARCHIVE_LOCATIONS.length} 类地点`:`已发现 ${progress}`}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${ARCHIVE_TABS.map(({id,name:label})=>`<button type="button" data-archive-tab="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='world'?worldArchiveHTML():tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
 }
 
 let monsterArt=null,combatArt=null,humanoidArt=null,companionArt=null;

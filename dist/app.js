@@ -26,7 +26,7 @@ import { ImmersionArt } from './immersion-art.js';
 import { presentUpgrade, upgradeCardHTML } from './upgrade-presentation.js';
 import { characterPanelHTML } from './character-panel.js';
 import { AdventureArchive } from './adventure-archive.js';
-import { ARCHIVE_ENTRIES } from './archive-catalog.js';
+import { ARCHIVE_ENTRIES, ARCHIVE_CATEGORIES, ARCHIVE_TABS } from './archive-catalog.js';
 import { archivePanelHTML, drawArchiveArt, archiveMilestones } from './archive-panel.js';
 import { groundOffset, rockShadowParts } from './terrain.js';
 import { isGrounded, obstacleHeight } from './height-rules.js';
@@ -593,7 +593,7 @@ $('close-archive').onclick=closeArchive;
 $('archive-overlay').addEventListener('pointerdown',e=>e.stopPropagation());
 $('archive-content').addEventListener('click',e=>{
   const button=e.target.closest?.('button');if(!button||!archiveOpen)return;
-  for(const [attribute,key,allowed] of [['tab','tab',['codex','records','milestones']],['category','category',['enemies','bosses','weapons','skills','weaponSkills']],['difficulty','difficulty',['normal','casual']],['entry','selectedId',null]]){
+  for(const [attribute,key,allowed] of [['tab','tab',ARCHIVE_TABS.map(item=>item.id)],['category','category',ARCHIVE_CATEGORIES.map(item=>item.id)],['difficulty','difficulty',['normal','casual']],['entry','selectedId',null]]){
     const value=button.getAttribute(`data-archive-${attribute}`);if(value===null||value===undefined||allowed&&!allowed.includes(value))continue;
     archiveView[key]=value;if(key==='category')archiveView.selectedId=null;
     renderArchive();

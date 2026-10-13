@@ -34,4 +34,40 @@ for(const region of ['forest','marsh','ruins'])for(const seed of [0,1,9]){
  assert.equal(world.relicSites.sites.filter(s=>s.kind).length,5,`${region}/${seed}: all recruitment sites exist`);
  for(const site of world.relicSites.sites.filter(s=>s.kind))assert(t.isFree(site.door.x,site.door.y,22),`${region}/${seed}/${site.key}: approach is traversable`);
 }
-console.log('Army world: five reachable recruitments, safe challenges, conditional stone gate, unique rewards, paused work and persistent travel passed.');
+// Drive real movement and TouchInteractions through Game.update: testing only
+// RelicSites.interact used to hide the altar's misplaced prison-door anchor.
+function altarRun(options={}) {
+ const game=quiet(new Game(options));game.enemies=[];game.events=[];game._shot=Infinity;
+ if(game.encounters)game.encounters.generation=false;
+ const altar=game.relicSites.sites.find(site=>site.appearance==='golemaltar');assert(altar);
+ assert.deepEqual(altar.door,{x:altar.x,y:altar.y},'the open altar has no off-center doorway');
+ return {game,altar};
+}
+for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+ const {game,altar}=altarRun();
+ // A previously generated region may still carry the old front-door field.
+ if(dx===-1)altar.door={x:altar.x,y:altar.y+100};
+ feet(game,{x:altar.x+dx*70,y:altar.y+dy*70});game.update(0);
+ assert.equal(altar.state,'ready');assert.equal(game.companions.camp,null);
+ const hint=game.getInteraction();assert.equal(hint.id,altar.id);assert.equal(hint.x,altar.x);assert.equal(hint.y,altar.y);assert.equal(hint.touchRadius,ARMY_SITE_RULES.altarTouchRadius);
+ assert.equal(game.relicSites.interact(altar.id),false,'a hint-range key press cannot remotely trigger the altar');
+ for(let step=0;step<20&&altar.state==='ready';step++)game.update(.025,{x:-dx,y:-dy});
+ assert.equal(altar.state,'active','walking onto the central pedestal activates from every direction');
+ const camp=game.companions.camp;assert(camp);assert.equal(camp.kind,'golem');
+ const guards=game.enemies.filter(enemy=>enemy.rescueId===camp.id);assert.equal(guards.length,8);
+ const foot={x:game.player.x,y:game.player.y+groundOffset(game.player,true)};
+ for(const enemy of guards){assert(Math.hypot(enemy.x-foot.x,enemy.y+groundOffset(enemy)-foot.y)>=150);assert.equal(enemy.rescueSpawnGrace,.8);assert.equal(game._hurtEnemy(enemy,enemy.hp+100),0,'activation retains the harmless spawn warning');}
+ assert.equal(game.companions.members.length,0,'touching the statue begins its challenge, not instant recruitment');
+ game.update(0);game.update(0);assert.equal(game.enemies.filter(enemy=>enemy.rescueId===camp.id).length,8);assert.equal(game.events.filter(event=>event.type==='relicSiteStarted'&&event.siteId===altar.id).length,1);
+ if(dx===1){
+   for(const enemy of guards){enemy.rescueSpawnGrace=0;game._hurtEnemy(enemy,enemy.hp+100);}
+   assert.equal(camp.state,'ready');game.update(0);assert.equal(altar.state,'cleared');assert.equal(game.companions.members.filter(member=>member.kind==='golem').length,1);assert.equal(game.rescuePower,1);
+   feet(game,{x:altar.x+100,y:altar.y});game.update(0);feet(game,altar);game.update(0);assert.equal(game.rescuePower,1);assert.equal(game.companions.members.length,1,'reentering a completed altar cannot duplicate recruitment or reward');
+ }
+}
+const pausedAltar=altarRun();feet(pausedAltar.game,pausedAltar.altar);pausedAltar.game.status='paused';pausedAltar.game.update(.05);assert.equal(pausedAltar.altar.state,'ready');pausedAltar.game.status='playing';pausedAltar.game.update(0);assert.equal(pausedAltar.altar.state,'active','a paused contact does not consume the activation latch');
+const busyAltar=altarRun(),otherPrison=busyAltar.game.relicSites.sites.find(site=>site.kind==='stormcaller');feet(busyAltar.game,otherPrison.door);assert(busyAltar.game.relicSites.interact(otherPrison.id));feet(busyAltar.game,busyAltar.altar);busyAltar.game.update(0);assert.equal(busyAltar.altar.state,'ready');assert.equal(busyAltar.game.getInteraction().label,'先完成当前遗迹挑战');
+busyAltar.game.companions._clearCamp();busyAltar.game.update(0);assert.equal(busyAltar.altar.state,'active','a rejected busy contact never latches away a later valid attempt');
+const graceAltar=altarRun();feet(graceAltar.game,graceAltar.altar);graceAltar.game.regionGrace=2;graceAltar.game.update(0);assert.equal(graceAltar.altar.state,'ready');assert.match(graceAltar.game.getInteraction().label,/先结束附近战斗/);graceAltar.game.regionGrace=0;graceAltar.game.update(0);assert.equal(graceAltar.altar.state,'active');
+const ownedAltar=altarRun({debug:true,debugFull:true});feet(ownedAltar.game,ownedAltar.altar);ownedAltar.game.update(0);assert.equal(ownedAltar.altar.state,'ready');assert.equal(ownedAltar.game.companions.camp,null);assert.equal(ownedAltar.game.getInteraction().enabled,false);assert.equal(ownedAltar.game.getInteraction().label,'岩灵已在队伍中');assert.equal(ownedAltar.game.companions.members.filter(member=>member.kind==='golem').length,1);
+console.log('Army world: five reachable recruitments, safe challenges, conditional stone gate, unique rewards, paused work, persistent travel and actual center-contact altar activation passed.');

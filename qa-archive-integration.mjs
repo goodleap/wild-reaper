@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { harness, html } from './qa-app-harness.mjs';
 import { ARCHIVE_STORAGE_KEY } from './dist/adventure-archive.js';
-import { ARCHIVE_ENTRIES } from './dist/archive-catalog.js';
+import { ARCHIVE_ENTRIES, ARCHIVE_CATEGORIES, ARCHIVE_TABS } from './dist/archive-catalog.js';
 
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert.equal(new Set(ids).size,ids.length,'shipped modal and entry IDs remain unique');
@@ -41,6 +41,12 @@ const archiveControl=(h,attribute,value)=>{
   archiveControl(h,'entry','weapon:arrow');assert.match(nodes['archive-content'].innerHTML,/尚未发现/);assert.doesNotMatch(nodes['archive-content'].innerHTML,/穿透适合直线/);
   archiveControl(h,'category','skills');assert.match(nodes['archive-content'].innerHTML,/天雷轰击/);assert.doesNotMatch(nodes['archive-content'].innerHTML,/王庭剑阵/);
   archiveControl(h,'category','weaponSkills');assert.doesNotMatch(nodes['archive-content'].innerHTML,/符文穿击/);
+  for(const category of ARCHIVE_CATEGORIES){archiveControl(h,'category',category.id);assert.equal(run('archiveView.category'),category.id,'every rendered category handles clicks');}
+  assert.match(nodes['archive-content'].innerHTML,/data-archive-entry="companion:golem"/,'companions category renders its actual entries');
+  assert.deepEqual(ARCHIVE_TABS.map(tab=>tab.id),['codex','world','records','milestones']);
+  const orderedTabs=[...nodes['archive-content'].innerHTML.matchAll(/data-archive-tab="([^"]+)"/g)].map(match=>match[1]);assert.deepEqual(orderedTabs,ARCHIVE_TABS.map(tab=>tab.id));
+  const archiveBefore=run('JSON.stringify(archive.data)');archiveControl(h,'tab','world');assert.equal(run('archiveView.tab'),'world');assert.match(nodes['archive-content'].innerHTML,/低语之森/);assert.match(nodes['archive-content'].innerHTML,/封石宝库/);assert.equal(run('JSON.stringify(archive.data)'),archiveBefore,'world reference does not unlock codex or change statistics');
+  archiveControl(h,'tab','codex');assert.equal(run('archiveView.category'),'companions','returning from the world retains chosen codex category');
   archiveControl(h,'tab','records');assert.match(nodes['archive-content'].innerHTML,/一路走来/);
   archiveControl(h,'difficulty','casual');assert.equal(run('archiveView.difficulty'),'casual');
   archiveControl(h,'tab','milestones');assert.match(nodes['archive-content'].innerHTML,/冒险的足迹/);

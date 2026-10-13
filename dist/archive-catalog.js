@@ -2,6 +2,7 @@ import { WEAPON_DEFS, SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS } from './combat-cata
 import { WEAPON_BRANCHES } from './weapon-branches.js';
 import { companionDefinition } from './companion-catalog.js';
 
+export const ARCHIVE_TABS=Object.freeze([{id:'codex',name:'图鉴'},{id:'world',name:'世界'},{id:'records',name:'记录'},{id:'milestones',name:'里程碑'}].map(Object.freeze));
 export const ARCHIVE_CATEGORIES=Object.freeze([
   {id:'enemies',name:'怪物'},{id:'bosses',name:'首领'},{id:'weapons',name:'武器'},
   {id:'skills',name:'技能'},{id:'weaponSkills',name:'武器技能'},{id:'companions',name:'伙伴'}
