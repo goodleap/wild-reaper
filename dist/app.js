@@ -27,6 +27,8 @@ import { isGrounded, obstacleHeight } from './height-rules.js';
 import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-map.js';
 import { backingResolution, RenderSchedule, FrameMetrics } from './render-performance.js';
 import { FrameDiagnostics } from './frame-diagnostics.js';
+import { MapLightCache, MAP_SUN_ANGLE, MAP_SUN_DIRECTION } from './map-light-cache.js';
+import { ShadowRenderer, ShadowGeometryCache, shadowFrameBounds } from './shadow-renderer.js';
 import { debugConfigFromSearch } from './debug-mode.js';
 import { drawTrainingDummy } from './training-art.js';
 import { ACTOR_VISUALS } from './actor-visuals.js';
@@ -36,11 +38,9 @@ import { sceneEntityVisible, sceneItemVisible, sceneItemLayer, compareSceneDepth
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
-// One small reusable mask keeps overlapping actor shadows at a fixed darkness.
-const actorShadowCanvas=document.createElement('canvas'),actorShadowCtx=actorShadowCanvas.getContext('2d');
-// Sunlight is composed separately so a shadow removes light rather than
-// tinting an already illuminated patch of ground. Reuse the small buffer.
-const sunlightCanvas=document.createElement('canvas'),sunlightCtx=sunlightCanvas.getContext('2d');
+const shadowRenderer=new ShadowRenderer(()=>document.createElement('canvas'));
+const shadowGeometry=new ShadowGeometryCache();
+const mapLightCache=new MapLightCache(()=>document.createElement('canvas'));
 const decorativeShadowShapes=[];
 const sceneryArt=new SceneryArt(()=>document.createElement('canvas'));
 const combatArt=new CombatArt(()=>document.createElement('canvas'));
@@ -60,7 +60,7 @@ const immersionArt=new ImmersionArt();
 const worldMap=new WorldMap();
 const arena = $('arena'), TAU = Math.PI * 2;
 // One world-space sunlight direction drives every beam and actor projection.
-const SUN_ANGLE=Math.atan2(325,840),SUN={x:-Math.sin(SUN_ANGLE),y:Math.cos(SUN_ANGLE)};
+const SUN_ANGLE=MAP_SUN_ANGLE,SUN=MAP_SUN_DIRECTION;
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const hash = (x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const timeLabel = (n)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
@@ -554,17 +554,6 @@ function flower(x,y,s,seed){line(x,y,x+2*s,y-9*s,'#8b966255',1);ellipse(x+2*s,y-
 function fern(x,y,s,seed){ctx.save();ctx.translate(x,y);ctx.rotate(seed*1.5-.75);for(let i=0;i<5;i++){const a=(i-2)*.36;ctx.save();ctx.rotate(a);line(0,0,0,-25*s,'#77996055',1.2);for(let k=0;k<5;k++){const yy=-5*s-k*4*s;ctx.fillStyle=k%2?'#537847aa':'#76935490';ctx.beginPath();ctx.ellipse(-3*s,yy,5*s,1.7*s,.5,0,TAU);ctx.ellipse(3*s,yy,5*s,1.7*s,-.5,0,TAU);ctx.fill();}ctx.restore();}ctx.restore();}
 function tree(x,y,s,seed){decorativeShadowShapes.push({x:x+12*s,y:y+20*s,rx:50*s,ry:32*s});ctx.save();ctx.translate(x,y);ellipse(12*s,20*s,50*s,32*s,'#0a1c1440');line(0,6*s,-3*s,-35*s,'#4d5137',12*s);for(let i=0;i<7;i++){const a=i*2.4,rr=(18+(i%3)*7)*s,cx=Math.cos(a)*rr,cy=-20*s+Math.sin(a)*rr*.6;ellipse(cx,cy,29*s,23*s,['#284631','#304e33','#375438'][i%3]);ellipse(cx-5*s,cy-8*s,18*s,7*s,'#72835110');}for(let i=0;i<7;i++)ellipse((hash(seed+i)*60-30)*s,(-45+hash(i,seed)*40)*s,3*s,1.3*s,'#95a57228');ctx.restore();}
 // Light patches are generated from map cells, never from the player or viewport center.
-function mapLightPatches(camX,camY,viewWidth=width,viewHeight=height){
-  const spacing=1080,margin=850,patches=[];
-  const left=Math.floor((camX-viewWidth/2-margin)/spacing),right=Math.ceil((camX+viewWidth/2+margin)/spacing);
-  const top=Math.floor((camY-viewHeight/2-margin)/spacing),bottom=Math.ceil((camY+viewHeight/2+margin)/spacing);
-  for(let gx=left;gx<=right;gx++)for(let gy=top;gy<=bottom;gy++){
-    const seed=hash(gx+51,gy+93);
-    const x=gx*spacing+160+hash(gx+7,gy+16)*460,y=gy*spacing+100+hash(gx+34,gy+2)*400;
-    patches.push({id:`${gx},${gy}`,x,y,spread:80+seed*65,alpha:.04+seed*.025});
-  }
-  return patches;
-}
 function sunBeamGeometry(x,y,verticalSpan,nearWidth,farWidth){
   return {x,y,endX:x+SUN.x/SUN.y*verticalSpan,endY:y+verticalSpan,nearWidth,farWidth};
 }
@@ -573,18 +562,7 @@ function sunBeamPath(beam,target=ctx){
   target.beginPath();target.moveTo(x-nx*nearWidth,y-ny*nearWidth);target.lineTo(x+nx*nearWidth,y+ny*nearWidth);
   target.lineTo(endX+nx*farWidth,endY+ny*farWidth);target.lineTo(endX-nx*farWidth,endY-ny*farWidth);target.closePath();
 }
-function drawMapLights(camX,camY,target=ctx){
-  target.save();target.translate(width/2-camX,height/2-camY);
-  for(const light of mapLightPatches(camX,camY)){
-    const {x,y,spread,alpha}=light;
-    const shape=sunBeamGeometry(x+165+spread*.24,y-520,840,spread*.24,spread*.65);
-    glow(shape.x+(shape.endX-shape.x)*.8,shape.y+(shape.endY-shape.y)*.8,330,'#c7d98a12',target);
-    const beam=target.createLinearGradient(shape.x,shape.y,shape.endX,shape.endY);
-    beam.addColorStop(0,'#e3ebaf00');beam.addColorStop(.23,`rgba(225,237,172,${alpha})`);beam.addColorStop(.8,`rgba(225,237,172,${alpha*.72})`);beam.addColorStop(1,'#e3ebaf00');
-    target.fillStyle=beam;sunBeamPath(shape,target);target.fill();
-  }
-  target.restore();
-}
+function drawMapLights(camX,camY,target=ctx,viewWidth=width,viewHeight=height){mapLightCache.draw(target,{camX,camY,width:viewWidth,height:viewHeight});}
 function drawIntroLights(target){const pad=Math.max(40,width*.08);target.save();target.globalAlpha=.075;target.fillStyle='#dee8a0';sunBeamPath(sunBeamGeometry(width*.74-SUN.x/SUN.y*pad,-pad,height+pad*2,width*.04,width*.07),target);target.fill();target.restore();}
 function background(camX,camY,intro){
   if(!intro&&!game?.dungeon?.active&&game?.terrain?.island){decorativeShadowShapes.length=0;islandArt.draw(ctx,game.terrain.island,{camX,camY,width,height,time:game._clock,reduced,dense:combatOptions.dense},()=>backgroundLand(camX,camY,false));return;}
@@ -612,55 +590,40 @@ function actorInView(actor,offsetX=0,offsetY=0){
   return cx+(shape.halfWidth+5)*scale>=0&&cx-(shape.halfWidth+shape.shadowLength*.45+5)*scale<=width
     &&cy-(shape.top+5)*scale<=height&&footY+offsetY+(shape.shadowLength+shape.shadowWidth*.4+5)*scale>=0;
 }
-function drawActorShadowPaths(target,actors,flying){
+function actorShadowShapes(actors){
+  const shapes=[];
   for(const actor of actors){
-    if(typeof flying==='boolean'&&(!isGrounded(actor.entity))!==flying)continue;
-    const {x,footY,scale,shape,immersion}=actor,depth=immersion?.depth||0,length=shape.shadowLength*scale*(1-depth*.35);
-    const offset=length*.39,cx=x+SUN.x*offset,cy=footY+SUN.y*offset,rx=shape.shadowWidth*scale*(1-depth*.12),ry=length*.63;
-    target.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));
-    target.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);target.closePath();
+    const {x,footY,scale,shape,immersion}=actor,depth=immersion?.depth||0,length=shape.shadowLength*scale*(1-depth*.35),offset=length*.39;
+    shapes.push({x:x+SUN.x*offset,y:footY+SUN.y*offset,rx:shape.shadowWidth*scale*(1-depth*.12),ry:length*.63,angle:SUN_ANGLE,flying:!isGrounded(actor.entity)});
   }
+  return shapes;
+}
+function staticShadowShapes(terrain,adventureProps,sceneKey){
+  shadowGeometry.setScene(sceneKey);const shapes=[];
+  for(const [kind,props,draw]of [['terrain',terrain,drawTerrainShadowPaths],['prop',adventureProps,drawAdventureShadowPaths]])for(const prop of props){
+    const visual=prop.visual||{};
+    // Values that affect the projection, rather than transient HP or animation,
+    // allow cloned props and regenerated terrain cells to reuse the same mask.
+    const signature=JSON.stringify([prop.type,prop.variant,prop.x,prop.y,prop.r,prop.scale,prop.angle,prop.halfLength,prop.rockForm,prop.visual===false,prop.structureId,visual.shadowOffset,visual.shadowWidth,visual.shadowLength,prop.isHutFurniture,prop.isSettlement,prop.width,prop.depth,prop.shadowWidth,prop.shadowHeight,prop.shadowRevision]);
+    const key=kind+':'+(prop.id??`${prop.type}:${prop.x}:${prop.y}`);
+    const shape=shadowGeometry.get(key,signature,target=>draw(target,[prop]));if(!shape.empty)shapes.push(shape);
+  }
+  return shapes;
 }
 function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[],adventureProps=[],drawLight=null){
   if(game&&diagnostics?.lightsDisabled)return;
   if(width<=0||height<=0)return;
-  const maskWidth=Math.max(1,Math.ceil(width*.5)),maskHeight=Math.max(1,Math.ceil(height*.5));
-  if(actorShadowCanvas.width!==maskWidth||actorShadowCanvas.height!==maskHeight){actorShadowCanvas.width=maskWidth;actorShadowCanvas.height=maskHeight;}
-  const mask=actorShadowCtx;
-  const paintMask=opaque=>{
-    mask.setTransform(1,0,0,1,0,0);mask.clearRect(0,0,maskWidth,maskHeight);
-    mask.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);mask.translate(offsetX,offsetY);
-    mask.fillStyle='#10271d';mask.globalCompositeOperation='source-over';mask.globalAlpha=1;
-    if(opaque){
-      // Full coverage, including lighter flying shadows, excludes sunlight.
-      mask.beginPath();drawActorShadowPaths(mask,actors);drawTerrainShadowPaths(mask,terrain);drawAdventureShadowPaths(mask,adventureProps);mask.fill('nonzero');
-      // Decorative ground shadows have already been drawn in screen space.
-      mask.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);mask.beginPath();
-      for(const shape of decorativeShadowShapes){mask.moveTo(shape.x+shape.rx,shape.y);mask.ellipse(shape.x,shape.y,shape.rx,shape.ry,0,0,TAU);mask.closePath();}mask.fill('nonzero');
-    }else{
-      // One nonzero fill per group forms a union. Overlapping shadows do not
-      // accumulate darkness; bats retain their lighter ground projection.
-      for(const flying of [true,false]){
-        mask.globalAlpha=flying?.55:1;mask.beginPath();drawActorShadowPaths(mask,actors,flying);
-        if(!flying){drawTerrainShadowPaths(mask,terrain);drawAdventureShadowPaths(mask,adventureProps);}mask.fill('nonzero');
-      }
-    }
-    mask.globalAlpha=1;
-  };
-  if(drawLight){
-    paintMask(true);
-    if(sunlightCanvas.width!==maskWidth||sunlightCanvas.height!==maskHeight){sunlightCanvas.width=maskWidth;sunlightCanvas.height=maskHeight;}
-    const light=sunlightCtx;light.setTransform(1,0,0,1,0,0);light.clearRect(0,0,maskWidth,maskHeight);
-    light.setTransform(maskWidth/width,0,0,maskHeight/height,0,0);light.globalAlpha=1;light.globalCompositeOperation='source-over';drawLight(light);
-    // Composite matching pixel grids without a transformed destructive fill.
-    light.setTransform(1,0,0,1,0,0);light.globalAlpha=1;light.globalCompositeOperation='destination-out';light.drawImage(actorShadowCanvas,0,0);light.globalCompositeOperation='source-over';
-    ctx.save();ctx.setTransform(scaleX,0,0,scaleY,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-    ctx.drawImage(sunlightCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
+  const sceneKey=game?.terrain||null;
+  if(game){
+    const b=shadowFrameBounds(width,height,offsetX,offsetY),tile=512;
+    // Query complete visible cache tiles plus caster reach. A fractional camera
+    // shift inside this grid must not keep changing its collection of props.
+    const minX=Math.floor(b.minX/tile)*tile,minY=Math.floor(b.minY/tile)*tile,maxX=Math.ceil(b.maxX/tile)*tile,maxY=Math.ceil(b.maxY/tile)*tile;
+    terrain=game.terrain.query(minX-260,minY-260,maxX+260,maxY+260);
+    adventureProps=adventureSceneProps((minX+maxX)/2,(minY+maxY)/2,maxX-minX,maxY-minY);
   }
-  paintMask(false);
-  ctx.save();ctx.setTransform(scaleX,0,0,scaleY,0,0);ctx.globalAlpha=.3;ctx.globalCompositeOperation='source-over';
-  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  ctx.drawImage(actorShadowCanvas,0,0,maskWidth,maskHeight,0,0,width,height);ctx.restore();
+  shadowRenderer.draw(ctx,{width,height,scaleX,scaleY,offsetX,offsetY,actors:actorShadowShapes(actors),staticShapes:staticShadowShapes(terrain,adventureProps,sceneKey),sceneKey,
+    decorativeShapes:decorativeShadowShapes.map(s=>({...s,angle:0})),drawLight});
 }
 function drawActorBody(actor){const e=actor.entity;if(e.isTownNpc){drawTownNpc(actor);return;}if(e.isCompanion||e.isCaptive)drawCompanion(actor);else if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,e.hurtFlash||0,e);else{drawEliteAura(e);enemy(e,game?._clock??clock);drawStatusMarks(e);drawEliteMark(e);if(game?.companions?.camp?.guardIds.includes(e.id)){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e9c894';ctx.fillText('围困者',e.x,e.y-actor.shape.top*actor.scale-16);ctx.restore();}}}
 function drawActor(actor){
@@ -740,7 +703,8 @@ function terrainCapsulePath(target,halfLength,radius){
 }
 const rockShadowOutlines=new WeakMap();
 function rubbleShadowPaths(prop){
-  let outlines=rockShadowOutlines.get(prop);if(outlines)return outlines;
+  const cached=rockShadowOutlines.get(prop);if(cached?.radius===prop.r)return cached.outlines;
+  let outlines;
   const parts=rockShadowParts(prop);if(!parts)return null;
   const turn=(a,b,c)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
   outlines=parts.map(({points,offset})=>{
@@ -752,7 +716,7 @@ function rubbleShadowPaths(prop){
     for(let i=vertices.length-1;i>=0;i--){const p=vertices[i];while(upper.length>1&&turn(upper.at(-2),upper.at(-1),p)<=0)upper.pop();upper.push(p);}
     return lower.slice(0,-1).concat(upper.slice(0,-1));
   });
-  rockShadowOutlines.set(prop,outlines);return outlines;
+  rockShadowOutlines.set(prop,{radius:prop.r,outlines});return outlines;
 }
 function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
@@ -801,14 +765,14 @@ function drawTerrain(prop,mainPlayer){if(prop.visual===false)return;if(prop.vari
   else if(prop.type==='rock')drawTerrainRock(prop);
   else if(prop.type==='log')drawTerrainLog(prop);
 }
-function adventureSceneProps(camX,camY){
+function adventureSceneProps(camX,camY,viewWidth=width,viewHeight=height){
   const adventure=game?.adventure;
-  const visible=prop=>Math.abs(prop.x-camX)<width/2+70&&Math.abs(prop.y-camY)<height/2+112;
+  const visible=prop=>Math.abs(prop.x-camX)<viewWidth/2+70&&Math.abs(prop.y-camY)<viewHeight/2+112;
   const props=(adventure?.props||[]).filter(prop=>prop.hp>0&&visible(prop));
   if(adventure?.treasure&&visible(adventure.treasure))props.push({...adventure.treasure,type:'treasure'});
   props.push(...(game?.environment?.props||[]).filter(prop=>prop.state!=='spent'&&visible(prop)));
   if(!game.dungeon?.active)for(const portal of game.regions?.portals||[])if(visible({...portal,y:portal.y-30}))props.push({...portal,type:'portal',sortY:portal.y});
-  if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type!=='merchant'&&Math.abs(site.x-camX)<width/2+200&&Math.abs(site.y-camY)<height/2+230)props.push({...site,isSettlement:true});
+  if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type!=='merchant'&&Math.abs(site.x-camX)<viewWidth/2+200&&Math.abs(site.y-camY)<viewHeight/2+230)props.push({...site,isSettlement:true});
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest)&&sceneVisible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
   if(game.dungeon?.active?.kind==='hut')for(const prop of game.dungeon.active.props||[])if(visible(prop))props.push({...prop,isHutFurniture:true,sortY:prop.y+(prop.type==='rug'?-1000:0)});
   if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])props.push(...(site.type==='hunt'?encounterArt.props(site):relicArt.props(site)).filter(visible));
@@ -1227,7 +1191,7 @@ function renderIntro(){
   const actors=surrounds.map(([dx,dy,type,r],id)=>actorVisual({x:x+dx,y:y+dy,r,type,id:id+1,hp:10,maxHp:10,hit:0}));
   actors.push(actorVisual({x,y,facing:0,heroId:'traveler'},true,s));
   const visible=actors.filter(actor=>actorInView(actor));
-  drawActorShadows(visible,0,0,[],[],target=>{drawIntroLights(target);glow(x,y-15,135,'#b9d68116',target);});runeCircle(x,y+30*s,70*s,clock,.28);runeCircle(x,y+30*s,51*s,-clock,.12);
+  drawActorShadows(visible,0,0,[],[],(target,view)=>{target.save();target.translate(view.width/2-view.camX,view.height/2-view.camY);drawIntroLights(target);glow(x,y-15,135,'#b9d68116',target);target.restore();});runeCircle(x,y+30*s,70*s,clock,.28);runeCircle(x,y+30*s,51*s,-clock,.12);
   for(let i=0;i<7;i++){let a=i*2.4,rr=mobile?60:115,gx=x+Math.cos(a)*rr,gy=y+35+Math.sin(a)*rr*.45;diamond(gx,gy,4+(i%2),'#c0e79099');}
   drawActors(visible);
   ambient(true);
@@ -1250,7 +1214,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   }
   ctx.save();if(vision)vision.clipVisible(ctx,offsetX,offsetY);
   ctx.save();ctx.translate(offsetX,offsetY);drawEncounterGround();drawRelicGround();drawMudGround();drawDungeonGround();ctx.restore();
-  drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active?null:target=>drawMapLights(camX-sx,camY-sy,target));ctx.save();ctx.translate(offsetX,offsetY);
+  drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active?null:(target,view)=>drawMapLights(view.camX,view.camY,target,view.width,view.height));ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(!sceneVisible(gem))continue;if(Math.abs(gem.x-p.x)>width/2+20||Math.abs(gem.y-p.y)>height/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   drawCoins();drawSuperFields();
   combatArt.drawStormGround(ctx,game.storm,combatOptions);

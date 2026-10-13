@@ -33,12 +33,12 @@ export const ROCK_FRAGMENTS=Object.freeze([
 const fragmentShadows=new WeakMap();
 export function rockShadowParts(prop){
   if(!prop||prop.rockForm!==3||prop.variant==='pillar'||!Number.isFinite(prop.r)||prop.r<=0)return null;
-  const cached=fragmentShadows.get(prop);if(cached)return cached;
+  const cached=fragmentShadows.get(prop);if(cached?.radius===prop.r)return cached.parts;
   const scale=prop.r/36,parts=Object.freeze(ROCK_FRAGMENTS.map(({points,depth})=>Object.freeze({
     points:Object.freeze(points.map(([x,y])=>Object.freeze({x:x*scale,y:(y+depth)*scale}))),
     offset:depth*.85*scale
   })));
-  fragmentShadows.set(prop,parts);return parts;
+  fragmentShadows.set(prop,{radius:prop.r,parts});return parts;
 }
 export function sceneryVisual(prop){
   const s=prop.scale||1;
