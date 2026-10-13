@@ -1,4 +1,5 @@
 import { COAST_RULES } from './placement-rules.js';
+import { WORLD_IDS, regionFor, worldNeighbors } from './world-definitions.js';
 // Deterministic island outlines are shared by coast paint, collision, spawning
 // and natural terrain generation. The radius varies smoothly: no hidden
 // rectangular world wall and no narrow pixel-scale bays trapping a creature.
@@ -14,9 +15,9 @@ function segmentDistanceSq(ax,ay,bx,by,cx,cy,dx,dy){
 }
 export class Island {
   constructor({region='forest',seed=0}={}){
-    this.region=['forest','marsh','ruins'].includes(region)?region:'forest';this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
-    this.worldId=['forest','marsh','ruins'].indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.routeRadius=80;
-    const profile=this.region==='marsh'?{x:4450,y:3950,phase:1.6,bays:.14}:this.region==='ruins'?{x:4250,y:4050,phase:3.5,bays:.115}:{x:4350,y:4100,phase:.2,bays:.08};
+    this.region=WORLD_IDS.includes(region)?region:'forest';this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
+    this.worldId=WORLD_IDS.indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.beachWidth=this.region==='beach'?180:COAST_RULES.beachWidth;this.routeRadius=80;
+    const profile=regionFor(this.worldId).profile;
     const phase=profile.phase+(hash(this.seed+11)-.5)*.36;
     this.points=Object.freeze(Array.from({length:COUNT},(_,i)=>{
       const a=i*TAU/COUNT,radial=.94+.075*Math.cos(a*2+phase)+profile.bays*Math.sin(a*3-phase)+.032*Math.sin(a*5+phase*2);
@@ -29,8 +30,25 @@ export class Island {
     this._contours=new Map([[0,this.points]]);
     const rotate=this.worldId*.52+(hash(this.seed+19)-.5)*.16;
     const specs=[['merchant',.18,710,105],['supply',2.25,1050,125],['occupied',4.30,1730,225],['castle',2.80,2610,360],['hunt',.94,1830,280],['rescue',5.42,2060,240],['rune',3.73,2280,185],['rescue-warden',3.80,1120,240],['dogcamp',.25,1430,115],['owlroost',2.91,1570,240],['golemaltar',4.62,2630,270],['stonevault',.13,2830,240]];
-    const destinations=[0,1,2].filter(id=>id!==this.worldId);specs.push([`portal:${destinations[0]}`,1.73,3050,310],[`portal:${destinations[1]}`,5.69,3150,310]);
     const plan={};for(const [key,angle,radius,r] of specs){const a=angle+rotate;let d=radius;while(d>500&&!this.isDry(Math.cos(a)*d,Math.sin(a)*d,r+100))d-=40;plan[key]=Object.freeze({x:Math.cos(a)*d,y:Math.sin(a)*d,r});}
+    // Reserve every graph endpoint before natural objects and sites generate.
+    // Even the four-way world gets distinct dry approaches, rather than having
+    // later portals compete for a single pair of authored slots.
+    const destinations=worldNeighbors(this.worldId);
+    for(const [index,target] of destinations.entries()) {
+      const preferred=1.73+rotate+index*TAU/destinations.length,r=310;
+      let point=null;
+      for(const radius of [3150,3350,2950,3550,2750,2550]) {
+        for(let step=0;step<96;step++) {
+          const offset=step===0?0:Math.ceil(step/2)*(step%2?1:-1)*TAU/96,a=preferred+offset,x=Math.cos(a)*radius,y=Math.sin(a)*radius;
+          if(!this.isDry(x,y,r+100)||Object.values(plan).some(other=>Math.hypot(x-other.x,y-other.y)<r+other.r+60))continue;
+          point=Object.freeze({x,y,r});break;
+        }
+        if(point)break;
+      }
+      if(!point)throw new Error(`No dry portal reservation for ${this.region}:${target}`);
+      plan[`portal:${target}`]=point;
+    }
     this.plan=Object.freeze(plan);this.routes=Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
   }
   _inside(x,y){

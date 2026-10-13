@@ -4,10 +4,12 @@ import { clearBossAttacks, initBoss } from './bosses.js';
 import { resetLocomotion } from './locomotion.js';
 import { DungeonVision } from './dungeon-vision.js';
 import { HUT_RULES, createHutState, populateHut, claimHutChest } from './hut-interior.js';
+import { REGIONS } from './world-definitions.js';
+import { featureForSite } from './world-sites.js';
 
 const TAU=Math.PI*2;
 const DIRS=Object.freeze([{dx:0,dy:-1,opposite:2},{dx:1,dy:0,opposite:3},{dx:0,dy:1,opposite:0},{dx:-1,dy:0,opposite:1}]);
-export const DUNGEON_RULES=Object.freeze({cols:5,rows:5,cellSize:360,wallRadius:14,doorWidth:180,interactRadius:74,sideChests:3,bossDistance:8,roomCrystals:6,maxRoomEnemies:6,bossGold:80,bossCrystals:100,maxStates:4});
+export const DUNGEON_RULES=Object.freeze({cols:5,rows:5,cellSize:360,wallRadius:14,doorWidth:180,interactRadius:74,sideChests:3,bossDistance:8,roomCrystals:6,maxRoomEnemies:6,bossGold:80,bossCrystals:100,maxStates:REGIONS.length*2});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function seedFor(value){let seed=2166136261;for(const char of String(value))seed=Math.imul(seed^char.charCodeAt(0),16777619);return seed>>>0;}
 function randomFor(seed){let n=seed>>>0;return ()=>{n+=0x6D2B79F5;let t=n;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};}
@@ -31,7 +33,7 @@ export class Dungeon {
   }
   _neighbors(cell,state){return cell.open.map(direction=>{const d=DIRS[direction];return state.cells[(cell.row+d.dy)*state.cols+cell.col+d.dx];});}
   _makeState(site){
-    const rules=DUNGEON_RULES,cols=rules.cols,rows=rules.rows,cellSize=rules.cellSize;
+    const rules=DUNGEON_RULES,feature=featureForSite(site),cols=feature?.cols||rules.cols,rows=feature?.rows||rules.rows,cellSize=feature?.cellSize||rules.cellSize;
     const seed=seedFor(`${this.game.regionIndex}:${site.id}:${site.seed??0}`),random=randomFor(seed);
     const originX=-cols*cellSize*.5,originY=-rows*cellSize*.5;
     const cells=Array.from({length:cols*rows},(_,id)=>({id,col:id%cols,row:Math.floor(id/cols),x:originX+(id%cols+.5)*cellSize,y:originY+(Math.floor(id/cols)+.5)*cellSize,open:[]}));
@@ -44,14 +46,14 @@ export class Dungeon {
       const direction=available[Math.floor(random()*available.length)],d=DIRS[direction],next=cells[(cell.row+d.dy)*cols+cell.col+d.dx];
       cell.open.push(direction);next.open.push(d.opposite);seen.add(next.id);stack.push(next);
     }
-    const state={id:site.id,kind:'castle',name:'旧王城迷宫',site,seed,cols,rows,cellSize,originX,originY,cells,visited:new Set([entranceId]),entranceId,
+    const state={id:site.id,kind:'castle',name:feature?.name||'旧王城迷宫',featureId:feature?.id,treasureName:feature?.treasureName||'王城宝藏',site,seed,cols,rows,cellSize,originX,originY,cells,visited:new Set([entranceId]),entranceId,
       entrance:{x:cells[entranceId].x,y:cells[entranceId].y+55},landing:{x:cells[entranceId].x,y:cells[entranceId].y-30},bounds:{minX:originX,minY:originY,maxX:originX+cols*cellSize,maxY:originY+rows*cellSize},
       bossDefeated:false,rewardClaimed:false,rewardPending:false,enemies:[],gems:[],coins:[],rooms:new Map(),adventure:null,createdAt:this.game.time};
     const distances=new Map([[entranceId,0]]),parents=new Map(),queue=[cells[entranceId]];
     for(let i=0;i<queue.length;i++)for(const next of this._neighbors(queue[i],state))if(!distances.has(next.id)){distances.set(next.id,distances.get(queue[i].id)+1);parents.set(next.id,queue[i].id);queue.push(next);}
     // Keep the finite connected maze, but put its climax on a compact route.
     // The old farthest-cell rule could require 18+ mostly empty room crossings.
-    const bossDistance=Math.min(rules.bossDistance,Math.max(...distances.values())),bossCandidates=cells.filter(c=>distances.get(c.id)===bossDistance);
+    const bossDistance=Math.min(feature?.bossDistance||rules.bossDistance,Math.max(...distances.values())),bossCandidates=cells.filter(c=>distances.get(c.id)===bossDistance);
     state.bossRoom=bossCandidates[Math.floor(random()*bossCandidates.length)];
     state.mainRoute=[state.bossRoom.id];
     while(state.mainRoute[0]!==entranceId)state.mainRoute.unshift(parents.get(state.mainRoute[0]));
@@ -92,7 +94,7 @@ export class Dungeon {
     g.companions?.onSceneChange?.();
   }
   _populate(state){
-    const g=this.game,random=randomFor(state.seed^0x59B730D1),difficulty=1+Math.min(15,state.createdAt/120)*.32;
+    const g=this.game,random=randomFor(state.seed^0x59B730D1),difficulty=1+Math.min(15,state.createdAt/120)*.32,feature=featureForSite(state.site);
     const roomIds=[...state.mainRoute.slice(2,-1),...state.chests.map(chest=>chest.cellId)],specialCounts={boar:0,spore:0};
     const packs=[['slime','slime','beetle','bat'],['beetle','slime','beetle','slime','spore'],['slime','beetle','slime','beetle','boar'],['beetle','slime','beetle','brute','spore'],['slime','beetle','beetle','slime','boar','spore']];
     for(const [index,id] of roomIds.entries()){
@@ -108,17 +110,18 @@ export class Dungeon {
         enemy.dungeonId=state.id;enemy.dungeonRoom=id;enemy.dungeonHome={x:cell.x+Math.cos(angle)*radius,y:cell.y+Math.sin(angle)*radius};enemy.guardActive=false;
         // Group encounters replace lonely, tougher guards. Per-enemy rewards
         // stay modest; the clear reward is finite and belongs to the room.
-        enemy.hp*=1.05;enemy.maxHp=enemy.hp;enemy.xp=Math.max(3,Math.min(5,Math.round(enemy.xp*.7)));
+        enemy.hp*=1.05*(feature?.guardHp||1);enemy.maxHp=enemy.hp;enemy.xp=Math.max(3,Math.min(5,Math.round(enemy.xp*.7)));
         enemy.x=enemy.dungeonHome.x;enemy.y=enemy.dungeonHome.y-groundOffset(enemy);enemy._navTimer=0;g._moveEntity(enemy,0,0);
         // At most one authored shield/fast guard in a late room. Summoners
         // cannot turn this finite scene into an unlimited resource farm.
-        if(route>5&&i===0&&random()<.3)g.elites?.promote(enemy,random()<.5?'shield':'swift');
+        if(feature?.shieldRooms&&i===0&&route>=3)g.elites?.promote(enemy,'shield');
+        else if(route>5&&i===0&&random()<.3)g.elites?.promote(enemy,random()<.5?'shield':'swift');
       }
     }
     state.rooms.set(state.bossRoom.id,{cellId:state.bossRoom.id,kind:'boss',total:1,started:false,cleared:false,rewarded:false,heal:false});
-    const boss=g._spawnEnemy('boss',1);boss.dungeonId=state.id;boss.dungeonRoom=state.bossRoom.id;boss.dungeonBoss=true;boss.name='旧王城守卫';
-    boss.bossIndex=state.seed%2?2:1;initBoss(boss);
-    boss.hp=boss.maxHp=(g.easy?2100:2800)*difficulty;boss.damage=(g.easy?18:25)*(1+state.createdAt/600);boss.speed=g.easy?44:49;boss.xp=180+Math.floor(state.createdAt/10);
+    const boss=g._spawnEnemy('boss',1);boss.dungeonId=state.id;boss.dungeonRoom=state.bossRoom.id;boss.dungeonBoss=true;boss.name=feature?.bossName||'旧王城守卫';
+    boss.bossIndex=feature?.bossIndex||(state.seed%2?2:1);initBoss(boss);
+    boss.hp=boss.maxHp=(g.easy?2100:2800)*difficulty*(feature?.bossHp||1);boss.damage=(g.easy?18:25)*(1+state.createdAt/600);boss.speed=g.easy?44:49;boss.xp=180+Math.floor(state.createdAt/10);
     boss.dungeonHome={x:state.bossRoom.x,y:state.bossRoom.y+20};boss.x=boss.dungeonHome.x;boss.y=boss.dungeonHome.y-groundOffset(boss);boss.guardActive=false;boss._navTimer=0;g._moveEntity(boss,0,0);
     state.bossId=boss.id;state.enemies=g.enemies;
   }
@@ -171,11 +174,11 @@ export class Dungeon {
     const g=this.game,state=this.active;if(!state||g.status!=='playing')return null;
     if(this._near(state.entrance,95)&&this.vision.isVisible(state.entrance))return {id:`${state.id}:exit`,type:'dungeonExit',label:'返回荒野',description:'保留探索与战斗进度',...state.entrance,enabled:true};
     if(state.treasure&&this._near(state.treasure)&&this.vision.isVisible(state.treasure.x,state.treasure.y)){
-      if(state.treasure.state==='unlocked')return {id:state.treasure.id,type:'castleTreasure',label:'开启王城宝藏',description:'超级技能 · 80 金币 · 100 灵晶',x:state.treasure.x,y:state.treasure.y,enabled:true};
+      if(state.treasure.state==='unlocked'){const reward=featureForSite(state.site)?.reward||{gold:DUNGEON_RULES.bossGold,crystals:DUNGEON_RULES.bossCrystals};return {id:state.treasure.id,type:'castleTreasure',label:`开启${state.treasureName||'王城宝藏'}`,description:`超级技能 · ${reward.gold} 金币 · ${reward.crystals} 灵晶`,x:state.treasure.x,y:state.treasure.y,enabled:true};}
       if(state.rewardClaimed)return {id:`${state.id}:treasury-exit`,type:'dungeonExit',label:'携宝返回荒野',x:state.treasure.x,y:state.treasure.y,enabled:true};
     }
     const chest=state.chests.find(c=>c.state==='closed'&&this._near(c,62)&&this.vision.isVisible(c.x,c.y));
-    if(chest){const guarded=g.enemies.some(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===chest.cellId);return {id:chest.id,type:'dungeonChest',label:guarded?'清理房间守卫':state.kind==='hut'?'打开小屋补给':'打开古堡宝箱',description:guarded?'击败本房间守卫后开启':'金币、灵晶与恢复补给',x:chest.x,y:chest.y,enabled:!guarded};}
+    if(chest){const guarded=g.enemies.some(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===chest.cellId);return {id:chest.id,type:'dungeonChest',label:guarded?'清理房间守卫':state.kind==='hut'?`打开${state.treasureName||'小屋补给'}`:'打开古堡宝箱',description:guarded?'击败本房间守卫后开启':'金币、灵晶与恢复补给',x:chest.x,y:chest.y,enabled:!guarded};}
     return null;
   }
   interact(id){
@@ -198,7 +201,8 @@ export class Dungeon {
     const g=this.game,state=this.active;
     if(!state||!state.rewardPending||state.rewardClaimed||!state.bossDefeated||g.superSkills?.pending)return false;
     state.rewardPending=false;state.rewardClaimed=true;state.treasure.state='claimed';state.site.state='cleared';state.site.explored=true;
-    g.grantResources({gold:DUNGEON_RULES.bossGold,crystals:DUNGEON_RULES.bossCrystals},'castleBoss');g._effect(state.treasure.x,state.treasure.y,'ring',1.1,130,'#f4d688');g._emit('dungeonCleared',{name:state.name});return true;
+    const reward=featureForSite(state.site)?.reward||{gold:DUNGEON_RULES.bossGold,crystals:DUNGEON_RULES.bossCrystals};
+    g.grantResources(reward,'castleBoss');g._effect(state.treasure.x,state.treasure.y,'ring',1.1,130,'#f4d688');g._emit('dungeonCleared',{name:state.name,treasureName:state.treasureName,reward});return true;
   }
   onEnemyKilled(enemy){
     const state=this.active;if(!state||enemy.dungeonId!==state.id||enemy.hp>0)return false;
@@ -259,8 +263,8 @@ export class Dungeon {
     const markable=point=>revealMarkers||known(point);
     const landmarks=[{id:`${state.id}:exit`,type:'exit',name:'荒野出口',...state.entrance,state:'active',completed:false}];
     for(const chest of state.chests)if(markable(chest))landmarks.push({...chest,type:'chest',name:state.kind==='hut'?'小屋补给':'古堡宝箱',completed:chest.state==='claimed'});
-    if(state.treasure&&markable(state.treasure))landmarks.push({...state.treasure,type:'chest',name:'王城宝藏',completed:state.rewardClaimed});
-    if((state.bossDiscovered||revealMarkers)&&state.bossRoom)landmarks.push({id:`${state.id}:boss`,type:'boss',name:'旧王城守卫',x:state.bossRoom.x,y:state.bossRoom.y,state:state.bossDefeated?'cleared':'active',completed:state.bossDefeated});
+    if(state.treasure&&markable(state.treasure))landmarks.push({...state.treasure,type:'chest',name:state.treasureName||'王城宝藏',completed:state.rewardClaimed});
+    if((state.bossDiscovered||revealMarkers)&&state.bossRoom)landmarks.push({id:`${state.id}:boss`,type:'boss',name:featureForSite(state.site)?.bossName||'旧王城守卫',x:state.bossRoom.x,y:state.bossRoom.y,state:state.bossDefeated?'cleared':'active',completed:state.bossDefeated});
     return {kind:state.kind,cols:state.cols,rows:state.rows,cellSize:state.cellSize,originX:state.originX,originY:state.originY,bounds:state.bounds,
       cells:state.cells.map(c=>{const revealed=state.visited.has(c.id);return {...c,open:revealed?c.open:[],revealed,roomKind:revealed?state.rooms.get(c.id)?.kind:undefined,cleared:revealed&&(state.rooms.get(c.id)?.cleared??false)};}),playerCell:this._cellAt(p.x,p.y)?.id??state.entranceId,player:p,
       entrance:state.entranceId,boss:state.bossDiscovered?state.bossRoom?.id:null,bossDefeated:!!state.bossDiscovered&&state.bossDefeated,
@@ -274,9 +278,9 @@ export class Dungeon {
     const battleRooms=[...state.rooms.values()].filter(r=>r.kind!=='boss'&&state.visited.has(r.cellId)),chest=state.chests.find(c=>c.cellId===cell.id&&c.state==='closed'&&this.vision.isExplored(c.x,c.y));let next;
     if(state.kind==='hut'){
       next=remaining?{x:cell.x,y:cell.y,kind:'battle',label:`清理屋内守卫 ${room.total-remaining}/${room.total}`}:
-        chest?{x:chest.x,y:chest.y,kind:'treasure',label:'领取小屋补给'}:{...state.entrance,kind:'route',label:'返回荒野'};
-    }else if(state.bossDefeated&&this.vision.isExplored(state.treasure.x,state.treasure.y))next={...state.treasure,kind:'treasure',label:state.rewardClaimed?'携宝返回荒野':'领取王城宝藏'};
-    else if(remaining)next={x:cell.x,y:cell.y,kind:room.kind,label:room.kind==='boss'?'击败旧王城守卫':`清理守卫 ${room.total-remaining}/${room.total}`};
+        chest?{x:chest.x,y:chest.y,kind:'treasure',label:`领取${state.treasureName||'小屋补给'}`}:{...state.entrance,kind:'route',label:'返回荒野'};
+    }else if(state.bossDefeated&&this.vision.isExplored(state.treasure.x,state.treasure.y))next={...state.treasure,kind:'treasure',label:state.rewardClaimed?'携宝返回荒野':`领取${state.treasureName||'王城宝藏'}`};
+    else if(remaining)next={x:cell.x,y:cell.y,kind:room.kind,label:room.kind==='boss'?`击败${featureForSite(state.site)?.bossName||'旧王城守卫'}`:`清理守卫 ${room.total-remaining}/${room.total}`};
     else if(chest)next={x:chest.x,y:chest.y,kind:'treasure',label:'打开古堡宝箱'};
     else{
       // Search only already visited rooms for a frontier. The old shortest

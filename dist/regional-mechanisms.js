@@ -35,7 +35,7 @@ export class RegionalMechanisms {
   _candidate(tx,ty){
     // Rune support now belongs to a permanent, deliberately activated relic.
     // The roaming cache only owns renewable woodland/marsh hazards.
-    if(this.region==='ruins')return null;
+    if(!['forest','marsh'].includes(this.region))return null;
     const env=this.environment,seed=env._hash(tx+1423,ty+1451);
     if(seed>.64)return null;
     const type=this.region==='marsh'?'gas':this.region==='ruins'?'rune':'vine',r=REGIONAL_MECHANISM_RULES[`${type}Radius`];
@@ -158,12 +158,13 @@ export class RegionalMechanisms {
     prop._shot=(prop._shot??.3)-dt;if(prop._shot>1e-9)return;
     prop._shot=REGIONAL_MECHANISM_RULES.runeInterval;
     if(!this._visible(prop,100))return;
-    const g=this.game,targets=g.enemies.filter(e=>e.hp>0&&g._inView(e)&&distance(prop,e)<=REGIONAL_MECHANISM_RULES.runeRange).sort((a,b)=>distance(prop,a)-distance(prop,b)).slice(0,REGIONAL_MECHANISM_RULES.runeTargets);
+    const g=this.game,targets=g.enemies.filter(e=>e.hp>0&&g._inView(e)&&distance(prop,e)<=REGIONAL_MECHANISM_RULES.runeRange&&!g.terrain.firstBlocker(prop.x,prop.y,e.x,e.y,0,'sight')).sort((a,b)=>distance(prop,a)-distance(prop,b)).slice(0,REGIONAL_MECHANISM_RULES.runeTargets);
     const damage=30*(1+Math.min(Math.max(g.time,0),600)/1200);
     for(const enemy of targets){
       if(g.status!=='playing')break;
-      g._effect(prop.x,prop.y,'runeBolt',.32,enemy.r,'#85e2de',undefined,{x2:enemy.x,y2:enemy.y,seed:enemy.id});
+      g._effect(prop.x,prop.y,'runeBolt',.32,enemy.r,prop.element==='frost'?'#c2efff':'#85e2de',undefined,{x2:enemy.x,y2:enemy.y,seed:enemy.id});
       g._hurtEnemy(enemy,damage,0,prop,'rune');
+      if(prop.element==='frost'&&enemy.hp>0){const now=g._clock||0,previous=(enemy.superSlowUntil||0)>now?(enemy.superSlowFactor??1):1;enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,now+1.6);enemy.superSlowFactor=Math.min(previous,enemy.type==='boss'?.88:.65);}
     }
   }
   activateRune(prop){

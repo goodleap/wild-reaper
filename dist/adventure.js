@@ -1,5 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
+import { WORLD_IDS } from './world-definitions.js';
 
 const TAU=Math.PI*2,CELL=520,MAX_SUPPLIES=18,MAX_PICKUPS=24;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -18,7 +19,7 @@ class ConsumedSupplies {
 export class Adventure {
   constructor(game,{generation=true}={}) {
     this.game=game;this.generation=generation;
-    this.region=['forest','marsh','ruins'].includes(game.region?.id)?game.region.id:'forest';
+    this.region=WORLD_IDS.includes(game.region?.id)?game.region.id:'forest';
     this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
     this.props=[];this.pickups=[];this.treasure=null;
     this.furyTime=0;this.magnetTime=0;this.buffDuration=8;
@@ -26,7 +27,7 @@ export class Adventure {
     this._supplyClock=0;this._consumed=new ConsumedSupplies();
     if(generation)this._refreshSupplies(true);
   }
-  _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
+  _hash(x,y=0){const index=WORLD_IDS.indexOf(this.region),offset=index===1?419:index===2?811:index>2?index*431:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   damageMultiplier(){return this.furyTime>0?1.35:1;}
   fireRateMultiplier(){return this.furyTime>0?1.2:1;}
   magnetRange(base=this.game.stats.magnet){return this.magnetTime>0?Math.max(base,320):base;}

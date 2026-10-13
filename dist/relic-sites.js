@@ -61,7 +61,10 @@ export class RelicSites {
       {key:'owlroost',type:'rescue',kind:'owl',appearance:'owlroost',name:'林间鸟笼',guardCount:3},
       {key:'golemaltar',type:'rescue',kind:'golem',appearance:'golemaltar',name:'沉睡石像',guardCount:8},
       {key:'stonevault',type:'stonevault',name:'封石宝库'}];
-    if(g.region?.id==='ruins'&&g.environment?.mechanisms)entries.push({key:'rune',type:'rune',name:'遗迹符文阵'});
+    if(g.environment?.mechanisms){
+      if(g.region?.id==='ruins')entries.push({key:'rune',type:'rune',name:'遗迹符文阵'});
+      if(g.region?.id==='snow')entries.push({key:'rune',type:'rune',featureId:'icealtar',appearance:'icealtar',name:'冰封祭坛'});
+    }
     for(const [index,entry] of entries.entries()) {
       const {key,type}=entry;
       if(type==='hunt'&&g._features?.encounters===false)continue;
@@ -76,7 +79,7 @@ export class RelicSites {
           door:{x,y:y+(hunt?190:rune?45:dog?36:vault?138:entry.appearance==='golemaltar'?0:100)},interactRadius:RELIC_SITE_RULES.interactRadius,state:'ready',gateOpen:entry.appearance==='golemaltar',progress:0,
           goal:hunt?RELIC_SITE_RULES.huntGuards:rune?12:entry.guardCount||0,discovered:false,regionIndex,seed:hash(regionIndex+131,index+41)};
         if(this._valid(site)){
-          if(rune)site.mechanism={id:`${site.id}:support`,siteId:site.id,type:'rune',x,y,r:48,state:'idle',charge:0,remaining:0,maxRemaining:12};
+          if(rune)site.mechanism={id:`${site.id}:support`,siteId:site.id,type:'rune',element:entry.featureId==='icealtar'?'frost':undefined,x,y,r:48,state:'idle',charge:0,remaining:0,maxRemaining:12};
           this.sites.push(site);break;
         }
       }
@@ -119,7 +122,7 @@ export class RelicSites {
         label=site.type==='hunt'?`狩猎守卫 ${site.progress}/${site.goal}`:site.type==='rune'?`符文支援 ${Math.ceil(site.mechanism.remaining)} 秒`:camp?.siteId===site.id&&camp.state==='ready'?'靠近伙伴完成解救':`${site.appearance==='golemaltar'?'唤醒试炼':'囚牢守卫'} ${site.progress}/${site.goal}`;
         description=site.type==='rune'?'符文正在自动轰击附近怪物':'离开后进度保留，返回可继续挑战';
       } else if(site.type==='hunt') {label='走进中央纹章开启狩猎';description='击败 24 名遗迹守卫 · 72 灵晶 / 18 金币';}
-      else if(site.type==='rune') {label='激活遗迹符文阵';description='一次性 12 秒符文支援 · 自动攻击附近怪物';}
+      else if(site.type==='rune') {label=`激活${site.name}`;description=site.featureId==='icealtar'?'一次性寒霜支援 · 自动攻击并减速附近怪物':'一次性 12 秒符文支援 · 自动攻击附近怪物';}
       else {label=site.kind==='golem'?'触碰古坛唤醒岩灵':site.kind==='owl'?'驱散守卫解救猫头鹰':'挑战囚牢守卫';description=`击败 ${site.goal} 名守卫，招募伙伴`;
         if(this._member(site.kind)){enabled=false;label=site.kind==='golem'?'岩灵已在队伍中':'该伙伴已在队伍中';description='每种伙伴最多一名，无需重复解救或唤醒';}}
       nearest={id:site.id,siteId:site.id,type:'relic',relicType:site.type,category:'relic',label,description,x:anchor.x,y:anchor.y,enabled,...(site.type==='hunt'?{touchRadius:RELIC_SITE_RULES.huntTouchRadius}:site.appearance==='golemaltar'?{touchRadius:ARMY_SITE_RULES.altarTouchRadius}:{})};best=d;

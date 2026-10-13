@@ -1,6 +1,9 @@
 import { groundOffset } from './terrain.js';
 import { groundFootprint, surfaceAllows, placementAllowed } from './placement-rules.js';
 import { RegionalMechanisms, isGrounded } from './regional-mechanisms.js';
+import { WorldHazards } from './world-hazards.js';
+import { WORLD_IDS } from './world-definitions.js';
+import { biomeZone } from './biome-layout.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from './friendly-combat.js';
 import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, waterIntersectsCapsule, getWaterContours, WATER_SHAPES } from './water-geometry.js';
 export { isGrounded } from './regional-mechanisms.js';
@@ -40,14 +43,15 @@ function segmentDistance(x,y,x1,y1,x2,y2){
 export class Environment {
   constructor(game,{generation=true}={}){
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
-    this.region=['forest','marsh','ruins'].includes(game.region?.id)?game.region.id:'forest';
+    this.region=WORLD_IDS.includes(game.region?.id)?game.region.id:'forest';
     this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();
     if(generation)this._refresh(true);
     this.mechanisms=new RegionalMechanisms(this,{generation});
+    this.worldHazards=new WorldHazards(this,{generation});
   }
-  _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
+  _hash(x,y=0){const offset=this.region==='marsh'?419:this.region==='ruins'?811:WORLD_IDS.indexOf(this.region)*419;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer||humanoid(entity))};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<=g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<=g.viewHeight*.5+margin;}
   _terrainClear(x,y,r){const terrain=this.game.terrain;return Math.hypot(x,y)>=ENVIRONMENT_BALANCE.safeRadius+r&&(!terrain.island||terrain.island.naturalCircleFree(x,y,r))&&terrain.isFree(x,y,r);}
@@ -71,6 +75,7 @@ export class Environment {
     return null;
   }
   _mushroomsAt(tx,ty,{ignoreObjectives=false}={}){
+    if(!['forest','marsh','ruins'].includes(this.region))return [];
     const seed=this._hash(tx+683,ty+727),chance=this.region==='marsh'?.61:this.region==='ruins'?.48:.57;if(seed>chance)return [];
     const point=this._point(tx,ty,751,this.game.terrain.island?ENVIRONMENT_BALANCE.blastRadius:35);if(!point)return [];
     const make=(point,index)=>{
@@ -90,12 +95,14 @@ export class Environment {
   _mudCandidate(tx,ty){
     const key=`${tx},${ty}`;if(this._waterCandidates.has(key))return this._waterCandidates.get(key);
     const remember=mud=>{this._waterCandidates.set(key,mud);while(this._waterCandidates.size>192)this._waterCandidates.delete(this._waterCandidates.keys().next().value);return mud;};
-    const seed=this._hash(tx+911,ty+947),chance=this.region==='marsh'?.52:this.region==='ruins'?.16:.36;if(seed>chance)return remember(null);
+    const chance={forest:.36,marsh:.52,ruins:.16,beach:.54,city:0,mountain:.18,snow:.56,volcano:.38}[this.region]??0;
+    const seed=this._hash(tx+911,ty+947);if(seed>chance||chance===0)return remember(null);
     const sizeRoll=this._hash(tx+971,ty+977),scale=WATER_SIZES[sizeRoll<.36?0:sizeRoll<.72?1:sizeRoll<.89?2:sizeRoll<.97?3:4];
     const family=Math.floor(this._hash(tx+991,ty+997)*(this.region==='marsh'?5:4)),shape=WATER_SHAPES[family];
     const x=tx*CELL+260+(this._hash(tx+1013,ty+419)-.5)*120,y=ty*CELL+260+(this._hash(tx+503,ty+1013)-.5)*120;
     const rx=80*scale,ry=(shape==='elongated'?34:shape==='rounded'?50:47)*scale,angleIndex=Math.floor(this._hash(tx+1091,ty+1097)*3),angle=WATER_ANGLES[angleIndex];
-    const mud={id:`mud:${tx},${ty}`,type:'mud',x,y,rx,ry,seed,shape,angle,island:this.region==='marsh'&&scale>=2.5&&family>=3,scale};
+    const kind=this.region==='volcano'?'lava':this.region==='snow'?(biomeZone(this.region,x,y,this.seed).id==='icefield'?'ice':'snow'):'water';
+    const mud={id:`mud:${tx},${ty}`,type:'mud',kind,x,y,rx,ry,seed,shape,angle,island:this.region==='marsh'&&scale>=2.5&&family>=3,scale};
     const terrain=this.game.terrain,structures=new Set(terrain._structures||[]);
     const clear=()=>{
       if(Math.hypot(mud.x,mud.y)<=ENVIRONMENT_BALANCE.safeRadius+Math.max(rx,ry)+8)return false;
@@ -201,7 +208,11 @@ export class Environment {
     const point=this._foot(entity,isPlayer),island=this.game.terrain.island;let depth=island?.depthAt(point.x,point.y)||0,mud=depth>0?this._shore:null;
     // Choose the deepest overlapping pool instead of adding their depths.
     // Only the sprite sinks: movement, collision and ordering keep their feet.
-    for(const patch of this.muds){const d=waterDepth(patch,point.x,point.y);if(d>depth){depth=d;mud=patch;}}
+    for(const patch of this.muds){
+      if(patch.kind==='ice'||patch.kind==='lava')continue;
+      const depthScale=patch.kind==='snow'?.35:this.region==='beach'?(this.worldHazards?.tideAt(patch)==='active'?.8:.25):1;
+      const d=waterDepth(patch,point.x,point.y)*depthScale;if(d>depth){depth=d;mud=patch;}
+    }
     if(!mud)return null;
     const bodyKey=entity.isCompanion||entity.isCaptive?entity.kind||entity.heroId:entity.type;
     const human=isPlayer||(humanoid(entity)&&!BODY_HEIGHTS[bodyKey]),body=BODY_HEIGHTS[bodyKey]||[34,16];
@@ -212,11 +223,16 @@ export class Environment {
   movementMultiplier(entity,isPlayer=entity===this.game.player){
     if(!isGrounded(entity))return 1;
     const point=this._foot(entity,isPlayer);
-    const mud=this.muds.some(m=>containsWater(m,point.x,point.y))?ENVIRONMENT_BALANCE.mudMultiplier:1;
+    let mud=1;
+    for(const patch of this.muds){
+      if(!containsWater(patch,point.x,point.y))continue;
+      const slow=patch.kind==='ice'||patch.kind==='lava'?1:patch.kind==='snow'?.68:this.region==='beach'?(this.worldHazards?.tideAt(patch)==='active'?.62:.94):ENVIRONMENT_BALANCE.mudMultiplier;
+      mud=Math.min(mud,slow);
+    }
     const shoreDepth=this.game.terrain.island?.depthAt(point.x,point.y)||0,shore=1-shoreDepth*.35;
     return Math.min(mud,shore,this.mechanisms.movementMultiplier(entity,isPlayer));
   }
-  isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r);}
+  isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r)&&this.worldHazards.isHazardFree(x,y,r);}
   nearestDestructible(range=280){return this.mechanisms.nearestDestructible(range);}
   _arm(prop,source){
     if(this.game.status!=='playing'||prop.state==='armed'||prop.state==='spent')return false;
@@ -272,5 +288,6 @@ export class Environment {
     if(g.status!=='playing')return;
     if(this.generation){this._refreshClock-=dt;if(this._refreshClock<=0){this._refreshClock=.5;this._refresh();}}
     this.mechanisms.update(dt);
+    if(g.status==='playing')this.worldHazards.update(dt);
   }
 }

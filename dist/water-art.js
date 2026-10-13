@@ -3,6 +3,13 @@
 import { getWaterContours, traceWaterPath, waterBounds, containsWater } from './water-geometry.js';
 
 const TAU=Math.PI*2,TILE=192,BLEED=2,PAD=24,PIXEL_LIMIT=2*1024*1024;
+const WORLD_WATER={
+  beach:{bank:'#a5956bb0',rim:'#d8c99f',top:'#6eaa9b',deep:'#377d7b',light:'#daf3d0'},
+  city:{bank:'#626a5990',rim:'#a3ab8c',top:'#759d8d',deep:'#456e69',light:'#d6e5c8'},
+  mountain:{bank:'#637b697d',rim:'#a8baa2',top:'#779f9a',deep:'#3c787c',light:'#e0edd5'},
+  snow:{bank:'#729a9c70',rim:'#d2e1d5',top:'#b8d7d3',deep:'#7eafb6',light:'#f1f9e5'},
+  volcano:{bank:'#202730ab',rim:'#7c7c6b',top:'#567c77',deep:'#335454',light:'#c3d1ba'}
+};
 const random=seed=>{let n=(seed*2654435761)>>>0;return()=>{n^=n<<13;n^=n>>>17;n^=n<<5;return(n>>>0)/4294967296;};};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 function stroke(c,points,color,width=1){c.beginPath();for(let i=0;i<points.length;i++)c[i?'lineTo':'moveTo'](points[i][0],points[i][1]);c.strokeStyle=color;c.lineWidth=width;c.stroke();}
@@ -16,7 +23,7 @@ export class WaterArt {
   constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this._shapes=new WeakMap();}
   get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
   _shape(mud){
-    const seed=Math.floor((mud.seed||0)*3)/3,key=[mud.shape||'ellipse',mud.rx,mud.ry,mud.angle||0,mud.island?1:0,seed].join(':');
+    const seed=Math.floor((mud.seed||0)*3)/3,key=[mud.kind||'water',mud.shape||'ellipse',mud.rx,mud.ry,mud.angle||0,mud.island?1:0,seed].join(':');
     const previous=this._shapes.get(mud);if(previous?.key===key)return previous;
     const local={...mud,x:0,y:0,seed},contours=getWaterContours(local,{local:true}),b=waterBounds(local),shore=[...shorelinePoints(contours.outer),...contours.holes.flatMap(p=>shorelinePoints(p,13))];
     const r=random(613+Math.round(seed*1e6)),ripples=[];
@@ -35,6 +42,7 @@ export class WaterArt {
     this.cache.set(key,item);this.pixels+=item.pixels;this.builds++;return item;
   }
   _paint(c,shape,region,tile){
+    if(WORLD_WATER[region]||['ice','lava','snow'].includes(shape.local.kind)){this._paintTheme(c,shape,region,tile);return;}
     const {local,b,shore}=shape,marsh=region==='marsh',seed=Math.round((local.seed||0)*1e6);
     // A narrow dry earthen bank is outside the exact water contour. The broad
     // filled region and all reflective details are clipped to playable water.
@@ -73,9 +81,42 @@ export class WaterArt {
       if(i%3===1){const next=shore[(i+1)%shore.length];if(Math.hypot(next.x-p.x,next.y-p.y)<24){const light=clamp((p.nx-p.ny)*.5+.5,.15,1);c.save();c.globalAlpha*=light;stroke(c,[[p.x,p.y],[p.x+(next.x-p.x)*.42,p.y+(next.y-p.y)*.42]],marsh?'#c0c59a52':'#c4d1ae57',.6);c.restore();}}
     }
   }
+  _paintTheme(c,shape,region,tile){
+    const {local,b,shore}=shape,kind=local.kind||'water',ice=kind==='ice',lava=kind==='lava',snow=kind==='snow',p=WORLD_WATER[region]||WORLD_WATER.snow,seed=Math.round((local.seed||0)*1e6);
+    traceWaterPath(c,local,{local:true});c.lineWidth=12;c.strokeStyle=lava?'#1c2225b5':snow?'#91b1b445':p.bank;c.stroke();
+    c.lineWidth=4;c.strokeStyle=lava?'#66605b':snow?'#dbe8dc':p.rim;c.stroke();
+    const gradient=c.createLinearGradient(b.minX,b.minY,b.maxX,b.maxY);
+    gradient.addColorStop(0,lava?'#be703f':snow?'#e6eddf':ice?'#c5e3df':p.top);gradient.addColorStop(.45,lava?'#aa4b31':snow?'#d2e0d8':ice?'#8abfc4':p.deep);gradient.addColorStop(1,lava?'#71372d':snow?'#b7d0cf':ice?'#a8d4d0':p.top);
+    traceWaterPath(c,local,{local:true});c.fillStyle=gradient;c.fill();c.save();c.clip();
+    const cell=48;
+    for(let gy=Math.floor(tile.minY/cell)-1;gy<=Math.floor(tile.maxY/cell)+1;gy++)for(let gx=Math.floor(tile.minX/cell)-1;gx<=Math.floor(tile.maxX/cell)+1;gx++){
+      const r=random(seed+gx*9277+gy*17491+731),x=gx*cell,y=gy*cell;
+      for(let i=0;i<12;i++){c.fillStyle=lava?(i%3?'#d789432b':'#fbd17c2b'):i%3?p.light+'34':'#477f841b';c.fillRect(x+r()*cell,y+r()*cell,.5+r()*2,.5+r());}
+      if(lava){
+        const xx=x+5+r()*29,yy=y+5+r()*28,rx=12+r()*12,ry=8+r()*10;
+        c.beginPath();c.moveTo(xx-rx,yy);c.lineTo(xx-rx*.6,yy-ry);c.lineTo(xx+rx*.45,yy-ry*.8);c.lineTo(xx+rx,yy+ry*.2);c.lineTo(xx+rx*.3,yy+ry);c.lineTo(xx-rx*.8,yy+ry*.7);c.closePath();c.fillStyle=['#403b3c','#514340','#663f34'][Math.floor(r()*3)];c.fill();c.strokeStyle='#e99c536e';c.lineWidth=1.4;c.stroke();stroke(c,[[xx-rx*.5,yy-ry*.6],[xx+rx*.3,yy-ry*.5]],'#a47c5360',.8);
+        stroke(c,[[x+3,y+7],[x+12,y+10],[x+20,y+6]],'#ffcf8266',1.7);
+      }else if(ice){
+        if(r()>.35){const xx=x+5+r()*27,yy=y+5+r()*27;stroke(c,[[xx-18,yy+8],[xx-4,yy-1],[xx+2,yy+1],[xx+16,yy-9]],'#f0ffe4a3',1.1);stroke(c,[[xx-4,yy-1],[xx-7,yy-8],[xx-3,yy-14]],'#3e8d9c51',.7);}
+        if(r()>.75)stroke(c,[[x+8,y+15],[x+32,y+6]],'#f0fff162',2.5);
+      }else if(snow){
+        const xx=x+9+r()*28,yy=y+10+r()*27;c.beginPath();c.moveTo(xx-19,yy);c.quadraticCurveTo(xx,yy-5,xx+18,yy-1);c.strokeStyle='#f9fae977';c.lineWidth=1.4;c.stroke();
+      }else{
+        const xx=x+r()*cell,yy=y+r()*cell;stroke(c,[[xx-8,yy],[xx,yy-.6],[xx+12,yy]],p.light+'42',.7);if(r()>.82){oval(c,xx+8,yy+12,2.3,1.1,region==='beach'?'#d4cbab60':'#87b09640');}
+      }
+    }
+    c.restore();
+    for(let i=0;i<shore.length;i++){
+      const q=shore[i];if(q.x<tile.minX-8||q.x>tile.maxX+8||q.y<tile.minY-8||q.y>tile.maxY+8)continue;
+      const r=random(seed+i*191+319),angle=Math.atan2(q.ny,q.nx)+Math.PI*.5;
+      if(lava){oval(c,q.x+q.nx*2,q.y+q.ny*2,3+r()*4,1.5+r()*2,'#57504b',angle);if(i%4===0)stroke(c,[[q.x-2,q.y],[q.x+2,q.y-1]],'#eeae6f8c',.8);}
+      else if(ice||snow){if(i%3===0)leaf(c,q.x,q.y,7+r()*7,1.1+r()*2,angle,'#edf6e6c0');}
+      else if(i%3===0){oval(c,q.x+q.nx*2,q.y+q.ny*2,2+r()*3,1+r(),region==='beach'?'#d3c499':'#a2b69a',angle);}
+    }
+  }
   draw(c,mud,options={}){
     if(!valid(mud))return false;
-    const shape=this._shape(mud),region=options.region==='marsh'?'marsh':'forest',b=shape.b;
+    const shape=this._shape(mud),region=(options.region==='marsh'||WORLD_WATER[options.region])?options.region:'forest',b=shape.b;
     // Small and medium shores are retina crisp. Broad water uses the same
     // world-pixel density as the ground, preventing a lake from evicting its
     // own tiles on every frame. Edge tiles allocate only their actual extent.
@@ -90,8 +131,9 @@ export class WaterArt {
       // so translucent banks never darken at seams from overlapping images.
       c.drawImage(image.canvas,BLEED*dpr,BLEED*dpr,image.w*dpr,image.h*dpr,image.x,image.y,image.w,image.h);
     }
+    if(['ice','snow','lava'].includes(mud.kind)){c.restore();return true;}
     const time=options.reduced?0:(Number.isFinite(options.time)?options.time:0),count=Math.min(shape.ripples.length,options.dense?1:3);
-    traceWaterPath(c,shape.local,{local:true});c.clip();c.strokeStyle=region==='marsh'?'#c2d2a7':'#d0e5cc';c.lineWidth=.65;
+    traceWaterPath(c,shape.local,{local:true});c.clip();c.strokeStyle=WORLD_WATER[region]?.light||(region==='marsh'?'#c2d2a7':'#d0e5cc');c.lineWidth=.65;
     for(let i=0;i<count;i++){const p=shape.ripples[i],phase=((time*.17+(mud.seed||0)*3+i*.37)%1+1)%1;c.save();c.globalAlpha*=.2*(1-phase);c.beginPath();c.ellipse(p.x,p.y,3+phase*15,1.4+phase*3.8,0,.12,Math.PI*.92);c.stroke();c.restore();}
     c.restore();return true;
   }

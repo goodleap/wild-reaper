@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {Island} from './dist/islands.js';
+import {worldNeighbors} from './dist/world-definitions.js';
 import {Terrain} from './dist/terrain.js';
 import {Environment,waterObstacleFootprint} from './dist/environment.js';
 import {getWaterContours,waterIntersectsCapsule,waterIntersectsCircle} from './dist/water-geometry.js';
@@ -26,7 +27,7 @@ for(const region of ['forest','marsh','ruins']){
     assert(relocated.blocked);assert(island.contains(relocated.x,relocated.y,49));
   }
   assert(!island.contains(Infinity,0));assert(!island.contains(0,0,-1));
-  assert.equal(Object.keys(island.plan).filter(k=>k.startsWith('portal:')).length,2);
+  assert.equal(Object.keys(island.plan).filter(k=>k.startsWith('portal:')).length,worldNeighbors(island.worldId).length);
   for(const p of Object.values(island.plan)){assert(island.isDry(p.x,p.y,p.r));assert(island.isReserved(p.x,p.y));}
   for(const p of island.routes)assert(island.containsCapsule(p.ax,p.ay,p.bx,p.by,p.r,island.shallowWidth),'entire wide planned route must be dry');
   const terrain=new Terrain({island,region,cacheLimit:24}),props=terrain.query(-5200,-5200,5200,5200);

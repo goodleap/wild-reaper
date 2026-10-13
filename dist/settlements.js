@@ -4,6 +4,7 @@ import { portalDoor } from './portal-geometry.js';
 import { RELICS } from './relics.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive } from './event-scheduling.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive } from './friendly-combat.js';
+import { worldSettlementDefinition, WORLD_HUT_NAMES } from './world-sites.js';
 
 const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -75,6 +76,7 @@ export class Settlements {
   }
   _createSite(def,index,{nearSpawn=false}={}) {
     const region=this.game.region?.id||'forest',seed=this._hash(index+83,17),rotation=(this.game.regionIndex||0)===0?0:this._hash(71,23)*TAU;
+    def=worldSettlementDefinition(region,def);
     const spawn=nearSpawn?this._foot():null,plan=!nearSpawn&&this.game.terrain.island?.plan?.[def.type];
     for(let i=0;i<(plan?33:nearSpawn?128:192);i++) {
       const ring=Math.floor(i/32),angle=(nearSpawn?-Math.PI/2:def.angle+rotation)+(i%32)*TAU/32,radius=nearSpawn?190+ring*40:def.radius+ring*100;
@@ -82,7 +84,7 @@ export class Settlements {
       const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
       const site={...def,id:`site:${this.game.regionIndex||0}:${def.type}`,x,y,sortY:y,door:{x,y:y+(def.type==='merchant'?0:30)},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
       if(!this._validSite(site,{nearSpawn}))continue;
-      if(site.type==='supply')site.name=region==='marsh'?'沼泽高脚屋':region==='ruins'?'遗迹石屋':'林间小屋';
+      if(site.type==='supply')site.name=WORLD_HUT_NAMES[region]||WORLD_HUT_NAMES.forest;
       if(site.type==='merchant') {
         site.relicId=RELICS[Math.floor(this._hash(index+199,63)*RELICS.length)].id;
         site.stock={heal:1,magnet:1,fury:1,shield:1,relic:1};
@@ -152,9 +154,9 @@ export class Settlements {
       if(site.type==='merchant'){label='与商人交易';description='购买一件补给或遗物后，游商将离开';}
       else if(site.type==='supply'||site.type==='occupied'||site.type==='castle') {
         const visited=site.explored||site.state==='spent';
-        if(site.type==='castle'){label=visited?'重返已探索古堡':'进入古堡迷宫';description=visited?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';}
-        else if(site.type==='supply'){label=visited?'重返林间小屋':'进入林间小屋';description=visited?'补给已领取，可随时进出':'进入屋内搜寻补给箱';}
-        else {label=visited?'重返清理过的小屋':'进入被占据的小屋';description=visited?'宝藏已领取，可随时进出':site.state==='cleared'?'守卫已清除，屋内宝箱等待领取':'清理屋内守卫，搜寻宝箱';}
+        if(site.type==='castle'){label=site.featureId?`${visited?'重返':'进入'}${site.name}`:visited?'重返已探索古堡':'进入古堡迷宫';description=visited?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';}
+        else if(site.type==='supply'){label=`${visited?'重返':'进入'}${site.name}`;description=visited?'补给已领取，可随时进出':'进入屋内搜寻补给箱';}
+        else {label=site.featureId?`${visited?'重返':'进入'}${site.name}`:visited?'重返清理过的小屋':'进入被占据的小屋';description=visited?'宝藏已领取，可随时进出':site.state==='cleared'?'守卫已清除，屋内宝箱等待领取':'清理屋内守卫，搜寻宝箱';}
       }
       nearest={id:site.id,siteId:site.id,type:site.type,label,description,x:site.door.x,y:site.door.y,enabled};best=d;
     }
@@ -249,7 +251,7 @@ export class Settlements {
       site._attack=ANGEL_RULES.attackInterval;
       site.castFace=.25;
       const impact={x:target.x,y:target.y+groundOffset(target)},origin={x:site.x,y:site.y-19.8,groundY:site.y};
-      const damage=ANGEL_RULES.damage*(1+Math.max(0,g.regionIndex||0)*.25);
+      const damage=ANGEL_RULES.damage*(1+Math.min(3,g.regions?.unlockedConnections?.size||0)*.15+Math.max(0,(g.region?.danger||1)-1));
       for(const enemy of g.enemies)if(canHit(enemy)&&Math.hypot(enemy.x-impact.x,enemy.y+groundOffset(enemy)-impact.y)<=ANGEL_RULES.strikeRadius)
         g._hurtEnemy(enemy,damage,0,origin,'angel');
       // A long sky strike with a short lifetime: ten casts/second show at most

@@ -1,5 +1,7 @@
 import { groundOffset } from './terrain.js';
 import { traceIslandContour } from './island-art.js';
+import { REGIONS } from './world-definitions.js';
+import { COAST_RULES } from './placement-rules.js';
 
 export const WORLD_MAP_RULES=Object.freeze({range:900,discoveryRadius:340,explorationCell:100});
 const TAU=Math.PI*2;
@@ -7,6 +9,17 @@ const BUILDINGS=new Set(['supply','occupied','castle','angel']);
 const RELICS=new Set(['hunt','rescue','rune','dogcamp','stonevault']);
 const COMPLETED=new Set(['cleared','completed','claimed','spent','failed']);
 const FONT='"PingFang SC",system-ui,sans-serif';
+const MAP_COASTS=Object.freeze({
+  forest:{land:'#476246',sand:'#919a6b',sea:'#264e54',shallow:'#507776'},
+  marsh:{land:'#4a5e50',sand:'#7f896b',sea:'#294b51',shallow:'#507776'},
+  ruins:{land:'#666d65',sand:'#969985',sea:'#345360',shallow:'#507776'},
+  beach:{sand:'#dfc998',sea:'#347a88',shallow:'#75c1c3'},
+  city:{sand:'#ad9d80',sea:'#425f66',shallow:'#72928c'},
+  mountain:{sand:'#8f9e8d',sea:'#3c6878',shallow:'#79a3a6'},
+  snow:{sand:'#a7c7cf',sea:'#416e84',shallow:'#85bdcf'},
+  volcano:{sand:'#937366',sea:'#453c48',shallow:'#776a71'}
+});
+const MAP_PALETTES=Object.freeze(Object.fromEntries(REGIONS.map(region=>[region.id,Object.freeze({land:region.colors.light,sand:region.colors.accent,sea:'#345360',shallow:'#507776',...MAP_COASTS[region.id]})])));
 const positive=(value,fallback)=>Number.isFinite(value)&&value>0?value:fallback;
 export function minimapBounds(width,height,insets={}){
   const compact=width<600||height<430,size=compact?104:128,margin=compact?10:16;
@@ -163,7 +176,7 @@ export class WorldMap {
     const scale=expanded?Math.min((mapW-26)/(b.maxX-b.minX+240),(mapH-26)/(b.maxY-b.minY+240)):radius/range;
     const mx=worldX=>cx+(worldX-center.x)*scale,my=worldY=>cy+(worldY-center.y)*scale;
     const markerRange=expanded?Math.hypot(b.maxX-b.minX,b.maxY-b.minY)+500:range,discoveredMarkers=this.getMarkers(game,{range:markerRange}),markers=expanded?this._expandedMarkers(discoveredMarkers):discoveredMarkers;
-    const palette=island.region==='marsh'?{land:'#4a5e50',sand:'#7f896b',sea:'#294b51'}:island.region==='ruins'?{land:'#666d65',sand:'#969985',sea:'#345360'}:{land:'#476246',sand:'#919a6b',sea:'#264e54'};
+    const palette=MAP_PALETTES[island.region]||MAP_PALETTES.forest;
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';rounded(ctx,x,y,width,height,9);ctx.fillStyle='#101f1ce8';ctx.fill();ctx.strokeStyle='#a6b99b50';ctx.lineWidth=1;ctx.stroke();
     ctx.save();rounded(ctx,x+pad,y+pad,mapW,mapH,5);ctx.clip();ctx.fillStyle='#202c2e';ctx.fillRect(x+pad,y+pad,mapW,mapH);
     // Clip all geographical detail to cells physically visited in this world.
@@ -173,9 +186,10 @@ export class WorldMap {
     for(const run of runs){const xx=mx(run.gx*cell),yy=my(run.gy*cell),size=cell*scale;ctx.rect(xx,yy,run.length*size,size);}
     ctx.clip();ctx.fillStyle=palette.sea;ctx.fillRect(x+pad,y+pad,mapW,mapH);
     ctx.save();ctx.translate(cx-center.x*scale,cy-center.y*scale);ctx.scale(scale,scale);
-    traceIslandContour(ctx,island.points);ctx.fillStyle='#507776';ctx.fill();
-    traceIslandContour(ctx,island.contour(island.shallowWidth||100));ctx.fillStyle=palette.sand;ctx.fill();
-    traceIslandContour(ctx,island.contour((island.shallowWidth||100)+35));ctx.fillStyle=palette.land;ctx.fill();
+    const shallow=island.shallowWidth??COAST_RULES.shallowWidth,beach=island.beachWidth??COAST_RULES.beachWidth;
+    traceIslandContour(ctx,island.points);ctx.fillStyle=palette.shallow;ctx.fill();
+    traceIslandContour(ctx,island.contour(shallow));ctx.fillStyle=palette.sand;ctx.fill();
+    traceIslandContour(ctx,island.contour(shallow+beach));ctx.fillStyle=palette.land;ctx.fill();
     ctx.restore();ctx.restore();
     if(!expanded){ctx.strokeStyle='#abc3b222';ctx.lineWidth=.7;ctx.setLineDash([2,4]);ctx.beginPath();ctx.arc(cx,cy,radius*.5,0,TAU);ctx.stroke();ctx.setLineDash([]);}
     ctx.fillStyle='#bed0b1';ctx.font=`600 ${expanded?15:8}px ${FONT}`;ctx.textAlign='center';ctx.fillText('N',cx,y+pad+(expanded?16:8));

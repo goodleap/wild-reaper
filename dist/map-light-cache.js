@@ -2,6 +2,16 @@ const SPACING=1080,SEARCH_MARGIN=850,BASE_SCALE=.5,PADDING=2,PIXEL_LIMIT=4_194_3
 export const MAP_SUN_ANGLE=Math.atan2(325,840);
 export const MAP_SUN_DIRECTION=Object.freeze({x:-Math.sin(MAP_SUN_ANGLE),y:Math.cos(MAP_SUN_ANGLE)});
 const hash=(x,y)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
+const palette=(id,rgb,glow,strength,clear=`rgba(${rgb},0)`)=>Object.freeze({id,rgb,glow,strength,clear});
+export const MAP_LIGHT_PALETTES=Object.freeze({
+  forest:palette('forest','225,237,172','#c7d98a12',1,'#e3ebaf00'),
+  beach:palette('beach','246,225,184','#f2d8a80c',.60),
+  city:palette('city','240,229,211','#eee0c60a',.48),
+  mountain:palette('mountain','219,235,239','#d8e8eb09',.46),
+  snow:palette('snow','216,240,255','#d4f1ff08',.35),
+  volcano:palette('volcano','247,171,110','#f5a86806',.20)
+});
+const paletteFor=region=>Object.prototype.hasOwnProperty.call(MAP_LIGHT_PALETTES,region)?MAP_LIGHT_PALETTES[region]:MAP_LIGHT_PALETTES.forest;
 
 // Geometry is world-fixed. Bounds include both the long beam and its ground
 // glow, so a light whose origin is offscreen may still contribute to the view.
@@ -25,14 +35,15 @@ function spriteBounds(patch,scale){
   return {x:left/scale,y:top/scale,width,height,pixels:width*height};
 }
 
-function paintPatch(target,patch){
+function paintPatch(target,patch,palette){
   const {x,y,endX,endY,glowX,glowY,alpha,points}=patch;
+  const intensity=alpha*palette.strength;
   const glow=target.createRadialGradient(glowX,glowY,0,glowX,glowY,330);
-  glow.addColorStop(0,'#c7d98a12');glow.addColorStop(1,'transparent');
+  glow.addColorStop(0,palette.glow);glow.addColorStop(1,'transparent');
   target.fillStyle=glow;target.fillRect(glowX-330,glowY-330,660,660);
   const beam=target.createLinearGradient(x,y,endX,endY);
-  beam.addColorStop(0,'#e3ebaf00');beam.addColorStop(.23,`rgba(225,237,172,${alpha})`);
-  beam.addColorStop(.8,`rgba(225,237,172,${alpha*.72})`);beam.addColorStop(1,'#e3ebaf00');
+  beam.addColorStop(0,palette.clear);beam.addColorStop(.23,`rgba(${palette.rgb},${intensity})`);
+  beam.addColorStop(.8,`rgba(${palette.rgb},${intensity*.72})`);beam.addColorStop(1,palette.clear);
   target.fillStyle=beam;target.beginPath();target.moveTo(...points[0]);
   for(let i=1;i<points.length;i++)target.lineTo(...points[i]);
   target.closePath();target.fill();
@@ -56,8 +67,8 @@ export class MapLightCache {
     if(this.geometry.size>=256)this.geometry.delete(this.geometry.keys().next().value);
     this.geometry.set(key,patch);return patch;
   }
-  _image(patch,scale){
-    const key=`${scale}:${patch.id}`;let entry=this.cache.get(key);
+  _image(patch,scale,palette){
+    const key=`${palette.id}:${scale}:${patch.id}`;let entry=this.cache.get(key);
     if(entry){this.cache.delete(key);this.cache.set(key,entry);return entry;}
     const bounds=spriteBounds(patch,scale);
     while(this.pixels+bounds.pixels>PIXEL_LIMIT&&this.cache.size){
@@ -66,12 +77,13 @@ export class MapLightCache {
     }
     const canvas=this.makeCanvas();canvas.width=bounds.width;canvas.height=bounds.height;
     const target=canvas.getContext('2d');target.setTransform(scale,0,0,scale,-bounds.x*scale,-bounds.y*scale);
-    paintPatch(target,patch);
+    paintPatch(target,patch,palette);
     entry={...bounds,canvas,scale};this.cache.set(key,entry);this.pixels+=entry.pixels;this.builds++;
     return entry;
   }
-  draw(target,{camX,camY,width,height}){
+  draw(target,{camX,camY,width,height,region='forest'}){
     if(![camX,camY,width,height].every(Number.isFinite)||width<=0||height<=0)return;
+    const palette=paletteFor(region);
     const left=camX-width/2,top=camY-height/2,right=left+width,bottom=top+height,visible=[];
     const firstX=Math.floor((left-SEARCH_MARGIN)/SPACING),lastX=Math.ceil((right+SEARCH_MARGIN)/SPACING);
     const firstY=Math.floor((top-SEARCH_MARGIN)/SPACING),lastY=Math.ceil((bottom+SEARCH_MARGIN)/SPACING);
@@ -90,11 +102,11 @@ export class MapLightCache {
     }
     // Touch all visible resident images first, keeping offscreen entries at
     // the front of the LRU while new visible images are constructed.
-    for(const patch of visible){const key=`${this.scale}:${patch.id}`,entry=this.cache.get(key);
+    for(const patch of visible){const key=`${palette.id}:${this.scale}:${patch.id}`,entry=this.cache.get(key);
       if(entry){this.cache.delete(key);this.cache.set(key,entry);}}
     target.save();target.imageSmoothingEnabled=true;target.imageSmoothingQuality='low';
     for(const patch of visible){
-      const entry=this._image(patch,this.scale),scale=entry.scale;
+      const entry=this._image(patch,this.scale,palette),scale=entry.scale;
       const x=Math.max(left,entry.x),y=Math.max(top,entry.y);
       const endX=Math.min(right,entry.x+entry.width/scale),endY=Math.min(bottom,entry.y+entry.height/scale);
       if(endX<=x||endY<=y)continue;

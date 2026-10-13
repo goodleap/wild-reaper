@@ -52,12 +52,14 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false}={}) {
-    this.terrain=terrain??new Terrain({island:new Island({region:'forest',seed:0})});
-    this._islandWorlds=!!this.terrain.island;
+  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false,debugWorld=null}={}) {
     this.debug=debug===true;
     this.debugFull=this.debug&&debugFull===true;
-    this.regionIndex=0;this.region=regionFor(0);this.portal=null;this.regionGrace=0;this.regionTransition=null;
+    this.regionIndex=this.debug?Math.max(0,REGIONS.findIndex(region=>region.id===debugWorld)):0;
+    this.region=regionFor(this.regionIndex);
+    this.terrain=terrain??new Terrain({region:this.region.id,seed:this.regionIndex,island:new Island({region:this.region.id,seed:this.regionIndex})});
+    this._islandWorlds=!!this.terrain.island;
+    this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
@@ -153,15 +155,15 @@ export class Game {
     return best;
   }
   _difficultyTime() {
-    // Exploration has a ceiling. The endless clock begins only after all three
-    // inter-world connections have actually been defeated, not merely visited.
+    // Pressure follows cleared connections and elapsed time, not the world
+    // array index. The first three cleared routes start the endless clock.
     if(!this._features.adventure||!this._islandWorlds)return this.time;
-    const base=Math.min(2,this.regionIndex)*90+(this.regions?.defeatedConnectionsCount||0)*45+Math.min(this.time,600)*.18;
+    const base=Math.max(0,(this.region.danger||1)-1)*600+Math.min(3,this.regions?.defeatedConnectionsCount||0)*45+Math.min(this.time,600)*.18;
     return base+(this.regions?.endlessUnlocked?Math.max(0,this.time-this.regions.endlessStartedAt):0);
   }
   _waveTier() {
     if(!this._features.adventure||!this._islandWorlds)return null;
-    const exploration=Math.min(2,this.regionIndex)*2+(this.regions?.defeatedConnectionsCount||0)*2+Math.min(3,Math.floor(this.time/180));
+    const exploration=Math.round(Math.max(0,(this.region.danger||1)-1)*20)+Math.min(3,this.regions?.defeatedConnectionsCount||0)*2+Math.min(3,Math.floor(this.time/180));
     return exploration+(this.regions?.endlessUnlocked?Math.floor(Math.max(0,this.time-this.regions.endlessStartedAt)/50):0);
   }
   _findSpawnPoint(type='slime',angle,radius) {
@@ -488,6 +490,7 @@ export class Game {
     // visible scene during the fade cut without advancing any hazard timers.
     if(this.environment?.generation)this.environment._refresh(true);
     if(this.environment?.mechanisms.generation)this.environment.mechanisms._refresh(true);
+    if(this.environment?.worldHazards?.generation)this.environment.worldHazards._refresh(true);
     if(this.adventure?.generation)this.adventure._refreshSupplies(true);
     this.companions.onSceneChange?.();
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();

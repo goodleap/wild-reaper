@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MapLightCache, mapLightPatch, MAP_SUN_ANGLE, MAP_SUN_DIRECTION } from './dist/map-light-cache.js';
+import { MapLightCache, mapLightPatch, MAP_SUN_ANGLE, MAP_SUN_DIRECTION, MAP_LIGHT_PALETTES } from './dist/map-light-cache.js';
 
 function context(){
   const calls=[],stack=[],ctx={imageSmoothingEnabled:false,imageSmoothingQuality:'high',globalAlpha:.7};
@@ -46,7 +46,7 @@ for(const draw of first){
 // A light's origin can be far outside the screen while its glow reaches in.
 const p=mapLightPatch(-2,-3),edgeView={camX:p.glowX,camY:p.glowY+320,width:12,height:12};
 const edge=fixture();edge.render(edgeView);
-assert(edge.cache.cache.has(`0.5:${p.id}`),'offscreen beam origins must not cull an overlapping ground glow');
+assert(edge.cache.cache.has(`forest:0.5:${p.id}`),'offscreen beam origins must not cull an overlapping ground glow');
 
 // Compare the indexed cull to a larger brute-force neighborhood, including
 // negative cell coordinates and narrow views near beam/glow boundaries.
@@ -56,10 +56,39 @@ for(const v of [view,edgeView,{camX:0,camY:0,width:393,height:852},{camX:-4300,c
   for(let gx=Math.floor(left/1080)-3;gx<=Math.ceil(right/1080)+3;gx++)for(let gy=Math.floor(top/1080)-3;gy<=Math.ceil(bottom/1080)+3;gy++){
     const p=mapLightPatch(gx,gy);
     if(p.maxX<left||p.minX>right||p.maxY<top||p.minY>bottom)continue;
-    expected.push(`0.5:${p.id}`);
+    expected.push(`forest:0.5:${p.id}`);
   }
   assert.deepEqual([...f.cache.cache.keys()],expected,'visible lights retain original x-then-y world order');
 }
+
+const themed=fixture(),small={camX:0,camY:0,width:393,height:852};
+themed.render(small);const legacyBuilds=themed.cache.cacheStats.builds,geometryCount=themed.cache.geometry.size;
+for(const region of ['forest','marsh','ruins','unknown'])themed.render({...small,region});
+assert.equal(themed.cache.cacheStats.builds,legacyBuilds,'original three worlds retain identical cached sunlight');
+const baseBeam=themed.canvases[0].calls.find(c=>c[0]==='createLinearGradient');
+assert.equal(baseBeam.at(-1)[0][1],'#e3ebaf00');
+assert.equal(themed.canvases[0].calls.find(c=>c[0]==='createRadialGradient').at(-1)[0][1],'#c7d98a12');
+const colors=new Set();
+for(const region of ['beach','city','mountain','snow','volcano']){
+  const previous=themed.cache.cacheStats.builds,images=themed.canvases.length,palette=MAP_LIGHT_PALETTES[region];
+  const draws=themed.render({...small,region}),after=themed.cache.cacheStats.builds;
+  assert(after>previous,'a new world needs a separately colored sprite');
+  assert(draws.every(call=>call[0]==='drawImage'),'world lighting has no per-frame gradients or filters');
+  const sprite=themed.canvases[images],beam=sprite.calls.find(c=>c[0]==='createLinearGradient'),glow=sprite.calls.find(c=>c[0]==='createRadialGradient');
+  assert.deepEqual(beam.slice(1,-1),baseBeam.slice(1,-1),'world colors cannot change sunlight direction or geometry');
+  assert.equal(glow.at(-1)[0][1],palette.glow);
+  assert(beam.at(-1)[1][1].startsWith(`rgba(${palette.rgb},`));
+  assert(palette.strength>0&&palette.strength<1,'new world light beams remain subdued');
+  colors.add(beam.at(-1)[1][1]);
+  for(let frame=0;frame<12;frame++)themed.render({...small,region,camX:Math.sin(frame)});
+  assert.equal(themed.cache.cacheStats.builds,after,'a moving camera reuses the current world palette');
+  assert.equal(themed.cache.geometry.size,geometryCount,'world changes reuse world-fixed light geometry');
+  assert(themed.cache.cacheStats.bytes<=themed.cache.cacheStats.limitBytes,'all world palettes share one pixel budget');
+}
+assert.equal(colors.size,5);
+for(let i=0;i<35;i++)themed.render({...view,region:['beach','city','mountain','snow','volcano'][i%5],camX:i*1300});
+assert(themed.cache.cacheStats.bytes<=themed.cache.cacheStats.limitBytes,'cross-world exploration preserves the global LRU cap');
+assert(themed.canvases.some(c=>c.width===0&&c.height===0),'world palette eviction releases old backing stores');
 
 for(const [width,height] of [[393,852],[3840,2160],[7680,4320]]){
   const f=fixture(),v={camX:415.25,camY:-320.75,width,height};f.render(v);
@@ -77,4 +106,4 @@ const resident=[...light.cache.cache.values()];light.cache.clear();
 assert.equal(light.cache.cacheStats.entries,0);assert.equal(light.cache.cacheStats.bytes,0);assert.equal(light.cache.geometry.size,0);
 assert(resident.every(entry=>entry.canvas.width===0&&entry.canvas.height===0));
 const invalid=fixture();invalid.render({...view,width:NaN});assert.equal(invalid.cache.cacheStats.builds,0);
-console.log('Map light cache: original geometry/order, full glow culling, cropped draws, warm reuse, 4K/8K stability and bounded bitmap/metadata eviction passed.');
+console.log('Map light cache: original geometry/order, five cached world palettes, full glow culling, cropped draws, warm reuse, 4K/8K stability and shared bounded bitmap/metadata eviction passed.');

@@ -8,14 +8,33 @@ function stroke(c,x,y,x2,y2,color,w=1){c.strokeStyle=color;c.lineWidth=w;c.begin
 export class HutArt {
   constructor(createCanvas){this.createCanvas=createCanvas;this.cache=new Map();}
   sprite(key,w,h,paint){if(this.cache.has(key))return this.cache.get(key);const canvas=this.createCanvas();canvas.width=w;canvas.height=h;paint(canvas.getContext('2d'));const image={canvas,w,h};this.cache.set(key,image);return image;}
-  floor(){return this.sprite('floor',400,400,c=>{
+  floor(featureId){if(featureId==='mine')return this.sprite('mine-floor',400,400,c=>{
+    c.fillStyle='#4b514b';c.fillRect(0,0,400,400);
+    for(let i=0;i<340;i++){const x=noise(i,1)*400,y=noise(i,2)*400,r=1+noise(i,3)*5;ellipse(c,x,y,r,r*.5,i%3?'#69726b55':'#252f2e77');}
+    for(const x of [183,217]){stroke(c,x,80,x,399,'#242c2b',6);stroke(c,x-1,80,x-1,399,'#8b9990',2);}
+    for(let y=90;y<400;y+=23){stroke(c,176,y,224,y,'#3d3228',5);stroke(c,177,y-1,223,y-1,'#7f6f52',1);}
+  });return this.sprite('floor',400,400,c=>{
     c.fillStyle='#493d29';c.fillRect(0,0,400,400);
     for(let row=0;row<16;row++){const y=row*25;for(let col=-1;col<5;col++){const x=col*106+(row%2)*53,n=noise(row,col);c.fillStyle=['#756043','#6b573b','#80694a','#705d3f'][Math.floor(n*4)];c.fillRect(x+1,y+1,104,23);stroke(c,x+2,y+2,x+104,y+2,'#a38a5a50');stroke(c,x+2,y+23,x+104,y+23,'#30291e90');for(let k=0;k<5;k++){const yy=y+5+noise(row+k,col)*14;stroke(c,x+4,yy,x+22+noise(col,k)*78,yy+(noise(k,row)-.5)*2,'#312c201d');}for(const xx of [x+6,x+99]){ellipse(c,xx,y+5,.9,.9,'#372e24');ellipse(c,xx,y+20,.9,.9,'#372e24');}}}
     const light=c.createRadialGradient(180,100,15,180,180,275);light.addColorStop(0,'#d8b97017');light.addColorStop(1,'#191d216d');c.fillStyle=light;c.fillRect(0,0,400,400);
   });}
-  drawGround(c,dungeon,camX,camY,w,h){c.fillStyle='#101b18';c.fillRect(0,0,w,h);const b=dungeon.bounds,image=this.floor();c.drawImage(image.canvas,b.minX+w*.5-camX,b.minY+h*.5-camY,b.maxX-b.minX,b.maxY-b.minY);}
+  drawGround(c,dungeon,camX,camY,w,h){c.fillStyle=dungeon.featureId==='mine'?'#171e20':'#101b18';c.fillRect(0,0,w,h);const b=dungeon.bounds,image=this.floor(dungeon.featureId);c.drawImage(image.canvas,b.minX+w*.5-camX,b.minY+h*.5-camY,b.maxX-b.minX,b.maxY-b.minY);}
   furniture(type){return this.sprite(type,150,150,c=>{
     c.translate(75,88);c.lineJoin='round';
+    if(type==='cargo'){
+      c.fillStyle='#453627';c.fillRect(-25,-24,50,39);c.fillStyle='#927249';c.fillRect(-25,-34,50,37);c.fillStyle='#b19561';c.fillRect(-25,-36,50,7);
+      for(const x of [-24,17]){c.fillStyle='#5c533f';c.fillRect(x,-35,7,48);stroke(c,x+1,-34,x+1,10,'#b2a985',1);}
+      for(const y of [-18,-3])stroke(c,-18,y,17,y,'#6b4e33',1);stroke(c,-16,-26,15,-1,'#b59b68',4);return;
+    }
+    if(type==='barrel'){
+      ellipse(c,0,9,19,8,'#202a2455');c.fillStyle='#80603d';c.beginPath();c.moveTo(-16,-25);c.bezierCurveTo(-23,-8,-23,6,-16,13);c.quadraticCurveTo(0,22,16,13);c.bezierCurveTo(23,6,23,-8,16,-25);c.closePath();c.fill();
+      ellipse(c,0,-25,16,7,'#a18a5c');for(const y of [-16,6]){c.strokeStyle='#b3aa87';c.lineWidth=4;c.beginPath();c.ellipse(0,y,19,5,0,0,Math.PI);c.stroke();}stroke(c,-7,-20,-7,13,'#ad8b55',2);return;
+    }
+    if(type==='minecart'){
+      for(const x of [-22,22]){ellipse(c,x,13,8,8,'#212b2b');ellipse(c,x,13,3,3,'#899992');}
+      c.fillStyle='#404b4a';c.beginPath();c.moveTo(-35,-24);c.lineTo(35,-24);c.lineTo(26,9);c.lineTo(-26,9);c.closePath();c.fill();c.strokeStyle='#87958c';c.lineWidth=3;c.stroke();
+      ellipse(c,0,-25,34,10,'#232e2d');for(let i=0;i<7;i++)ellipse(c,-24+i*8,-28-(i%3)*4,8,7,['#6e8580','#94aca0','#b0aa85'][i%3]);stroke(c,-32,-21,32,-21,'#a3aea2',2);return;
+    }
     if(type==='rug'){c.fillStyle='#6e4540';c.fillRect(-43,-25,86,54);c.strokeStyle='#b69b66';c.lineWidth=3;c.strokeRect(-39,-21,78,46);c.strokeStyle='#7e7560';c.lineWidth=1;c.strokeRect(-34,-16,68,36);for(let i=-35;i<=35;i+=10){stroke(c,i,-30,i,-25,'#a99469',2);stroke(c,i,29,i,34,'#a99469',2);}c.strokeStyle='#b09660';c.beginPath();c.moveTo(0,-11);c.lineTo(19,1);c.lineTo(0,13);c.lineTo(-19,1);c.closePath();c.stroke();return;}
     ellipse(c,4,8,type==='bed'?33:type==='shelf'?61:34,type==='bed'?32:15,'#131d1766');
     if(type==='bed'){

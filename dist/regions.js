@@ -1,14 +1,8 @@
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { PORTAL_GEOMETRY, portalDoor, portalEntranceContains, portalObstacles } from './portal-geometry.js';
-
-export const REGIONS=Object.freeze([
-  Object.freeze({id:'forest',name:'低语之森',shortName:'密林',colors:{ground:'#263e30',light:'#35503a',dark:'#182b22',accent:'#a9d991',mist:'#c1d6a9',grass:'#648052',stone:'#788170'},enemyWeights:{slime:1,beetle:1,bat:1,brute:1,boar:1,spore:1}}),
-  Object.freeze({id:'marsh',name:'迷雾沼泽',shortName:'沼泽',colors:{ground:'#253c3d',light:'#36504c',dark:'#192d31',accent:'#a0d0c4',mist:'#bbd5d2',grass:'#64877b',stone:'#708c85'},enemyWeights:{slime:1.25,beetle:.8,bat:.7,brute:1.1,boar:.85,spore:1.7}}),
-  Object.freeze({id:'ruins',name:'失落遗迹',shortName:'遗迹',colors:{ground:'#41413a',light:'#555345',dark:'#2b302e',accent:'#dbc891',mist:'#dbd2b4',grass:'#858467',stone:'#a09b82'},enemyWeights:{slime:.8,beetle:1.45,bat:.8,brute:1.45,boar:.9,spore:.8}})
-]);
-export const normalizeWorldIndex=index=>Number.isFinite(index)?((Math.trunc(index)%REGIONS.length)+REGIONS.length)%REGIONS.length:0;
-export const regionFor=index=>REGIONS[normalizeWorldIndex(index)];
+import { REGIONS, regionFor, normalizeWorldIndex, worldNeighbors } from './world-definitions.js';
+export { REGIONS, WORLD_IDS, regionFor, normalizeWorldIndex, worldNeighbors, WORLD_CONNECTIONS } from './world-definitions.js';
 export const worldConnectionId=(a,b)=>[normalizeWorldIndex(a),normalizeWorldIndex(b)].sort((x,y)=>x-y).join(':');
 
 // Keep the old forest probabilities and population cap. Other regions change
@@ -43,7 +37,7 @@ export class Regions {
   constructor(game){this.game=game;this._lastBossId=null;this.portals=[];this.states=new Map();this.guarded=!!game._features.adventure;this.rewardPortal=null;this.unlockedConnections=new Set();this.claimedConnections=new Set();this.endlessStartedAt=null;this._rewardQueue=[];}
   _setStructures(){this.game.terrain.setStructures?.(this.portals.flatMap(portalObstacles),'portals');}
   get defeatedConnectionsCount(){return this.unlockedConnections.size;}
-  get endlessUnlocked(){return this.unlockedConnections.size===3;}
+  get endlessUnlocked(){return this.unlockedConnections.size>=3;}
   _endpoint(target,{origin=null,back=false}={}) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
     const point=plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
@@ -66,8 +60,9 @@ export class Regions {
     for(const state of this.states.values())state.enemies=sync(state.portals,state.enemies);
   }
   _spawnGuardian(portal) {
-    const g=this.game,boss=g._spawnEnemy('boss',1);boss.bossIndex=g.regionIndex+1;
-    const n=g.regionIndex;boss.hp=boss.maxHp=(g.easy?1700:2300)*(1+n*.65+n*n*.12);boss.damage=22*(1+n*.3)*(g.easy?.72:1);boss.xp=Math.round(160*(1+n*.3));
+    const g=this.game,boss=g._spawnEnemy('boss',1),progress=this.unlockedConnections.size+Math.min(3,Math.max(0,g.time||0)/240),danger=g.region.danger||1;
+    boss.bossIndex=this.unlockedConnections.size+1;
+    boss.hp=boss.maxHp=(g.easy?1700:2300)*(1+progress*.24)*danger;boss.damage=22*(1+progress*.1)*danger*(g.easy?.72:1);boss.xp=Math.round(160*(1+progress*.18)*danger);
     boss.portalId=portal.id;boss.portalHome={x:portal.x,y:portal.y+115};boss.x=boss.portalHome.x;boss.y=boss.portalHome.y-groundOffset(boss);boss.guardActive=false;boss._portalAnnounced=false;portal.bossId=boss.id;
     g._initializeRegionalBoss?.(boss);g._moveEntity(boss,0,0);
   }
@@ -96,10 +91,10 @@ export class Regions {
   initialize(fromPortal=null,fromRegionIndex=null) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex);this.portals=[];g.portal=null;this._setStructures();
     // Small isolated mechanics fixtures keep the legacy timed-boss trigger.
-    // Once entered they still use the same finite three-world graph.
+    // Once entered they still use the same finite world graph.
     if(!this.guarded&&!fromPortal)return;
     if(fromPortal)this.unlockedConnections.add(worldConnectionId(index,fromRegionIndex));
-    const targets=[(index+1)%3,(index+2)%3];
+    const targets=worldNeighbors(index);
     for(const target of targets){const endpoint=this._endpoint(target,{back:fromPortal&&target===fromRegionIndex});if(endpoint)this.portals.push(endpoint);}
     if(fromPortal)fromPortal.targetPortalId=`portal:${index}:${normalizeWorldIndex(fromRegionIndex)}`;
     g.portal=this.portals.find(portal=>portal.state==='locked')||this.portals[0]||null;
@@ -152,10 +147,10 @@ export class Regions {
     if(enemy.type!=='boss'||enemy.dungeonBoss||enemy.dungeonId||enemy.hp>0||enemy.id===this._lastBossId)return null;
     const g=this.game;let portal=enemy.portalId?this.portals.find(p=>p.id===enemy.portalId):g.portal;
     if(!portal&&!this.guarded) {
-      const target=(normalizeWorldIndex(g.regionIndex)+1)%3;
+      const targets=worldNeighbors(g.regionIndex),target=targets[0];
       portal=this._endpoint(target,{origin:{x:enemy.x,y:enemy.y+groundOffset(enemy)}});
       if(portal){this.portals.push(portal);g.portal=portal;}
-      const second=this._endpoint((target+1)%3);if(second)this.portals.push(second);
+      for(const remaining of targets.slice(1)){const endpoint=this._endpoint(remaining);if(endpoint)this.portals.push(endpoint);}
       this._setStructures();
     }
     if(!portal||this.unlockedConnections.has(portal.connectionId))return null;

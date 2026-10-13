@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { groundOffset } from './dist/terrain.js';
-import { regionFor, normalizeWorldIndex } from './dist/regions.js';
+import { REGIONS, regionFor, normalizeWorldIndex, worldNeighbors } from './dist/regions.js';
 import { portalDoor } from './dist/portal-geometry.js';
 
 let seed=314159;
@@ -12,8 +12,8 @@ const feet=(point)=>{g.player.x=point.x;g.player.y=point.y-groundOffset(g.player
 const gate=target=>g.regions.portals.find(portal=>portal.nextRegionIndex===target);
 function verifyWorld() {
   const island=g.terrain.island;assert(island);assert.equal(island.worldId,g.regionIndex);
-  assert.equal(g.regions.portals.length,2);
-  assert.deepEqual(new Set(g.regions.portals.map(p=>p.nextRegionIndex)),new Set([0,1,2].filter(id=>id!==g.regionIndex)));
+  assert.equal(g.regions.portals.length,worldNeighbors(g.regionIndex).length);
+  assert.deepEqual(new Set(g.regions.portals.map(p=>p.nextRegionIndex)),new Set(worldNeighbors(g.regionIndex)));
   for(const portal of g.regions.portals){
     assert.equal(portal.id,`portal:${g.regionIndex}:${portal.nextRegionIndex}`);
     assert.equal(portal.targetPortalId,`portal:${portal.nextRegionIndex}:${g.regionIndex}`);
@@ -49,10 +49,10 @@ function unlock(target) {
   assert(g.chooseSuper(choices[0]));assert(portal.rewardClaimed);
   return portal;
 }
-function travel(target){const portal=gate(target);feet(portalDoor(portal));assert(g.enterPortal(portal.id));assert.equal(g.regionIndex,target);assert(g.regions.states.size<=2);assert.equal(gate(Number(portal.id.split(':')[1])).state,'active');}
+function travel(target){const portal=gate(target);feet(portalDoor(portal));assert(g.enterPortal(portal.id));assert.equal(g.regionIndex,target);assert(g.regions.states.size<REGIONS.length);assert.equal(gate(Number(portal.id.split(':')[1])).state,'active');}
 
-for(const value of [-9,-1,0,1,2,3,600,NaN])assert([0,1,2].includes(normalizeWorldIndex(value)));
-assert.equal(regionFor(3).id,'forest');assert.equal(regionFor(-1).id,'ruins');
+for(const value of [-9,-1,0,1,2,3,600,NaN])assert(REGIONS[normalizeWorldIndex(value)]);
+assert.equal(regionFor(REGIONS.length).id,'forest');assert.equal(regionFor(-1).id,'volcano');
 verifyWorld();
 const original={terrain:g.terrain,settlements:g.settlements,relicSites:g.relicSites,gateToTwo:gate(2)};
 const merchant=g.settlements.sites.find(s=>s.type==='merchant');merchant.state='spent';
@@ -70,11 +70,11 @@ assert(!oldForest.enemies.includes(remoteBoss),'opening an already visited oppos
 assert(remoteBoss.hp>0,'opposite boss removal never routes through damage');
 travel(0);assert.equal(g.terrain,original.terrain);assert.equal(g.settlements,original.settlements);assert.equal(g.relicSites,original.relicSites);
 assert.equal(merchant.state,'spent');assert.equal(hunt.state,'cleared');assert.equal(g.dungeon.states.get(castle.id),castleProgress);assert(g.discoveredMap.has(castle.id));
-assert(!g.enemies.some(e=>e.portalId&&e.hp>0));
+assert(!g.enemies.some(e=>[gate(1).id,gate(2).id].includes(e.portalId)&&e.hp>0));
 const rewardState={kills:g.kills,bossKills:g.bossKills,gold:g.gold,crystals:g.crystals,skills:JSON.stringify(g.superSkills.owned)};
 for(const target of [2,1,0,1,2,0]){
   travel(target);verifyWorld();assert.equal(g.superSkills.pending,null);assert.equal(g.regions.unlockedConnections.size,3);assert.equal(g.regions.states.size,2);
   assert.deepEqual({kills:g.kills,bossKills:g.bossKills,gold:g.gold,crystals:g.crystals,skills:JSON.stringify(g.superSkills.owned)},rewardState,'return journeys preserve progress and cannot farm rewards');
-  for(const portal of g.regions.portals)assert.equal(g.settlements.sites.filter(site=>site.anchorId===portal.id).length,1,'each active gate has exactly one persistent angel');
+  for(const portal of g.regions.portals)assert.equal(g.settlements.sites.filter(site=>site.anchorId===portal.id).length,portal.state==='active'?1:0,'each active gate has exactly one persistent angel');
 }
-console.log('Island worlds: three finite districts, planned dry landmarks, fixed paired gateways, global single connection rewards, no remote boss duplication, retained castle/merchant/relic progress, bounded snapshots and endless unlock passed.');
+console.log('Island worlds: original route retained in expanded graph, planned dry landmarks, paired gateways, single connection rewards, no remote boss duplication, retained castle/merchant/relic progress, bounded snapshots and endless unlock passed.');

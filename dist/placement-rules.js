@@ -64,7 +64,7 @@ function waterOverlaps(s,m){
   // Perimeter checks alone miss a small pond entirely beneath a large site.
   return getWaterContours(m).outer.some(p=>inside(s.points,p.x,p.y));
 }
-function coastInset(island,p){const shallow=Number.isFinite(island?.shallowWidth)?island.shallowWidth:COAST_RULES.shallowWidth;return (p.surface==='inland'?shallow+COAST_RULES.beachWidth:p.surface==='dry'?shallow:0)+p.coastSetback;}
+function coastInset(island,p){const shallow=Number.isFinite(island?.shallowWidth)?island.shallowWidth:COAST_RULES.shallowWidth,beach=Number.isFinite(island?.beachWidth)?island.beachWidth:COAST_RULES.beachWidth;return (p.surface==='inland'?shallow+beach:p.surface==='dry'?shallow:0)+p.coastSetback;}
 function allowsSurface(island,p,s){
   if(!island)return true;
   const inset=coastInset(island,p);
@@ -74,8 +74,8 @@ function allowsSurface(island,p,s){
 }
 export function surfaceAt(island,x,y){
   if(!finite(x,y))return null;if(!island)return 'inland';
-  const shallow=island.shallowWidth??COAST_RULES.shallowWidth;
-  return !island.contains(x,y)?'sea':!island.contains(x,y,shallow)?'shallow':!island.contains(x,y,shallow+COAST_RULES.beachWidth)?'beach':'inland';
+  const shallow=island.shallowWidth??COAST_RULES.shallowWidth,beach=island.beachWidth??COAST_RULES.beachWidth;
+  return !island.contains(x,y)?'sea':!island.contains(x,y,shallow)?'shallow':!island.contains(x,y,shallow+beach)?'beach':'inland';
 }
 export function surfaceAllows(island,kind,shape){const p=resolvePolicy(kind),s=normalizedShape(shape);return !!p&&!!s&&allowsSurface(island,p,s);}
 
