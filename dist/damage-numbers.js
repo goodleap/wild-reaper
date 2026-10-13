@@ -1,19 +1,19 @@
 import { ACTOR_VISUALS } from './actor-visuals.js';
 
-export const DAMAGE_NUMBERS=Object.freeze({fontSize:14,life:.72,globalLimit:48,targetLimit:6,mergeWindow:.12});
+export const DAMAGE_NUMBERS=Object.freeze({fontSize:14,life:.72,riseSpeed:14,globalLimit:48,targetLimit:6,mergeWindow:.12});
 const LANES=Object.freeze([
-  Object.freeze({side:0,lift:0}),Object.freeze({side:-1,lift:8}),Object.freeze({side:1,lift:8}),
-  Object.freeze({side:0,lift:25}),Object.freeze({side:-1,lift:33}),Object.freeze({side:1,lift:33})
+  Object.freeze({side:-1,lift:18}),Object.freeze({side:1,lift:18}),
+  Object.freeze({side:-1,lift:0}),Object.freeze({side:1,lift:0}),
+  Object.freeze({side:-1,lift:-18}),Object.freeze({side:1,lift:-18})
 ]);
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
-// Body art, names and damage share one envelope. Collision radius alone is
-// too low for the dummy's label, tall mushrooms and the boss's crown.
+// Numbers begin beside the upper body, not above the name and crown.
+// Their six compact lanes avoid a growing tower of text on large enemies.
 export function damageNumberAnchor(enemy) {
   const shape=ACTOR_VISUALS[enemy.type]||ACTOR_VISUALS.slime;
   const scale=(enemy.r||shape.radius)/shape.radius;
-  const labelRoom=enemy.affix||enemy.rescueId?32:enemy.trainingDummy||enemy.type==='boss'||enemy.name?26:enemy.elite?24:12;
-  return {x:enemy.x,y:enemy.y-shape.top*scale-labelRoom};
+  return {x:enemy.x,y:enemy.y-shape.top*scale*.52+2};
 }
 
 // The effect list is already bounded by the engine. One bounded scan per hit
@@ -41,16 +41,24 @@ export function emitDamageNumber(game,enemy,amount,source='raw') {
   if(remove>=0)effects.splice(remove,1);
   const sequence=Number.isInteger(enemy._damageNumberSequence)?enemy._damageNumberSequence:0;
   const lane=LANES[sequence%LANES.length],anchor=damageNumberAnchor(enemy);
-  const text=String(Math.round(amount)),spacing=clamp(text.length*DAMAGE_NUMBERS.fontSize*.52,24,36);
+  const text=String(Math.round(amount)),shape=ACTOR_VISUALS[enemy.type]||ACTOR_VISUALS.slime;
+  const scale=(enemy.r||shape.radius)/shape.radius,named=enemy.affix||enemy.rescueId||enemy.trainingDummy||enemy.type==='boss'||enemy.name||enemy.elite;
+  const spacing=clamp(shape.halfWidth*scale*.72+text.length*DAMAGE_NUMBERS.fontSize*.26,named?40:24,named?72:44);
   enemy._damageNumberSequence=(sequence+1)%LANES.length;
-  game._effect(anchor.x+lane.side*spacing,anchor.y-lane.lift,'damage',DAMAGE_NUMBERS.life,0,'#f5e8b8',text,{
-    damageTarget:enemy,damageSource:source,damageAmount:amount,damageBornAt:time,damageSide:lane.side,
+  game._effect(anchor.x+lane.side*spacing,anchor.y+(named?18:0)-lane.lift,'damage',DAMAGE_NUMBERS.life,0,'#f5e8b8',text,{
+    damageTarget:enemy,damageSource:source,damageAmount:amount,damageBornAt:time,damageSide:lane.side,riseSpeed:DAMAGE_NUMBERS.riseSpeed,
     // Keep visibility tied to the struck actor, even as the text rises above
     // a castle wall. The existing scene visibility gate remains authoritative.
     groundX:enemy.x,groundY:game.combat?.groundPoint?.(enemy)?.y??enemy.y
   });
   const effect=effects[effects.length-1];
   return effect?.type==='damage'&&effect.damageTarget===enemy&&effect.damageBornAt===time?effect:null;
+}
+
+// Call after world clips have been restored. Visibility follows the struck
+// ground position, never the scattered text, so walls cannot reveal a hit.
+export function drawDamageOverlay(ctx,effects,options={},visible=()=>true,inView=()=>true) {
+  for(const effect of effects)if(effect.type==='damage'&&effect.life>0&&visible(effect)&&inView(effect))drawDamageNumber(ctx,effect,options);
 }
 
 // The simulation already moves text upwards and freezes it when paused.

@@ -70,6 +70,8 @@ g.build.setEquipped('orbit',false);g.attacks.updateOrbit();assert.equal(g.attack
 g.build.setEquipped('orbit',true);g.attacks.updateOrbit();assert.equal(g.orbitals[0].trail.count,1);
 g.levels.orbit=5;g._clock+=.025;g.attacks.updateOrbit();assert.equal(g.attacks._orbitTrails.size,6);assert(g.orbitals.every(b=>b.trail.count===1));
 for(let n=0;n<1000;n++){g._clock+=.016;g.player.x+=1;g.attacks.updateOrbit();}assert.equal(g.attacks._orbitTrails.size,6);assert(g.orbitals.every(b=>b.trail.count<=TRAIL_CAPACITY));
+assert(g.orbitals.every(b=>b.trail.length<=b.trail.maxLength),'walking and evolved orbit surges keep the short streak inside its length budget');
+assert(g.orbitals.every(b=>g._clock-b.trail.points[b.trail.index(0)+2]<=b.trail.maxAge),'orbital streaks expire on simulation time even at the expanded radius');
 g.attacks.clearTrails();assert.equal(g.attacks._orbitTrails.size,0);
 
 // The projectile body keeps its familiar shape without adding its previous

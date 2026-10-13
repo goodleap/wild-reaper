@@ -59,7 +59,7 @@ export function spawnDebugTrainingDummy(game) {
   // or place the post inside the player to force a testing fixture into it.
   if(!point)return null;
   const enemy={id:++game._id,type:'trainingDummy',trainingDummy:true,x:point.x,y:point.y-foot,r,hp:health,maxHp:health,defense,
-    speed:0,damage:0,xp:0,hit:0,orbitHit:0,attackCooldown:0,charge:null,cast:null,phase:0};
+    speed:0,damage:0,xp:0,hit:0,attackCooldown:0,charge:null,cast:null,phase:0};
   game.enemies.push(enemy);game._debugTrainingSpawned=true;
   return enemy;
 }

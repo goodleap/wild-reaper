@@ -6,7 +6,7 @@ export class WeaponTrail {
   constructor(kind='arrow') {
     this.kind=kind;this.points=new Float64Array(TRAIL_CAPACITY*3);
     this.head=0;this.count=0;this.length=0;this.clock=0;
-    this.maxAge=kind==='orbit'?.22:.14;this.maxLength=kind==='orbit'?92:104;
+    this.maxAge=kind==='orbit'?.12:.14;this.maxLength=kind==='orbit'?32:104;
   }
   index(i){return((this.head+i)%TRAIL_CAPACITY)*3;}
   clear(){this.head=0;this.count=0;this.length=0;}
@@ -45,15 +45,31 @@ function ribbon(ctx,t,start,end,now,width) {
   ctx.closePath();ctx.fill();
 }
 
+// Orbiting steel leaves a short hairline cut rather than a wide body-shaped
+// tail. Reuse the same sampled path for both strokes, with no new geometry.
+function orbitStreak(ctx,t,start,end,now,reduced,dense,evolved){
+  ctx.beginPath();
+  for(let n=start;n<=end;n++){
+    const i=t.index(n);ctx[n===start?'moveTo':'lineTo'](t.points[i],t.points[i+1]);
+  }
+  const newest=t.index(end),fade=Math.max(0,1-(now-t.points[newest+2])/t.maxAge);
+  ctx.lineJoin='round';ctx.lineCap='round';
+  if(!reduced&&!dense){ctx.strokeStyle=evolved?'#d7bc81':'#a7c4ce';ctx.globalAlpha=.2*fade;ctx.lineWidth=2;ctx.stroke();}
+  ctx.strokeStyle=evolved?'#f6e5ba':'#e2edf0';ctx.globalAlpha=(reduced?.3:.46)*fade;ctx.lineWidth=.7;ctx.stroke();
+}
+
 export function drawWeaponTrail(ctx,weapon,{time,reduced=false,dense=false}={}) {
   const t=weapon.trail;if(!t||t.count<2)return false;
   const now=finite(time)?time:t.clock;let start=0;
   while(start<t.count&&now-t.points[t.index(start)+2]>t.maxAge)start++;
   if(t.count-start<2)return false;
-  const end=t.count-1,orbit=t.kind==='orbit',color=orbit?(weapon.evolved?'#efd390':'#c5e4ce'):weapon.color||'#cfe9ab';
+  const end=t.count-1,orbit=t.kind==='orbit',color=weapon.color||'#cfe9ab';
   ctx.save();ctx.shadowBlur=0;
-  if(!reduced&&!dense){ctx.fillStyle=color;ctx.globalAlpha=.19;ribbon(ctx,t,start,end,now,orbit?5.6:3.7);}
-  ctx.fillStyle=orbit?(weapon.evolved?'#fff2c2':'#e9f5da'):'#f0f5cf';ctx.globalAlpha=reduced?.44:.64;
-  ribbon(ctx,t,start,end,now,orbit?1.65:1.05);
+  if(orbit)orbitStreak(ctx,t,start,end,now,reduced,dense,weapon.evolved);
+  else{
+    if(!reduced&&!dense){ctx.fillStyle=color;ctx.globalAlpha=.19;ribbon(ctx,t,start,end,now,3.7);}
+    ctx.fillStyle='#f0f5cf';ctx.globalAlpha=reduced?.44:.64;
+    ribbon(ctx,t,start,end,now,1.05);
+  }
   ctx.restore();return true;
 }

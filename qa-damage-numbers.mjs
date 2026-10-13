@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { ACTOR_VISUALS } from './dist/actor-visuals.js';
-import { DAMAGE_NUMBERS, damageNumberAnchor, emitDamageNumber, drawDamageNumber } from './dist/damage-numbers.js';
+import { sceneEntityVisible } from './dist/scene-rendering.js';
+import { DAMAGE_NUMBERS, damageNumberAnchor, emitDamageNumber, drawDamageNumber, drawDamageOverlay } from './dist/damage-numbers.js';
 
 const game=()=>{
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,elites:false,companions:false,settlements:false});
@@ -24,22 +25,23 @@ assert.equal(numbers(g)[0].text,'40','a label reports post-defense HP damage');
 assert.equal(numbers(g)[0].damageAmount,40);assert.equal(dummy.hp,9960);
 assert.equal(randomCalls,0,'visual placement never consumes combat or loot randomness');
 const first=numbers(g)[0];
-assert(first.y+4<dummy.y-47,'the entire text baseline stays above the dummy name');
+assert(first.y>dummy.y-ACTOR_VISUALS.trainingDummy.top&&first.y<dummy.y,'numbers start beside the upper body instead of above the name');
+assert(Math.abs(first.x-dummy.x)>=40,'named enemies use side lanes instead of the centred name column');
 assert.equal(first.groundY,dummy.y+groundOffset(dummy),'castle visibility uses the struck actor ground point');
 for(const source of ['arrow','orbit','lightning','pulse','super'])g._hurtEnemy(dummy,20,0,g.player,source);
 assert.equal(numbers(g).length,6);
 assert.equal(new Set(numbers(g).map(e=>`${e.x},${e.y}`)).size,6,'simultaneous attacks occupy six distinct fixed lanes');
+for(const side of [-1,1]){const ys=numbers(g).filter(e=>e.damageSide===side).map(e=>e.y).sort((a,b)=>a-b);for(let i=1;i<ys.length;i++)assert(ys[i]-ys[i-1]>=DAMAGE_NUMBERS.fontSize+4,'same-side labels have room for a full glyph and outline');}
 for(const e of numbers(g)){
   assert.equal(e.groundX,dummy.x,'horizontal scatter retains the struck point for visibility');
-  assert(Math.abs(e.x-dummy.x)<=36,'scatter remains near its owner');
-  assert(damageNumberAnchor(dummy).y-e.y<=33,'start heights remain bounded');
+  assert(Math.abs(e.x-dummy.x)<=72,'scatter remains near its owner');
+  assert(e.y>=damageNumberAnchor(dummy).y&&e.y-damageNumberAnchor(dummy).y<=36,'named-target lanes spread downward along the body, away from names');
 }
-const visibleSource=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8').match(/function sceneVisible\(entity\)\{[^\n]*\}/)[0];
-const renderedVisible=new Function('game','ACTOR_VISUALS','groundOffset','entity',`return (${visibleSource})(entity);`);
+const appSource=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8');
 const doorway={dungeon:{active:{},vision:{isVisible:(x,y)=>x===dummy.x&&y===dummy.y+groundOffset(dummy)}}};
-for(const label of numbers(g))assert(renderedVisible(doorway,ACTOR_VISUALS,groundOffset,label),'a visible hit keeps all scattered lanes visible beside a wall');
+for(const label of numbers(g))assert(sceneEntityVisible(label,doorway.dungeon.vision),'a visible hit keeps all scattered lanes visible beside a wall');
 doorway.dungeon.vision.isVisible=()=>false;
-assert(!renderedVisible(doorway,ACTOR_VISUALS,groundOffset,numbers(g)[0]),'unseen rooms still hide floating damage');
+assert(!sceneEntityVisible(numbers(g)[0],doorway.dungeon.vision),'unseen rooms still hide floating damage');
 g._hurtEnemy(dummy,20,0,g.player,'sword');
 assert.equal(numbers(g).length,6);assert(!g.effects.includes(first),'the oldest label yields at the per-target cap');
 assert.equal(randomCalls,0);Math.random=random;
@@ -48,11 +50,12 @@ const shapes=game();
 for(const [type,shape] of Object.entries(ACTOR_VISUALS).filter(([type])=>type!=='player')) {
   const target=enemy(shapes,type,{r:shape.radius*1.4,name:type==='boss'?'古木首领':undefined});
   const anchor=damageNumberAnchor(target);
-  assert(anchor.y<target.y-shape.top*1.4-10,`${type} uses the rendered head instead of collision radius`);
+  assert(anchor.y>target.y-shape.top*1.4&&anchor.y<target.y,`${type} starts alongside the rendered upper body instead of above the head`);
 }
 const small=enemy(shapes,'slime',{hp:3,defense:100});
 const guard=enemy(shapes,'brute',{rescueId:'rescue:label'});
-assert(damageNumberAnchor(guard).y+4<guard.y-ACTOR_VISUALS.brute.top-25,'damage clears the full rescue guard title');
+const guardLabel=emitDamageNumber(shapes,guard,100);
+assert(Math.abs(guardLabel.x-guard.x)>=40&&guardLabel.y>guard.y-ACTOR_VISUALS.brute.top-3,'rescue guards keep damage beside their body and away from the title');
 assert.equal(shapes._hurtEnemy(small,100,0,shapes.player,'sword'),3);
 assert.equal(numbers(shapes).at(-1).text,'3','overkill never claims damage beyond the HP removed');
 
@@ -81,7 +84,7 @@ const paused=game(),frozen=enemy(paused);emitDamageNumber(paused,frozen,20,'swor
 const floating=numbers(paused)[0],initial={y:floating.y,life:floating.life};
 paused.status='paused';paused.update(.04);assert.deepEqual({y:floating.y,life:floating.life},initial);
 paused.status='playing';paused.update(.04);
-assert(Math.abs(floating.y-(initial.y-26*.04))<1e-7);assert(Math.abs(floating.life-(initial.life-.04))<1e-7);
+assert(Math.abs(floating.y-(initial.y-DAMAGE_NUMBERS.riseSpeed*.04))<1e-7);assert(Math.abs(floating.life-(initial.life-.04))<1e-7);
 
 const calls=[],ctx={save(){},restore(){},translate(...args){calls.push(['translate',...args]);},scale(...args){calls.push(['scale',...args]);},strokeText(...args){calls.push(['stroke',...args]);},fillText(...args){calls.push(['fill',...args]);}};
 assert.equal(drawDamageNumber(ctx,{type:'heal'}),false);
@@ -92,4 +95,18 @@ assert(calls.find(c=>c[0]==='scale')[1]>1,'the brief pop is subtle and positive'
 calls.length=0;drawDamageNumber(ctx,{type:'damage',x:20,y:30,life:.1,maxLife:.72,damageSide:-1,text:'123'},{reduced:true});
 assert.deepEqual(calls.find(c=>c[0]==='translate'),['translate',20,30]);assert.deepEqual(calls.find(c=>c[0]==='scale'),['scale',1,1]);
 assert(ctx.globalAlpha>0&&ctx.globalAlpha<.3,'the final part fades smoothly');
+
+// The production overlay filters by original hit location, after world clips.
+calls.length=0;
+const overlayLabels=[{type:'heal',life:1},
+ {type:'damage',x:25,y:-60,groundX:5,groundY:10,life:.6,maxLife:.72,text:'visible'},
+ {type:'damage',x:0,y:0,groundX:99,groundY:10,life:.6,maxLife:.72,text:'hidden'},
+ {type:'damage',x:2000,y:0,groundX:5,groundY:10,life:.6,maxLife:.72,text:'offscreen'},
+ {type:'damage',x:0,y:0,groundX:5,groundY:10,life:0,maxLife:.72,text:'expired'}];
+drawDamageOverlay(ctx,overlayLabels,{},e=>sceneEntityVisible(e,{isVisible:x=>x===5}),e=>e.x<100);
+assert.deepEqual(calls.filter(c=>c[0]==='fill').map(c=>c[1]),['visible'],'overlay admits only live, visible-source, onscreen labels');
+const overlayAt=appSource.indexOf('drawDamageOverlay(ctx,game.effects');
+assert(overlayAt>appSource.indexOf('if(!game.dungeon?.active)ambient(false'),'overlay is outside the final floor clip and above world effects');
+assert(overlayAt<appSource.indexOf('drawWorldMap();',overlayAt),'map UI stays above combat labels');
+assert(appSource.includes("function effects(e){if(e.type==='damage'||"),'world effect pass cannot double-paint labels');
 console.log('Damage numbers: deterministic distinct lanes, real damage, shared actor heights, names, bounded budgets, protected cues, precise short bleed sums, scene cleanup, pause, reduced motion and restrained rendering passed.');

@@ -64,7 +64,7 @@ export class CombatProgression {
       desc=rank?'提高护盾容量与持续时间，缩短冷却':'受击自动展开，吸收首击与随后伤害；无受击时持续待命';kind=rank?'技能强化':'独立技能';
     }else if(id==='orbit') {
       if(rank) {
-        desc=rank===2?'增加一枚环刃，更持续地切割四周敌人':'增加一枚环刃，并提高切割伤害';
+        desc='增加一枚环刃，并提高切割伤害';
         kind='武器强化';
       }
       if(rank===4){desc=`增加一枚环刃并提高伤害，进化为「${EVOLUTIONS.orbit.name}」：${EVOLUTIONS.orbit.desc}`;kind='武器进化';}

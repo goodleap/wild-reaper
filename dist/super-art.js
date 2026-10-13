@@ -1,5 +1,6 @@
 import { drawSwordFlight } from './sword-flight-art.js';
 import { swordFormationAnchor } from './sword-flight.js';
+import { FieldVectorArt } from './field-vector-art.js';
 
 // Super-skill artwork is presentation only. Simulation life supplies every phase;
 // hit positions, footprints, and timings remain owned by SuperSkills.
@@ -17,8 +18,8 @@ function shard(ctx,x,y,a,size,color){ctx.save();ctx.translate(x,y);ctx.rotate(a)
 function glyph(ctx,x,y,a,size,index,color){ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.strokeStyle=color;ctx.lineWidth=1.05;ctx.beginPath();if(index%3===0){line(ctx,-size,-size,size,size);line(ctx,size,-size,-size,size);line(ctx,0,-size*1.5,0,size*1.5);}else if(index%3===1){ctx.moveTo(0,-size*1.4);ctx.lineTo(size,0);ctx.lineTo(0,size*1.4);ctx.lineTo(-size,0);ctx.closePath();line(ctx,-size*1.5,0,size*1.5,0);}else{line(ctx,-size,-size,-size,size);line(ctx,size,-size,size,size);line(ctx,-size,-size,size,0);line(ctx,-size,size,size,0);}ctx.stroke();ctx.restore();}
 
 export class SuperArt {
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this.geometry=new WeakMap();this.geometryBuilds=0;}
-  get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:LIMIT*4,builds:this.builds,geometryBuilds:this.geometryBuilds};}
+  constructor(makeCanvas=()=>document.createElement('canvas'),vectorOptions={}){this.vectors=new FieldVectorArt(vectorOptions);this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this.geometry=new WeakMap();this.geometryBuilds=0;}
+  get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:LIMIT*4,builds:this.builds,geometryBuilds:this.geometryBuilds,vectorEntries:this.vectors.stats.entries,vectorPathBuilds:this.vectors.stats.pathBuilds,vectorCommands:this.vectors.stats.commands};}
   get diagnostics(){return this.cacheStats;}
   _sprite(key,w,h,paint){
     if(this.cache.has(key)){const value=this.cache.get(key);this.cache.delete(key);this.cache.set(key,value);return value;}
@@ -32,60 +33,6 @@ export class SuperArt {
   });}
   _dust(){return this._sprite('meteor-dust',160,112,ctx=>{
     for(let i=0;i<12;i++){const a=i*2.4,r=noise(78,i)*32,x=80+Math.cos(a)*r,y=58+Math.sin(a)*r*.65,s=17+noise(44,i)*20;const g=ctx.createRadialGradient(x,y,0,x,y,s);g.addColorStop(0,'#dab99258');g.addColorStop(.5,'#ac8b7144');g.addColorStop(1,'#ac8b7100');ctx.fillStyle=g;ctx.fillRect(x-s,y-s,s*2,s*2);}
-  });}
-  _thorns(variant,raised=false){return this._sprite(`thorns:${variant}:${raised?1:0}`,256,256,ctx=>{
-    ctx.translate(128,128);ctx.lineCap='round';ctx.lineJoin='round';
-    // Disconnected root clusters leave open ground between them. Their woody
-    // bodies and foliage are cached separately so emergence never redraws paths.
-    const clusters=[[-59,25,-.48],[39,47,-2.38],[-12,-54,.92],[62,-20,2.72],[-58,-36,.24]];
-    for(let j=0;j<clusters.length;j++){
-      const [bx,by,a]=clusters[j],x=bx+(noise(variant,j)-.5)*11,y=by+(noise(variant,j+12)-.5)*10;
-      ctx.save();ctx.translate(x,y);
-      if(!raised){
-        ellipse(ctx,1,3,13+j%3,5,'#172b2363');
-        ctx.strokeStyle='#253326c7';ctx.lineWidth=2.6;ctx.beginPath();
-        ctx.moveTo(-16,5);ctx.lineTo(-8,1);ctx.lineTo(-3,3);ctx.lineTo(5,-2);ctx.lineTo(17,-4);ctx.moveTo(-4,3);ctx.lineTo(-2,11);ctx.lineTo(5,14);ctx.stroke();
-        ctx.strokeStyle='#a3a07466';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(-14,6);ctx.lineTo(-7,3);ctx.lineTo(-3,5);ctx.moveTo(7,0);ctx.lineTo(15,-2);ctx.stroke();
-        ctx.rotate(a);
-        for(let k=0;k<3;k++){
-          const side=k===1?-1:1,end=30+noise(variant+j,k+20)*22,ey=(k-1)*16;
-          ctx.beginPath();ctx.moveTo(-4,3);ctx.bezierCurveTo(7,side*(14+k*3),end*.48,ey-side*15,end,ey);
-          ctx.strokeStyle='#293c2e';ctx.lineWidth=7-k*1.3;ctx.stroke();ctx.strokeStyle=k%2?'#687d45':'#79864b';ctx.lineWidth=4.5-k*.9;ctx.stroke();ctx.strokeStyle='#b9bd7a';ctx.lineWidth=1;ctx.stroke();
-          ctx.beginPath();ctx.moveTo(end*.58,ey*.55);ctx.quadraticCurveTo(end*.72,ey+side*9,end*.91,ey+side*15);ctx.strokeStyle='#526d42';ctx.lineWidth=1.6;ctx.stroke();
-          if(k!==1){leaf(ctx,end*.58,ey*.6,k?-.5:.8,6,k?'#829b53':'#5f8748');leaf(ctx,end*.8,ey,k?-1.8:1.8,4.6,'#9bb46b');}
-        }
-      }else{
-        const side=j%2?1:-1,h=20+noise(variant,j+41)*13;
-        ctx.fillStyle='#253b2c';ctx.beginPath();ctx.moveTo(-8,5);ctx.bezierCurveTo(-3,-4,-8,-h*.54,side*8,-h);ctx.bezierCurveTo(side*1,-h*.47,9,-5,7,5);ctx.closePath();ctx.fill();
-        ctx.fillStyle='#71844b';ctx.beginPath();ctx.moveTo(-3,3);ctx.bezierCurveTo(-1,-8,-5,-h*.5,side*8,-h);ctx.bezierCurveTo(side*1,-h*.49,3,-7,3,3);ctx.closePath();ctx.fill();
-        ctx.strokeStyle='#b8bf79';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-2,-2);ctx.quadraticCurveTo(-3,-h*.47,side*6,-h*.86);ctx.stroke();
-        ctx.fillStyle='#d6d49b';polygon(ctx,[[side*2,-h*.51],[side*8,-h],[side*5,-h*.52]]);
-        leaf(ctx,-1,-h*.35,side>0?2.95:.15,8.5,'#648947');leaf(ctx,side*2,-h*.58,side>0?-.32:Math.PI+.32,7,'#9bb968');
-        // One small hooked side thorn, instead of a field of identical spikes.
-        ctx.fillStyle='#91a35d';polygon(ctx,[[side*3,-7],[side*12,-14],[side*7,-5]]);
-      }
-      ctx.restore();
-    }
-  });}
-  _vortexRibbon(layer){return this._sprite(`vortex-ribbon:${layer}`,256,256,ctx=>{
-    ctx.translate(128,128);ctx.lineJoin='round';ctx.lineCap='round';
-    for(let arm=0;arm<2;arm++){
-      const a0=arm*Math.PI+layer*.58,points=[],inner=[];
-      for(let j=0;j<=32;j++){
-        const u=j/32,a=a0+u*4.35,shape=Math.sin(Math.PI*u),rr=116-u*91+Math.sin(u*9+arm)*shape*3,w=shape**.8*(.43+layer*.045)+.025,innerR=rr+shape*(9+layer*2);
-        points.push([Math.cos(a)*rr,Math.sin(a)*rr]);inner.push([Math.cos(a+w)*innerR,Math.sin(a+w)*innerR]);
-      }
-      const band=ctx.createLinearGradient(-90,-105,85,97);band.addColorStop(0,layer?'#a9c7e5e6':'#d1c2f4f2');band.addColorStop(.42,layer?'#7f93c8db':'#a294d4eb');band.addColorStop(.73,layer?'#4a609ca6':'#63539cb5');band.addColorStop(1,'#bfc0e8df');
-      const outline=[...points,...inner.reverse()];ctx.save();ctx.translate(1.5,3);ctx.fillStyle='#2a26416b';polygon(ctx,outline);ctx.restore();ctx.fillStyle=band;polygon(ctx,outline);
-      ctx.strokeStyle=layer?'#bed6ecad':'#eee4ffc9';ctx.lineWidth=layer?.9:1.5;ctx.beginPath();points.forEach(([x,y],i)=>ctx[i?'lineTo':'moveTo'](x,y));ctx.stroke();
-      ctx.strokeStyle='#3429527a';ctx.lineWidth=2.4;ctx.beginPath();inner.forEach(([x,y],i)=>ctx[i?'lineTo':'moveTo'](x,y));ctx.stroke();
-      ctx.strokeStyle='#f0e7ff8c';ctx.lineWidth=.8;ctx.beginPath();for(let j=8;j<20;j++){const [x,y]=points[j];ctx[j===8?'moveTo':'lineTo'](x*.975,y*.975);}ctx.stroke();
-    }
-  });}
-  _vortexCore(){return this._sprite('vortex-core',128,128,ctx=>{
-    ctx.translate(64,64);const core=ctx.createRadialGradient(-3,-4,2,0,0,49);core.addColorStop(0,'#2d294dd9');core.addColorStop(.32,'#363054c2');core.addColorStop(.65,'#71639c68');core.addColorStop(1,'#9482ca00');ctx.fillStyle=core;ctx.fillRect(-64,-64,128,128);
-    ctx.strokeStyle='#afa2ddb3';ctx.lineWidth=2.6;ctx.beginPath();ctx.moveTo(-22,5);ctx.bezierCurveTo(-30,-20,17,-28,24,-6);ctx.stroke();ctx.strokeStyle='#dfd9f7c7';ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(-18,-7);ctx.bezierCurveTo(-8,-19,10,-19,18,-10);ctx.stroke();
-    ctx.fillStyle='#e0d8f3';polygon(ctx,[[-7,0],[-1,-2],[1,-9],[3,-1],[8,1],[2,3],[0,8],[-2,2]]);
   });}
   _runicArrow(){return this._sprite('runic-heavy-arrow',144,56,ctx=>{
     ctx.translate(111,28);ctx.lineJoin='round';
@@ -120,9 +67,9 @@ export class SuperArt {
     if(kind==='thorns'){
       const variant=Math.abs(data.seed)%3,emerge=reduced?1:smooth(elapsed/.24),tick=Math.max(.2,field.interval||.75),strike=reduced?0:Math.max(0,1-(elapsed%tick)/.15),size=r*1.16;
       ctx.globalAlpha=fade*.1;ctx.drawImage(this._glow('#a9d888'),-r,-r,r*2,r*2);
-      ctx.globalAlpha=fade*(.65+.35*emerge);ctx.drawImage(this._thorns(variant),-size,-size,size*2,size*2);
+      ctx.globalAlpha=fade*(.65+.35*emerge);ctx.save();ctx.scale(size/128,size/128);this.vectors.drawThorns(ctx,variant);ctx.restore();
       const growth=.88+emerge*.12+strike*.016;
-      ctx.globalAlpha=fade;ctx.drawImage(this._thorns(variant,true),-size*growth,-size*growth,size*2*growth,size*2*growth);
+      ctx.globalAlpha=fade;ctx.save();ctx.scale(size*growth/128,size*growth/128);this.vectors.drawThorns(ctx,variant,{raised:true});ctx.restore();
     }else if(kind==='miasma'){
       // A hard game radius remains readable while the interior consists of soft,
       // mottled clouds. The foliage and enemies above it are never obscured.
@@ -148,10 +95,10 @@ export class SuperArt {
   _vortex(ctx,f,elapsed,data,reduced,dense,fade){
     const r=f.r,phase=reduced?0:elapsed*.72;
     ctx.globalAlpha=fade*.1;ctx.drawImage(this._glow('#a896eb'),-r,-r,r*2,r*2);
-    // Spiral geometry and its bevels are fixed cached images. A field only
-    // rotates two layers and a handful of inward-moving fragments each frame.
-    ctx.save();ctx.rotate(phase);ctx.globalAlpha=fade*.82;ctx.drawImage(this._vortexRibbon(0),-r,-r,r*2,r*2);ctx.rotate(-phase*.26+1.1);ctx.globalAlpha=fade*(dense?.5:.6);ctx.drawImage(this._vortexRibbon(1),-r*.82,-r*.82,r*1.64,r*1.64);ctx.restore();
-    ctx.save();ctx.rotate(-phase*.4);ctx.globalAlpha=fade*.8;ctx.drawImage(this._vortexCore(),-r*.38,-r*.38,r*.76,r*.76);ctx.restore();
+    // Paths are compiled once. World and device scaling rasterize clean vector
+    // edges at the final resolution, rather than enlarging a small field image.
+    ctx.save();ctx.scale(r/128,r/128);ctx.rotate(phase);ctx.globalAlpha=fade*.82;this.vectors.drawVortexRibbon(ctx,0);ctx.rotate(-phase*.26+1.1);ctx.scale(.82,.82);ctx.globalAlpha=fade*(dense?.5:.6);this.vectors.drawVortexRibbon(ctx,1);ctx.restore();
+    ctx.save();ctx.scale(r/128,r/128);ctx.rotate(-phase*.4);ctx.globalAlpha=fade*.8;this.vectors.drawVortexCore(ctx);ctx.restore();
     for(let i=0;i<(dense?3:6);i++){
       const p=data.particles[i],travel=reduced?p.r:(p.r+elapsed*.39)%1,a=p.a+(reduced?0:elapsed*(.7+p.r*.3)),rr=r*(.91-travel*.75),x=Math.cos(a)*rr,y=Math.sin(a)*rr;
       ctx.globalAlpha=fade*(.25+Math.sin(travel*Math.PI)*.4);shard(ctx,x,y,a,p.size*.65,i%3?'#ac9bd0':'#e6dff7');

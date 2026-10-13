@@ -19,7 +19,7 @@ const site=(g,type)=>{
 };
 const persistent=g=>({time:g.time,runTime:g.runTime,clock:g._clock,hp:g.player.hp,cooldown:g.player.skillCooldown,xp:g.player.xp,level:g.player.level,gold:g.gold,crystals:g.crystals,kills:g.kills,shield:g.relics.shieldCooldown});
 const scene=g=>({x:g.player.x,y:g.player.y,invuln:g.player.invuln,grace:g.regionGrace,shot:g._shot,pulse:g._pulse,lightning:g._lightning,spawn:g._spawn,
-  enemies:g.enemies.map(e=>[e.id,e.x,e.y,e.hp,e.guardActive,e.orbitHit]),effects:structuredClone(g.effects),gems:structuredClone(g.gems),coins:structuredClone(g.coins),bullets:structuredClone(g.bullets),enemyBullets:structuredClone(g.enemyBullets)});
+  enemies:g.enemies.map(e=>[e.id,e.x,e.y,e.hp,e.guardActive]),effects:structuredClone(g.effects),gems:structuredClone(g.gems),coins:structuredClone(g.coins),bullets:structuredClone(g.bullets),enemyBullets:structuredClone(g.enemyBullets)});
 const heldInput={x:1,y:1,skill:true,interact:true};
 function finish(g){for(let i=0;g.sceneTransition.active&&i<32;i++)g.update(.025,heldInput);assert.equal(g.sceneTransition.active,false);}
 

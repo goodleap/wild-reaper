@@ -71,8 +71,12 @@ assert(!bleed.e.bleed);const expiredHp=bleed.e.hp;advance(bleed.g,.75);assert.eq
 
 const refreshed=bleedingTarget();advance(refreshed.g,.45);
 const blade=refreshed.g.orbitals[0];Object.assign(refreshed.e,{x:blade.x,y:blade.y});
-const tickPhase=refreshed.e.bleed.nextTick;refreshed.g.update(0);
-assert.equal(refreshed.e.bleed.nextTick,tickPhase,'another blade refreshes duration without resetting the tick clock');
+const tickPhase=refreshed.e.bleed.nextTick,lifeBefore=refreshed.e.bleed.life;refreshed.g.update(0);
+assert.equal(refreshed.e.bleed.life,lifeBefore,'same-clock refresh cannot create a new blade hit');
+// The original knife has left the target since its initial strike. Returning
+// to its path creates a new contact on the next real simulation step.
+refreshed.g.update(.025);
+assert(Math.abs(refreshed.e.bleed.nextTick-(tickPhase-.025))<1e-8,'re-entering blade contact refreshes duration without resetting the tick clock');
 assert(refreshed.e.bleed.life>1.9);refreshed.g.levels.orbit=0;refreshed.e.x=220;
 const afterRefresh=refreshed.e.hp;advance(refreshed.g,.075);
 assert.equal(afterRefresh-refreshed.e.hp,tickDamage,'refreshing bleed does not stack another damage stream');

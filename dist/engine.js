@@ -198,7 +198,7 @@ export class Game {
     const endurance=Math.max(0,t-300)/60;
     const health=hp*(type==='boss'?1+(bossIndex-1)*.65+sq(bossIndex-1)*.12:1+Math.min(t,300)*.0018+endurance*.13+Math.pow(endurance,1.25)*.05);
     const danger=type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.18;
-    const enemy={id:++this._id,...point,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),orbitHit:0,attackCooldown:0,slamCooldown:0,slamRecovery:0,slam:null,charge:null,chargeCooldown:1.5,cast:null,castCooldown:1};
+    const enemy={id:++this._id,...point,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),attackCooldown:0,slamCooldown:0,slamRecovery:0,slam:null,charge:null,chargeCooldown:1.5,cast:null,castCooldown:1};
     if(!islandSpawn) {
       this._moveEntity(enemy,0,0);
       if(!radius)for(let i=0;i<6&&this._inView(enemy);i++) {
@@ -534,7 +534,7 @@ export class Game {
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
       if(e.type==='beetle'){e._walkStartX=e.x;e._walkStartY=e.y;}
-      e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
+      e.hit=Math.max(0,e.hit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
       e._weaponPushTime=updateWeaponKnockback(this,e,dt);
       if(e.trainingDummy)continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
@@ -594,7 +594,7 @@ export class Game {
     this._collectDrops(this.gems,dt,'crystals');
     this._collectDrops(this.coins,dt,'gold');
     this.gems=this.gems.filter(g=>g.value>0);this.coins=this.coins.filter(c=>c.value>0);
-    for(const e of this.effects) {e.life-=dt;if(e.type==='damage'||e.type==='heal')e.y-=dt*26;}
+    for(const e of this.effects) {e.life-=dt;if(e.type==='damage'||e.type==='heal')e.y-=dt*(e.riseSpeed??26);}
     this.effects=this.effects.filter(e=>e.life>0);
     this.regions.flushReward();this._trySkillUpgrade();
   }
@@ -634,7 +634,7 @@ export class Game {
     if(!equipped) {
       if(id==='sword')this.attacks.sword.clearScene();
       if(id==='arrow')this.bullets=this.bullets.filter(b=>b.weaponId&&b.weaponId!=='arrow');
-      if(id==='orbit')this.orbitals=[];
+      if(id==='orbit'){this.orbitals=[];this.attacks.clearOrbit();}
     }
     this._refreshStats();this._refreshWeapons();return true;
   }

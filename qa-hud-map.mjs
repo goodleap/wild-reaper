@@ -105,7 +105,7 @@ const chestRendering=JSON.parse(run(`JSON.stringify((()=>{
     ctx.save=()=>{stack.push(clipped);save.call(ctx);};ctx.restore=()=>{restore.call(ctx);clipped=stack.pop();};
     vision.clipVisible=function(...args){clips++;clipped=true;return originalClip.apply(this,args);};
     drawTerrain=p=>calls.push({id:p.id,clipped});drawAdventureProp=p=>calls.push({id:p.id,state:p.state,clipped});
-    const floorProp={id:'qa-floor-prop',type:'supply',x:chest.x,y:chest.y+10};
+    const floorProp={id:'qa-floor-prop',type:'rug',renderLayer:'ground',x:chest.x,y:chest.y+10};
     drawScene([],[south,north],game.player,[floorProp,visible]);
     return {hidden,hiddenBehindWall,lidBeyondFloor,visible:visible.isDungeonTreasure&&visible.royal,calls,clips,north:north.id,south:south.id,chest:chest.id};
   }finally{if(vision)vision.clipVisible=originalClip;ctx.save=save;ctx.restore=restore;drawTerrain=originalTerrain;drawAdventureProp=originalProp;game=previous;}

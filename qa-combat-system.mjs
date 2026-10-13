@@ -144,7 +144,7 @@ for(const route of ['pierce','ricochet']) {
 const evolved=arena();evolved.levels.orbit=5;evolved._syncEvolutions(false);
 paid(evolved,'orbitPower');paid(evolved,'orbitRadius');
 const orbitVictim=enemy(evolved,82);evolved._rebuildGrid();evolved._updateWeapons(0);
-near(10000-orbitVictim.hp,60*1.15,'post-evolution orbit damage');
+near(10000-orbitVictim.hp,42*1.15,'post-evolution orbit damage');
 near(Math.hypot(evolved.orbitals[0].x,evolved.orbitals[0].y),82,'post-evolution orbit radius');
 assert.equal(evolved.build.getWeapon('orbit').level,7);assert.equal(skillStats(evolved,'storm').damage,160);
 for(const [id,route,baseDamage] of [['pulse','echoes',90],['lightning','chain',88]]) {

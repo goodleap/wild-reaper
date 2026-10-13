@@ -28,8 +28,9 @@ import { backingResolution, RenderSchedule, FrameMetrics } from './render-perfor
 import { debugConfigFromSearch } from './debug-mode.js';
 import { drawTrainingDummy } from './training-art.js';
 import { ACTOR_VISUALS } from './actor-visuals.js';
-import { drawDamageNumber } from './damage-numbers.js';
+import { drawDamageOverlay } from './damage-numbers.js';
 import { drawCastleActivation } from './relic-activation.js';
+import { sceneEntityVisible, sceneItemVisible, sceneItemLayer, compareSceneDepth } from './scene-rendering.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
@@ -575,7 +576,7 @@ function drawActors(actors){for(const actor of sortActors(actors))drawActor(acto
 function terrainInView(camX,camY){
   return game?.terrain?.query(camX-width/2-260,camY-height/2-260,camX+width/2+260,camY+height/2+260)||[];
 }
-function sceneVisible(entity){if(!game?.dungeon?.active||!game.dungeon.vision)return true;const actor=entity.type&&ACTOR_VISUALS[entity.type]||entity.isCompanion;const y=entity.groundY??(entity.y+(actor?groundOffset(entity,!!entity.isCompanion):0));return game.dungeon.vision.isVisible(entity.groundX??entity.x,y,actor?entity.r||0:0);}
+function sceneVisible(entity){return sceneEntityVisible(entity,game?.dungeon?.active?game.dungeon.vision:null);}
 function flightCrossesProp(actor,prop){
   const half=prop.type==='log'?(prop.halfLength||0):0,dx=Math.cos(prop.angle||0),dy=Math.sin(prop.angle||0);
   const along=clamp((actor.x-prop.x)*dx+(actor.footY-prop.y)*dy,-half,half);
@@ -610,8 +611,7 @@ function sceneDrawList(actors,props,adventureProps=[],weaponItems=[]){
   // Transient weapon art shares terrain depth; it cannot cover every wall
   // merely because combat effects normally draw after the scene.
   items.push(...weaponItems);
-  const kindOrder={terrain:0,adventure:1,actor:2,sword:3};
-  return items.sort((a,b)=>a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:a.kind==='sword'?(a.effect.seed||0)-(b.effect.seed||0):String(a.prop.id).localeCompare(String(b.prop.id))):kindOrder[a.kind]-kindOrder[b.kind]));
+  return items.sort(compareSceneDepth);
 }
 function drawScene(actors,props,mainPlayer,adventureProps=[]){
   const vision=game?.dungeon?.active?game.dungeon.vision:null;
@@ -625,13 +625,10 @@ function drawScene(actors,props,mainPlayer,adventureProps=[]){
     }
   }
   for(const item of sceneDrawList(actors,props,adventureProps,weaponItems)){
-    const wall=item.kind==='terrain'&&['castle-wall','hut-wall'].includes(item.prop.variant);
-    // The floor visibility test already admitted each interior chest at its
-    // ground anchor. Its raised lid, like the player's hood, must not be cut
-    // by the north wall's floor mask. Depth-sorted walls still occlude both.
-    const self=item.kind==='actor'&&item.actor.entity===mainPlayer;
-    const raisedChest=item.kind==='adventure'&&item.prop.isDungeonTreasure;
-    ctx.save();if(vision&&!wall&&!self&&!raisedChest)vision.clipVisible(ctx);
+    if(!sceneItemVisible(item,vision))continue;
+    // Only ground artwork follows the floor polygon. All visible raised
+    // objects use complete silhouettes and the same foot/base depth order.
+    ctx.save();if(vision&&sceneItemLayer(item)==='ground')vision.clipVisible(ctx);
     if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else if(item.kind==='sword')drawSwordSlash(ctx,item.effect,game,item.options);else drawActor(item.actor);
     ctx.restore();
   }
@@ -949,8 +946,8 @@ function effectInView(e){
   const margin=(e.r||0)+65,px=game.player.x,py=game.player.y,x2=e.x2??e.x,y2=e.y2??e.y;
   return Math.max(e.x,x2)+margin>=px-width/2&&Math.min(e.x,x2)-margin<=px+width/2&&Math.max(e.y,y2)+margin>=py-height/2&&Math.min(e.y,y2)-margin<=py+height/2;
 }
-function effects(e){if(!sceneVisible(e))return;if(e.type==='rescueWarning'){const age=1-e.life/e.maxLife,r=e.r||24;ctx.save();ctx.globalAlpha=.7;ctx.fillStyle='#e5b77222';ctx.strokeStyle='#efd2a0';ctx.lineWidth=1.8;ctx.beginPath();ctx.ellipse(e.x,e.y,r,r*.65,0,0,TAU);ctx.fill();ctx.stroke();ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(e.x,e.y,r+4,(r+4)*.65,0,-Math.PI/2,-Math.PI/2+TAU*age);ctx.stroke();for(let i=0;i<4;i++){const a=i*TAU/4;diamond(e.x+Math.cos(a)*(r+9),e.y+Math.sin(a)*(r+9)*.65,3,'#eac994');}ctx.restore();return;}if(angelArt.drawStrike(ctx,e,combatOptions))return;
-  if(!effectInView(e)||drawDamageNumber(ctx,e,combatOptions)||drawBarrierEffect(ctx,e,game,combatOptions)||combatVfx.drawHit(ctx,e,combatOptions)||combatVfx.drawBurst(ctx,e,combatOptions,'air')||combatArt.drawEffect(ctx,e,combatOptions)||superArt.drawEffect(ctx,e,combatOptions))return;
+function effects(e){if(e.type==='damage'||!sceneVisible(e))return;if(e.type==='rescueWarning'){const age=1-e.life/e.maxLife,r=e.r||24;ctx.save();ctx.globalAlpha=.7;ctx.fillStyle='#e5b77222';ctx.strokeStyle='#efd2a0';ctx.lineWidth=1.8;ctx.beginPath();ctx.ellipse(e.x,e.y,r,r*.65,0,0,TAU);ctx.fill();ctx.stroke();ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(e.x,e.y,r+4,(r+4)*.65,0,-Math.PI/2,-Math.PI/2+TAU*age);ctx.stroke();for(let i=0;i<4;i++){const a=i*TAU/4;diamond(e.x+Math.cos(a)*(r+9),e.y+Math.sin(a)*(r+9)*.65,3,'#eac994');}ctx.restore();return;}if(angelArt.drawStrike(ctx,e,combatOptions))return;
+  if(!effectInView(e)||drawBarrierEffect(ctx,e,game,combatOptions)||combatVfx.drawHit(ctx,e,combatOptions)||combatVfx.drawBurst(ctx,e,combatOptions,'air')||combatArt.drawEffect(ctx,e,combatOptions)||superArt.drawEffect(ctx,e,combatOptions))return;
   const alpha=clamp(e.life/e.maxLife,0,1),progress=1-alpha;ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=e.color||'#e9e4b7';ctx.fillStyle=e.color||'#e9e4b7';
   if(e.type==='ring'){
     if(e.control||e.branch==='control'){ctx.strokeStyle='#9fe5cf';ctx.fillStyle='#9fe5cf';}
@@ -1172,7 +1169,11 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   ctx.restore();
   const exposure=stormExposure(game.storm);if(exposure>0){ctx.fillStyle=`rgba(177,219,255,${exposure})`;ctx.fillRect(0,0,width,height);}
   ctx.restore();
-  if(!game.dungeon?.active)ambient(false,camX-sx,camY-sy);drawWorldMap();
+  if(!game.dungeon?.active)ambient(false,camX-sx,camY-sy);
+  // Combat text is an overlay: visible hit sources only, outside floor clips.
+  ctx.save();ctx.translate(offsetX,offsetY);
+  drawDamageOverlay(ctx,game.effects,combatOptions,sceneVisible,effectInView);ctx.restore();
+  drawWorldMap();
   drawObjectivePointers();drawWaveCue();
   if(p.hp/p.maxHp<.3){const danger=ctx.createRadialGradient(width/2,height/2,height*.2,width/2,height/2,Math.max(width,height)*.65);danger.addColorStop(0,'transparent');danger.addColorStop(1,'#ae392144');ctx.fillStyle=danger;ctx.fillRect(0,0,width,height);}
   drawRegionTransition();

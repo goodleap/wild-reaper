@@ -81,7 +81,7 @@ function weapons(game) {
       if(item.branch==='heavy')notes.push('重斩集中处理强敌，攻击节奏更慢');
       else if(item.branch==='sweep')notes.push('横扫覆盖更宽的敌群');
     }else if(item.id==='orbit') {
-      rows.push(['单次伤害',number(s.damage),'damage'],['同敌命中间隔',seconds(s.hitInterval),'interval'],['刃数',number(s.count),'count'],['环绕半径',item.evolved?`${number(s.radius)}—${number(s.radius+55)}`:number(s.radius),'range'],['旋转一周',seconds(Math.PI*2/s.rotationSpeed),'rotation']);
+      rows.push(['单次伤害',number(s.damage),'damage'],['命中规则','每枚每次接触一次','contact'],['刃数',number(s.count),'count'],['环绕半径',item.evolved?`${number(s.radius)}—${number(s.radius+55)}`:number(s.radius),'range'],['旋转一周',seconds(Math.PI*2/s.rotationSpeed),'rotation']);
       notes.push('环绕持续攻击，移动调整与敌人的距离');
       notes.push(`流血：每 ${seconds(STATUS_RULES.bleedInterval)} 造成 ${number(s.bleedDamage)} 伤害，持续 ${seconds(STATUS_RULES.bleedDuration)}；单层刷新`);
       if(item.evolved)notes.push('每 3 秒向外扩张一次');

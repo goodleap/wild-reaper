@@ -201,15 +201,22 @@ function bullet(c,bloom){
 }
 
 function blade(c,evolved){
-  const edge=evolved?'#fff1c0':'#e9ecd1',body=evolved?'#bea86a':'#8b9f90';
-  // Forged, curved steel with a dark fuller and a wrapped hilt, still exactly
-  // the original short orbital silhouette (17 units above its pivot).
-  const steel=c.createLinearGradient(-7,0,7,-3);steel.addColorStop(0,'#516c65');steel.addColorStop(.35,body);steel.addColorStop(.65,edge);steel.addColorStop(1,'#91a394');
-  c.fillStyle=steel;c.strokeStyle='#344c40';c.lineWidth=.85;c.beginPath();c.moveTo(0,-17);c.bezierCurveTo(1,-12,10,-6,6,5);c.lineTo(2,10);c.lineTo(-2,7);c.bezierCurveTo(-6,-1,-8,-8,0,-17);c.closePath();c.fill();c.stroke();
-  c.strokeStyle=edge;c.lineWidth=1;c.beginPath();c.moveTo(0,-16);c.bezierCurveTo(2,-11,8,-5,5,4);c.stroke();
-  path(c,[[0,-12],[-1,-6],[1,4]],evolved?'#9a8043':'#53746c',.8);path(c,[[-1,-9],[1,-7],[0,-4]],'#e0e3b86e',.5);
-  poly(c,[[-5,6],[-4,4],[1,7],[6,6],[6,8],[1,9]],evolved?'#cfb573':'#9aab84','#415644',.65);
-  path(c,[[0,9],[-1,14]],'#715e43',3.2);for(let i=0;i<3;i++)path(c,[[-1.5,10+i*1.4],[1,10.6+i*1.4]],'#d3bd87',.7);oval(c,-1,14,1.9,1.3,evolved?'#e3c784':'#adb897');
+  const edge=evolved?'#f5dca1':'#eef2e9',trim=evolved?'#c8a969':'#a5b7b7';
+  // A narrow throwing knife: angular steel facets, a small guard and a short
+  // wrapped grip. Its local -Y tip stays aligned by drawBlade's travel heading.
+  poly(c,[[0,-18],[3.5,-6],[3,2],[-2.8,2],[-3.2,-5]],'#798f99','#2d4247',.85);
+  poly(c,[[0,-17],[.25,1.8],[-2.5,1.8],[-2.9,-5]],'#b9c9cd');
+  poly(c,[[0,-17],[3.1,-5.8],[2.65,1.7],[.25,1.7]],'#647e8b');
+  path(c,[[0,-17],[-2.9,-5],[-2.5,1.6]],edge,.8);
+  path(c,[[0,-16],[.25,1.3]],'#edf2ea',.65);
+  path(c,[[3.15,-5.5],[2.7,1.4]],evolved?'#dfbd75':'#9aadb3',.7);
+  // The compact crossguard and pommel read as metal fittings, not fins.
+  poly(c,[[-4.5,2],[-3.8,1.2],[-1.6,2],[1.7,2],[4.2,1.4],[4.6,3.1],[1.5,3.9],[-1.5,3.9],[-4.5,3.2]],trim,'#364747',.65);
+  path(c,[[-3.6,2],[0,2.7],[3.6,2.1]],edge,.55);
+  poly(c,[[-1.6,3.7],[1.5,3.7],[1.25,10.5],[-1.4,10.5]],'#655344','#2f4140',.65);
+  for(let i=0;i<3;i++)path(c,[[-1.35,5+i*1.65],[1.2,4.6+i*1.65]],'#b3a07d',.65);
+  poly(c,[[-1.7,10.2],[1.5,10.2],[1.8,11.9],[0,13],[-1.9,11.8]],trim,'#344947',.55);
+  path(c,[[-1.15,10.7],[1.1,10.7]],edge,.55);
 }
 
 export class PropArt {

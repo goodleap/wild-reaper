@@ -62,7 +62,9 @@ assert(expandedRadius>restRadius+40,'the evolved blades visibly expand beyond th
 const outerTarget=monster(orbit,'slime',outerBlade.x,outerBlade.y),outerHealth=outerTarget.hp;
 assert(expandedRadius>restRadius+outerTarget.r+outerBlade.r,'the target is beyond the old orbit collision reach');
 orbit.update(0);
-assert(outerTarget.hp<outerHealth,'the expanded blade has a real damaging collision');
+assert.equal(outerTarget.hp,outerHealth,'a same-clock refresh does not start another contact simulation');
+orbit.update(.025);
+assert(outerTarget.hp<outerHealth,'the expanded blade has a real damaging collision on the next simulation step');
 assert.equal(orbit.orbitals.length,bladeCount,'expansion does not increase the blade budget');
 advance(orbit,.5);
 assert(Math.hypot(orbit.orbitals[0].x,orbit.orbitals[0].y)<expandedRadius-40,'the blades return to their normal orbit');

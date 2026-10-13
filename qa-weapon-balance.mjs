@@ -85,7 +85,7 @@ assert(late.heavy.dps>late.arrow.dps,'equally funded multi-arrow piercing cannot
 assert(late.heavy.dps>late.orbit.dps*1.5,'six surrounding blades retain a material focused-output disadvantage to the equally funded heavy sword');
 assert(late.arrow.dps>single.arrow.dps,'coverage investments still add output on a large single target');
 const evolvedSurround=measure('orbit',Array(5).fill('orbit'),circle);
-assert(evolvedSurround.dps>surroundingOrbit.dps,'the sixth blade and evolution improve sustained surrounding damage despite the shared hit interval');
+assert(evolvedSurround.dps>surroundingOrbit.dps,'the sixth blade and evolution improve sustained surrounding damage with independent blade contacts');
 for(const distance of [60,90]) {
   const positions=[[distance,0,9]],previous=measure('orbit',Array(4).fill('orbit'),positions,30),evolved=measure('orbit',Array(5).fill('orbit'),positions,30);
   assert(evolved.dps>previous.dps,'evolution does not reduce sustained small-body contact damage on the original orbit');

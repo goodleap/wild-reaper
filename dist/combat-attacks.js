@@ -54,13 +54,14 @@ export function obstacleImpact(o,x,y,dx,dy,r) {
 // Execution owns attack cadence and transient effects. Build state and derived
 // stats live elsewhere; it never edits upgrade ranks or reapplies global power.
 export class CombatAttacks {
-  constructor(game){this.game=game;this._orbitTrails=new Map();this.sword=new SwordCombat(game);}
+  constructor(game){this.game=game;this._orbitTrails=new Map();this._orbitContacts=new Map();this._orbitNextContacts=new Map();this.sword=new SwordCombat(game);}
 
-  clearScene(){this.sword.clearScene();}
+  clearOrbit(){this._orbitTrails.clear();this._orbitContacts.clear();this._orbitNextContacts.clear();this._orbitTrailClock=undefined;}
+
+  clearScene(){this.sword.clearScene();this.clearOrbit();}
 
   clearTrails() {
     for(const b of this.game.bullets)b.trail?.clear();
-    this._orbitTrails.clear();this._orbitTrailClock=undefined;
     clearWeaponKnockbackScene(this.game);
     this.clearScene();
   }
@@ -182,9 +183,15 @@ export class CombatAttacks {
   updateOrbit() {
     const g=this.game,p=g.player,stats=weaponStats(g,'orbit');
     g.orbitals=[];
-    if(!stats.equipped){this._orbitTrails.clear();this._orbitTrailClock=undefined;return;}
+    if(!stats.equipped){this.clearOrbit();return;}
     const elapsed=g._clock-(this._orbitTrailClock??g._clock),travel=Math.hypot(p.x-(this._orbitTrailPlayerX??p.x),p.y-(this._orbitTrailPlayerY??p.y));
-    if(this._orbitTrailCount!==stats.count||this._orbitTrailRadius!==stats.radius||this._orbitTrailSpeed!==stats.rotationSpeed||this._orbitTrailEvolved!==g.evolutions.orbit||elapsed<0||elapsed>.25||travel>Math.max(48,Math.max(0,elapsed)*(p.speed||220)*1.8))this._orbitTrails.clear();
+    if(this._orbitTerrain!==g.terrain||this._orbitScene!==g.dungeon?.active||this._orbitRegion!==g.region?.id||this._orbitSceneKind!==g.sceneKind||this._orbitTrailCount!==stats.count||this._orbitTrailRadius!==stats.radius||this._orbitTrailSpeed!==stats.rotationSpeed||this._orbitTrailEvolved!==g.evolutions.orbit||elapsed<0||elapsed>.25||travel>Math.max(48,Math.max(0,elapsed)*(p.speed||220)*1.8))this.clearOrbit();
+    this._orbitTerrain=g.terrain;this._orbitScene=g.dungeon?.active;this._orbitRegion=g.region?.id;this._orbitSceneKind=g.sceneKind;
+    // Only live contacts survive into the next step. Six bits per touched
+    // entity distinguish blades without a global damage cooldown or an
+    // ever-growing hit history. Repeated render/upgrade refreshes do no damage.
+    const advanceContacts=this._orbitDamageClock!==g._clock;
+    if(advanceContacts)this._orbitNextContacts.clear();
     this._orbitTrailCount=stats.count;this._orbitTrailRadius=stats.radius;this._orbitTrailSpeed=stats.rotationSpeed;this._orbitTrailEvolved=g.evolutions.orbit;
     this._orbitTrailClock=g._clock;this._orbitTrailPlayerX=p.x;this._orbitTrailPlayerY=p.y;
     const cycle=(g._clock-(g._orbitEvolutionStartedAt||0))%3;
@@ -199,20 +206,33 @@ export class CombatAttacks {
       const origin={x:blade.x,y:blade.y,groundY:blade.y+groundOffset(p,true)};
       let trail=this._orbitTrails.get(i);if(!trail){trail=new WeaponTrail('orbit');this._orbitTrails.set(i,trail);}syncTrailScene(trail,g);
       if(!clearPath(g,p,origin,{source:'orbit',radius:blade.r})){trail.clear();continue;}
+      let prior=null;
       if(trail.count&&!trail.endsAt(blade.x,blade.y)){
-        const last=trail.index(trail.count-1),prior={x:trail.points[last],y:trail.points[last+1],groundY:trail.points[last+1]+groundOffset(p,true)};
-        if(!clearPath(g,prior,origin,{source:'orbit',radius:blade.r}))trail.clear();
+        const last=trail.index(trail.count-1);prior={x:trail.points[last],y:trail.points[last+1],groundY:trail.points[last+1]+groundOffset(p,true)};
+        if(!clearPath(g,prior,origin,{source:'orbit',radius:blade.r})){trail.clear();prior=null;}
       }
       trail.add(blade.x,blade.y,g._clock);blade.trail=trail;
       g.orbitals.push(blade);
       g.environment?.hitAt(blade.x,blade.y,blade.r,'orbit',prop=>propPath(g,origin,prop,'orbit'));
-      for(const e of g._nearby(blade.x,blade.y,65))if(e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)&&canTarget(g,e,origin,{source:'orbit',checkPath:true})) {
-        g._hitEnemy(e,stats.damage,stats.knockback,origin,'orbit');e.orbitHit=stats.hitInterval;
+      if(advanceContacts) {
+        const bit=1<<i,x=prior?.x??blade.x,y=prior?.y??blade.y,dx=blade.x-x,dy=blade.y-y;
+        // The existing local query also covers the short travelled segment;
+        // a fast player cannot step a knife straight through a small target.
+        for(const e of g._nearby(x+dx*.5,y+dy*.5,65+Math.hypot(dx,dy)*.5)) {
+          const contact=dist2(e,blade)<sq(e.r+blade.r);
+          const impact=contact?1:circleImpact(x,y,dx,dy,e.x,e.y,e.r+blade.r);
+          if(!Number.isFinite(impact))continue;
+          const hitOrigin=contact?origin:{x:x+dx*impact,y:y+dy*impact,groundY:y+dy*impact+groundOffset(p,true)};
+          if(!canTarget(g,e,hitOrigin,{source:'orbit',checkPath:true}))continue;
+          if(contact)this._orbitNextContacts.set(e,(this._orbitNextContacts.get(e)||0)|bit);
+          if(!((this._orbitContacts.get(e)||0)&bit))g._hitEnemy(e,stats.damage,stats.knockback,hitOrigin,'orbit');
+        }
       }
       for(const prop of g.adventure?.props||[])if(prop.hp>0&&(prop._orbitNext||0)<=g.time&&sq(prop.x-blade.x)+sq((prop.aimY??prop.y)-blade.y)<sq(prop.r+blade.r)&&propPath(g,origin,prop,'orbit')) {
-        g.adventure.hitSupply(prop,stats.damage);prop._orbitNext=g.time+stats.hitInterval;
+        g.adventure.hitSupply(prop,stats.damage);prop._orbitNext=g.time+stats.propHitInterval;
       }
     }
+    if(advanceContacts){const previous=this._orbitContacts;this._orbitContacts=this._orbitNextContacts;this._orbitNextContacts=previous;this._orbitNextContacts.clear();this._orbitDamageClock=g._clock;}
   }
 
   updatePulse(dt) {

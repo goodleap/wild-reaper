@@ -7,6 +7,7 @@ import { Island } from '../dist/islands.js';
 import { Environment } from '../dist/environment.js';
 import { isGrounded, movementProfile, obstacleHeight } from '../dist/height-rules.js';
 import { weaponStats } from '../dist/combat-stats.js';
+import { compareSceneDepth } from '../dist/scene-rendering.js';
 
 let seed=184219;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -134,7 +135,7 @@ assert.equal(wet.environment.getImmersion(wetBat),null);assert.equal(wet.environ
 // depth relationships while keeping the actor and its ground shadow immutable.
 const app=fs.readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
 const depthCode=app.slice(app.indexOf('function flightCrossesProp('),app.indexOf('function drawScene('));
-const context={clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),isGrounded,obstacleHeight};vm.createContext(context);vm.runInContext(depthCode,context);
+const context={clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),isGrounded,obstacleHeight,compareSceneDepth};vm.createContext(context);vm.runInContext(depthCode,context);
 const flierActor={entity:{type:'bat',r:11},x:0,y:40,footY:60,shape:{radius:11,halfWidth:20,top:27},scale:1,orderId:1};
 const lowProp={id:'depth-low',type:'rock',heightBand:'low',x:0,y:70,r:20},tree={id:'depth-high',type:'tree',x:0,y:65,r:14,visual:{halfWidth:35,top:100,bottom:15}};
 const order=(actor,props)=>context.sceneDrawList([actor],props).map(item=>item.kind==='actor'?'actor':item.prop.id).join(',');

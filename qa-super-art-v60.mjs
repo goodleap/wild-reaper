@@ -20,8 +20,11 @@ function context(record=true){
     state[k]=v;return true;
   }});
 }
+class RecordedPath {
+  constructor(){for(const method of ['moveTo','lineTo','quadraticCurveTo','bezierCurveTo','closePath'])this[method]=(...values)=>values.forEach(value=>assert(Number.isFinite(value)));}
+}
 let canvases=0;
-const art=new SuperArt(()=>({key:++canvases,width:0,height:0,getContext:()=>context(false)}));
+const art=new SuperArt(()=>({key:++canvases,width:0,height:0,getContext:()=>context(false)}),{makePath:()=>new RecordedPath()});
 const fields=['thorns','miasma','meteor','vortex'].flatMap(kind=>[1,2,3].map(seed=>({kind,id:seed,seed,x:200,y:180,r:120,life:3,maxLife:3.2,interval:.4})));
 const effects=[
   {type:'superRunicCharge',angle:.4,r:18},
@@ -45,12 +48,13 @@ try{
     for(const e of effects)art.drawEffect(ctx,e,options);
   }
   assert.equal(art.cacheStats.builds,warm.builds,'all palettes stay resident after warmup, with no cache churn');
+  assert.equal(art.cacheStats.vectorPathBuilds,warm.vectorPathBuilds,'field vector paths compile only once per fixed variant');
   assert(art.cacheStats.bytes<=art.cacheStats.limitBytes,'fixed sprite cache remains inside its allocation budget');
   const vortex=fields.find(f=>f.kind==='vortex'),vctx=context();art.drawField(vctx,vortex);
-  assert.equal(vctx.calls.filter(c=>c[0]==='drawImage').length,4,'vortex uses four cached image layers');
+  assert.equal(vctx.calls.filter(c=>c[0]==='drawImage').length,1,'vortex only rasterizes its quiet glow; ribbons and core stay vector');
   assert(vctx.calls.filter(c=>c[0]==='lineTo').length<65,'hot frames do not rebuild spiral ribbon geometry');
   const thorn=fields.find(f=>f.kind==='thorns'),tctx=context();art.drawField(tctx,thorn);
-  assert.equal(tctx.calls.filter(c=>c[0]==='drawImage').length,3,'roots use two cached artwork layers plus quiet glow');
+  assert.equal(tctx.calls.filter(c=>c[0]==='drawImage').length,1,'roots only rasterize their quiet glow; body and foliage stay vector');
   assert.equal(tctx.calls.filter(c=>c[0]==='lineTo').length,0,'root geometry is static after cache warmup');
   for(const field of [vortex,thorn]){
     const one=context(),two=context();art.drawField(one,field,{time:0});art.drawField(two,field,{time:999});assert.deepEqual(two.calls,one.calls,'effect lifetime, not wall-clock, controls animation');
@@ -63,4 +67,4 @@ try{
   assert(arrows(later)[0].at(-1)<arrows(first)[0].at(-1),'the endpoint arrow is a fading afterimage');
   for(const kind of ['thorns','vortex'])for(const r of [1,22,420]){const ctx=context();assert(art.drawField(ctx,{kind,x:0,y:0,r,life:.01,maxLife:4}));assert.equal(ctx.depth,0);}
 }finally{Math.random=previousRandom;}
-console.log(`Super art: organic field layers, cached vortex geometry, instant runic-arrow afterimage, immutable paused simulation and stable ${art.cacheStats.bytes}-byte cache passed.`);
+console.log(`Super art: crisp vector field layers, compiled vortex geometry, instant runic-arrow afterimage, immutable paused simulation and stable ${art.cacheStats.bytes}-byte cache passed.`);
