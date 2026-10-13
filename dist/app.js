@@ -4,7 +4,7 @@ import { SceneryArt } from './scenery-art.js';
 import { CombatArt } from './combat-art.js';
 import { CombatVfx } from './combat-vfx.js';
 import { drawWeaponTrail } from './weapon-trails.js';
-import { drawSwordSlash } from './sword-art.js';
+import { drawSwordSlash, swordSlashPose } from './sword-art.js';
 import { drawGuardianBarrier, drawBarrierEffect } from './guardian-art.js';
 import { getStormGeometry, lightningPath, stormBrightness, stormImpactBrightness } from './storm-geometry.js';
 import { MonsterArt } from './monster-art.js';
@@ -589,7 +589,7 @@ function flightOverlapsSilhouette(actor,prop){
   return actor.x+actor.shape.halfWidth*actor.scale>=prop.x-halfWidth&&actor.x-actor.shape.halfWidth*actor.scale<=prop.x+halfWidth
     &&actor.footY>=prop.y-top&&actor.y-actor.shape.top*actor.scale<=prop.y+bottom;
 }
-function sceneDrawList(actors,props,adventureProps=[]){
+function sceneDrawList(actors,props,adventureProps=[],weaponItems=[]){
   const items=actors.map(actor=>({kind:'actor',sortY:actor.footY,actor}));
   for(const prop of props)if(prop.visual!==false&&(!prop.structureId||prop.variant==='castle-wall'||prop.variant==='hut-wall'))items.push({kind:'terrain',sortY:prop.sortY??prop.y,prop});
   for(const prop of adventureProps)items.push({kind:'adventure',sortY:prop.sortY??prop.y,prop});
@@ -606,11 +606,24 @@ function sceneDrawList(actors,props,adventureProps=[]){
     for(const prop of scenery)if(prop.sortY>item.sortY&&prop.sortY<=front&&(prop.kind!=='terrain'||obstacleHeight(prop.prop)==='high')&&flightOverlapsSilhouette(item.actor,prop.prop))front=Math.min(front,prop.sortY-.01);
     item.sortY=Math.max(item.sortY,front);
   }
-  return items.sort((a,b)=>a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:String(a.prop.id).localeCompare(String(b.prop.id))):({terrain:0,adventure:1,actor:2}[a.kind]-{terrain:0,adventure:1,actor:2}[b.kind])));
+  // Transient weapon art shares terrain depth; it cannot cover every wall
+  // merely because combat effects normally draw after the scene.
+  items.push(...weaponItems);
+  const kindOrder={terrain:0,adventure:1,actor:2,sword:3};
+  return items.sort((a,b)=>a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:a.kind==='sword'?(a.effect.seed||0)-(b.effect.seed||0):String(a.prop.id).localeCompare(String(b.prop.id))):kindOrder[a.kind]-kindOrder[b.kind]));
 }
 function drawScene(actors,props,mainPlayer,adventureProps=[]){
   const vision=game?.dungeon?.active?game.dungeon.vision:null;
-  for(const item of sceneDrawList(actors,props,adventureProps)){
+  const actor=actors.find(item=>item.entity===mainPlayer),weaponItems=[];
+  if(actor){
+    const options={...combatOptions,actor,bodyY:humanoidPose(mainPlayer).bodyY*actor.scale};
+    for(const effect of game.effects){
+      if(effect.type!=='swordSlash'||!(effect.life>0)||!sceneVisible(effect)||!effectInView(effect))continue;
+      const pose=swordSlashPose(effect,game,options);
+      weaponItems.push({kind:'sword',sortY:pose.sortY,effect,options:{...options,pose}});
+    }
+  }
+  for(const item of sceneDrawList(actors,props,adventureProps,weaponItems)){
     const wall=item.kind==='terrain'&&['castle-wall','hut-wall'].includes(item.prop.variant);
     // The floor visibility test already admitted each interior chest at its
     // ground anchor. Its raised lid, like the player's hood, must not be cut
@@ -618,7 +631,7 @@ function drawScene(actors,props,mainPlayer,adventureProps=[]){
     const self=item.kind==='actor'&&item.actor.entity===mainPlayer;
     const raisedChest=item.kind==='adventure'&&item.prop.isDungeonTreasure;
     ctx.save();if(vision&&!wall&&!self&&!raisedChest)vision.clipVisible(ctx);
-    if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else drawActor(item.actor);
+    if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else if(item.kind==='sword')drawSwordSlash(ctx,item.effect,game,item.options);else drawActor(item.actor);
     ctx.restore();
   }
 }
@@ -936,7 +949,7 @@ function effectInView(e){
   return Math.max(e.x,x2)+margin>=px-width/2&&Math.min(e.x,x2)-margin<=px+width/2&&Math.max(e.y,y2)+margin>=py-height/2&&Math.min(e.y,y2)-margin<=py+height/2;
 }
 function effects(e){if(!sceneVisible(e))return;if(e.type==='rescueWarning'){const age=1-e.life/e.maxLife,r=e.r||24;ctx.save();ctx.globalAlpha=.7;ctx.fillStyle='#e5b77222';ctx.strokeStyle='#efd2a0';ctx.lineWidth=1.8;ctx.beginPath();ctx.ellipse(e.x,e.y,r,r*.65,0,0,TAU);ctx.fill();ctx.stroke();ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(e.x,e.y,r+4,(r+4)*.65,0,-Math.PI/2,-Math.PI/2+TAU*age);ctx.stroke();for(let i=0;i<4;i++){const a=i*TAU/4;diamond(e.x+Math.cos(a)*(r+9),e.y+Math.sin(a)*(r+9)*.65,3,'#eac994');}ctx.restore();return;}if(angelArt.drawStrike(ctx,e,combatOptions))return;
-  if(!effectInView(e)||drawSwordSlash(ctx,e,game,combatOptions)||drawBarrierEffect(ctx,e,game,combatOptions)||combatVfx.drawHit(ctx,e,combatOptions)||combatVfx.drawBurst(ctx,e,combatOptions,'air')||combatArt.drawEffect(ctx,e,combatOptions)||superArt.drawEffect(ctx,e,combatOptions))return;
+  if(!effectInView(e)||drawBarrierEffect(ctx,e,game,combatOptions)||combatVfx.drawHit(ctx,e,combatOptions)||combatVfx.drawBurst(ctx,e,combatOptions,'air')||combatArt.drawEffect(ctx,e,combatOptions)||superArt.drawEffect(ctx,e,combatOptions))return;
   const alpha=clamp(e.life/e.maxLife,0,1),progress=1-alpha;ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=e.color||'#e9e4b7';ctx.fillStyle=e.color||'#e9e4b7';
   if(e.type==='ring'){
     if(e.control||e.branch==='control'){ctx.strokeStyle='#9fe5cf';ctx.fillStyle='#9fe5cf';}
@@ -1147,7 +1160,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   drawGuardianBarrier(ctx,game,p,combatOptions);
   for(const b of game.bullets)if(sceneVisible(b)&&Math.abs(b.x-p.x)<width/2+100&&Math.abs(b.y-p.y)<height/2+100){drawWeaponTrail(ctx,b,combatOptions);combatArt.drawArrow(ctx,b,combatOptions);}
   for(const b of game.orbitals){drawWeaponTrail(ctx,b,combatOptions);propArt.drawBlade(ctx,b,combatOptions);}
-  for(const e of game.effects)if(e.type!=='ring'&&e.type!=='rescueWarning'&&e.type!=='eliteSummon')effects(e);
+  for(const e of game.effects)if(e.type!=='ring'&&e.type!=='rescueWarning'&&e.type!=='eliteSummon'&&e.type!=='swordSlash')effects(e);
   drawStorm();combatArt.drawStormAir(ctx,game.storm,combatOptions);
   ctx.restore();
   const exposure=stormExposure(game.storm);if(exposure>0){ctx.fillStyle=`rgba(177,219,255,${exposure})`;ctx.fillRect(0,0,width,height);}

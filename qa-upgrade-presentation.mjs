@@ -122,6 +122,28 @@ for(const [id,owner,branch] of [['swordMastery','sword','heavy'],['pulseMastery'
   assert.equal(after(model.rows[1]),Number((actual.cooldown??actual.interval).toFixed(2)));
   assert.match(model.summary,/间隔/,'mastery cards explain cadence as well as damage');examplesForNew.push(model);
 }
+// Sword energy is acquired on the weapon, so its first card is NEW even
+// though the innate sword is already owned. The tier and range match payment.
+for(const branch of [null,'sweep','heavy'])for(const owned of [0,1,2]){
+  const current=game();current.levels.sword=branch?5:3;if(branch)current.branches.sword=branch;
+  current.levels.swordEnergy=owned;current._refreshWeapons();
+  const choice=find(current,'swordEnergy'),before=current.build.serialize();
+  const model=presentUpgrade(choice,current),html=upgradeCardHTML(model);
+  assert.deepEqual(current.build.serialize(),before,'sword-energy preview remains read-only');
+  assert.equal(model.category,'weapon');assert.equal(model.ownerId,'sword');
+  assert.equal(model.action,owned?'升级':'新获得');assert.equal(html.includes('choice-new'),!owned);
+  assert.equal(model.weaponAbility,true);assert.match(html,/武器专属能力/);
+  assert.doesNotMatch(html,/获得武器|超级/,'energy is a regular weapon upgrade, not a new weapon or boss skill');
+  if(!owned)assert.match(html,/获得能力/);
+  const baseRank=current.build.getWeapon('sword').baseRank,skillIds=current.build.getSkillLoadout().map(item=>item.id);
+  assert(current.chooseUpgrade('swordEnergy'));
+  const actual=weaponStats(current,'sword');
+  assert.equal(after(model.rows[0]),Number(actual.baseDamage.toFixed(2)));
+  assert.equal(after(model.rows[1]),actual.range);
+  assert.equal(current.build.getWeapon('sword').baseRank,baseRank,'energy rank does not disguise an extra sword base level');
+  assert.deepEqual(current.build.getSkillLoadout().map(item=>item.id),skillIds,'energy does not create a skill slot');
+  examplesForNew.push(model);
+}
 assert.equal(presentUpgrade({id:'super:resource',name:'满阶宝藏',desc:'领取资源',icon:'◆'},g).category,'resource');
 assert(upgradeCardHTML({...presentUpgrade(find(g,'power'),g),name:'<script>bad</script>'}).includes('&lt;script&gt;'),'card strings are escaped');
 // At a 320px arena: overlay 20px + card padding/borders 22px leave

@@ -98,4 +98,13 @@ assert.equal(JSON.stringify({build:defensive.build.serialize(),player:defensive.
 defensive.player.invuln=0;defensive.player.hp=defensive.player.maxHp;
 const hp=defensive.player.hp;defensive._hurtPlayer(40);
 assert.equal(`${Number(((1-(hp-defensive.player.hp)/40)*100).toFixed(2))}%`,value(defenseHTML,'damageReduction'),'inspector reduction agrees with actual damage');
+const energyGame=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,settlements:false,companions:false});
+energyGame.levels.sword=3;energyGame.levels.swordEnergy=2;energyGame._refreshWeapons();
+const energySnapshot=JSON.stringify(energyGame.build.serialize()),energyPanel=characterPanelHTML(energyGame,'weapons'),energySword=item(energyPanel,'sword');
+assert.equal(value(energySword,'swordEnergyRank'),'2 / 3');
+assert.equal(value(energySword,'swordEnergyBonus'),'+14%');
+assert.equal(value(energySword,'range'),'132','weapon details include the sword-energy coverage');
+assert.match(energySword,/攻击覆盖距离|卸下长剑时停用/);
+assert.doesNotMatch(characterPanelHTML(energyGame,'skills'),/剑气/,'sword energy remains under its weapon');
+assert.equal(JSON.stringify(energyGame.build.serialize()),energySnapshot,'opening energy details does not alter rank');
 console.log('Character panel: effective stats, source isolation, super skills, equipment guards, safe rendering passed.');

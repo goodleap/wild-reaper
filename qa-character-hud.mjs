@@ -64,6 +64,7 @@ Object.assign(document,{body:root.querySelector('body'),getElementById:id=>root.
 const $=id=>{const node=document.getElementById(id);assert(node,`missing #${id}`);return node;};
 const sandbox={...modules,document,performance,window:{location:{search:''},devicePixelRatio:1,addEventListener:(type,handler)=>{(windowListeners[type]??=[]).push(handler);}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:query=>({matches:query.includes('pointer: coarse')}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
+const shippedRenderGame=sandbox.renderGame;
 const run=script=>vm.runInContext(script,sandbox);
 function fire(node,type,extra={}){
   const event={target:node,currentTarget:node,pointerId:1,clientX:30,clientY:30,button:0,detail:type==='click'?1:undefined,preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.stopped=true;},...extra};
@@ -200,6 +201,28 @@ assert.match($('loadout').textContent,/\+2/,'all three weapons stay inside the e
 key('KeyC');click('character-tab-skills');assert.equal($('character-content').querySelectorAll('[data-capability-id]').length,owned,'details list every acquired skill');
 click('quit-button');assert.equal(run('game'),null);assert($('run-summary').classList.contains('hidden'),'returning home hides passive run statistics');assert.equal(run('characterOpen'),false);assert($('character-overlay').classList.contains('hidden'));assert.equal($('character-button').getAttribute('aria-expanded'),'false');
 start();assert.equal(run('characterOpen'),false);assert.equal(run('characterTab'),'attributes');
+// A weapon-bound upgrade remains in the existing equipment strip. Details
+// can explain it without adding an automatic skill or a mobile HUD slot.
+const compactBefore={weapons:$('loadout').querySelectorAll('.combat-slot').length,skills:$('super-loadout').querySelectorAll('.combat-slot').length};
+run("game.levels.sword=3;game.levels.swordEnergy=1;game._refreshWeapons();updateHUD();");
+assert.equal($('loadout').querySelectorAll('.combat-slot').length,compactBefore.weapons);
+assert.equal($('super-loadout').querySelectorAll('.combat-slot').length,compactBefore.skills);
+assert.equal(run("game.build.getSkill('swordEnergy')"),null);
+
+// Sword art joins the normal scene depth instead of the final air-effects
+// layer. The same ground anchor still orders the unchanged player sprite.
+assert.equal(run(`(()=>{const actor=actorVisual(game.player,true),foot=actor.footY;
+ const front={kind:'sword',sortY:foot+2,effect:{seed:1}},back={kind:'sword',sortY:foot-2,effect:{seed:2}};
+ const wall={id:'front-wall',type:'log',variant:'castle-wall',x:actor.x,y:foot+20,r:14,halfLength:100};
+ return sceneDrawList([actor],[wall],[],[front,back]).map(item=>item.kind==='sword'?(item.effect.seed===1?'front-sword':'back-sword'):item.kind).join(',');})()`),'back-sword,actor,front-sword,terrain');
+const swordDraws=[],originalSwordDraw=sandbox.drawSwordSlash;
+sandbox.drawSwordSlash=(ctx,e,g,options)=>{swordDraws.push(options);return originalSwordDraw(ctx,e,g,options);};
+run(`game.effects=[{type:'swordSlash',x:game.player.x,y:game.player.y,groundY:game.player.y+19.8,r:122,meleeRange:100,energyRank:1,angle:0,arc:1.95,windup:.065,hitTime:.115,attackAge:.115,maxLife:.28,life:.165,followOwner:true,owner:game.player,seed:765}];`);shippedRenderGame();
+assert.equal(swordDraws.length,1,'one sword effect renders once in the scene, never again in the air layer');
+assert(swordDraws[0].actor.entity===run('game.player'));
+assert(Number.isFinite(swordDraws[0].pose.sortY),'the frame uses the art pose for depth ordering');
+assert(Number.isFinite(swordDraws[0].bodyY),'walking body offset accompanies the owner silhouette');
+sandbox.drawSwordSlash=originalSwordDraw;run('game.effects=[];');
 run("game.sceneTransition.active=true;");key('KeyC');click('character-button');assert.equal(run('characterOpen'),false,'scene changes cannot be interrupted by details');
 
 console.log('Character HUD: touch activation, equipment below attributes with shared responsive slots, value-only resource captions, passive run-statistics lifecycle, frozen simulation/cooldowns, pause and reward preservation, modal exclusivity, drag/cancel guards, tabs, and equipment investment passed (VM DOM; no browser layout assertion).');

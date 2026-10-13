@@ -57,10 +57,13 @@ export function weaponStats(game,id) {
   if(id==='sword') {
     const level=Math.min(5,rank(game,id)),branch=game.build?.getWeapon?.(id)?.branch??game.branches?.sword??null;
     const heavy=branch==='heavy',sweep=branch==='sweep';
-    const baseDamage=(46+level*8)*(heavy?1.85:1)*(1+effectTotal(game,'swordMastery','baseDamageBonus'));
-    return {id,level,equipped:equipped&&level>0,branch,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
+    const energyRank=level>=3?boundedRank(game,'swordEnergy',3):0;
+    const energy=getUpgradeDefinition('swordEnergy').rankBonuses[energyRank-1];
+    const energyBonus=energy?.damageBonus||0,meleeRange=88+level*4+(sweep?18:0);
+    const baseDamage=(46+level*8)*(heavy?1.85:1)*(1+effectTotal(game,'swordMastery','baseDamageBonus')+energyBonus);
+    return {id,level,equipped:equipped&&level>0,branch,energyRank,energyBonus,meleeRange,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
       interval:(.72-Math.max(0,level-1)*.025)*(heavy?1.38:1)-effectTotal(game,'swordMastery','intervalReduction'),
-      range:88+level*4+(sweep?18:0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,duration:.28,knockback:heavy?14:5};
+      range:meleeRange+(energy?.range||0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,hitTime:.115,duration:.28,knockback:heavy?14:5};
   }
   if(id==='arrow') {
     const branch=game.build?.getWeapon?.(id)?.branch??game.branches?.arrow??null;

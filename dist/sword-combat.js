@@ -16,18 +16,27 @@ export function intersectsSwordArc(origin,target,range,arc,angle) {
 }
 
 export class SwordCombat {
-  constructor(game){this.game=game;this.cooldown=0;this.pending=null;this._sequence=0;}
+  constructor(game){this.game=game;this.cooldown=0;this.pending=null;this._visual=null;this._sequence=0;}
 
   clearScene() {
-    this.pending=null;this.cooldown=0;
+    this.pending=null;this._visual=null;this.cooldown=0;
     if(this.game.effects)this.game.effects=this.game.effects.filter(e=>e.type!=='swordSlash');
     this._terrain=this.game.terrain;this._scene=this.game.dungeon?.active;this._region=this.game.region?.id;this._sceneKind=this.game.sceneKind;
+    this._owner=this.game.player;
     this._lastX=this.game.player.x;this._lastY=this.game.player.y;
   }
 
   _sceneChanged(dt) {
     const g=this.game,p=g.player;
-    return this._terrain!==g.terrain||this._scene!==g.dungeon?.active||this._region!==g.region?.id||this._sceneKind!==g.sceneKind||Math.hypot(p.x-(this._lastX??p.x),p.y-(this._lastY??p.y))>Math.max(64,(p.speed||220)*Math.max(0,dt)*2);
+    return this._owner!==p||this._terrain!==g.terrain||this._scene!==g.dungeon?.active||this._region!==g.region?.id||this._sceneKind!==g.sceneKind||Math.hypot(p.x-(this._lastX??p.x),p.y-(this._lastY??p.y))>Math.max(64,(p.speed||220)*Math.max(0,dt)*2);
+  }
+
+  _origin() {const p=this.game.player;return {x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};}
+
+  _followVisual(dt) {
+    const e=this._visual;if(!e)return;
+    if(e.life<=0){this._visual=null;return;}
+    const origin=this._origin();e.x=origin.x;e.y=origin.y;e.groundY=origin.groundY;e.attackAge+=dt;
   }
 
   _canHit(enemy,origin) {
@@ -59,27 +68,33 @@ export class SwordCombat {
     const g=this.game,p=g.player;
     if(this._sceneChanged(dt))this.clearScene();
     this._lastX=p.x;this._lastY=p.y;
-    if(!stats.equipped){if(this.pending)this.clearScene();return;}
+    if(!stats.equipped){if(this.pending||this._visual)this.clearScene();return;}
     if(g.status!=='playing')return;
+    this._followVisual(dt);
     this.cooldown-=dt;
     if(this.pending) {
       this.pending.remaining-=dt;
       if(this.pending.remaining<=0){const swing=this.pending;this.pending=null;this._strike(swing);}
     }
     if(this.pending||this.cooldown>0)return;
-    const origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)},target=this._acquire(origin,stats);
+    const origin=this._origin(),target=this._acquire(origin,stats);
     if(!target){this.cooldown=.06;return;}
     const angle=Math.atan2((target.aimY??target.y)-origin.y,target.x-origin.x),windup=stats.windup??.065;
-    this.pending={origin,angle,arc:stats.arc,range:stats.range,damage:stats.damage,knockback:stats.knockback||0,remaining:windup};
+    const hitTime=stats.hitTime??windup+.05;
+    // Direction and outgoing stats lock at startup, while the owner and path
+    // origin are resolved at contact so a moving blade cannot hit from behind.
+    this.pending={angle,arc:stats.arc,range:stats.range,damage:stats.damage,knockback:stats.knockback||0,remaining:hitTime};
     this.cooldown=stats.interval;
     p.castFace=Math.max(p.castFace||0,windup+.1);
-    g._effect(origin.x,origin.y,'swordSlash',stats.duration??.28,stats.range,stats.branch==='heavy'?'#f1d594':'#daf2ed',undefined,{angle,arc:stats.arc,branch:stats.branch,groundY:origin.groundY,seed:++this._sequence,windup});
+    const sequence=++this._sequence;
+    g._effect(origin.x,origin.y,'swordSlash',stats.duration??.28,stats.range,stats.branch==='heavy'?'#f1d594':'#daf2ed',undefined,{angle,arc:stats.arc,branch:stats.branch,groundY:origin.groundY,seed:sequence,windup,hitTime,attackAge:0,followOwner:true,owner:p,meleeRange:stats.meleeRange??stats.range,energyRank:stats.energyRank??0,energyBonus:stats.energyBonus??0});
+    const visual=g.effects?.[g.effects.length-1];this._visual=visual?.type==='swordSlash'&&visual.seed===sequence?visual:null;
     g._emit('swordSwing',{branch:stats.branch,angle});
-    if(windup<=0){const swing=this.pending;this.pending=null;this._strike(swing);}
+    if(hitTime<=0){const swing=this.pending;this.pending=null;this._strike(swing);}
   }
 
   _strike(swing) {
-    const g=this.game,{origin,range,arc,angle,damage,knockback}=swing;
+    const g=this.game,{range,arc,angle,damage,knockback}=swing,origin=this._origin();
     if(g.status!=='playing')return;
     const within=target=>intersectsSwordArc(origin,target,range,arc,angle);
     let hit=false;

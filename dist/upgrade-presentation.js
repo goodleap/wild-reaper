@@ -85,6 +85,12 @@ export function presentUpgrade(choice,game) {
   if(choice.evolves&&ownerId==='orbit')model.name='裂风环刃';
   const stats=category==='weapon'?weaponStats:skillStats,before=stats(game,ownerId),after=stats(nextGame,ownerId);
   const base=stats=>stats.primaryBaseDamage??stats.baseDamage;
+  if(id==='swordEnergy'){
+    Object.assign(model,{action:current?'升级':'新获得',weaponAbility:true,scope:'长剑 · 武器专属能力',levelLabel:current?`${current} → ${next} 阶`:'获得 1 阶',note:'随长剑生效 · 最高 3 阶'});
+    model.rows=[change('挥砍基础伤害',base(before),base(after)),change('攻击覆盖距离',before.range,after.range)];
+    model.summary=current?`挥砍伤害 ${pair(base(before),base(after))}，覆盖 ${pair(before.range,after.range)}。`:`挥剑附带剑气，伤害 ${pair(base(before),base(after))}、覆盖 ${pair(before.range,after.range)}。`;
+    return finish('rare');
+  }
   if(id==='runeArrow'||id==='arrowRune'){
     const runeBefore=before.runic||0;
     Object.assign(model,{tier:'super',activation:'automatic',action:runeBefore?'升级':'新获得',scope:'翠羽飞矢 · 武器专属能力',note:'穿透路线专属 · 最高 3 阶'});
@@ -153,8 +159,8 @@ const TYPE_ICONS={weapon:'<path d="m5 19 3-6 8-9 4-1-1 4-9 8-5 4Zm1-8 7 7m-9 3 3
 export function upgradeCardHTML(model) {
   const type={attribute:'属性',weapon:'武器',skill:'技能',resource:'宝藏'}[model.category];
   const level=model.category==='skill'||model.category==='weapon'?model.levelLabel:'';
-  const context=model.category==='attribute'?(model.note.includes('无尽')?'无尽成长':'角色通用'):model.category==='resource'?'资源补给':model.category==='weapon'&&model.tier==='super'?'武器专属能力':model.tier==='super'?(model.activation==='manual'?'手动施放':'自动施放'):model.ownerName;
+  const context=model.category==='attribute'?(model.note.includes('无尽')?'无尽成长':'角色通用'):model.category==='resource'?'资源补给':model.category==='weapon'&&(model.tier==='super'||model.weaponAbility)?'武器专属能力':model.tier==='super'?(model.activation==='manual'?'手动施放':'自动施放'):model.ownerName;
   const summary=String(model.summary??'').split(/(\d+(?:\.\d+)?(?:→\d+(?:\.\d+)?)?%?)/g).map((part,index)=>index%2?`<b>${escape(part)}</b>`:escape(part)).join('');
-  const action=model.category==='attribute'?'加强属性':model.action==='分支'?'确定分支':model.action==='进化'?'完成进化':model.action==='新获得'?(model.category==='weapon'?(model.tier==='super'?'获得秘术':'获得武器'):'学习技能'):model.category==='resource'?'领取宝藏':model.category==='weapon'?'强化武器':'强化技能';
+  const action=model.category==='attribute'?'加强属性':model.action==='分支'?'确定分支':model.action==='进化'?'完成进化':model.action==='新获得'?(model.category==='weapon'?(model.tier==='super'?'获得秘术':model.weaponAbility?'获得能力':'获得武器'):'学习技能'):model.category==='resource'?'领取宝藏':model.category==='weapon'?'强化武器':'强化技能';
   return `<span class="choice-top"><span class="choice-category"><svg viewBox="0 0 24 24" aria-hidden="true">${TYPE_ICONS[model.category]}</svg>${type} · ${escape(model.action)}${model.action==='新获得'?'<em class="choice-tier choice-new" aria-hidden="true">NEW</em>':''}${model.tier==='super'?'<em class="choice-tier">超级</em>':''}</span><span class="choice-quality">${escape(model.quality.name)}</span></span><span class="choice-heading"><span class="upgrade-icon" style="color:${escape(model.color)}" aria-hidden="true">${escape(model.icon)}</span><strong>${escape(model.name)}</strong><span class="choice-level">${escape(level)}</span></span><span class="choice-summary">${summary}</span><span class="select-arrow"><span>${escape(context)}</span><span>${action} <span aria-hidden="true">↗</span></span></span>`;
 }
