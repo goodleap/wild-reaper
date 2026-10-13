@@ -14,17 +14,19 @@ for(const match of source.matchAll(/^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)[
 }
 source=source.replace(/^import[^\n]+;\s*$/gm,'');
 function harness(search){
-  let viewport={width:393,height:717,left:0,top:0},scheduled=0,clockReads=0;
+  let viewport={width:393,height:717,left:0,top:0},scheduled=0,clockReads=0,drawImages=0;
   const nodes={},listeners={},document={activeElement:null,hidden:false};
   const gradient={addColorStop(){}};
-  const drawing=new Proxy({measureText:text=>({width:String(text).length*6}),createLinearGradient:()=>gradient,createRadialGradient:()=>gradient},{get:(target,key)=>target[key]??(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
+  const drawing=new Proxy({measureText:text=>({width:String(text).length*6}),createLinearGradient:()=>gradient,createRadialGradient:()=>gradient,drawImage(){drawImages++;}},{get:(target,key)=>target[key]??(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
   class Element{
-    constructor(id='',tag='DIV',classes=''){this.id=id;this.tagName=tag;this.children=[];this.style={setProperty(name,value){this[name]=String(value);},getPropertyValue(name){return this[name]??'';}};this.attributes={};this.textContent='';this.isConnected=true;this.disabled=false;const set=new Set(classes.split(' ').filter(Boolean));this.classList={contains:name=>set.has(name),add:name=>set.add(name),remove:name=>set.delete(name),toggle:(name,on)=>{on=on??!set.has(name);on?set.add(name):set.delete(name);return on;}};}
+    constructor(id='',tag='DIV',classes=''){this.id=id;this.tagName=tag;this.nodeType=1;this.children=[];this.style={setProperty(name,value){this[name]=String(value);},getPropertyValue(name){return this[name]??'';}};this.attributes={};this.textContent='';this.value='';this.isConnected=true;this.disabled=false;const set=new Set(classes.split(' ').filter(Boolean));this.classList={contains:name=>set.has(name),add:name=>set.add(name),remove:name=>set.delete(name),toggle:(name,on)=>{on=on??!set.has(name);on?set.add(name):set.delete(name);return on;}};}
     getBoundingClientRect(){return viewport;}
     setAttribute(name,value){this.attributes[name]=String(value);}
     getAttribute(name){return this.attributes[name];}
     addEventListener(type,handler){listeners[`${this.id}:${type}`]=handler;}
     focus(){document.activeElement=this;}
+    select(){this.selectionStart=0;this.selectionEnd=this.value.length;}
+    closest(selector){for(let node=this;node;node=node.parentElement)if(selector.split(',').some(part=>{const s=part.trim();return s.startsWith('.')?node.classList.contains(s.slice(1)):s.startsWith('#')?node.id===s.slice(1):node.tagName===s.toUpperCase();}))return node;return null;}
     append(...children){for(const child of children){child.parentElement=this;this.children.push(child);}}
     replaceChildren(...children){this.children=[...children];}
     querySelector(){return this.children.find(child=>!child.disabled);}
@@ -34,6 +36,7 @@ function harness(search){
     setPointerCapture(){}
   }
   for(const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g))nodes[match[3]]=new Element(match[3],match[1].toUpperCase(),match[2].match(/class="([^"]*)"/)?.[1]||'');
+  const appRoot=new Element('qa-app','MAIN','app');appRoot.append(nodes.arena);
   // Model the shipped pause column so debug detail must actually be attached,
   // instead of passing through the production optional-parent fallback.
   assert.match(html,/<div class="pause-control"><button id="pause-button"/);
@@ -41,19 +44,22 @@ function harness(search){
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean);
   Object.assign(document,{getElementById:id=>{const node=nodes[id]||Object.values(nodes).map(root=>find(root,id)).find(Boolean);assert(node,id);return node;},body:new Element(),createElement:tag=>new Element('',tag.toUpperCase()),querySelectorAll:()=>Object.values(nodes).filter(node=>node.classList.contains('modal-layer')),addEventListener:(type,handler)=>listeners[`document:${type}`]=handler});
   const window={location:{search},devicePixelRatio:2,addEventListener:(type,handler)=>listeners[`window:${type}`]=handler};
-  const sandbox={...modules,document,window,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){scheduled++;},setTimeout:()=>0,clearTimeout(){},console};
+  const navigator={userAgent:'QA frame integration'};
+  const sandbox={...modules,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){scheduled++;},setTimeout:()=>0,clearTimeout(){},console};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
   const run=script=>vm.runInContext(script,sandbox);
   run('let gameDraws=0,introDraws=0;renderGame=()=>{gameDraws++;};renderIntro=()=>{introDraws++;};');
   let now=1000;
   const tick=(delta=1000/60)=>{const before=scheduled;run(`frame(${now+=delta})`);assert.equal(scheduled,before+1,'every callback schedules its successor without a frame-rate limiter');};
-  return {nodes,listeners,document,window,run,tick,pauseColumn,clockReads:()=>clockReads,resize(width,height){viewport={...viewport,width,height};run('resize();');}};
+  return {nodes,listeners,document,window,navigator,run,tick,pauseColumn,clockReads:()=>clockReads,drawImages:()=>drawImages,resize(width,height){viewport={...viewport,width,height};run('resize();');}};
 }
 
 for(const search of ['', '?debug']){
   const {nodes,listeners,document,window,run,tick,resize,pauseColumn,clockReads}=harness(search);
   const debugDetails=pauseColumn.children.filter(node=>node.id==='debug-performance');
   assert.equal(debugDetails.length,search?1:0,'performance detail is attached once in debug and absent on normal URLs');
+  assert.equal(run('diagnostics===null'),!search,'ordinary URLs allocate no diagnostic capture');
+  if(!search){assert(nodes['debug-diagnostics'].classList.contains('hidden'));assert.equal(nodes['diagnostic-start'].onclick,undefined);}
   nodes['start-button'].onclick();
   run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
   assert.equal(nodes['game-canvas'].width,786,'phone rendering retains native 2x detail within the pixel budget');
@@ -67,6 +73,7 @@ for(const search of ['', '?debug']){
   else assert.equal(clockReads(),0,'ordinary play has no diagnostic timing overhead');
   run("keys.add('KeyD');skillRequested=true;touch={id:1,dx:1,dy:0};");
   nodes['pause-button'].onclick();tick();
+  assert.equal(nodes['debug-diagnostics'].classList.contains('hidden'),!search,'the diagnostic panel appears only on a debug pause');
   const pausedDraws=run('gameDraws'),pausedState=run('JSON.stringify([game.runTime,clock,game.player.x,game.player.y,game.player.skillCooldown])');
   for(let i=0;i<90;i++)tick();
   assert.equal(run('gameDraws'),pausedDraws,'pause retains the last canvas rather than redrawing the world');
@@ -121,4 +128,66 @@ game.settlements.sites=[hut];game.player.x=hut.door.x;game.player.y=hut.door.y-g
   nodes['resume-button'].onclick();tick();assert(run('gameDraws')>hiddenDraws,'foreground resume paints again');
   window.devicePixelRatio=1;resize(393,717);tick();assert.equal(nodes['game-canvas'].width,393,'subsequent display scale changes remain responsive');
 }
-console.log('Performance integration: live RAF cadence, bounded Retina buffers, unchanged world view, retained pause/reward/modal scenes, resize repaint, input/time continuity, animated scene fades and background recovery passed.');
+
+// Run the real diagnostic controls through one bounded 15-second capture.
+// Keep real frame/update/HUD/input handlers; this fixture has no spawning or
+// procedural scenery, and the existing renderer counter avoids raster cost.
+{
+  const {nodes,listeners,document,navigator,run,tick,resize,drawImages}=harness('?debug');
+  nodes['start-button'].onclick();
+  run(`game=new Game({terrain:new game.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
+game.enemies=[];game.regionGrace=Infinity;game._spawn=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;game.viewWidth=width;game.viewHeight=height;updateHUD();`);
+  tick();nodes['pause-button'].onclick();
+  assert(!nodes['debug-diagnostics'].classList.contains('hidden'));
+  nodes['diagnostic-hud-off'].onclick();
+  assert.equal(nodes['diagnostic-hud-off'].getAttribute('aria-pressed'),'true');
+  nodes['diagnostic-start'].onclick();
+  assert.equal(run('diagnostics.running'),true);assert.equal(run('paused'),false,'capture starts by resuming the game');
+  const frozenGold=nodes['gold-label'].textContent,frozenTimer=nodes.timer.textContent;
+  run("game.gold=321;game.player.skillCooldown=2;skillRequested=false;keys.add('KeyD');");
+  assert.equal(nodes['skill-button'].disabled,false);assert.equal(nodes['touch-skill'].disabled,false);
+  nodes['skill-button'].onclick();assert.equal(run('skillRequested'),false,'freezing button appearance never bypasses the real cooldown');
+  run('game.player.skillCooldown=0;');nodes['skill-button'].onclick();assert.equal(run('skillRequested'),true,'a ready skill still accepts input while HUD updates are stopped');
+  for(let i=0;i<65;i++)tick();
+  assert.equal(nodes['gold-label'].textContent,frozenGold);assert.equal(nodes.timer.textContent,frozenTimer,'live numeric HUD stays frozen');
+  const beforePause=run('diagnostics._elapsed');
+  nodes['pause-button'].onclick();tick(10_000);
+  assert.equal(run('diagnostics._elapsed'),beforePause);assert.equal(run('diagnostics.running'),true,'pause suspends rather than discards the capture');
+  nodes['resume-button'].onclick();tick();assert.equal(run('diagnostics._elapsed'),beforePause,'first resumed frame only establishes a new baseline');
+  tick();const beforeHidden=run('diagnostics._elapsed');
+  document.hidden=true;listeners['document:visibilitychange']();tick(60_000);
+  document.hidden=false;listeners['document:visibilitychange']();tick();
+  assert.equal(run('diagnostics._elapsed'),beforeHidden);assert.equal(run('paused'),true);
+  nodes['resume-button'].onclick();tick();assert.equal(run('diagnostics._elapsed'),beforeHidden,'hidden-tab time never enters the RAF distribution');
+  run("keys.add('KeyD');");let captureFrames=0;
+  while(run('diagnostics.running')&&captureFrames++<1000)tick();
+  assert(captureFrames<1000);assert.equal(run('paused'),true,'15 active seconds finish by opening pause');
+  assert.equal(run('diagnostics.reports.length'),1);assert.equal(run('diagnostics.reports[0].mode'),'hud-off');
+  assert(run('diagnostics.reports[0].activeMs')>=15_000&&run('diagnostics.reports[0].activeMs')<15_020);
+  assert(run('diagnostics.reports[0].movingRatio')>.9);assert.equal(run('diagnostics.reports[0].raf.over50'),0);
+  assert.equal(nodes['diagnostic-copy'].disabled,false);assert.match(nodes['diagnostic-output'].value,/HUD|RAF/);
+
+  // Call the shipped composition function directly, since the main renderer
+  // is counted above. Disabled lighting must bypass both masks and sunlight.
+  nodes['diagnostic-default'].onclick();run('let lightCalls=0;drawActorShadows([],0,0,[],[],()=>lightCalls++);');
+  assert.equal(run('lightCalls'),1);const litDraws=drawImages();assert(litDraws>0);
+  nodes['diagnostic-lights-off'].onclick();run('drawActorShadows([],0,0,[],[],()=>lightCalls++);');
+  assert.equal(run('lightCalls'),1);assert.equal(drawImages(),litDraws,'lights-off skips all shadow/sunlight canvas composition');
+  assert.equal(run('diagnostics.reports.length'),1,'changing the comparison mode keeps completed reports');
+  nodes['diagnostic-start'].onclick();tick();tick();resize(1512,850);
+  assert.equal(run('diagnostics.running'),false);assert.equal(run('diagnostics.reports.length'),1);assert.match(nodes['diagnostic-status'].textContent,/尺寸变化/);
+
+  nodes['pause-button'].onclick();nodes['diagnostic-default'].onclick();nodes['diagnostic-start'].onclick();tick();tick();
+  run(`const diagnosticHut={id:'qa-diagnostic-hut',type:'supply',name:'测试小屋',x:400,y:0,door:{x:400,y:30},width:54,depth:28,interactRadius:82,state:'ready',seed:1,guardIds:[]};
+game.settlements.sites=[diagnosticHut];game.player.x=diagnosticHut.door.x;game.player.y=diagnosticHut.door.y-groundOffset(game.player,true);`);
+  tick();assert(run('game.sceneTransition.active'));assert.equal(run('diagnostics.running'),false);assert.equal(run('diagnostics.reports.length'),1);assert.match(nodes['diagnostic-status'].textContent,/场景切换/);
+
+  let copied='';navigator.clipboard={async writeText(text){copied=text;}};
+  await nodes['diagnostic-copy'].onclick();assert.equal(copied,run('diagnostics.exportText()'));assert.match(nodes['diagnostic-status'].textContent,/已复制 1 组/);
+  navigator.clipboard={async writeText(){throw new Error('clipboard denied');}};
+  await nodes['diagnostic-copy'].onclick();const output=nodes['diagnostic-output'];
+  assert.equal(document.activeElement,output);assert.equal(output.selectionStart,0);assert.equal(output.selectionEnd,output.value.length);assert.equal(nodes['diagnostic-details'].open,true);assert.match(nodes['diagnostic-status'].textContent,/⌘C/);
+  let prevented=false;listeners['qa-app:selectstart']({target:output,cancelable:true,preventDefault(){prevented=true;}});
+  assert.equal(prevented,false,'manual-copy textarea remains selectable under the game callout guard');
+}
+console.log('Performance integration: live cadence, retained scenes, input/time continuity, bounded buffers, debug-only 15-second capture, HUD/light controls, interruption/cancellation and clipboard fallback passed.');

@@ -147,3 +147,17 @@
 .build-note{font-size:9px;line-height:1.8;color:#90a786;margin:9px 0 0}
 @media(max-width:760px){.combat-loadout{gap:4px;max-width:100%}.combat-loadout .loadout-label{flex-basis:22px;font-size:8px}.combat-loadout .combat-slot{height:26px;min-width:37px;padding:3px 5px;gap:4px}.combat-loadout .combat-slot>span{font-size:17px}.combat-loadout .combat-slot>small{font-size:8px}.combat-build>summary>span{font-size:9px}.build-content{padding:0 10px 10px}.build-attributes{gap:11px 6px}.build-attributes span{font-size:8px}.build-attributes strong{font-size:12px}.build-item-copy>strong{font-size:11px}.build-item-copy>span{font-size:9px}.build-enhancements{font-size:9px}}
 @media(max-height:430px){.equipment-stack{gap:4px}.combat-loadout .combat-slot{height:23px}.combat-loadout .combat-slot>span{font-size:15px}.combat-build{margin-bottom:12px}.pause-panel{padding-top:20px;padding-bottom:20px}}
+
+/* Debug-only controls live inside the paused dialog, outside combat view. */
+.debug-diagnostics{margin:18px 0;padding-top:14px;border-top:1px solid #c5d69b30;text-align:left}
+.debug-diagnostics h3{margin:0 0 7px;font-size:14px;color:#dce8c9}
+.debug-diagnostics .diagnostic-hint,.debug-diagnostics .diagnostic-status{margin:7px 0;font-size:11px;line-height:1.55;color:#aeba9f}
+.diagnostic-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:10px 0}
+.diagnostic-modes button{min-height:34px;padding:6px 3px;border:1px solid #8b9b7955;border-radius:7px;background:#182d23;color:#b9c8aa;font:inherit;font-size:11px;cursor:pointer}
+.diagnostic-modes button[aria-pressed="true"]{background:#c2d999;color:#223427;border-color:#c2d999}
+.diagnostic-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.diagnostic-actions .secondary-button{padding:9px 5px;min-height:36px;font-size:11px}
+.diagnostic-actions button:disabled{opacity:.45;cursor:default}
+.diagnostic-details{font-size:11px;color:#c5d4b4;margin:8px 0}
+.diagnostic-details summary{cursor:pointer;padding:4px 0}
+#diagnostic-output{display:block;width:100%;height:142px;resize:vertical;margin-top:7px;padding:8px;box-sizing:border-box;border:1px solid #78926366;border-radius:6px;background:#14241d;color:#d0dfc0;font:10px/1.5 ui-monospace,monospace;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;touch-action:auto}
