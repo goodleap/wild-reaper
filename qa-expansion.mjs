@@ -10,6 +10,8 @@ let seed=410117;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena({terrain=new Terrain({obstacles:[]}),width=1100,height=650}={}) {
   const g=new Game({terrain,adventure:false,encounters:false});
+  // These scenarios isolate the established arrow/pulse/encounter behavior.
+  g.levels.arrow=1;g.build.setEquipped('sword',false);
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;
   g.viewWidth=width;g.viewHeight=height;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
@@ -27,10 +29,10 @@ const foot=(entity,isPlayer=false)=>({x:entity.x,y:entity.y+groundOffset(entity,
 const xpTotal=g=>g.player.xp;
 
 // The fifth slot uses the current upgrade: orbit evolves directly, while
-// pulse/lightning require an explicit branch without another choice screen.
+// sword/pulse/lightning require an explicit branch without another choice screen.
 for(const id of Object.keys(EVOLUTIONS)) {
   const g=arena();g.player.level=8;g.player.xp=17;g.levels[id]=4;g.branches.arrow='pierce';g.crystalsNext=40;g.crystals=40;g.status='upgrade';
-  const chosenId=id==='pulse'?'branch:pulse:echoes':id==='lightning'?'branch:lightning:chain':id;
+  const chosenId=id==='sword'?'branch:sword:sweep':id==='pulse'?'branch:pulse:echoes':id==='lightning'?'branch:lightning:chain':id;
   const expectedName=WEAPON_BRANCHES[id]?.find(b=>b.id===chosenId)?.name||EVOLUTIONS[id].name;
   let choices;
   for(let i=0;i<100;i++) {
@@ -44,7 +46,7 @@ for(const id of Object.keys(EVOLUTIONS)) {
   assert.equal(g.status,'playing','evolution does not add another selection screen');
   assert.equal(g.player.xp,17,'evolution does not charge additional experience');
   assert.equal(g.player.level,8,'evolution does not create a bonus hero level');
-  const weapon=(id==='orbit'?g.weapons:g.skills).find(w=>w.id===id);
+  const weapon=(['sword','orbit'].includes(id)?g.weapons:g.skills).find(w=>w.id===id);
   assert(weapon.evolved&&weapon.name===expectedName,'the displayed weapon name and state update together');
   g._syncEvolutions(true);g._syncEvolutions(true);advance(g,.1);
   assert.equal(g.events.filter(e=>e.type==='evolution'&&e.weaponId===id).length,1,'an evolution announces only once');
@@ -66,7 +68,7 @@ advance(orbit,.5);
 assert(Math.hypot(orbit.orbitals[0].x,orbit.orbitals[0].y)<expandedRadius-40,'the blades return to their normal orbit');
 
 const echo=arena();echo.levels.pulse=5;echo.branches.pulse='echoes';echo._pulse=0;
-const echoTarget=monster(echo,'slime',185,0);echo.update(0);
+const echoTarget=monster(echo,'slime',210,0);echo.update(0);
 assert.equal(echoTarget.hp,10000,'an enemy in the outer ring is outside the first pulse');
 assert.equal(echo._pulseEchoes.length,1);
 const pendingEcho=structuredClone(echo._pulseEchoes[0]);
@@ -85,7 +87,7 @@ assert.equal(echoEffects.length,1);assert.equal(echoEffects[0].x,pendingEcho.x);
 const afterEcho=echoTarget.hp;advance(echo,.5);assert.equal(echoTarget.hp,afterEcho,'one cast cannot repeat its echo');
 
 const deadEcho=arena();deadEcho.levels.pulse=5;deadEcho.branches.pulse='echoes';deadEcho._pulse=0;
-const untouched=monster(deadEcho,'slime',185,0);deadEcho.update(0);
+const untouched=monster(deadEcho,'slime',210,0);deadEcho.update(0);
 deadEcho.player.x=480;deadEcho.player.hp=1;
 monster(deadEcho,'slime',480,0).damage=5;
 deadEcho.update(.05);assert.equal(deadEcho.status,'dead');advance(deadEcho,1);
@@ -93,15 +95,15 @@ assert.equal(untouched.hp,10000,'a pending echo cannot deal delayed damage after
 assert(!deadEcho.effects.some(e=>e.echo));
 
 const chain=arena();chain.levels.lightning=5;chain.branches.lightning='chain';chain._lightning=0;
-const chainTargets=[60,140,220,300,380,460].map(x=>monster(chain,'slime',x));chain.update(0);
+const chainTargets=[60,120,180,240,300,360,420,480].map(x=>monster(chain,'slime',x));chain.update(0);
 const chainDamage=chainTargets.map(e=>10000-e.hp);
-assert.equal(chainDamage.filter(d=>d>0).length,5,'an evolved chain hits at most five different enemies');
+assert.equal(chainDamage.filter(d=>d>0).length,7,'an evolved chain hits at most seven different enemies');
 assert(chainDamage[0]>0);
 assert(chainDamage.slice(0,3).every(damage=>damage===chainDamage[0]),'the original three targets retain their full strike damage');
-for(const damage of chainDamage.slice(3,5))assert(Math.abs(damage/chainDamage[0]-.4)<1e-10,'the two extra jumps add bounded damage');
-assert.equal(chainDamage[5],0);
+for(const damage of chainDamage.slice(3,7))assert(Math.abs(damage/chainDamage[0]-.85)<1e-10,'the four extra jumps retain 85% damage');
+assert.equal(chainDamage[7],0);
 const links=chain.effects.filter(e=>e.type==='lightning');
-assert.equal(new Set(links.map(e=>`${e.x2},${e.y2}`)).size,5,'the chain never revisits an earlier target');
+assert.equal(new Set(links.map(e=>`${e.x2},${e.y2}`)).size,7,'the chain never revisits an earlier target');
 for(const [width,height,axis] of [[390,690,'x'],[1100,300,'y']]) {
   const edge=arena({width,height});edge.levels.lightning=5;edge.branches.lightning='chain';edge._lightning=0;
   const visible=monster(edge,'slime',axis==='x'?160:0,axis==='y'?110:0);

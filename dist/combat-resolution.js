@@ -6,12 +6,14 @@ import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } fro
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
 const feedbackSeed=(x,y,time,id=0)=>(Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
-const HIT_COLORS=Object.freeze({arrow:'#e8f3ad',orbit:'#f2d492',lightning:'#cce9ff',companionLightning:'#cce9ff',storm:'#d4e7ff',conduction:'#c4e8ff',pulse:'#b9dca0',echo:'#c6ead5',companionPulse:'#b9dca0',companionEcho:'#c6ead5',bleed:'#e8a486',mushroom:'#ffbd70',super:'#ead4aa',relic:'#ddc8f5'});
+const HIT_COLORS=Object.freeze({sword:'#f1e5bb',arrow:'#e8f3ad',runeArrow:'#c4e7df',orbit:'#f2d492',lightning:'#cce9ff',companionLightning:'#cce9ff',storm:'#d4e7ff',conduction:'#c4e8ff',pulse:'#b9dca0',echo:'#c6ead5',companionPulse:'#b9dca0',companionEcho:'#c6ead5',bleed:'#e8a486',mushroom:'#ffbd70',super:'#ead4aa',relic:'#ddc8f5'});
 
 // Source ownership and reaction permissions are explicit. An automatic attack
 // is not automatically a weapon, nor does an ally inherit the player's stats.
 export const ATTACK_SOURCES=Object.freeze({
+  sword:Object.freeze({owner:'player',weaponId:'sword',conduct:true}),
   arrow:Object.freeze({owner:'player',weaponId:'arrow',conduct:true}),
+  runeArrow:Object.freeze({owner:'player',weaponId:'arrow'}),
   orbit:Object.freeze({owner:'player',weaponId:'orbit',conduct:true,bleed:true}),
   pulse:Object.freeze({owner:'player',skillId:'pulse',consumeBleed:true}),
   echo:Object.freeze({owner:'player',skillId:'pulse',consumeBleed:true}),
@@ -149,9 +151,11 @@ export class CombatResolution {
     const p=g.player;if(p.invuln>0||g.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
     amount*=defenseDamageMultiplier(resolveCharacterStats(g).defense);
     amount=g.relics?.modifyIncomingDamage(amount)??amount;
+    amount=g.barrier?.absorbDamage(amount)??amount;
     const previousHp=p.hp;
-    p.hp=Math.max(0,p.hp-amount);p.invuln=.8;if(p.hp<previousHp)p.hurtFace=.24;g._emit('hurt');
-    g._effect(p.x,p.y,'ring',.3,42,'#e48d78');
+    p.hp=Math.max(0,p.hp-amount);p.invuln=.8;
+    if(p.hp<previousHp){p.hurtFace=.24;g._emit('hurt');g._effect(p.x,p.y,'ring',.3,42,'#e48d78');}
+    else g._emit('shieldAbsorbed');
     if(p.hp<=0)g.status='dead';return true;
   }
 }

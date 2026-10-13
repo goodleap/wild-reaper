@@ -43,7 +43,7 @@ function purchase(game,id) {
   assert.equal(game.chooseUpgrade(id),false,'a completed transaction cannot be repeated');
 }
 function capRegularUpgrades(game) {
-  Object.assign(game.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
+  Object.assign(game.branches,{sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain'});
   Object.assign(game.levels,LEVEL_CAPS);
   game._syncEvolutions(false);game._refreshStats();game._refreshWeapons();
 }
@@ -67,9 +67,11 @@ assert.equal(growth.build.attributes.defense,7);
 // payment guards as other upgrades; it neither heals nor increases attacks.
 const normal=arena();normal.player.hp=53;
 fund(normal);
-assert(normal.getUpgradeChoices().every(choice=>['orbit','pulse','lightning'].includes(choice.id)));
+const opening=normal.getUpgradeChoices();
+assert.equal(opening.length,3);assert(opening.some(choice=>choice.id==='arrow'));assert(opening.some(choice=>choice.id==='barrier'));
+const openingAttack=opening.find(choice=>['orbit','pulse','lightning'].includes(choice.id));assert(openingAttack);
 assert.equal(normal.chooseUpgrade('toughness'),false,'defense cannot bypass the opening acquisition offer');
-assert(normal.chooseUpgrade('orbit'));
+assert(normal.chooseUpgrade(openingAttack.id));
 const loadoutBefore={weapons:normal.build.getWeaponLoadout(),skills:normal.build.getSkillLoadout()};
 const offenseBefore={arrow:weaponStats(normal,'arrow').damage,storm:skillStats(normal,'storm').damage,attack:resolveCharacterStats(normal).attack};
 for(let rank=1;rank<=5;rank++) {
@@ -154,13 +156,14 @@ for(const defense of [0,20,100,119]) {
 }
 const shielded=arena();shielded.levels.toughness=5;shielded._refreshStats();
 assert(shielded.relics.acquire('leafWard'));assert(shielded.relics.grantWard(18));
-assert(shielded._hurtPlayer(100));near(shielded.player.hp,80,'100 raw damage halves before 18 ward and 12 relic shield absorb it');
+assert(shielded._hurtPlayer(100));near(shielded.player.hp,100,'100 raw damage halves before 18 ward and the 34.5-capacity barrier absorb it');
+near(shielded.barrier.remaining,2.5,'the same active barrier retains unused capacity');
 assert.equal(shielded.relics.wardAmount,0);assert.equal(shielded.relics.shieldReady,false);
-assert.equal(shielded.relics.shieldCooldown,20);assert.equal(shielded.player.invuln,.8);
+assert.equal(shielded.relics.shieldCooldown,12.75);assert.equal(shielded.player.invuln,.8);
 const blocked=arena();blocked.levels.toughness=5;blocked._refreshStats();
 assert(blocked.relics.acquire('leafWard'));assert(blocked.relics.grantWard(18));
 assert(blocked._hurtPlayer(30));assert.equal(blocked.player.hp,100);
-assert.equal(blocked.relics.wardAmount,0);assert.equal(blocked.relics.shieldReady,true,'a ward that absorbs the reduced hit does not consume the backup relic shield');
+assert.equal(blocked.relics.wardAmount,0);assert.equal(blocked.relics.shieldReady,true,'a ward that absorbs the reduced hit preserves the automatic barrier');
 assert.equal(blocked.player.invuln,.8);
 
 console.log('Defense: paid normal and endless growth, character XP separation, snapshots, shared damage formula, shield ordering and invulnerability passed.');

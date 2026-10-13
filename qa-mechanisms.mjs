@@ -10,6 +10,8 @@ let seed=192653;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(region='forest',generation=false) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false});
+  // Mechanism timing is independent of the new default melee weapon.
+  g.levels.arrow=1;g.build.setEquipped('sword',false);
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   g._updatePressure=()=>{};g.region=REGIONS.find(r=>r.id===region);g.regionIndex=REGIONS.indexOf(g.region);

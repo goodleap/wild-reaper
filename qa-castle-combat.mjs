@@ -6,6 +6,7 @@ const vertical={id:'cross-wall',type:'log',structureType:'castle-wall',x:85,y:0,
 const horizontal={id:'near-wall',type:'log',structureType:'castle-wall',x:0,y:0,r:14,halfLength:400,angle:0};
 function arena(wall=vertical){
  const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false});g.enemies=[];
+ g.levels.arrow=1;g.build.setEquipped('sword',false);
  assert(g.dungeon.enter({id:'combat-castle',door:{x:0,y:19.8}}));
  g.terrain=new Terrain({obstacles:[wall]});g.dungeon.active.terrain=g.terrain;g.enemies=[];g.gems=[];g.coins=[];g.effects=[];g.events=[];g.bullets=[];g.player.x=0;g.player.y=0;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
  return g;

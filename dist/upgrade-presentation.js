@@ -7,7 +7,7 @@ const RARITIES=Object.freeze({
   common:{name:'普通',color:'#c0c9bd'},uncommon:{name:'精良',color:'#a8d798'},
   rare:{name:'稀有',color:'#8fc9ed'},epic:{name:'史诗',color:'#d3afea'},legendary:{name:'传说',color:'#f1cd83'}
 });
-const SUPER_RARITY={thorns:'rare',miasma:'rare',runes:'epic',swords:'epic',meteor:'legendary',vortex:'legendary'};
+const SUPER_RARITY={domain:'epic',swords:'epic',meteor:'legendary',vortex:'legendary'};
 const numeric=n=>Number(Number(n).toFixed(2));
 const num=(n,suffix='')=>`${numeric(n)}${suffix}`;
 const pair=(before,after)=>before===after?num(after):`${num(before)}→${num(after)}`;
@@ -21,19 +21,15 @@ function previewGame(game,choice,definition) {
   player.maxHp+=extraHealth;
   return {...game,build,levels:build.levels,branches:build.branches,evolutions:build.evolutions,player};
 }
-function superSummary(id,before,after) {
+function superSummary(id,before,after,branch) {
   if(!before)return {
-    thorns:`荆棘造成 ${after.damage} 范围伤害，定身普通敌人 ${after.root} 秒。`,
-    miasma:`瘴气爆发 ${after.impactDamage} 伤害，持续 ${after.duration} 秒、每半秒侵蚀 ${after.damage}。`,
-    runes:`三道射线贯穿沿途敌人，造成 ${after.damage} 伤害，同轮不重复命中。`,
+    domain:branch==='erosion'?`爆发 ${after.impactDamage}，每 ${after.interval} 秒侵蚀 ${after.damage}；离开后短暂残留。`:`爆发 ${after.impactDamage}，每跳 ${after.damage}；反复束缚地面小怪，减速强敌。`,
     meteor:`锁定敌群落下 ${after.count} 颗星陨，每颗造成 ${after.damage} 范围伤害。`,
     swords:`每轮 ${after.count} 柄追击灵剑，每剑 ${after.damage} 伤害，优先首领。`,
     vortex:`持续 ${after.duration} 秒，每 ${after.interval} 秒造成 ${after.damage} 伤害并聚怪；首领免牵引。`
   }[id];
   return {
-    thorns:`伤害 ${pair(before.damage,after.damage)}，定身 ${pair(before.root,after.root)} 秒；范围扩大、冷却缩短。`,
-    miasma:`爆发 ${pair(before.impactDamage,after.impactDamage)}，每跳 ${pair(before.damage,after.damage)}；范围扩大、冷却缩短。`,
-    runes:`伤害 ${pair(before.damage,after.damage)}；射线加宽，冷却 ${pair(before.cooldown,after.cooldown)} 秒。`,
+    domain:`爆发 ${pair(before.impactDamage,after.impactDamage)}，每跳 ${pair(before.damage,after.damage)}；领域扩大、冷却缩短。`,
     meteor:`伤害 ${pair(before.damage,after.damage)}${before.count!==after.count?`，星陨 ${pair(before.count,after.count)} 颗`:''}；爆炸扩大、冷却缩短。`,
     swords:`每剑伤害 ${pair(before.damage,after.damage)}，灵剑 ${pair(before.count,after.count)} 柄；冷却缩短。`,
     vortex:`每跳伤害 ${pair(before.damage,after.damage)}，牵引 ${pair(before.pull,after.pull)}；范围扩大、冷却缩短。`
@@ -51,14 +47,13 @@ export function presentUpgrade(choice,game) {
     return finish('legendary');
   }
   if(superId&&SUPER_RARITY[superId]) {
-    const level=game.build.getSkill(superId).level,after=getSuperSkillStats(superId,level+1),before=level?getSuperSkillStats(superId,level):null;
-    Object.assign(model,{category:'skill',tier:'super',activation:'automatic',action:level?'升级':'新获得',scope:'超级技能 · 自动攻击',levelLabel:level?`Lv.${level} → ${level+1}`:'获得 Lv.1',note:'最高 3 级 · 本局持续生效',summary:superSummary(superId,before,after)});
-    if(superId==='miasma')model.rows=[change('初始爆发',before?.impactDamage??null,after.impactDamage),change('每次侵蚀',before?.damage??null,after.damage),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
+    const record=game.build.getSkill(superId),level=record.baseRank,branch=choice.domainBranch||record.branch;
+    const after=getSuperSkillStats(superId,level+1,branch),before=level?getSuperSkillStats(superId,level,branch):null;
+    Object.assign(model,{category:'skill',tier:'super',activation:'automatic',action:level?'升级':'新获得',scope:'超级技能 · 自动攻击',levelLabel:level?`Lv.${level} → ${level+1}`:'获得 Lv.1',note:superId==='domain'?'领域分支互斥 · 最高 3 级':'最高 3 级 · 本局持续生效',summary:superSummary(superId,before,after,branch)});
+    if(superId==='domain')model.rows=[change('初始爆发',before?.impactDamage??null,after.impactDamage),change('每次领域伤害',before?.damage??null,after.damage),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
     else if(superId==='swords')model.rows=[change('单剑基础伤害',before?.damage??null,after.damage),change('每轮灵剑',before?.count??null,after.count,'柄'),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
-    else if(superId==='thorns')model.rows=[change('基础伤害',before?.damage??null,after.damage),change('定身时长',before?.root??null,after.root,'秒'),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
     else if(superId==='meteor')model.rows=[change('单颗基础伤害',before?.damage??null,after.damage),change('每轮星陨',before?.count??null,after.count,'颗'),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
     else if(superId==='vortex')model.rows=[change('每次基础伤害',before?.damage??null,after.damage),change('牵引速度',before?.pull??null,after.pull),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
-    else model.rows=[change('基础伤害',before?.damage??null,after.damage),fixed('贯穿射线','3 道'),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
     return finish(SUPER_RARITY[superId]);
   }
   const nextGame=previewGame(game,choice,definition),current=game.build.getRank(id),next=nextGame.build.getRank(id);
@@ -86,20 +81,31 @@ export function presentUpgrade(choice,game) {
     return finish(id==='regen'?'uncommon':'common');
   }
   const beforeOwner=getOwner(game.build,ownerId),afterOwner=getOwner(nextGame.build,ownerId),owned=beforeOwner?.level>0;
-  Object.assign(model,{action:choice.branch?'分支':choice.evolves?'进化':owned?'升级':'新获得',scope:`${owner.name} · ${model.activation==='manual'?'手动施放':category==='weapon'?'自动攻击':'独立自动攻击'}`,levelLabel:owned?`Lv.${beforeOwner.level} → ${afterOwner.level}`:'获得 Lv.1',note:choice.branch?'选择后本局固定，仍可继续强化':definition?.upgradeKind==='modifier'?`本项强化 ${next} / ${definition.cap} 次`:''});
-  if(choice.evolves)model.name='裂风环刃';
+  Object.assign(model,{action:choice.branch?'分支':choice.evolves?'进化':owned?'升级':'新获得',scope:`${owner.name} · ${model.activation==='manual'?'手动施放':category==='weapon'?'自动攻击':'独立自动技能'}`,levelLabel:owned?`Lv.${beforeOwner.level} → ${afterOwner.level}`:'获得 Lv.1',note:choice.branch?'选择后本局固定，仍可继续强化':definition?.upgradeKind==='modifier'?`本项强化 ${next} / ${definition.cap} 次`:''});
+  if(choice.evolves&&ownerId==='orbit')model.name='裂风环刃';
   const stats=category==='weapon'?weaponStats:skillStats,before=stats(game,ownerId),after=stats(nextGame,ownerId);
   const base=stats=>stats.primaryBaseDamage??stats.baseDamage;
+  if(id==='runeArrow'||id==='arrowRune'){
+    const runeBefore=before.runic||0;
+    Object.assign(model,{tier:'super',activation:'automatic',action:runeBefore?'升级':'新获得',scope:'翠羽飞矢 · 武器专属能力',note:'穿透路线专属 · 最高 3 阶'});
+    model.rows=[change('符文基础伤害',runeBefore?before.runicBaseDamage??before.runicDamage:null,after.runicBaseDamage??after.runicDamage),change('符文间隔',runeBefore?before.runicInterval:null,after.runicInterval,'秒')];
+    model.summary=runeBefore?`符文伤害 ${pair(before.runicBaseDamage??before.runicDamage,after.runicBaseDamage??after.runicDamage)}，间隔 ${pair(before.runicInterval,after.runicInterval)} 秒。`:`飞矢获得贯穿符文，每 ${num(after.runicInterval)} 秒造成 ${num(after.runicBaseDamage??after.runicDamage)} 伤害。`;
+    if(!owned)model.summary=`获得穿透飞矢；每 ${num(after.runicInterval)} 秒触发 ${num(after.runicBaseDamage??after.runicDamage)} 伤害符文。`;
+    return finish('epic');
+  }
   if(choice.branch) {
-    if(ownerId==='arrow'){
+    if(ownerId==='sword'){
+      model.rows=[change('挥砍基础伤害',base(before),base(after)),change('挥砍角度',before.arc*180/Math.PI,after.arc*180/Math.PI,'°'),change('攻击间隔',before.interval,after.interval,'秒')];
+      model.summary=choice.branch==='sweep'?`伤害 ${pair(base(before),base(after))}；挥砍扩大至 ${num(after.arc*180/Math.PI)}°，清理正面敌群。`:`伤害 ${pair(base(before),base(after))}；每 ${num(after.interval)} 秒重斩，集中处理强敌。`;
+    }else if(ownerId==='arrow'){
       model.rows=[change('单箭最多命中',before.targetLimit,after.targetLimit,'个目标'),fixed('后续单段伤害',`保留上一段的 ${num(after.retention*100)}%`)];
       model.summary=choice.branch==='pierce'?`飞矢最多贯穿 ${after.targetLimit} 个目标，后续每段保留 ${num(after.retention*100)}% 伤害。`:`飞矢向附近目标弹射 ${after.maxBounces} 次，后续每跳保留 ${num(after.retention*100)}% 伤害。`;
     }else if(ownerId==='pulse'){
       model.rows=[change('基础伤害',base(before),base(after)),choice.branch==='echoes'?fixed('追加回波','0.35秒后 · 60%伤害'):change('冲击范围',before.radius,after.radius)];
       model.summary=choice.branch==='echoes'?`伤害 ${pair(base(before),base(after))}；0.35 秒后追加更大回波，造成 60% 伤害。`:`伤害 ${pair(base(before),base(after))}、范围 ${pair(before.radius,after.radius)}；震退并短暂减速。`;
     }else{
-      model.rows=choice.branch==='chain'?[change('最多攻击目标',before.targetLimit,after.targetLimit),fixed('新增两段伤害','基础伤害的 40%')]:[change('单目标基础伤害',base(before),base(after)),fixed('索敌优先级','首领 → 高生命敌人')];
-      model.summary=choice.branch==='chain'?`伤害 ${pair(base(before),base(after))}，连锁 ${before.targetLimit}→${after.targetLimit} 个目标，末两跳为 40% 伤害。`:`集中轰击一个目标，伤害 ${pair(base(before),base(after))}，优先首领与强敌。`;
+      model.rows=choice.branch==='chain'?[change('最多攻击目标',before.targetLimit,after.targetLimit),fixed('后续连锁伤害',`基础伤害的 ${num(after.chainRetention*100)}%`)]:[change('单目标基础伤害',base(before),base(after)),fixed('索敌优先级','首领 → 高生命敌人')];
+      model.summary=choice.branch==='chain'?`伤害 ${pair(base(before),base(after))}，连锁 ${before.targetLimit}→${after.targetLimit} 个目标，后续连锁保留 ${num(after.chainRetention*100)}%。`:`集中轰击一个目标，伤害 ${pair(base(before),base(after))}，优先首领与强敌。`;
     }
     return finish(ownerId==='lightning'?'epic':ownerId==='pulse'?'rare':'uncommon');
   }
@@ -113,8 +119,21 @@ export function presentUpgrade(choice,game) {
     model.rows=[change('后续伤害保留',before.retention*100,after.retention*100,'%')];model.summary=`穿透或弹射的每段伤害保留 ${pair(before.retention*100,after.retention*100)}%。`;
   }else if(id==='orbitRadius'){
     model.rows=[change('环绕半径',before.radius,after.radius)];model.summary=`环刃半径 ${pair(before.radius,after.radius)}，进化扩张同步增强。`;
-  }else if(['arrowPower','orbitPower','pulseMastery','lightningMastery'].includes(id)){
+  }else if(id==='pulseMastery'||id==='lightningMastery'||id==='swordMastery'){
+    model.rows=[change('基础伤害',base(before),base(after)),change('攻击间隔',before.cooldown??before.interval,after.cooldown??after.interval,'秒')];
+    model.summary=`伤害 ${pair(base(before),base(after))}，间隔 ${pair(before.cooldown??before.interval,after.cooldown??after.interval)} 秒${id==='lightningMastery'&&!after.focus?`，目标 ${before.targetLimit}→${after.targetLimit}`:''}。`;
+  }else if(['arrowPower','orbitPower'].includes(id)){
     model.rows=[change('基础伤害',base(before),base(after))];model.summary=`${owner.name}伤害 ${pair(base(before),base(after))}，当前分支与进化继续生效。`;
+  }else if(id==='sword'){
+    model.rows=[change('挥砍基础伤害',owned?base(before):null,base(after)),change('挥砍距离',owned?before.range:null,after.range),change('攻击间隔',owned?before.interval:null,after.interval,'秒')];
+    model.summary=owned?`挥砍伤害 ${pair(base(before),base(after))}，距离 ${pair(before.range,after.range)}；自动朝敌人斩击。`:`自动朝近身敌人挥剑，每次扇形斩击造成 ${num(base(after))} 伤害。`;
+  }else if(id==='arrow'){
+    model.rows=[fixed('主箭基础伤害',num(after.baseDamage)),fixed('发射间隔',`${num(after.interval)} 秒`),fixed('索敌范围',after.range)];
+    model.summary=`自动远程射击，每 ${num(after.interval)} 秒发射 ${num(after.baseDamage)} 伤害飞矢。`;
+  }else if(id==='barrier'){
+    model.rows=[change('护盾容量',owned?before.capacity:null,after.capacity),change('恢复间隔',owned?before.cooldown:null,after.cooldown,'秒'),fixed('最长持续',`${num(after.duration)} 秒`)];
+    model.summary=owned?`护盾 ${pair(before.capacity,after.capacity)}，冷却 ${pair(before.cooldown,after.cooldown)} 秒；受击自动展开。`:`受击自动展开 ${num(after.capacity)} 护盾，持续至多 ${num(after.duration)} 秒；冷却 ${num(after.cooldown)} 秒。`;
+    model.scope='守护屏障 · 自动防护';model.note='触发的一击也受保护 · 最高 3 级';
   }else if(id==='storm'){
     model.rows=[change('基础伤害',base(before),base(after)),change('冷却',before.cooldown,after.cooldown,'秒')];model.summary=`天雷伤害 ${pair(base(before),base(after))}，冷却 ${pair(before.cooldown,after.cooldown)} 秒。`;model.note='手动超级技能 · 最高 3 级';
   }else if(id==='orbit'){
@@ -122,7 +141,7 @@ export function presentUpgrade(choice,game) {
     model.summary=!owned?`${after.count} 枚利刃环绕护身，每次 ${num(base(after))} 伤害并附加流血。`:choice.evolves?`伤害 ${pair(base(before),base(after))}，利刃 ${pair(before.count,after.count)} 枚；每 3 秒扩张收拢。`:`伤害 ${pair(base(before),base(after))}，${before.count!==after.count?`利刃 ${before.count}→${after.count} 枚，`:''}半径 ${pair(before.radius,after.radius)}。`;
     model.note=choice.evolves?'进化形态 · 仍可继续强化':'附加流血 · 基础成长 5 级进化';
   }else if(id==='pulse'){
-    model.rows=[change('基础伤害',owned?base(before):null,base(after)),change('冲击范围',owned?before.radius:null,after.radius),fixed('施放间隔',`${after.cooldown} 秒`)];model.summary=owned?`伤害 ${pair(base(before),base(after))}，范围 ${pair(before.radius,after.radius)}。`:`每 ${after.cooldown} 秒震退周围敌人，造成 ${num(base(after))} 伤害；消耗流血增伤 25%。`;
+    model.rows=[change('基础伤害',owned?base(before):null,base(after)),change('冲击范围',owned?before.radius:null,after.radius),fixed('施放间隔',`${after.cooldown} 秒`)];model.summary=owned?`伤害 ${pair(base(before),base(after))}，范围 ${pair(before.radius,after.radius)}。`:`敌人靠近时震退并造成 ${num(base(after))} 伤害；消耗流血增伤 25%。`;
   }else if(id==='lightning'){
     model.rows=[change('单段基础伤害',owned?base(before):null,base(after)),fixed('连锁目标',`最多 ${after.targetLimit} 个`),fixed('施放间隔',`${after.cooldown} 秒`)];model.summary=owned?`连锁每段伤害 ${pair(base(before),base(after))}，保持最多 ${after.targetLimit} 个目标。`:`每 ${after.cooldown} 秒连锁最多 ${after.targetLimit} 个目标，每段 ${num(base(after))} 伤害并附加感电。`;
   }else model.summary=choice.desc;
@@ -134,8 +153,8 @@ const TYPE_ICONS={weapon:'<path d="m5 19 3-6 8-9 4-1-1 4-9 8-5 4Zm1-8 7 7m-9 3 3
 export function upgradeCardHTML(model) {
   const type={attribute:'属性',weapon:'武器',skill:'技能',resource:'宝藏'}[model.category];
   const level=model.category==='skill'||model.category==='weapon'?model.levelLabel:'';
-  const context=model.category==='attribute'?(model.note.includes('无尽')?'无尽成长':'角色通用'):model.category==='resource'?'资源补给':model.tier==='super'?(model.activation==='manual'?'手动施放':'自动施放'):model.ownerName;
+  const context=model.category==='attribute'?(model.note.includes('无尽')?'无尽成长':'角色通用'):model.category==='resource'?'资源补给':model.category==='weapon'&&model.tier==='super'?'武器专属能力':model.tier==='super'?(model.activation==='manual'?'手动施放':'自动施放'):model.ownerName;
   const summary=String(model.summary??'').split(/(\d+(?:\.\d+)?(?:→\d+(?:\.\d+)?)?%?)/g).map((part,index)=>index%2?`<b>${escape(part)}</b>`:escape(part)).join('');
-  const action=model.category==='attribute'?'加强属性':model.action==='分支'?'确定分支':model.action==='进化'?'完成进化':model.action==='新获得'?(model.category==='weapon'?'获得武器':'学习技能'):model.category==='resource'?'领取宝藏':model.category==='weapon'?'强化武器':'强化技能';
+  const action=model.category==='attribute'?'加强属性':model.action==='分支'?'确定分支':model.action==='进化'?'完成进化':model.action==='新获得'?(model.category==='weapon'?(model.tier==='super'?'获得秘术':'获得武器'):'学习技能'):model.category==='resource'?'领取宝藏':model.category==='weapon'?'强化武器':'强化技能';
   return `<span class="choice-top"><span class="choice-category"><svg viewBox="0 0 24 24" aria-hidden="true">${TYPE_ICONS[model.category]}</svg>${type} · ${escape(model.action)}${model.action==='新获得'?'<em class="choice-tier choice-new" aria-hidden="true">NEW</em>':''}${model.tier==='super'?'<em class="choice-tier">超级</em>':''}</span><span class="choice-quality">${escape(model.quality.name)}</span></span><span class="choice-heading"><span class="upgrade-icon" style="color:${escape(model.color)}" aria-hidden="true">${escape(model.icon)}</span><strong>${escape(model.name)}</strong><span class="choice-level">${escape(level)}</span></span><span class="choice-summary">${summary}</span><span class="select-arrow"><span>${escape(context)}</span><span>${action} <span aria-hidden="true">↗</span></span></span>`;
 }

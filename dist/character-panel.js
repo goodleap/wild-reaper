@@ -72,6 +72,12 @@ function weapons(game) {
       if(s.count>1)rows.push(['副箭伤害',number(s.damage*.6),'secondaryDamage']);
       if(item.branch)rows.push(['最多命中',`${s.targetLimit} 个`,'targetLimit'],['每段伤害保留',percent(s.retention),'retention']);
       if(item.branch==='ricochet')rows.push(['弹射次数',number(s.maxBounces),'bounces'],['弹射范围','150','chainRange']);
+      if(s.runic){rows.push(['符文穿击伤害',number(s.runicDamage),'runicDamage'],['符文触发间隔',seconds(s.runicInterval),'runicInterval']);notes.push('符文穿击：飞矢专属能力，自动贯穿沿途敌人；卸下飞矢时停用');}
+    }else if(item.id==='sword') {
+      rows.push(['挥砍伤害',number(s.damage),'damage'],['攻击间隔',seconds(s.interval),'interval'],['挥砍距离',number(s.range),'range'],['挥砍角度',`${number(s.arc*180/Math.PI)}°`,'arc']);
+      notes.push('自动朝范围内敌人挥砍；移动方向不限制攻击方向');
+      if(item.branch==='heavy')notes.push('重斩集中处理强敌，攻击节奏更慢');
+      else if(item.branch==='sweep')notes.push('横扫覆盖更宽的敌群');
     }else if(item.id==='orbit') {
       rows.push(['单次伤害',number(s.damage),'damage'],['同敌命中间隔',seconds(s.hitInterval),'interval'],['刃数',number(s.count),'count'],['环绕半径',item.evolved?`${number(s.radius)}—${number(s.radius+55)}`:number(s.radius),'range'],['旋转一周',seconds(Math.PI*2/s.rotationSpeed),'rotation']);
       notes.push(`流血：每 ${seconds(STATUS_RULES.bleedInterval)} 造成 ${number(scalePlayerDamage(game,STATUS_RULES.bleedDamage,{weaponId:'orbit'}))} 伤害，持续 ${seconds(STATUS_RULES.bleedDuration)}`);
@@ -85,40 +91,51 @@ function weapons(game) {
 }
 function skills(game) {
   const items=game.build.getSkillLoadout();
-  return summary('伤害为当前每次命中或每次持续伤害；已计入角色攻击与增益。')+(items.length?items.map(item=>{
-    const s=skillStats(game,item.id)??getSuperSkillStats(item.id,item.baseRank),rows=[],notes=[];
-    if(!s)return '';
-    const superSkill=!['storm','pulse','lightning'].includes(item.id);
+  const groups={manual:[],automatic:[],super:[]};
+  for(const item of items){
+    const s=skillStats(game,item.id)??getSuperSkillStats(item.id,item.baseRank,item.branch),rows=[],notes=[];
+    if(!s)continue;
+    const superSkill=item.tier==='super'&&item.id!=='storm';
     const damage=superSkill?scalePlayerDamage(game,s.damage,{skillId:item.id}):s.primaryDamage??s.damage;
-    const damageLabel={miasma:'每跳伤害',vortex:'每跳伤害',meteor:'每次星陨伤害',swords:'单剑伤害',runes:'单次命中伤害'}[item.id]||'单次伤害';
-    rows.push([damageLabel,number(damage),'damage'],['冷却',seconds(s.cooldown),'cooldown']);
-    if(item.id==='storm') {
+    const damageLabel={domain:'每跳伤害',vortex:'每跳伤害',meteor:'每次星陨伤害',swords:'单剑伤害'}[item.id]||'单次伤害';
+    if(item.id!=='barrier')rows.push([damageLabel,number(damage),'damage']);
+    rows.push(['冷却',seconds(s.cooldown),'cooldown']);
+    if(item.id==='barrier') {
+      const barrier=game.barrier,state=barrier?.active?'保护中':barrier?.ready?'就绪待命':`恢复中 · ${seconds(barrier?.cooldown??0)}`;
+      rows.push(['护盾容量',number(s.capacity),'capacity'],['最长持续',seconds(s.duration),'duration'],['当前状态',state,'barrierState']);
+      if(barrier?.active)rows.push(['剩余护盾',number(barrier.remaining),'remainingShield'],['剩余持续',seconds(barrier.life),'remainingDuration']);
+      notes.push('受到伤害时自动展开，触发的第一击也受保护；伤害先经防御减免，再消耗护盾');
+      if(game.relics?.has?.('leafWard'))notes.push('铁叶护符增幅已计入护盾容量与冷却');
+    }else if(item.id==='storm') {
       rows.push(['剩余冷却',seconds(game.player.skillCooldown),'remainingCooldown'],['攻击范围','屏内可攻击目标','range']);
-      notes.push(`感电持续 ${seconds(STATUS_RULES.shockDuration)}；飞矢或环刃命中可触发传导`);
+      notes.push(`感电持续 ${seconds(STATUS_RULES.shockDuration)}；武器命中可触发传导`);
     }else if(item.id==='pulse') {
       rows.push(['冲击半径',number(s.radius),'range'],['击退强度',number(s.knockback),'knockback']);
-      notes.push('仅攻击地面单位；消耗流血时伤害增加 25%');
+      notes.push('有可攻击地面敌人靠近时施放；消耗流血时伤害增加 25%');
       if(s.echo)rows.push(['追加回波伤害',number(s.damage*.6),'echoDamage'],['回波半径',number(s.radius*1.2),'echoRange']);
       if(s.control)notes.push('普通敌人减速 35%，持续 1.1 秒');
     }else if(item.id==='lightning') {
       rows.push(['索敌范围',number(s.range),'range'],['最多目标',number(s.focus?1:s.targetLimit),'targetLimit']);
       if(!s.focus)rows.push(['跳跃范围',number(s.chainRange),'chainRange']);
-      if(!s.focus&&s.targetLimit>3)rows.push(['最后两跳伤害',number(s.damage*.4),'secondaryDamage']);
+      if(!s.focus&&s.targetLimit>3)rows.push(['后续连锁伤害',number(s.damage*s.chainRetention),'secondaryDamage']);
       notes.push(s.focus?'优先攻击 Boss 与高生命目标':`附加 ${seconds(STATUS_RULES.shockDuration)} 感电`);
     }else {
-      rows.push(['索敌范围',number(item.id==='runes'?s.range:420),'range']);
+      rows.push(['索敌范围',number(s.range??420),'range']);
       if(s.radius)rows.push(['作用半径',number(s.radius),'radius']);
       if(s.impactDamage)rows.push(['初次爆发伤害',number(scalePlayerDamage(game,s.impactDamage,{skillId:item.id})),'impactDamage']);
       if(s.duration)rows.push(['持续时间',seconds(s.duration),'duration']);
       if(s.interval)rows.push([item.id==='swords'?'出剑间隔':'伤害间隔',seconds(s.interval),'interval']);
-      if(s.count)rows.push([{meteor:'每轮星陨',swords:'每轮灵剑',runes:'射线数'}[item.id]||'数量',number(s.count),'count']);
-      if(s.root)notes.push(`定身普通地面敌人 ${seconds(s.root)}，不束缚 Boss`);
+      if(s.count)rows.push([{meteor:'每轮星陨',swords:'每轮灵剑'}[item.id]||'数量',number(s.count),'count']);
+      if(s.root)notes.push(`每次伤害束缚普通地面敌人 ${seconds(s.root)}，强敌受到减速`);
+      if(item.id==='domain'&&s.slow)notes.push(`领域减速 ${percent(s.slow)}`);
+      if(item.id==='domain'&&s.linger)notes.push(`离开后侵蚀持续 ${seconds(s.linger)}`);
       if(s.pull)notes.push('持续牵引普通敌人，Boss 不受牵引');
     }
     if(item.id==='storm'||item.id==='lightning')notes.push(`感电传导伤害 ${number(scalePlayerDamage(game,STATUS_RULES.conductionDamage,{skillId:item.id}))}，范围 ${STATUS_RULES.conductionRange}`);
     const kind=`${item.activation==='manual'?'手动':'自动'}${item.tier==='super'?' · 超级技能':'技能'}`;
-    return card(`${item.icon} ${item.name}`,tags(item.baseName!==item.name?[item.baseName]:[])+grid(rows)+enhancements(item)+sources('附加效果',notes),{id:item.id,meta:ownership(item,kind)});
-  }).join(''):empty('尚未掌握技能。'));
+    groups[item.activation==='manual'?'manual':item.tier==='super'?'super':'automatic'].push(card(`${item.icon} ${item.name}`,tags(item.baseName!==item.name?[item.baseName]:[])+grid(rows)+enhancements(item)+sources('附加效果',notes),{id:item.id,meta:ownership(item,kind)}));
+  }
+  return summary('伤害已计入角色攻击与当前增益；防护自动触发，不增加操作。')+(items.length?Object.entries(groups).filter(([,cards])=>cards.length).map(([id,cards])=>section({manual:'手动技能',automatic:'自动技能',super:'自动超级技能'}[id],cards.join(''))).join(''):empty('尚未掌握技能。'));
 }
 function status(game) {
   const active=[],adventure=game.adventure,stats=resolveCharacterStats(game),move=movement(game,stats),relics=game.relics;
@@ -127,7 +144,7 @@ function status(game) {
   if((relics?.damageMultiplier?.()??1)>1)active.push(card('赤心增幅',grid([['伤害加成',bonus(relics.damageMultiplier()-1)]]),{meta:'来源：赤心 · 当前生命低于 40%'}));
   if(move.modifier<1)active.push(card('地形减速',grid([['当前移速',number(move.speed)],['地形速度系数',`${number(move.modifier)} 倍`]]),{meta:'离开影响区域后恢复'}));
   if(relics?.wardAmount>0)active.push(card('守护护罩',grid([['可抵消伤害',number(relics.wardAmount)]]),{meta:'下一次受击时消耗'}));
-  if(relics?.has?.('leafWard'))active.push(card('铁叶护罩',grid([['护罩状态',relics.shieldReady?'已就绪':`恢复中 · ${seconds(relics.shieldCooldown)}`],['可抵消伤害',number(RELIC_RULES.shieldAbsorption)]]),{meta:'来源：铁叶护符'}));
+  if(game.barrier?.active)active.push(card('守护屏障',grid([['剩余护盾',number(game.barrier.remaining)],['剩余持续',seconds(game.barrier.life)]]),{meta:'自动防护 · 与技能共用同一护盾'}));
   const ally=game.companions?.active;
   const helper=ally?card(ally.name,grid([['助战剩余',seconds(ally.remaining)],['助战技能',ally.kind==='warden'?'高级地震':'高级雷电']]),{meta:'解救的伙伴'}):empty('当前没有同行伙伴。');
   const permanent=game.rescuePower>0?card('营救援助',grid([['累计援助',`${game.rescuePower} 次`],['角色攻击加成',bonus(game.rescuePower*.08)]]),{meta:'本局持续生效，已计入角色攻击'}):'';

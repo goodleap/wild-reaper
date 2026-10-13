@@ -10,6 +10,8 @@ let seed=423961;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
+  // Preserve arrow fixtures while excluding unrelated default-sword damage.
+  g.levels.arrow=1;g.build.setEquipped('sword',false);
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   // Pressure phases would otherwise shorten the suppressed wave timer.
@@ -41,10 +43,11 @@ function travel(g) {
 
 assert.deepEqual(HEROES.map(h=>h.id),['traveler']);
 assert.deepEqual(COMPANIONS.map(h=>h.id).sort(),['stormcaller','warden']);
-const original=arena({hero:'stormcaller'});
+const original=new Game({hero:'stormcaller',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false});
 assert.equal(original.hero.id,'traveler');assert.equal(original.player.heroId,'traveler');
 assert.equal(original.player.hp,100);assert.equal(original.player.speed,220);assert.equal(original.player.skillCooldownMax,15);
-assert(Object.values(original.levels).every(level=>level===0));assert.equal(original.rescuePower,0);
+assert.equal(original.levels.sword,1);assert.equal(original.levels.arrow,0);
+assert(Object.entries(original.levels).every(([id,level])=>level===(id==='sword'?1:0)));assert.equal(original.rescuePower,0);
 assert.equal(original.companions.active,null);assert.equal(original.companions.camp,null);
 
 const access=arena(),camp=access.companions.spawn('stormcaller',350,19.8);

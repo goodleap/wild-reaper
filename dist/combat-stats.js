@@ -54,12 +54,23 @@ export function scalePlayerDamage(game,base,{weaponId,skillId}={}) {
 
 export function weaponStats(game,id) {
   const equipped=game.build?.isEquipped?.(id)??(id==='arrow'||rank(game,id)>0);
+  if(id==='sword') {
+    const level=Math.min(5,rank(game,id)),branch=game.build?.getWeapon?.(id)?.branch??game.branches?.sword??null;
+    const heavy=branch==='heavy',sweep=branch==='sweep';
+    const baseDamage=(46+level*8)*(heavy?1.85:1)*(1+effectTotal(game,'swordMastery','baseDamageBonus'));
+    return {id,level,equipped:equipped&&level>0,branch,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
+      interval:(.72-Math.max(0,level-1)*.025)*(heavy?1.38:1)-effectTotal(game,'swordMastery','intervalReduction'),
+      range:88+level*4+(sweep?18:0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,duration:.28,knockback:heavy?14:5};
+  }
   if(id==='arrow') {
     const branch=game.build?.getWeapon?.(id)?.branch??game.branches?.arrow??null;
     const reach=branch?effectTotal(game,'arrowReach','maxTargets'):0;
     const baseDamage=ATTACK_DEFAULTS.arrowDamage*(1+effectTotal(game,'arrowPower','baseDamageBonus'));
     const fireRate=(1+effectTotal(game,'rapid','attackRateBonus'))*(game.adventure?.fireRateMultiplier()??1);
+    const runic=branch==='pierce'?boundedRank(game,'arrowRune',3):0;
+    const runicBaseDamage=runic?(96+(runic-1)*30)*(1+effectTotal(game,'arrowPower','baseDamageBonus')):0;
     return {id,equipped,branch,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
+      runic,runicBaseDamage,runicDamage:scalePlayerDamage(game,runicBaseDamage,{weaponId:id}),runicInterval:4.2-Math.max(0,runic-1)*.3,
       interval:ATTACK_DEFAULTS.arrowInterval/fireRate,range:ATTACK_DEFAULTS.arrowRange,
       speed:ATTACK_DEFAULTS.arrowSpeed,life:ATTACK_DEFAULTS.arrowLife,
       count:Math.min(ATTACK_DEFAULTS.maxArrowProjectiles,1+effectTotal(game,'multishot','projectileCount')),
@@ -79,6 +90,12 @@ export function weaponStats(game,id) {
 
 export function skillStats(game,id) {
   const record=game.build?.getSkill?.(id),branch=record?.branch??game.branches?.[id]??null;
+  if(id==='barrier') {
+    const level=boundedRank(game,id,3),bonus=game.relics?.has?.('leafWard')===true;
+    const healthFraction=.3+Math.max(0,level-1)*.075;
+    return {id,level,owned:level>0,automatic:true,capacity:level>0?game.player.maxHp*healthFraction*(bonus?1.15:1):0,
+      healthFraction:healthFraction*(bonus?1.15:1),cooldown:(15-Math.max(0,level-1)*1.5)*(bonus?.85:1),duration:2+Math.max(0,level-1)*.3};
+  }
   if(id==='storm') {
     const upgrades=boundedRank(game,'storm',2),baseDamage=160*(1+effectTotal(game,'storm','baseDamageBonus'));
     return {id,level:1+upgrades,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),cooldown:game.debug?0:game.hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction')),manual:true,super:true};
@@ -87,7 +104,7 @@ export function skillStats(game,id) {
     const level=Math.min(5,rank(game,id)),evolved=!!game.evolutions?.pulse,control=evolved&&branch==='control';
     const baseDamage=(40+level*10)*(1+effectTotal(game,'pulseMastery','baseDamageBonus'));
     return {id,level,owned:level>0,branch,evolved,control,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),
-      cooldown:2.6,radius:control?210:100+level*10,knockback:control?45:20,echo:evolved&&branch==='echoes'};
+      cooldown:2.6-effectTotal(game,'pulseMastery','cooldownReduction'),radius:control?230:132+level*8,knockback:control?48:30,controlDuration:1.1,echo:evolved&&branch==='echoes'};
   }
   if(id==='lightning') {
     const level=Math.min(5,rank(game,id)),evolved=!!game.evolutions?.lightning,focus=evolved&&branch==='focus';
@@ -95,7 +112,8 @@ export function skillStats(game,id) {
     const primaryBaseDamage=baseDamage*(focus?2.5:1);
     return {id,level,owned:level>0,branch,evolved,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),
       primaryBaseDamage,primaryDamage:scalePlayerDamage(game,primaryBaseDamage,{skillId:id}),
-      cooldown:2.8,range:360,chainRange:190,targetLimit:evolved&&branch==='chain'?5:3,focus};
+      cooldown:2.8-effectTotal(game,'lightningMastery','cooldownReduction'),range:360,chainRange:evolved&&branch==='chain'?220:190,
+      targetLimit:evolved&&branch==='chain'?7+effectTotal(game,'lightningMastery','chainTargets'):3,chainRetention:.85,focus};
   }
   return null;
 }

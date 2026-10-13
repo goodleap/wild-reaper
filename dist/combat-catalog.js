@@ -16,18 +16,18 @@ export const ATTRIBUTE_DEFS=freeze({
   magnet:{id:'magnet',name:'拾取',scope:'character'}
 });
 export const WEAPON_DEFS=freeze({
-  arrow:{id:'arrow',name:'翠羽飞矢',icon:'➶',color:'#a7dab7',category:'weapon',binding:'weapon',activation:'automatic',tier:'regular',source:'innate',initialRank:1,maxBaseRank:1,attackId:'arrow'},
+  sword:{id:'sword',name:'长剑',icon:'⚔',color:'#efdcad',category:'weapon',binding:'weapon',activation:'automatic',tier:'regular',source:'innate',initialRank:1,maxBaseRank:5,attackId:'sword'},
+  arrow:{id:'arrow',name:'翠羽飞矢',icon:'➶',color:'#a7dab7',category:'weapon',binding:'weapon',activation:'automatic',tier:'regular',source:'crystal',initialRank:0,maxBaseRank:1,attackId:'arrow'},
   orbit:{id:'orbit',name:'环刃',icon:'◈',color:'#f0d28a',category:'weapon',binding:'weapon',activation:'automatic',tier:'regular',source:'crystal',initialRank:0,maxBaseRank:5,attackId:'orbit'}
 });
 export const SUPER_SKILL_DEFS=freeze([
-  {id:'thorns',name:'荆棘缚阵',desc:'在敌群脚下召出荆棘，造成范围伤害并短暂定身普通敌人',icon:'♧',color:'#a9d888',source:'region',regionId:'forest',rewardTier:'区域超级技能'},
-  {id:'miasma',name:'瘴雾侵蚀',desc:'在敌群脚下爆发瘴气，留下持续 4 秒的侵蚀雾，每半秒造成范围伤害',icon:'♨',color:'#cea1da',source:'region',regionId:'marsh',rewardTier:'区域超级技能'},
-  {id:'runes',name:'符文穿击',desc:'朝敌人展开三道符文射线，贯穿沿途目标，同次攻击不重复命中',icon:'✧',color:'#89ddd8',source:'region',regionId:'ruins',rewardTier:'区域超级技能'},
+  {id:'domain',name:'荒野领域',desc:'选择荆棘束缚或瘴雾侵蚀，形成持续作用的领域',icon:'♧',color:'#a9d888',source:'region',regionId:'forest',rewardTier:'区域超级技能'},
   {id:'meteor',name:'星陨',desc:'标记数处敌群位置，短暂蓄能后落下星陨，造成高额范围伤害',icon:'✦',color:'#f1bc79',source:'castle',regionId:null,rewardTier:'城堡超级技能'},
   {id:'swords',name:'王庭剑阵',desc:'连续唤出追击灵剑，优先攻击附近首领和强敌',icon:'⚔',color:'#f0dda3',source:'castle',regionId:null,rewardTier:'城堡超级技能'},
   {id:'vortex',name:'虚空漩涡',desc:'生成持续漩涡，牵引普通敌人并反复造成伤害；首领不受牵引',icon:'◉',color:'#b7a3ed',source:'castle',regionId:null,rewardTier:'城堡超级技能'}
 ].map(def=>({...def,category:'skill',ownerId:def.id,binding:'character',activation:'automatic',tier:'super',automatic:true,initialRank:0,maxBaseRank:3,maxLevel:3})));
 export const SKILL_DEFS=freeze({
+  barrier:{id:'barrier',name:'守护屏障',icon:'⬡',color:'#b7e3e5',category:'skill',binding:'character',activation:'automatic',tier:'regular',source:'crystal',initialRank:0,maxBaseRank:3},
   pulse:{id:'pulse',name:'大地回响',icon:'◎',color:'#80d5bd',category:'skill',binding:'character',activation:'automatic',tier:'regular',source:'crystal',initialRank:0,maxBaseRank:5},
   lightning:{id:'lightning',name:'唤雷',icon:'ϟ',color:'#b6bafa',category:'skill',binding:'character',activation:'automatic',tier:'regular',source:'crystal',initialRank:0,maxBaseRank:5},
   storm:{id:'storm',name:'天雷轰击',icon:'ϟ',color:'#d4e7ff',category:'skill',binding:'character',activation:'manual',tier:'super',source:'innate',initialRank:1,maxBaseRank:3},
@@ -35,10 +35,13 @@ export const SKILL_DEFS=freeze({
 });
 const owned=id=>({kind:'owned',id});
 const rank=(id,min)=>({kind:'rank',id,min});
-const route=id=>({kind:'branch',id});
+const route=(id,value)=>({kind:'branch',id,...(value?{value}:{})});
 const effect=(stat,value,operation='add')=>({stat,value,operation});
 const upgrade=(def)=>({requires:[],effects:[],...def});
 export const UPGRADE_DEFS=freeze([
+  upgrade({id:'sword',name:'长剑',desc:'提高挥砍伤害、距离与攻击频率',kind:'武器强化',icon:'⚔',color:'#efdcad',category:'weapon',ownerId:'sword',upgradeKind:'rank',cap:5,branchAtRank:4}),
+  upgrade({id:'arrow',name:'翠羽飞矢',desc:'自动射出飞矢，提供远程持续攻击',kind:'获得武器',icon:'➶',color:'#a7dab7',category:'weapon',ownerId:'arrow',upgradeKind:'rank',cap:1}),
+  upgrade({id:'barrier',name:'守护屏障',desc:'受击自动展开护盾，吸收首击与随后伤害；就绪时持续待命',kind:'学习技能',icon:'⬡',color:'#b7e3e5',category:'skill',ownerId:'barrier',upgradeKind:'rank',cap:3}),
   upgrade({id:'power',name:'锋芒',desc:'角色通用伤害加成提高 25%，作用于武器和独立技能',kind:'属性强化',icon:'✦',color:'#e6be73',category:'attribute',ownerId:'power',upgradeKind:'rank',cap:6,effects:[effect('damageBonus',.25)]}),
   upgrade({id:'rapid',name:'疾风连射',desc:'翠羽飞矢攻击速度提升 15%',kind:'武器强化',icon:'»',color:'#89d8ad',category:'weapon',ownerId:'arrow',upgradeKind:'modifier',cap:5,requires:[owned('arrow')],effects:[effect('attackRateBonus',.15)]}),
   upgrade({id:'multishot',name:'分裂箭',desc:'保留全伤主箭，每轮增加一支 60% 伤害的副箭',kind:'武器强化',icon:'⋔',color:'#a7dab7',category:'weapon',ownerId:'arrow',upgradeKind:'modifier',cap:3,requires:[owned('arrow')],effects:[effect('projectileCount',1)]}),
@@ -55,8 +58,10 @@ export const UPGRADE_DEFS=freeze([
   upgrade({id:'arrowReach',name:'贯流延伸',desc:'穿透最多命中目标或弹射次数增加 1',kind:'分支强化',icon:'⋔',color:'#abdca3',category:'weapon',ownerId:'arrow',upgradeKind:'modifier',cap:1,requires:[owned('arrow'),route('arrow')],effects:[effect('maxTargets',1)]}),
   upgrade({id:'orbitPower',name:'裂刃淬锋',desc:'仅环刃基础伤害加成提高 15%，进化形态持续生效',kind:'进化后强化',icon:'◈',color:'#f0d28a',category:'weapon',ownerId:'orbit',upgradeKind:'modifier',cap:2,requires:[owned('orbit'),rank('orbit',5)],effects:[effect('baseDamageBonus',.15)]}),
   upgrade({id:'orbitRadius',name:'环域延展',desc:'环刃环绕半径增加 8，进化扩张同步生效',kind:'进化后强化',icon:'◎',color:'#f0d28a',category:'weapon',ownerId:'orbit',upgradeKind:'modifier',cap:2,requires:[owned('orbit'),rank('orbit',5)],effects:[effect('radius',8)]}),
-  upgrade({id:'pulseMastery',name:'地脉精研',desc:'仅大地回响及所选分支的伤害加成提高 12%',kind:'技能强化',icon:'◎',color:'#80d5bd',category:'skill',ownerId:'pulse',upgradeKind:'modifier',cap:2,requires:[owned('pulse'),rank('pulse',5),route('pulse')],effects:[effect('baseDamageBonus',.12)]}),
-  upgrade({id:'lightningMastery',name:'雷鸣精研',desc:'仅唤雷及所选分支的伤害加成提高 12%',kind:'技能强化',icon:'ϟ',color:'#b6bafa',category:'skill',ownerId:'lightning',upgradeKind:'modifier',cap:2,requires:[owned('lightning'),rank('lightning',5),route('lightning')],effects:[effect('baseDamageBonus',.12)]}),
+  upgrade({id:'swordMastery',name:'剑术精研',desc:'挥砍伤害增加 12%，攻击间隔缩短 0.05 秒',kind:'武器强化',icon:'⚔',color:'#efdcad',category:'weapon',ownerId:'sword',upgradeKind:'modifier',cap:2,requires:[owned('sword'),rank('sword',5),route('sword')],effects:[effect('baseDamageBonus',.12),effect('intervalReduction',.05)]}),
+  upgrade({id:'arrowRune',name:'符文穿击',desc:'提高符文贯穿伤害，并缩短触发间隔；仅穿透飞矢生效',kind:'武器技能强化',icon:'✧',color:'#89ddd8',category:'weapon',ownerId:'arrow',upgradeKind:'modifier',tier:'super',cap:3,requires:[owned('arrow'),rank('arrowRune',1),route('arrow','pierce')]}),
+  upgrade({id:'pulseMastery',name:'地脉精研',desc:'震波伤害增加 12%，冷却缩短 0.18 秒',kind:'技能强化',icon:'◎',color:'#80d5bd',category:'skill',ownerId:'pulse',upgradeKind:'modifier',cap:2,requires:[owned('pulse'),rank('pulse',5),route('pulse')],effects:[effect('baseDamageBonus',.12),effect('cooldownReduction',.18)]}),
+  upgrade({id:'lightningMastery',name:'雷鸣精研',desc:'唤雷伤害增加 12%，冷却缩短 0.15 秒；连锁分支多追击一个目标',kind:'技能强化',icon:'ϟ',color:'#b6bafa',category:'skill',ownerId:'lightning',upgradeKind:'modifier',cap:2,requires:[owned('lightning'),rank('lightning',5),route('lightning')],effects:[effect('baseDamageBonus',.12),effect('cooldownReduction',.15),effect('chainTargets',1)]}),
   upgrade({id:'storm',name:'天雷轰击',desc:'天雷基础伤害加成提高 15%，基础冷却缩短 10%',kind:'超级技能强化',icon:'ϟ',color:'#d4e7ff',category:'skill',ownerId:'storm',upgradeKind:'rank',tier:'super',activation:'manual',cap:2,requires:[owned('storm')],effects:[effect('baseDamageBonus',.15),effect('cooldownReduction',.1)]})
 ]);
 export const ENDLESS_UPGRADES=freeze([
@@ -67,16 +72,17 @@ export const ENDLESS_UPGRADES=freeze([
 ]);
 export const LEVEL_CAPS=freeze(Object.fromEntries(UPGRADE_DEFS.map(def=>[def.id,def.cap])));
 export const EVOLUTIONS=freeze({
+  sword:{name:'剑术精通',desc:'选择横扫或重斩，改变长剑挥砍方式',category:'weapon',ownerId:'sword',upgradeKind:'evolution'},
   orbit:{name:'裂风环刃',desc:'每 3 秒向外扩张再收拢，扩大环刃的切割范围',category:'weapon',ownerId:'orbit',upgradeKind:'evolution',requires:[rank('orbit',5)]},
   pulse:{name:'双重回响',desc:'冲击波后在原位置追加一道范围更大的回波，造成 60% 伤害',category:'skill',ownerId:'pulse',upgradeKind:'evolution'},
-  lightning:{name:'雷暴链',desc:'最多追击 5 个目标，新增的两次跳跃造成 40% 伤害',category:'skill',ownerId:'lightning',upgradeKind:'evolution'}
+  lightning:{name:'雷暴链',desc:'最多追击 7 个目标，新增跳跃保留 85% 伤害',category:'skill',ownerId:'lightning',upgradeKind:'evolution'}
 });
 const UPGRADE_INDEX=new Map([...UPGRADE_DEFS,...ENDLESS_UPGRADES,...SUPER_SKILL_DEFS.map(def=>({...def,id:`super:${def.id}`,upgradeKind:'rank',cap:3,requires:[owned(def.id)]}))].map(def=>[def.id,freeze(def)]));
 export const getUpgradeDefinition=id=>UPGRADE_INDEX.get(id)||null;
 const requirements={
   owned:(build,rule)=>(build.getWeapon(rule.id)||build.getSkill(rule.id))?.baseRank>0,
   rank:(build,rule)=>build.getRank(rule.id)>=rule.min,
-  branch:(build,rule)=>!!(build.getWeapon(rule.id)||build.getSkill(rule.id))?.branch
+  branch:(build,rule)=>{const branch=(build.getWeapon(rule.id)||build.getSkill(rule.id))?.branch;return rule.value?branch===rule.value:!!branch;}
 };
 export const meetsUpgradeRequirements=(build,def)=>(def.requires||[]).every(rule=>requirements[rule.kind]?.(build,rule)===true);
 export function canTakeUpgrade(build,id) {

@@ -10,6 +10,7 @@ Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 const emptyTerrain=()=>new Terrain({obstacles:[]});
 function arena({terrain=emptyTerrain(),width=1100,height=650}={}) {
   const g=new Game({terrain,adventure:false});
+  g.levels.arrow=1;g.build.setEquipped('sword',false);g._refreshWeapons();
   g.enemies=[];g.gems=[];g.events=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;
   g.viewWidth=width;g.viewHeight=height;

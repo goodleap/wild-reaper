@@ -28,7 +28,7 @@ export class CombatBuild {
       if(def.upgradeKind==='modifier')this._owner(def).modifiers[def.id]=0;
       view(this.levels,def.id,()=>this.getRank(def.id),value=>this._setRank(def,natural(value)));
     }
-    for(const id of ['arrow','pulse','lightning'])view(this.branches,id,()=>this._record(id).branch,value=>{
+    for(const id of ['sword','arrow','pulse','lightning','domain'])view(this.branches,id,()=>this._record(id).branch,value=>{
       if(value===null||branchDefinition(id,value))this._record(id).branch=value;
     });
     for(const id of Object.keys(EVOLUTIONS))view(this.evolutions,id,()=>this._record(id).evolved,value=>{this._record(id).evolved=!!value;});
@@ -70,6 +70,20 @@ export class CombatBuild {
     if(id!=='arrow')this._record(id).baseRank=5;
     return true;
   }
+  awardDomain(branch) {
+    if(!branchDefinition('domain',branch))return false;
+    const item=this.skills.domain;
+    if(item.baseRank>=3||(item.baseRank>0&&item.branch&&item.branch!==branch))return false;
+    item.branch=branch;item.baseRank++;item.equipped=true;
+    return true;
+  }
+  awardRuneArrow() {
+    const item=this.weapons.arrow;
+    if(item.branch==='ricochet'||item.modifiers.arrowRune>=3)return false;
+    if(!item.baseRank){item.baseRank=1;item.equipped=true;}
+    item.branch='pierce';item.modifiers.arrowRune++;
+    return true;
+  }
   isEquipped(id){const item=this.weapons[id];return !!(item?.baseRank>0&&item.equipped);}
   setEquipped(id,equipped) {
     const item=this.weapons[id];
@@ -92,7 +106,11 @@ export class CombatBuild {
     if(!choice?.id)return null;
     const next=CombatBuild.fromSnapshot(this.serialize());
     const parts=choice.id.split(':');
-    if(parts[0]==='branch') {
+    if(choice.domainBranch) {
+      if(!next.awardDomain(choice.domainBranch))return null;
+    }else if(choice.id==='runeArrow') {
+      if(!next.awardRuneArrow())return null;
+    }else if(parts[0]==='branch') {
       if(!next.selectBranch(choice.ownerId||choice.weaponId||parts[1],choice.branch||parts[2]))return null;
     }else if(SUPER_SKILL_DEFS.some(def=>def.id===choice.id)) {
       if(next.superLevels[choice.id]>=SKILL_DEFS[choice.id].maxBaseRank)return null;
@@ -107,10 +125,21 @@ export class CombatBuild {
   // HP and world events belong to their respective future persistence layer.
   serialize() {
     const save=records=>Object.fromEntries(Object.values(records).map(item=>[item.id,{baseRank:item.baseRank,modifiers:{...item.modifiers},branch:item.branch,evolved:item.evolved,equipped:item.equipped}]));
-    return {version:1,progressionTier:this.progressionTier,rescuePower:this.rescuePower,attributes:{...this.attributes},weapons:save(this.weapons),skills:save(this.skills)};
+    return {version:2,progressionTier:this.progressionTier,rescuePower:this.rescuePower,attributes:{...this.attributes},weapons:save(this.weapons),skills:save(this.skills)};
   }
   static fromSnapshot(snapshot) {
-    if(!snapshot||snapshot.version!==1)throw new TypeError('Unsupported combat build snapshot');
+    if(!snapshot||![1,2].includes(snapshot.version))throw new TypeError('Unsupported combat build snapshot');
+    if(snapshot.version===1){
+      snapshot=structuredClone(snapshot);
+      const oldBinding=snapshot.skills?.thorns,oldErosion=snapshot.skills?.miasma;
+      const oldDomain=(oldErosion?.baseRank||0)>(oldBinding?.baseRank||0)?oldErosion:oldBinding;
+      if(oldDomain?.baseRank&&!snapshot.skills.domain)snapshot.skills.domain={...oldDomain,branch:oldDomain===oldErosion?'erosion':'binding',evolved:false};
+      const runic=snapshot.skills?.runes?.baseRank||0,arrow=snapshot.weapons?.arrow;
+      if(runic&&arrow){
+        if(arrow.branch==='ricochet')arrow.modifiers.arrowPower=Math.min(3,(arrow.modifiers.arrowPower||0)+runic);
+        else {arrow.baseRank=1;arrow.branch='pierce';arrow.modifiers.arrowRune=Math.min(3,runic);}
+      }
+    }
     const build=new CombatBuild();
     const readNumber=(value,label,min=0,max=Number.MAX_SAFE_INTEGER)=>{
       if(!Number.isSafeInteger(value)||value<min||value>max)throw new RangeError(`Invalid combat build ${label}`);
@@ -134,7 +163,7 @@ export class CombatBuild {
     for(const def of ALL_UPGRADES)if(def.category==='attribute'&&build.getRank(def.id)&&!meetsUpgradeRequirements(build,def))throw new RangeError(`Unavailable combat build attribute: ${def.id}`);
     for(const item of [...Object.values(build.weapons),...Object.values(build.skills)]) {
       if(item.branch) {
-        const ready=item.id==='arrow'?1+build.getRank('rapid')+build.getRank('multishot')>=4:item.baseRank>=5;
+        const ready=item.id==='domain'?item.baseRank>=1:item.id==='arrow'?build.getRank('arrowRune')>0||1+build.getRank('rapid')+build.getRank('multishot')>=4:item.baseRank>=5;
         if(!item.baseRank||!ready)throw new RangeError(`Untrained combat build branch: ${item.id}`);
       }
       if(item.evolved&&!build._canEvolve(item.id))throw new RangeError(`Invalid combat build evolution: ${item.id}`);

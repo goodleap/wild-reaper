@@ -2,6 +2,7 @@ import { CombatBuild } from './combat-build.js';
 import { CombatAttacks, circleImpact, obstacleImpact } from './combat-attacks.js';
 import { CombatResolution } from './combat-resolution.js';
 import { CombatProgression } from './combat-progression.js';
+import { GuardianBarrier } from './guardian-barrier.js';
 import { resolveCharacterStats, upgradeEffectTotal } from './combat-stats.js';
 import { EVOLUTIONS } from './combat-catalog.js';
 export { EVOLUTIONS } from './combat-catalog.js';
@@ -94,7 +95,7 @@ export class Game {
     this.environment=environment?new Environment(this):null;
     // Natural water is fixed before smaller supplies choose their habitat.
     this.adventure=adventure?new Adventure(this):null;
-    this.relics=new Relics(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
+    this.relics=new Relics(this);this.barrier=new GuardianBarrier(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
     this.companions=new Companions(this,{generation:companions});
     this.superSkills=new SuperSkills(this);this.progression=new CombatProgression(this,{costForTier:crystalCost});this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
     this.settlements??=new Settlements(this,{generation:settlements});
@@ -431,7 +432,7 @@ export class Game {
     // Clear only transient attacks. Persistent sites and surviving objective
     // guards remain in a suspended per-region snapshot for return journeys.
     for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
-    this.superSkills.clearScene();this.regions.saveWorld();
+    this.superSkills.clearScene();this.barrier.clearScene();this.regions.saveWorld();
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];
     this.status='playing';this.regionGrace=2;this.sceneKind='world';
     this.regionTransition={life:.7,maxLife:.7,name:this.region.name,from,to:this.region.id};
@@ -486,6 +487,7 @@ export class Game {
     this.regionGrace=Math.max(0,this.regionGrace-dt);
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
     this.relics.update(dt);
+    this.barrier.update(dt);
     if(!inDungeon){this.regions.update(dt);this._updatePressure(dt);}
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debug?0:Math.max(0,p.skillCooldown-dt);
     p.hurtFace=Math.max(0,(p.hurtFace||0)-dt);p.castFace=Math.max(0,(p.castFace||0)-dt);
@@ -621,6 +623,7 @@ export class Game {
     if(!equipped&&this.build.isEquipped(id)&&this.weapons.filter(weapon=>this.build.isEquipped(weapon.id)).length<=1)return false;
     if(!this.build.setEquipped(id,equipped))return false;
     if(!equipped) {
+      if(id==='sword')this.attacks.sword.clearScene();
       if(id==='arrow')this.bullets=this.bullets.filter(b=>b.weaponId&&b.weaponId!=='arrow');
       if(id==='orbit')this.orbitals=[];
     }

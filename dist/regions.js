@@ -231,7 +231,7 @@ export class Regions {
     this.portals=state.portals;g.dungeon.states=state.dungeonStates;
     g.companions.camp=state.companionCamp;g.companions.generation=state.companionGeneration;g.companions.nextAt=state.companionNextAt+delta;
     if(g.adventure)g.adventure._nextTreasureAt+=delta;if(g.encounters)g.encounters.nextAt+=delta;
-    for(const e of g.enemies)for(const key of ['superRootUntil','shockUntil'])if(Number.isFinite(e[key]))e[key]+=clockDelta;
+    for(const e of g.enemies)for(const key of ['superRootUntil','superSlowUntil','branchSlowUntil','shockUntil'])if(Number.isFinite(e[key]))e[key]+=clockDelta;
     this.states.delete(index);this._setStructures();this._syncConnections();g.settlements?.ensureAngels?.();return true;
   }
 }

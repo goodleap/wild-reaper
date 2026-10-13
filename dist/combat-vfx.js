@@ -24,7 +24,7 @@ function themeFor(e){
   if(e.type==='mushroomBlast'||e.skillId==='meteor')return 'fire';
   if(e.type==='bossSlam'||EARTH.has(e.source))return 'earth';
   if(ELECTRIC.has(e.source))return 'electric';
-  if(e.source==='orbit')return 'blade';
+  if(e.source==='orbit'||e.source==='sword')return 'blade';
   if(e.source==='super'||e.source==='relic')return 'magic';
   if(e.source==='mushroom')return 'fire';
   if(e.source==='bleed')return 'bleed';

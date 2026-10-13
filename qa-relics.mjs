@@ -8,8 +8,9 @@ let seed=108473;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena({owned=[],...options}={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
+  assert(g.build.increment('arrow'));assert(g.build.setEquipped('sword',false));g._refreshWeapons();
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];g._spawn=Infinity;g._shot=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
-  g.relics.owned.push(...owned);if(owned.includes('leafWard'))g.relics.shieldReady=true;
+  g.relics.owned.push(...owned.filter(id=>id!=='leafWard'));if(owned.includes('leafWard'))assert(g.relics.acquire('leafWard'));
   if(g.elites)g.elites.generation=false;g._refreshStats();return g;
 }
 function advance(g,seconds,input={}) {for(let left=seconds;left>1e-8;left-=.025)g.update(Math.min(.025,left),input);}
@@ -79,16 +80,17 @@ assert(Math.abs(fast.player.x/baseline.player.x-1.08)<1e-10,'the movement relic 
 const shield=arena({owned:['leafWard']});shield.player.invuln=1;
 assert.equal(shield._hurtPlayer(30),false);assert(shield.relics.shieldReady,'existing invulnerability does not consume a shield');
 shield.player.invuln=0;assert(shield._hurtPlayer(8));
-assert.equal(shield.player.hp,100);assert(!shield.relics.shieldReady);assert.equal(shield.relics.shieldCooldown,20);
+assert.equal(shield.player.hp,100);assert(!shield.relics.shieldReady);assert.equal(shield.relics.shieldCooldown,12.75);
+assert.equal(shield.barrier.remaining,26.5,'the relic strengthens the skill instead of adding a second shield');
 assert(shield.player.invuln>0,'even a fully absorbed hit starts the normal damage grace period');
 shield._hurtPlayer(30);assert.equal(shield.player.hp,100,'overlapping hits cannot bypass that grace period');
 for(const state of ['upgrade','relic','paused','dead']) {
-  shield.status=state;advance(shield,1);shield.relics.update(.05);assert.equal(shield.relics.shieldCooldown,20,'shield recovery freezes outside live play');
+  shield.status=state;advance(shield,1);shield.relics.update(.05);assert.equal(shield.relics.shieldCooldown,12.75,'shield recovery freezes outside live play');
 }
-shield.status='playing';advance(shield,19.9);assert(!shield.relics.shieldReady);
-advance(shield,.125);assert(shield.relics.shieldReady);shield.player.invuln=0;shield._hurtPlayer(30);
-assert.equal(shield.player.hp,82,'the replenished shield absorbs twelve damage and lets the remainder through');
-shield.player.invuln=0;shield._hurtPlayer(10);assert.equal(shield.player.hp,72,'the shield has one charge, not a stack');
+shield.status='playing';advance(shield,12.65);assert(!shield.relics.shieldReady);
+advance(shield,.125);assert(shield.relics.shieldReady);shield.player.invuln=0;shield._hurtPlayer(40);
+assert.equal(shield.player.hp,94.5,'the replenished barrier absorbs its full boosted capacity and lets excess through');
+shield.player.invuln=0;shield._hurtPlayer(10);assert.equal(shield.player.hp,84.5,'an exhausted barrier leaves no second relic shield');
 
 const herbs=arena({owned:['herbalEcho','deepRoot','thunderstone']});herbs.player.skillCooldown=8;
 const herbEnemy=monster(herbs,100),farEnemy=monster(herbs,200),drop=herb(herbs);herbs.update(0);

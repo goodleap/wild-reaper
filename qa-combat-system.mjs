@@ -10,8 +10,9 @@ import { weaponStats, skillStats, resolveCharacterStats } from './dist/combat-st
 // Suppress world generation only, leaving targeting/status/damage intact.
 let seed=462831;
 Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
-function arena(options={}) {
+function arena({starting=false,...options}={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,...options});
+  if(!starting){g.levels.arrow=1;g.build.setEquipped('sword',false);g._refreshWeapons();}
   g.enemies=[];g.gems=[];g.coins=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;
   g.player.xpNext=Infinity;g.crystalsNext=Infinity;g._updatePressure=()=>{};
@@ -26,8 +27,8 @@ function paid(g,id) {
   assert.fail(`eligible upgrade never offered: ${id}`);
 }
 
-const base=arena();
-assert.deepEqual(base.weapons.map(w=>w.id),['arrow']);
+const base=arena({starting:true});
+assert.deepEqual(base.weapons.map(w=>w.id),['sword']);
 assert.deepEqual(base.skills.map(s=>s.id),['storm'],'manual super belongs to the independent skill collection');
 assert.equal(base.player.level,1);assert.equal(base.progressionTier,1);
 assert.equal(resolveCharacterStats(base).attack,32);
@@ -35,7 +36,8 @@ assert.equal(weaponStats(base,'arrow').baseDamage,32);
 assert.equal(weaponStats(base,'arrow').interval,.38);
 assert.equal(skillStats(base,'storm').damage,160);
 assert.equal(skillStats(base,'storm').cooldown,15);
-assert.equal(base.build.getWeapon('arrow').level,1);
+assert.equal(base.build.getWeapon('arrow').level,0);
+assert.equal(base.build.getWeapon('sword').level,1);assert.equal(weaponStats(base,'sword').baseDamage,54);
 
 // Merely inspecting a portal guardian cannot awaken it, announce a Boss or
 // increment progression. The first valid hit activates it, even if shielded.
@@ -77,7 +79,7 @@ near(10000-arrowVictim.hp,36.8*1.25,'real projectile matches the single-scaling 
 
 // Delayed damage snapshots are already scaled and may not borrow later power.
 const echo=arena();echo.levels.power=2;echo.levels.pulse=5;echo.branches.pulse='echoes';echo._pulse=0;
-const echoVictim=enemy(echo,185);echo.update(0);assert.equal(echoVictim.hp,10000);
+const echoVictim=enemy(echo,205);echo.update(0);assert.equal(echoVictim.hp,10000);
 echo.levels.power=6;echo.player.x=500;echo._pulse=Infinity;advance(echo,.36);
 near(10000-echoVictim.hp,90*1.5*.6,'echo preserves its cast-time damage without a second global multiplier');
 
@@ -114,8 +116,9 @@ for(const actorScope of ['ally','player'])for(const source of ['lightning','orbi
 const rewarded=arena();
 for(let level=1;level<=2;level++) {
   rewarded.regions.rewardPortal={rewardClaimed:false};assert(rewarded.superSkills.offer('region',rewarded.region.id));rewarded.status='super';
-  assert(rewarded.chooseSuper('thorns'));assert.equal(rewarded.build.getSkill('thorns').level,level);
-  assert.equal(rewarded.skills.find(skill=>skill.id==='thorns')?.level,level);assert(!rewarded.weapons.some(weapon=>weapon.id==='thorns'));
+  const domainChoice=rewarded.getSuperChoices().find(c=>(c.skillId==='domain'||c.id==='domain')&&c.domainBranch==='binding');assert(domainChoice);
+  assert(rewarded.chooseSuper(domainChoice.id));assert.equal(rewarded.build.getSkill('domain').level,level);
+  assert.equal(rewarded.skills.find(skill=>skill.id==='domain')?.level,level);assert(!rewarded.weapons.some(weapon=>weapon.id==='domain'));
 }
 
 // Branch investments change the real finite projectile path, preserving both
@@ -172,8 +175,8 @@ equip._shot=0;equip.update(0);assert(equip.bullets.length>0);assert(equip.orbita
 const choice=arena();choice.progressionTier=5;choice.crystalsNext=40;choice.crystals=40;choice.status='upgrade';
 const offer=choice.getUpgradeChoices(),offerIds=offer.map(c=>c.id);for(let i=0;i<10;i++)assert.equal(choice.getUpgradeChoices(),offer);
 assert.equal(new Set(offerIds).size,offer.length);assert(offer.some(c=>c.category==='attribute'));
-assert(offer.some(c=>['orbit','pulse','lightning'].includes(c.id)),'new abilities retain opportunity');
-assert(offer.some(c=>['rapid','multishot','arrowPower','storm'].includes(c.id)),'owned abilities retain opportunity');
+assert(offer.some(c=>['orbit','pulse','lightning','barrier'].includes(c.id)),'new abilities retain opportunity');
+assert(offer.some(c=>['rapid','multishot','arrowPower','storm','sword'].includes(c.id)),'owned abilities retain opportunity');
 const unfunded=choice.build.serialize();choice.crystals=39;assert.equal(choice.chooseUpgrade(offerIds[0]),false);assert.deepEqual(choice.build.serialize(),unfunded);
 choice.crystals=40;assert.equal(choice.chooseUpgrade('missing'),false);assert.equal(choice.getUpgradeChoices(),offer);
 const picked=offer.find(c=>c.category==='attribute');assert(choice.chooseUpgrade(picked.id));assert.equal(choice.crystals,0);assert.equal(choice.progressionTier,6);assert.equal(choice.chooseUpgrade(picked.id),false);

@@ -150,11 +150,11 @@ run("game.crystals=game.crystalsNext;game.status='upgrade';upgradeLevel=0;openUp
 let upgrade=$('upgrade-cards').children[0];assert(upgrade.onclick);const upgradeBefore=run('game.skillLevel');key('KeyC');upgrade.onclick();assert.equal(run('game.skillLevel'),upgradeBefore);key('Escape');assert.equal(run('game.status'),'upgrade');upgrade.onclick();assert.equal(run('game.skillLevel'),upgradeBefore+1);
 run("game.regions.rewardPortal={rewardClaimed:false};game.superSkills.offer('region',game.region.id);game.status='super';openSuperChoices();");
 const superChoice=$('super-cards').children[0],superBefore=run('Object.values(game.superSkills.owned).filter(level=>level>0).length');key('KeyC');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),superBefore);key('Escape');assert.equal(run('game.status'),'super');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),superBefore+1);
-run("game.status='playing';game.build.increment('orbit');game.build.increment('arrowPower');game._refreshWeapons();");
+run("game.status='playing';game.build.increment('arrow');game.build.increment('arrowPower');game._refreshWeapons();");
 key('KeyC');click('character-tab-weapons');
 let equip=$('character-equip-arrow');assert.equal(equip.disabled,false);
 const weaponBefore=run('JSON.stringify({rank:game.build.getWeapon("arrow").baseRank,modifiers:game.build.getWeapon("arrow").modifiers,branch:game.build.getWeapon("arrow").branch})');
-fire($('character-content'),'click',{target:equip});assert.equal(run('game.build.isEquipped("arrow")'),false);assert.equal($('character-equip-orbit').disabled,true);assert.equal(document.activeElement.id,'character-equip-arrow');
+fire($('character-content'),'click',{target:equip});assert.equal(run('game.build.isEquipped("arrow")'),false);assert.equal($('character-equip-sword').disabled,true);assert.equal(document.activeElement.id,'character-equip-arrow');
 assert.equal(run('JSON.stringify({rank:game.build.getWeapon("arrow").baseRank,modifiers:game.build.getWeapon("arrow").modifiers,branch:game.build.getWeapon("arrow").branch})'),weaponBefore,'unequipping retains the weapon investment');
 fire($('character-content'),'click',{target:$('character-equip-arrow')});assert.equal(run('game.build.isEquipped("arrow")'),true);
 run("game.status='upgrade';renderCharacter();");equip=$('character-equip-arrow');assert(equip.disabled);fire($('character-content'),'click',{target:equip});assert.equal(run('game.build.isEquipped("arrow")'),true);key('Escape');assert.equal(run('game.status'),'upgrade');
@@ -163,8 +163,16 @@ run("game.status='playing';");
 // Long builds share one bounded equipment strip; weapon and skill slots use one
 // budget, including overflow counters. Exercise resize breakpoints and actual
 // catalog items, then remove a weapon through the real equipment control.
-run("game.build.increment('pulse');game.build.increment('lightning');for(const id of ['thorns','miasma','runes','meteor','swords','vortex'])game.superSkills.owned[id]=1;updateHUD();");
+run("game.build.increment('pulse');game.build.increment('lightning');game.build.increment('barrier');game.build.awardDomain('binding');for(const id of ['meteor','swords','vortex'])game.superSkills.owned[id]=1;updateHUD();");
 const owned=run('game.build.getSkillLoadout().length');
+assert($('super-loadout').querySelector('.barrier-ready'),'automatic protection has a ready indicator');
+assert.equal($('super-loadout').querySelectorAll('button').length,0,'barrier adds no manual control');
+run('game.barrier.cooldown=7.2;updateHUD();');
+assert.equal($('super-loadout').querySelector('.barrier-state').textContent,'8');
+run('game.barrier.life=1.4;game.barrier.remaining=18;updateHUD();');
+assert($('super-loadout').querySelector('.barrier-active'));
+run('game.barrier.life=0;game.barrier.remaining=0;game.barrier.cooldown=0;updateHUD();');
+
 const assertSharedSlots=(budget)=>{
   const shown=$('super-loadout').querySelectorAll('.skill-slot').length;
   assert(shown<owned&&shown>0,`the compact HUD limits its skill slots: owned=${owned}, shown=${shown}`);
@@ -186,6 +194,9 @@ assert.equal($('super-loadout').querySelectorAll('.skill-slot').length,skillSlot
 fire($('character-content'),'click',{target:$('character-equip-arrow')});assertSharedSlots(6);
 assert.equal($('super-loadout').querySelectorAll('.skill-slot').length,skillSlotsBeforeRemoval,'re-equipping returns the original skill capacity');
 key('Escape');
+run("game.build.increment('orbit');game._refreshWeapons();updateHUD();");
+assertSharedSlots(6);
+assert.match($('loadout').textContent,/\+2/,'all three weapons stay inside the existing two-position budget');
 key('KeyC');click('character-tab-skills');assert.equal($('character-content').querySelectorAll('[data-capability-id]').length,owned,'details list every acquired skill');
 click('quit-button');assert.equal(run('game'),null);assert($('run-summary').classList.contains('hidden'),'returning home hides passive run statistics');assert.equal(run('characterOpen'),false);assert($('character-overlay').classList.contains('hidden'));assert.equal($('character-button').getAttribute('aria-expanded'),'false');
 start();assert.equal(run('characterOpen'),false);assert.equal(run('characterTab'),'attributes');

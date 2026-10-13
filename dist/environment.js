@@ -7,7 +7,7 @@ export { isGrounded } from './regional-mechanisms.js';
 const CELL=520,TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-const WEAPON_SOURCES=new Set(['arrow','orbit','pulse','echo','lightning','storm']);
+const WEAPON_SOURCES=new Set(['sword','arrow','runeArrow','orbit','pulse','echo','lightning','storm']);
 export const ENVIRONMENT_BALANCE=Object.freeze({maxProps:20,maxMuds:12,mushroomFuse:.9,blastRadius:82,mudMultiplier:.74,safeRadius:240,despawnDistance:1800});
 const BODY_HEIGHTS=Object.freeze({slime:[34,16],beetle:[40,18],brute:[55,26],boar:[49,22],spore:[52,20],boss:[109,49]});
 const humanoid=entity=>!!(entity.isCompanion||entity.isCaptive||entity.isTownNpc);

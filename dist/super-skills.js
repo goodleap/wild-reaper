@@ -7,7 +7,11 @@ const freeze=Object.freeze;
 export const SUPER_SKILLS=SUPER_SKILL_DEFS;
 export const SUPER_RULES=freeze({maxLevel:3,maxFields:12,maxTargets:16,regionFallback:freeze({gold:60,crystals:100}),castleFallback:freeze({gold:120,crystals:180})});
 const DEFINITIONS=new Map(SUPER_SKILLS.map(skill=>[skill.id,skill]));
-const PROPAGATION=freeze({thorns:'ground',miasma:'projectile',runes:'projectile',meteor:'overhead',swords:'projectile',vortex:'projectile'});
+const PROPAGATION=freeze({domain:'ground',runeArrow:'projectile',meteor:'overhead',swords:'projectile',vortex:'projectile'});
+const DOMAIN_BRANCHES=freeze({
+  binding:freeze({name:'荆棘领域',desc:'反复刺击领域内的地面敌人，短暂束缚普通怪并减缓首领',icon:'♧',color:'#a9d888'}),
+  erosion:freeze({name:'侵蚀领域',desc:'侵蚀领域持续减速并伤害地面敌人，离开后仍短暂受侵蚀',icon:'♨',color:'#cea1da'})
+});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
 const segmentDistance=(x,y,x1,y1,x2,y2)=>{
@@ -17,25 +21,25 @@ const segmentDistance=(x,y,x1,y1,x2,y2)=>{
 };
 // One immutable source supplies both combat and the upgrade-card comparisons.
 // damage is a single hit/tick, before the player's shared damage multiplier.
-const LEVEL_STATS=freeze(Object.fromEntries(SUPER_SKILLS.map(({id})=>[id,freeze([1,2,3].map(level=>{
+const LEVEL_STATS=freeze(Object.fromEntries(['meteor','swords','vortex'].map(id=>[id,freeze([1,2,3].map(level=>{
   const n=level-1,stats={
-    thorns:{cooldown:7-n*.6,damage:84+n*32,radius:105+n*15,root:1.25+n*.2},
-    miasma:{cooldown:7-n*.3,damage:24+n*7,impactDamage:32+n*8,radius:95+n*10,duration:4,interval:.5},
-    runes:{cooldown:5.4-n*.3,damage:96+n*30,width:11+n*3,range:450,count:3},
     meteor:{cooldown:9-n*.5,damage:145+n*40,radius:86+n*9,count:level===1?2:3},
     swords:{cooldown:6.6-n*.4,damage:124+n*32,count:3+level,interval:.22},
     vortex:{cooldown:9-n*.5,damage:27+n*10,radius:125+n*15,duration:3.2,interval:.4,pull:82+n*14}
   }[id];
   return freeze({level,...stats});
 }))])));
-export const getSuperSkillStats=(id,level=1)=>LEVEL_STATS[id]?.[level-1]||null;
-const cooldown=(id,level)=>getSuperSkillStats(id,level).cooldown;
-const upgradeDescription=(id,level)=>{
-  const s=getSuperSkillStats(id,level);
+const DOMAIN_STATS=freeze(Object.fromEntries(Object.keys(DOMAIN_BRANCHES).map(branch=>[branch,freeze([1,2,3].map(level=>{
+  const n=level-1;
+  return freeze({level,branch,...(branch==='binding'
+    ?{cooldown:7-n*.5,damage:28+n*10,impactDamage:40+n*15,radius:118+n*14,duration:3,interval:.75,root:.45+n*.05,slow:.15}
+    :{cooldown:7-n*.3,damage:24+n*7,impactDamage:32+n*8,radius:112+n*12,duration:4,interval:.5,slow:.2,linger:1.05})});
+}))])));
+export const getSuperSkillStats=(id,level=1,branch='binding')=>id==='domain'?(DOMAIN_STATS[branch]||DOMAIN_STATS.binding)[level-1]||null:LEVEL_STATS[id]?.[level-1]||null;
+const upgradeDescription=(id,level,branch)=>{
+  const s=getSuperSkillStats(id,level,branch);
   return {
-    thorns:`荆棘伤害提升至 ${s.damage}，范围与定身时间增加，冷却缩短`,
-    miasma:`瘴气爆发伤害提升至 ${s.impactDamage}，每次侵蚀 ${s.damage} 伤害，范围增加`,
-    runes:`符文射线伤害提升至 ${s.damage}，射线加宽，冷却缩短`,
+    domain:branch==='erosion'?`每次侵蚀提升至 ${s.damage} 伤害，领域扩大，冷却缩短`:`每次刺击提升至 ${s.damage} 伤害，领域扩大，束缚增强`,
     meteor:`星陨伤害提升至 ${s.damage}，扩大爆炸范围${level===2?'，增加一次星陨':''}`,
     swords:`每轮增加一柄灵剑，单剑伤害提升至 ${s.damage}，冷却缩短`,
     vortex:`漩涡每次伤害提升至 ${s.damage}，范围与牵引速度增加，冷却缩短`
@@ -47,7 +51,7 @@ const upgradeDescription=(id,level)=>{
 export class SuperSkills {
   constructor(game) {
     this.game=game;this.owned=game.build.superLevels;this.cooldowns={};this.pending=null;
-    this.fields=[];this._volleys=[];this._id=0;
+    this.fields=[];this._volleys=[];this._erosion=new Map();this._runicShots=[];this._runicCooldown=0;this._id=0;
   }
 
   offer(source,regionId=this.game.region?.id) {
@@ -55,25 +59,43 @@ export class SuperSkills {
     this.pending=this._rewardSnapshot(source,regionId||'forest');
     return true;
   }
+  _branch(){return this.game.build.getSkill('domain')?.branch||'binding';}
+  _cooldown(id,level){return getSuperSkillStats(id,level,this._branch()).cooldown;}
   _poolSignature(source) {
-    return SUPER_SKILLS.filter(skill=>skill.source===source).map(skill=>`${skill.id}:${this.owned[skill.id]||0}`).join('|');
+    const signature=SUPER_SKILLS.filter(skill=>skill.source===source).map(skill=>`${skill.id}:${this.owned[skill.id]||0}`).join('|');
+    if(source!=='region')return signature;
+    const arrow=this.game.build.getWeapon('arrow');
+    return `${signature}|${this._branch()}|${arrow?.baseRank||0}:${arrow?.branch||''}:${this.game.build.getRank('arrowRune')}`;
+  }
+  _regionChoices(regionId) {
+    const choices=[],level=this.owned.domain||0,definition=DEFINITIONS.get('domain');
+    if(level<SUPER_RULES.maxLevel) {
+      if(level)choices.push(this._choice(definition));
+      else for(const domainBranch of regionId==='marsh'?['erosion','binding']:['binding','erosion'])
+        choices.push(freeze({...this._choice(definition,domainBranch),id:`domain:${domainBranch}`}));
+    }
+    const arrow=this.game.build.getWeapon('arrow'),currentLevel=this.game.build.getRank('arrowRune');
+    if(arrow?.branch!=='ricochet'&&currentLevel<SUPER_RULES.maxLevel) {
+      const rune=freeze({id:'runeArrow',name:'符文穿击',desc:currentLevel?'强化贯穿符文的伤害并缩短充能间隔':`${arrow?.baseRank?'':'获得翠羽飞矢；'}飞矢转为穿透路线，射击时周期性释放强力符文射线`,icon:'✧',color:'#89ddd8',category:'weapon',ownerId:'arrow',tier:'super',abilityTier:'super',source:'region',rewardTier:'区域武器宝藏',kind:currentLevel?'武器专属强化':'武器专属能力',upgradeKind:currentLevel?'modifier':'acquisition',level:currentLevel+1,currentLevel,acquired:currentLevel>0,automatic:true,runic:true});
+      if(regionId==='ruins')choices.unshift(rune);else choices.push(rune);
+    }
+    return choices;
   }
   _rewardSnapshot(source,regionId) {
-    const pool=SUPER_SKILLS.filter(skill=>skill.source===source&&(this.owned[skill.id]||0)<SUPER_RULES.maxLevel);
-    pool.sort((a,b)=>Number(b.regionId===regionId)-Number(a.regionId===regionId));
-    let choices=freeze(pool.map(skill=>this._choice(skill)));
+    const pool=source==='region'?this._regionChoices(regionId):SUPER_SKILLS.filter(skill=>skill.source===source&&(this.owned[skill.id]||0)<SUPER_RULES.maxLevel).map(skill=>this._choice(skill));
+    let choices=freeze(pool);
     if(!choices.length) {
       const reward=source==='castle'?SUPER_RULES.castleFallback:SUPER_RULES.regionFallback;
-      choices=freeze([freeze({id:'super:resource',name:'满阶宝藏',desc:`该类超级技能已全部满阶，获得 ${reward.gold} 金币与 ${reward.crystals} 灵晶`,icon:'◆',color:'#edcf8a',kind:'资源宝藏',source,tier:source==='castle'?'城堡宝藏':'区域宝藏',level:0,automatic:false})]);
+      choices=freeze([freeze({id:'super:resource',name:'满阶宝藏',desc:`可获得的该类能力已全部满阶，获得 ${reward.gold} 金币与 ${reward.crystals} 灵晶`,icon:'◆',color:'#edcf8a',kind:'资源宝藏',source,tier:source==='castle'?'城堡宝藏':'区域宝藏',level:0,automatic:false})]);
     }
-    // The pending object is a complete immutable reward snapshot, allowing a
-    // castle to suspend and later restore an unclaimed overworld portal.
+    // A suspended portal restores a complete immutable reward snapshot.
     return freeze({source,regionId,choices,signature:this._poolSignature(source)});
   }
 
-  _choice(skill) {
+  _choice(skill,domainBranch=this._branch()) {
     const currentLevel=this.owned[skill.id]||0,level=currentLevel+1;
-    return freeze({...skill,tier:skill.rewardTier,abilityTier:skill.tier,level,currentLevel,acquired:currentLevel>0,kind:currentLevel?'超级技能强化':'超级技能',desc:currentLevel?upgradeDescription(skill.id,level):skill.desc});
+    const domain=skill.id==='domain'?{...DOMAIN_BRANCHES[domainBranch],domainBranch,skillId:'domain',ownerId:'domain',category:'skill',upgradeKind:currentLevel?'base':'acquisition'}:{};
+    return freeze({...skill,...domain,tier:skill.tier,abilityTier:skill.tier,level,currentLevel,acquired:currentLevel>0,kind:currentLevel?'超级技能强化':'超级技能',desc:currentLevel?upgradeDescription(skill.id,level,domainBranch):(domain.desc||skill.desc)});
   }
   getChoices(){
     // A portal can remain unclaimed while crystals strengthen learned skills,
@@ -85,26 +107,32 @@ export class SuperSkills {
 
   choose(id) {
     const g=this.game;
-    if(g.status!=='super'||!this.pending||!this.getChoices().some(choice=>choice.id===id))return false;
+    if(g.status!=='super'||!this.pending)return false;
+    const choice=this.getChoices().find(choice=>choice.id===id);
+    if(!choice)return false;
     const source=this.pending.source;
     if(id==='super:resource') {
-      if(!SUPER_SKILLS.filter(skill=>skill.source===source).every(skill=>(this.owned[skill.id]||0)>=SUPER_RULES.maxLevel))return false;
-      // Consume the claim before resource hooks run; they may schedule another
-      // modal, but can never grant the same treasure a second time.
+      // Only a freshly recomputed fallback card can reach this branch.
       this.pending=null;
       const reward=source==='castle'?SUPER_RULES.castleFallback:SUPER_RULES.regionFallback;
       g.grantResources({...reward},'superMastered');
       g._emit('superChosen',{skillId:id,name:'满阶宝藏',source});
       return true;
     }
-    const skill=DEFINITIONS.get(id),current=this.owned[id]||0;
+    if(id==='runeArrow') {
+      if(source!=='region'||!g.build.awardRuneArrow())return false;
+      this.pending=null;
+      g._emit('superChosen',{skillId:'runeArrow',weaponId:'arrow',name:choice.name,level:g.build.getRank('arrowRune'),source});
+      return true;
+    }
+    const skillId=choice.skillId||id,skill=DEFINITIONS.get(skillId),current=this.owned[skillId]||0;
     if(!skill||skill.source!==source||current>=SUPER_RULES.maxLevel)return false;
-    this.owned[id]=current+1;
-    // An upgrade preserves the current cooldown instead of granting free
-    // extra casts. New skills start shortly after leaving the reward panel.
-    this.cooldowns[id]=current?Math.min(this.cooldowns[id]??0,cooldown(id,current+1)):.6;
+    if(skillId==='domain') {
+      if(!g.build.awardDomain(choice.domainBranch))return false;
+    }else this.owned[skillId]=current+1;
+    this.cooldowns[skillId]=current?Math.min(this.cooldowns[skillId]??0,this._cooldown(skillId,current+1)):.6;
     this.pending=null;
-    g._emit('superChosen',{skillId:id,name:skill.name,level:this.owned[id],source});
+    g._emit('superChosen',{skillId,name:choice.name,level:this.owned[skillId],source});
     return true;
   }
 
@@ -117,12 +145,12 @@ export class SuperSkills {
     const skillId=id.slice(6),level=this.owned[skillId];
     if(!DEFINITIONS.has(skillId)||!level||level>=SUPER_RULES.maxLevel)return false;
     if(!this.game.build.increment(id))return false;
-    this.cooldowns[skillId]=Math.min(this.cooldowns[skillId]??0,cooldown(skillId,level+1));
+    this.cooldowns[skillId]=Math.min(this.cooldowns[skillId]??0,this._cooldown(skillId,level+1));
     return true;
   }
   getLoadout() {
     return SUPER_SKILLS.filter(skill=>this.owned[skill.id]>0)
-      .map(skill=>({...skill,level:this.owned[skill.id],cooldown:this.cooldowns[skill.id]||0,maxCooldown:cooldown(skill.id,this.owned[skill.id])}));
+      .map(skill=>({...skill,...(skill.id==='domain'?DOMAIN_BRANCHES[this._branch()]:{}),level:this.owned[skill.id],cooldown:this.cooldowns[skill.id]||0,maxCooldown:this._cooldown(skill.id,this.owned[skill.id])}));
   }
 
   _foot(entity=this.game.player) {
@@ -130,7 +158,9 @@ export class SuperSkills {
     return {x:entity.x,y,groundY:y};
   }
   _visible(enemy,origin=this._foot()) {
-    return enemy.hp>0&&!enemy.isCompanion&&!(enemy.rescueSpawnGrace>0)&&this.game._inView(enemy)&&
+    if(enemy.isCompanion)return false;
+    if(this.game.combat?.canTarget)return this.game.combat.canTarget(enemy,{...origin,groundY:origin.y},{requireView:true});
+    return enemy.hp>0&&!(enemy.rescueSpawnGrace>0)&&this.game._inView(enemy)&&
       (enemy.dungeonId?this.game.dungeon.canDamage(enemy,{...origin,groundY:origin.y}):enemy.guardActive!==false);
   }
   _lineClear(from,to,r=0,profile='projectile') {
@@ -163,64 +193,35 @@ export class SuperSkills {
     this.fields.push(field);return field;
   }
   _areaTargets(field,limit=SUPER_RULES.maxTargets) {
-    const profile=PROPAGATION[field.skillId]||'projectile';
+    const profile=field.profile||PROPAGATION[field.skillId]||'projectile';
     return this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,field)&&distance(field,this._foot(enemy))<=field.r+enemy.r&&this._lineClear(field,this._foot(enemy),0,profile))
       .sort((a,b)=>distance(field,this._foot(a))-distance(field,this._foot(b))).slice(0,limit);
   }
-  _damage(enemy,amount,origin) {
+  _damage(enemy,amount,origin,kind='super') {
     // Raw damage deliberately bypasses bleed, shock and lightning refunds.
     const source=origin===this.game.player?origin:{...origin,groundY:origin.y};
-    return this.game._hurtEnemy(enemy,amount,0,source,'super');
+    return this.game._hurtEnemy(enemy,amount,0,source,kind);
   }
   _burst(field,life=.55) {
-    this.game._effect(field.x,field.y,'superBurst',life,field.r,field.color,undefined,{skillId:field.skillId,seed:field.seed});
+    this.game._effect(field.x,field.y,'superBurst',life,field.r,field.color,undefined,{skillId:field.skillId,domainBranch:field.domainBranch,seed:field.seed});
   }
 
   _cast(id,level) {
-    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,id==='runes'?450:420,{strongest:id==='swords',skillId:id});
+    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,420,{strongest:id==='swords',skillId:id});
     if(!targets.length)return false;
-    const stats=getSuperSkillStats(id,level);
-    // Snapshot a cast once: a kill-triggered buff must not retroactively alter
-    // the remaining victims, delayed impacts or ticks of the same cast.
+    const stats=getSuperSkillStats(id,level,this._branch());
+    if(!stats)return false;
     const damage=scalePlayerDamage(g,stats.damage,{skillId:id});
-    const impactDamage=stats.impactDamage?scalePlayerDamage(g,stats.impactDamage,{skillId:id}):0;
-    if(id==='thorns') {
-      const {radius,root}=stats;
-      const field=this._field(id,this._center(targets,radius),radius,root+.15);
+    if(id==='domain') {
+      const branch=this._branch(),{radius,duration,interval}=stats;
+      const field=this._field(id,this._center(targets,radius),radius,duration,{kind:branch==='binding'?'thorns':'miasma',domainBranch:branch,profile:'ground',tick:interval,interval,damage,root:stats.root,slow:stats.slow,linger:stats.linger,color:DOMAIN_BRANCHES[branch].color});
       if(!field)return false;
-      for(const enemy of this._areaTargets(field,12)) {
-        this._damage(enemy,damage,field);
-        if(enemy.hp>0&&enemy.type!=='boss') {
-          enemy.superRootUntil=Math.max(enemy.superRootUntil||0,g._clock+root);
-          // A newly rooted charging beast stops at its current location;
-          // a stale charge segment must not hit the player on this frame.
-          enemy.charge=null;enemy._chargeSegment=null;
-          enemy.chargeCooldown=Math.max(enemy.chargeCooldown||0,root+.6);
-        }
+      const impactDamage=scalePlayerDamage(g,stats.impactDamage,{skillId:id});
+      for(const enemy of this._areaTargets(field)) {
+        const dealt=this._damage(enemy,impactDamage,field);
+        if(dealt>0&&enemy.hp>0)this._domainContact(enemy,field);
       }
-      this._burst(field,.4);
-    } else if(id==='miasma') {
-      const {radius,duration,interval}=stats;
-      const field=this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage});
-      if(!field)return false;
-      for(const enemy of this._areaTargets(field))this._damage(enemy,impactDamage,field);
       this._burst(field,.5);
-    } else if(id==='runes') {
-      const target=targets[0],angle=Math.atan2(target.y-p.y,target.x-p.x),hit=new Set();
-      for(const turn of [0,-.2,.2]) {
-        const a=angle+turn,dx=Math.cos(a),dy=Math.sin(a),width=stats.width;
-        let length=stats.range;
-        if(!this._lineClear(origin,{x:origin.x+dx*length,y:origin.y+dy*length},width)) {
-          let lo=0,hi=length;
-          for(let i=0;i<10;i++){const mid=(lo+hi)/2;if(this._lineClear(origin,{x:origin.x+dx*mid,y:origin.y+dy*mid},width))lo=mid;else hi=mid;}
-          length=lo;
-        }
-        const end={x:p.x+dx*length,y:p.y+dy*length};
-        const along=g.enemies.filter(enemy=>this._visible(enemy,origin)&&!hit.has(enemy.id)&&segmentDistance(enemy.x,enemy.y,p.x,p.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
-          .sort((a,b)=>distance(p,a)-distance(p,b)).slice(0,8);
-        g._effect(p.x,p.y,'superRay',.48,width,DEFINITIONS.get(id).color,undefined,{x2:end.x,y2:end.y,skillId:id,seed:++this._id});
-        for(const enemy of along){hit.add(enemy.id);this._damage(enemy,damage,p);}
-      }
     } else if(id==='meteor') {
       const {radius,count}=stats,points=[];
       for(const enemy of targets) {
@@ -244,6 +245,70 @@ export class SuperSkills {
     g._emit('superCast',{skillId:id});return true;
   }
 
+  _domainContact(enemy,field) {
+    const now=this.game._clock;
+    if(field.domainBranch==='binding'&&enemy.type!=='boss') {
+      enemy.superRootUntil=Math.max(enemy.superRootUntil||0,now+field.root);
+      enemy.charge=null;enemy._chargeSegment=null;
+      enemy.chargeCooldown=Math.max(enemy.chargeCooldown||0,field.root+.6);
+    }else {
+      enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,now+.65);
+      enemy.superSlowFactor=enemy.type==='boss'?Math.max(.85,1-field.slow):1-field.slow;
+    }
+    if(field.domainBranch==='erosion')this._erosion.set(enemy,{fieldId:field.id,origin:{x:field.x,y:field.y},damage:field.damage*.5,life:field.linger,tick:.5});
+  }
+  _updateErosion(dt) {
+    const g=this.game;
+    for(const [enemy,residue] of this._erosion) {
+      residue.life-=dt;residue.tick-=dt;
+      if(enemy.hp<=0||residue.life<-1e-9||!isGrounded(enemy)) {this._erosion.delete(enemy);continue;}
+      if(residue.tick>1e-9)continue;
+      residue.tick+=.5;
+      if(!this._visible(enemy,residue.origin)||!this._lineClear(residue.origin,this._foot(enemy),0,'ground'))continue;
+      // The field owns all in-area ticks. Residue only pays after leaving it.
+      const field=this.fields.find(field=>field.id===residue.fieldId&&field.life>1e-9);
+      if(field&&distance(field,this._foot(enemy))<=field.r+enemy.r)continue;
+      if(this._damage(enemy,residue.damage,residue.origin)>0&&enemy.hp>0){
+        enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,g._clock+.5);
+        enemy.superSlowFactor=enemy.type==='boss'?.9:.8;
+      }
+    }
+  }
+
+  castRunicVolley(stats,target) {
+    const g=this.game;
+    if(g.status!=='playing'||!stats?.equipped||!g.build.isEquipped('arrow')||!(stats.runic>0)||this._runicCooldown>1e-9||this._runicShots.length)return false;
+    target=target||this._targets(this._foot(),450,{skillId:'runeArrow'})[0];
+    if(!target||!Number.isFinite(target.x)||!Number.isFinite(target.y))return false;
+    const origin=this._foot(),visual={x:g.player.x,y:g.player.y},angle=Math.atan2((target.aimY??target.y)-visual.y,target.x-visual.x);
+    this._runicShots.push({origin,visual,angle,tick:.12,width:11+3*(stats.runic-1),range:450,damage:stats.runicDamage??stats.damage*(3+.9375*(stats.runic-1))});
+    this._runicCooldown=stats.runicInterval??4.2-.3*(stats.runic-1);
+    g._effect(visual.x,visual.y,'superRunicCharge',.12,18,'#89ddd8',undefined,{skillId:'runeArrow',angle,seed:++this._id});
+    return true;
+  }
+  _updateRunic(dt) {
+    this._runicCooldown=Math.max(0,this._runicCooldown-dt);
+    const g=this.game;
+    if(!g.build.isEquipped('arrow')){this._runicShots=[];return;}
+    for(const shot of this._runicShots) {
+      shot.tick-=dt;if(shot.tick>1e-9)continue;
+      const {origin,visual,angle,width}=shot,dx=Math.cos(angle),dy=Math.sin(angle);
+      let length=shot.range;
+      if(!this._lineClear(origin,{x:origin.x+dx*length,y:origin.y+dy*length},width)) {
+        let lo=0,hi=length;
+        for(let i=0;i<10;i++){const mid=(lo+hi)/2;if(this._lineClear(origin,{x:origin.x+dx*mid,y:origin.y+dy*mid},width))lo=mid;else hi=mid;}
+        length=lo;
+      }
+      const end={x:visual.x+dx*length,y:visual.y+dy*length};
+      const targets=g.enemies.filter(enemy=>this._visible(enemy,origin)&&segmentDistance(enemy.x,enemy.y,visual.x,visual.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
+        .sort((a,b)=>distance(visual,a)-distance(visual,b)).slice(0,SUPER_RULES.maxTargets);
+      g._effect(visual.x,visual.y,'superRay',.48,width,'#89ddd8',undefined,{x2:end.x,y2:end.y,skillId:'runeArrow',seed:++this._id});
+      for(const enemy of targets)this._damage(enemy,shot.damage,origin,'runeArrow');
+      g._emit('superCast',{skillId:'runeArrow',weaponId:'arrow'});
+    }
+    this._runicShots=this._runicShots.filter(shot=>shot.tick>1e-9);
+  }
+
   _updateFields(dt) {
     const g=this.game;
     for(const field of this.fields) {
@@ -256,7 +321,6 @@ export class SuperSkills {
         }
         continue;
       }
-      if(field.kind==='thorns')continue;
       field.tick-=dt;
       if(field.kind!=='vortex'&&field.tick>1e-9)continue;
       const targets=this._areaTargets(field);
@@ -268,7 +332,7 @@ export class SuperSkills {
       }
       if(field.tick<=1e-9) {
         field.tick+=field.interval;
-        for(const enemy of targets)this._damage(enemy,field.damage,field);
+        for(const enemy of targets){const dealt=this._damage(enemy,field.damage,field);if(dealt>0&&enemy.hp>0&&field.skillId==='domain')this._domainContact(enemy,field);}
       }
     }
     this.fields=this.fields.filter(field=>field.life>1e-9);
@@ -296,21 +360,23 @@ export class SuperSkills {
   }
 
   movementMultiplier(enemy) {
-    return enemy.type!=='boss'&&!enemy.isCompanion&&(enemy.superRootUntil||0)>this.game._clock?0:1;
+    if(enemy.isCompanion||!isGrounded(enemy))return 1;
+    if(enemy.type!=='boss'&&(enemy.superRootUntil||0)>this.game._clock)return 0;
+    return (enemy.superSlowUntil||0)>this.game._clock?(enemy.superSlowFactor??1):1;
   }
   clearScene() {
-    this.fields=[];this._volleys=[];
-    for(const enemy of this.game.enemies)delete enemy.superRootUntil;
-    this.game.effects=this.game.effects.filter(effect=>!effect.skillId||!DEFINITIONS.has(effect.skillId));
+    this.fields=[];this._volleys=[];this._erosion.clear();this._runicShots=[];
+    for(const enemy of this.game.enemies)for(const key of ['superRootUntil','superSlowUntil','superSlowFactor'])delete enemy[key];
+    this.game.effects=this.game.effects.filter(effect=>!effect.skillId||(!DEFINITIONS.has(effect.skillId)&&effect.skillId!=='runeArrow'));
   }
   update(dt) {
     if(this.game.status!=='playing'||!Number.isFinite(dt)||dt<=0)return;
     dt=Math.min(.05,dt);
-    this._updateFields(dt);this._updateVolleys(dt);
+    this._updateErosion(dt);this._updateFields(dt);this._updateVolleys(dt);this._updateRunic(dt);
     for(const skill of SUPER_SKILLS) {
       const level=this.owned[skill.id];if(!level)continue;
       this.cooldowns[skill.id]=Math.max(0,(this.cooldowns[skill.id]||0)-dt);
-      if(this.cooldowns[skill.id]<=1e-9)this.cooldowns[skill.id]=this._cast(skill.id,level)?cooldown(skill.id,level):.2;
+      if(this.cooldowns[skill.id]<=1e-9)this.cooldowns[skill.id]=this._cast(skill.id,level)?this._cooldown(skill.id,level):.2;
     }
   }
 }

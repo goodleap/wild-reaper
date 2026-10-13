@@ -33,7 +33,7 @@ const finite = (g) => {
   assert(['playing','upgrade','super','dead'].includes(g.status),'no terminal win state');
 };
 // Isolate active skill behavior from passive shots, spawns and movement.
-const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false});g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;};
+const skillArena=()=>{const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false});g.build.setEquipped('sword',false);g.enemies=[];g._spawn=10000;g._shot=10000;g.viewWidth=400;g.viewHeight=300;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;};
 const target=(g,x,y,{type='slime',hp=100,r=10}={})=>{
   g._spawnEnemy(type);const e=g.enemies.at(-1);Object.assign(e,{x,y,r,hp,maxHp:hp,speed:0});return e;
 };
@@ -112,7 +112,7 @@ const progression=new Game({adventure:false});progression.time=180;progression.b
 progression.player.invuln=100;progression.update(.03,{});
 assert(progression.time>180&&progression.status==='playing');
 const capped=new Game({adventure:false});
-Object.assign(capped.branches,{arrow:'pierce',pulse:'echoes',lightning:'chain'});
+Object.assign(capped.branches,{sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain'});
 Object.assign(capped.levels,LEVEL_CAPS);
 for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower','endlessRegen']) {
   capped.crystals=capped.crystalsNext;capped.update(.02,{});

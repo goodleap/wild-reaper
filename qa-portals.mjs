@@ -10,6 +10,7 @@ let seed=195870;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
+  assert(g.build.increment('arrow'));assert(g.build.setEquipped('sword',false));g._refreshWeapons();
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;
   g.player.xpNext=Infinity;g.crystalsNext=Infinity;if(g.elites)g.elites.generation=false;
@@ -27,6 +28,7 @@ function monster(g,type,x=200,y=0) {
   const e=g._spawnEnemy(type,1);Object.assign(e,{x,y,speed:0,hp:10000,maxHp:10000});return e;
 }
 const xpTotal=g=>g.player.xp;
+const rewardRank=(g,id)=>id==='runeArrow'?g.build.getRank('arrowRune'):g.superSkills.owned[id.startsWith('domain:')?'domain':id];
 function claim(g) {
   g.regions.flushReward();assert.equal(g.status,'super');const index=g.regionIndex,id=g.getSuperChoices()[0].id;
   assert(g.chooseSuper(id));assert.equal(g.regionIndex,index,'claiming a Boss reward never changes maps');
@@ -78,7 +80,7 @@ standAtPortal(access,returnGate);access.update(0);access.update(0);assert.equal(
 access.player.x=returnGate.x+75;access.player.y=returnGate.y-groundOffset(access.player,true);access.update(0);
 standAtPortal(access,returnGate);access.update(0);assert.equal(access.regionIndex,1);finishTransition(access);assert.equal(access.regionIndex,0,'leaving and touching the return gate again automatically returns');
 access.update(0);access.update(0);assert.equal(access.regionIndex,0,'the restored region also remains stable after arrival');
-assert.equal(access.portal.id,portalId);assert.equal(access.superSkills.owned[choiceIds[0]],1);
+assert.equal(access.portal.id,portalId);assert.equal(rewardRank(access,choiceIds[0]),1);
 assert.equal(access.superSkills.pending,null,'return journeys do not award the same skill again');
 
 const travel=arena({adventure:true,encounters:true,environment:true,companions:true});
@@ -92,7 +94,7 @@ travel.player.x=travel.portal.x+800;travel.regions.update();assert.equal(sleepin
 assert.equal(travel._hurtEnemy(sleeping,1000),0,'distant guardian cannot be sniped outside its arena');
 travel.time=241;travel._clock=241;travel.player.level=9;travel.player.hp=91;travel.player.skillCooldown=7.4;
 Object.assign(travel.levels,{orbit:5,pulse:3,lightning:2,power:3,speed:2});travel._syncEvolutions();travel._refreshStats();travel._refreshWeapons();
-travel.relics.owned.push('leafWard');travel.relics.shieldReady=false;travel.relics.shieldCooldown=7.8;
+assert(travel.relics.acquire('leafWard'));travel.barrier.cooldown=7.8;
 travel.adventure.furyTime=4.3;travel.adventure.magnetTime=5.2;
 openPortal(travel);const skillId=claim(travel);standAtPortal(travel);
 const old={terrain:travel.terrain,adventure:travel.adventure,environment:travel.environment,encounters:travel.encounters,settlements:travel.settlements,relicSites:travel.relicSites,portal:travel.portal};
@@ -113,7 +115,7 @@ const nextGate=travel.portal,back=travel.regions.portals.find(p=>p.direction==='
 for(const key of Object.keys(old))assert.equal(travel[key],old[key],`${key} restored by identity`);
 assert.equal(travel.dungeon.states.get(castle.id),castleState,'castle progress survives round trips');assert.equal(travel.encounters.active.progress,3);assert.equal(travel.adventure.treasure.id,'old-chest');
 assert(travel.enemies.includes(guard));assert.equal(guard.hp,234);assert(!travel.enemies.includes(oldEnemy),'ordinary chase mobs are released on suspension');
-assert.equal(travel.superSkills.owned[skillId],1);assert.equal(travel.superSkills.pending,null);
+assert.equal(rewardRank(travel,skillId),1);assert.equal(travel.superSkills.pending,null);
 assert(usePortal(travel));assert.equal(travel.portal,nextGate,'revisiting uses the same uncleared next gate');assert.equal(travel.regions.states.size,1,'only inactive region snapshots are stored');
 
 const route=arena(),routeIds=[route.region.id],terrainSignatures=[];

@@ -3,6 +3,7 @@ import { groundOffset } from './terrain.js';
 import { blocksObstacle, isGrounded } from './height-rules.js';
 import { weaponStats, skillStats, ATTACK_DEFAULTS } from './combat-stats.js';
 import { WeaponTrail } from './weapon-trails.js';
+import { SwordCombat } from './sword-combat.js';
 
 const TAU=Math.PI*2;
 const sq=v=>v*v;
@@ -52,11 +53,14 @@ export function obstacleImpact(o,x,y,dx,dy,r) {
 // Execution owns attack cadence and transient effects. Build state and derived
 // stats live elsewhere; it never edits upgrade ranks or reapplies global power.
 export class CombatAttacks {
-  constructor(game){this.game=game;this._orbitTrails=new Map();}
+  constructor(game){this.game=game;this._orbitTrails=new Map();this.sword=new SwordCombat(game);}
+
+  clearScene(){this.sword.clearScene();}
 
   clearTrails() {
     for(const b of this.game.bullets)b.trail?.clear();
     this._orbitTrails.clear();this._orbitTrailClock=undefined;
+    this.clearScene();
   }
 
   castStorm() {
@@ -95,6 +99,7 @@ export class CombatAttacks {
           // expiry of fury do not alter a volley already crossing the screen.
           g.bullets.push({weaponId:'arrow',x:p.x,y:p.y,r:4,angle,color:branch==='ricochet'?'#ead59b':branch==='pierce'?'#a5eed1':'#c3e9a4',vx:Math.cos(angle)*stats.speed,vy:Math.sin(angle)*stats.speed,speed:stats.speed,life:stats.life,damage:stats.damage*(i?.6:1),branch,pierce:stats.targetLimit,targetLimit:stats.targetLimit,maxBounces:stats.maxBounces,retention:stats.retention,bounces:0,hitIds:new Set()});
         }
+        if(stats.runic>0)g.superSkills?.castRunicVolley?.(stats,target);
         g._emit('shoot');
       }else g._shot=.06;
     }
@@ -156,10 +161,13 @@ export class CombatAttacks {
 
   updateAbilities(dt) {
     this.game._syncEvolutions();
+    this.updateSword(dt);
     this.updateOrbit();
     this.updatePulse(dt);
     this.updateLightning(dt);
   }
+
+  updateSword(dt){this.sword.update(dt,weaponStats(this.game,'sword'));}
 
   updateOrbit() {
     const g=this.game,p=g.player,stats=weaponStats(g,'orbit');
@@ -202,43 +210,56 @@ export class CombatAttacks {
     g._pulseEchoes=g._pulseEchoes.filter(e=>e.life>0);
     g._pulse-=dt;
     if(!stats.owned||g._pulse>0)return;
+    // The extended echo is part of the same cast, so a reachable enemy in its
+    // outer band is also a useful target. Never spend a full cooldown on air.
+    const reach=stats.radius*(stats.echo?1.2:1),origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};
+    const hasEnemy=g.enemies.some(e=>dist2(e,p)<sq(reach+e.r)&&canTarget(g,e,origin,{requireView:true,source:'pulse',checkPath:true,canHitFlying:false}));
+    const hasSupply=!hasEnemy&&(g.adventure?.props||[]).some(prop=>prop.hp>0&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
+    const hasVine=!hasEnemy&&!hasSupply&&(g.environment?.mechanisms?.props||[]).some(prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active')&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
+    if(!hasEnemy&&!hasSupply&&!hasVine){g._pulse=.06;return;}
     g._pulse=stats.cooldown;
-    this.castPulse(p.x,p.y,stats.radius,stats.damage,stats.knockback,false,stats.control);
-    if(stats.echo)g._pulseEchoes.push({x:p.x,y:p.y,r:stats.radius*1.2,damage:stats.damage*.6,life:.35,maxLife:.35});
+    this.castPulse(p.x,p.y,stats.radius,stats.damage,stats.knockback,false,stats.control,stats.controlDuration);
+    if(stats.echo)g._pulseEchoes.push({x:p.x,y:p.y,r:stats.radius*1.2,damage:stats.damage*(stats.echoRetention??.6),life:stats.echoDelay??.35,maxLife:stats.echoDelay??.35});
   }
 
   updateLightning(dt) {
     const g=this.game,p=g.player,stats=skillStats(g,'lightning');
     g._lightning-=dt;
     if(!stats.owned||g._lightning>0)return;
-    g._lightning=stats.cooldown;
     let origin=p;const excluded=new Set();
+    let hit=false;
     if(stats.focus) {
       let target=null;
       for(const e of g.enemies)if(dist2(e,p)<=stats.range*stats.range&&canTarget(g,e,p,{requireView:true,source:'lightning',checkPath:true})) {
         if(!target||(e.type==='boss'&&target.type!=='boss')||((e.type==='boss')===(target.type==='boss')&&(e.hp>target.hp||(e.hp===target.hp&&dist2(e,p)<dist2(target,p)))))target=e;
       }
       if(target) {
+        hit=true;
         g._effect(p.x,p.y,'lightning',.32,0,'#dcecff',undefined,{x2:target.x,y2:target.y,evolved:true,branch:'focus',focus:true,chainIndex:0});
         g._hitEnemy(target,stats.primaryDamage,0,p,'lightning');
         g.environment?.hitAt(target.x,target.y,target.r,'lightning',prop=>propPath(g,target,prop,'lightning'));
       }
     }else for(let i=0;i<stats.targetLimit;i++) {
       const e=g._nearest(origin.x,origin.y,i===0?stats.range:stats.chainRange,excluded,origin,{source:'lightning'});if(!e)break;
+      hit=true;
       excluded.add(e.id);
       g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:stats.evolved,branch:stats.branch,chainIndex:i});
-      g._hitEnemy(e,stats.damage*(i>=3?.4:1),0,origin,'lightning');
+      g._hitEnemy(e,stats.damage*(i>=3?(stats.chainRetention??.85):1),0,origin,'lightning');
       g.environment?.hitAt(e.x,e.y,e.r,'lightning',prop=>propPath(g,e,prop,'lightning'));origin=e;
     }
+    g._lightning=hit?stats.cooldown:.06;
   }
 
-  castPulse(x,y,radius,damage,knockback,echo=false,control=false) {
+  castPulse(x,y,radius,damage,knockback,echo=false,control=false,controlDuration=1.1) {
     const g=this.game,origin={x,y,groundY:y+groundOffset(g.player,true)};
     g._effect(x,y,'ring',control?.65:echo?.6:.48,radius,control?'#9fe5cf':echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:origin.groundY,evolved:g.evolutions.pulse,echo,control,branch:g.branches.pulse});
     const source=echo?'echo':'pulse';
     for(const e of g.enemies)if(dist2(origin,e)<sq(radius+e.r)&&canTarget(g,e,origin,{source,checkPath:true,canHitFlying:false})) {
       const dealt=g._hitEnemy(e,damage,knockback,origin,source);
-      if(control&&dealt>0&&e.hp>0&&e.type!=='boss')e.branchSlowUntil=g._clock+1.1;
+      if(dealt>0&&e.hp>0&&e.type!=='boss') {
+        if(e.charge||e._chargeSegment){e.charge=null;e._chargeSegment=null;e.chargeCooldown=Math.max(e.chargeCooldown||0,1.2);}
+        if(control)e.branchSlowUntil=g._clock+controlDuration;
+      }
     }
     g.environment?.hitAt(x,y,radius,source,prop=>propPath(g,origin,prop,source));
     for(const prop of g.adventure?.props||[])if(prop.hp>0&&sq(prop.x-x)+sq((prop.aimY??prop.y)-y)<sq(radius+prop.r)&&propPath(g,origin,prop,source))g.adventure.hitSupply(prop,damage);

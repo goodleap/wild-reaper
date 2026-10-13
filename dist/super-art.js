@@ -71,7 +71,8 @@ export class SuperArt {
     ctx.save();ctx.translate(x,y);ctx.lineJoin='round';ctx.lineCap='round';ctx.globalAlpha=fade;ctx.shadowBlur=0;
     if(kind==='thorns'){
       ctx.globalAlpha=fade*.16;ctx.drawImage(this._glow('#a9d888'),-r,-r,r*2,r*2);ctx.globalAlpha=fade;
-      const growth=reduced?1:.87+.13*smooth(elapsed/.16),size=r*1.28*growth;
+      const pulse=reduced?0:Math.sin(elapsed/Math.max(.2,field.interval||.75)*TAU)*.025;
+      const growth=reduced?1:.87+.13*smooth(elapsed/.16)+pulse,size=r*1.28*growth;
       ctx.drawImage(this._thorns(Math.abs(data.seed)%3),-size,-size,size*2,size*2);
     }else if(kind==='miasma'){
       // A hard game radius remains readable while the interior consists of soft,
@@ -127,16 +128,26 @@ export class SuperArt {
   }
 
   drawEffect(ctx,e,{reduced=false,dense=false}={}){
-    if(!['superRay','superSword','superBurst'].includes(e.type))return false;
+    if(!['superRay','superSword','superBurst','superRunicCharge'].includes(e.type))return false;
     if(!(e.life>0)||!(e.maxLife>0))return true;
     const t=age(e),data=this._data(e);ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.shadowBlur=0;
-    if(e.type==='superRay')this._runes(ctx,e,t,reduced,dense);
+    if(e.type==='superRunicCharge')this._runicCharge(ctx,e,t,reduced);
+    else if(e.type==='superRay')this._runes(ctx,e,t,reduced,dense);
     else if(e.type==='superSword')this._swordHit(ctx,e,t,reduced,dense);
     else if(e.skillId==='meteor')this._meteorImpact(ctx,e,t,data,reduced,dense);
-    else if(e.skillId==='miasma')this._miasmaBurst(ctx,e,t,data,reduced,dense);
+    else if(e.skillId==='miasma'||e.skillId==='domain'&&e.domainBranch==='erosion')this._miasmaBurst(ctx,e,t,data,reduced,dense);
     else if(e.skillId==='swords')this._swordSummon(ctx,e,t,reduced);
     else this._thornBurst(ctx,e,t,data,reduced,dense);
     ctx.restore();return true;
+  }
+  _runicCharge(ctx,e,t,reduced){
+    ctx.translate(e.x,e.y);ctx.rotate(e.angle||0);
+    const size=reduced?14:24-11*smooth(t),alpha=.4+.6*t;
+    ctx.globalAlpha=alpha*.38;ctx.drawImage(this._glow('#a5fff0'),-24,-24,48,48);
+    ctx.globalAlpha=alpha;glyph(ctx,0,0,Math.PI/4,size*.5,1,'#e3fff1');
+    ctx.strokeStyle='#8de5df';ctx.lineWidth=1.5;ctx.beginPath();
+    line(ctx,-size,-size*.7,-size*.4,0);line(ctx,-size,size*.7,-size*.4,0);
+    line(ctx,size*.4,0,size,-size*.7);line(ctx,size*.4,0,size,size*.7);ctx.stroke();
   }
   _runes(ctx,e,t,reduced,dense){
     const dx=e.x2-e.x,dy=e.y2-e.y,length=Math.hypot(dx,dy),a=Math.atan2(dy,dx),fade=(1-t)**.8,width=e.r||9;

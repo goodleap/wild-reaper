@@ -5,7 +5,7 @@ import { isGrounded } from './height-rules.js';
 // Poison clouds remain airborne hazards and do not use this exemption.
 export { isGrounded } from './height-rules.js';
 
-const CELL=520,WEAPON_SOURCES=new Set(['arrow','orbit','pulse','echo','lightning','storm']);
+const CELL=520,WEAPON_SOURCES=new Set(['sword','arrow','runeArrow','orbit','pulse','echo','lightning','storm']);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export const REGIONAL_MECHANISM_RULES=Object.freeze({maxProps:8,safeRadius:280,vineRadius:54,vineWarning:1.1,vineActive:2.5,vineSlow:.6,gasRadius:70,gasWarning:1.4,gasActive:3.6,gasInterval:1,gasPlayerDamage:6,gasEnemyDamage:20,runeRadius:48,runeCharge:.6,runeDuration:12,runeInterval:1.4,runeTargets:3,runeRange:420});
 

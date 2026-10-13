@@ -9,7 +9,7 @@ const fresh=()=>{
   g.enemies=[];g.gems=[];g.coins=[];g.effects=[];g.events=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   g.time=31;g.runTime=39;g._clock=39;g.player.hp=73;g.player.skillCooldown=6.2;
-  g.gold=17;g.crystals=23;g.relics.shieldCooldown=4.8;
+  g.gold=17;g.crystals=23;assert(g.relics.acquire('leafWard'));g.barrier.cooldown=4.8;
   return g;
 };
 const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};

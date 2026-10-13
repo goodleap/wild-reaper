@@ -5,7 +5,7 @@ import { Terrain } from './dist/terrain.js';
 // Resource identity is checked through real kill and pickup paths. Test fixtures
 // suppress only unrelated random spawns and scenery, never resource mutations.
 let seed=913721;Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
-function arena(){const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,encounters:false,settlements:false});g.enemies=[];g.gems=[];g.coins=[];g.effects=[];g.events=[];g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g._updatePressure=()=>{};return g;}
+function arena(){const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,encounters:false,settlements:false});g.build.setEquipped('sword',false);g.enemies=[];g.gems=[];g.coins=[];g.effects=[];g.events=[];g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g._updatePressure=()=>{};return g;}
 function monster(g,{type='slime',x=250,y=0,hp=1}={}){const e=g._spawnEnemy(type);Object.assign(e,{x,y,hp,maxHp:hp,speed:0});return e;}
 const sum=list=>list.reduce((n,p)=>n+p.value,0);
 const kill=arena(),victim=monster(kill),value=victim.xp;

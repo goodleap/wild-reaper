@@ -9,6 +9,7 @@ let seed=976317;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
+  g.levels.arrow=1;g.build.setEquipped('sword',false);g._refreshWeapons();
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   g._updatePressure=()=>{};
@@ -35,7 +36,8 @@ function select(g,weapon,branch) {
 function shot(g) {g._shot=0;g.update(0);g._shot=Infinity;}
 const damage=e=>10000-e.hp;
 
-assert.deepEqual(Object.keys(WEAPON_BRANCHES).sort(),['arrow','lightning','pulse']);
+assert.deepEqual(Object.keys(WEAPON_BRANCHES).sort(),['arrow','domain','lightning','pulse','sword']);
+assert.deepEqual(WEAPON_BRANCHES.sword.map(b=>b.branch),['sweep','heavy']);
 assert.deepEqual(WEAPON_BRANCHES.arrow.map(b=>b.branch),['pierce','ricochet']);
 assert.deepEqual(WEAPON_BRANCHES.pulse.map(b=>b.branch),['echoes','control']);
 assert.deepEqual(WEAPON_BRANCHES.lightning.map(b=>b.branch),['chain','focus']);
@@ -116,14 +118,14 @@ assert.equal(spread.bullets.length,4,'branch selection preserves the existing mu
 assert.equal(spread.bullets[0].damage,32);assert(spread.bullets.slice(1).every(b=>b.damage===32*.6));
 
 const echo=arena();select(echo,'pulse','echoes');echo._pulse=0;
-const echoOuter=monster(echo,185);echo.update(0);
+const echoOuter=monster(echo,205);echo.update(0);
 assert.equal(damage(echoOuter),0);assert.equal(echo._pulseEchoes.length,1);
 echo.player.x=450;advance(echo,.3);assert.equal(damage(echoOuter),0);
 const frozenEcho=structuredClone(echo._pulseEchoes);echo.status='paused';advance(echo,1);
 assert.deepEqual(echo._pulseEchoes,frozenEcho);echo.status='playing';advance(echo,.06);
 assert(Math.abs(damage(echoOuter)-54)<1e-8,'the echo branch retains its delayed original-location 60% strike');
 const control=arena();select(control,'pulse','control');control._pulse=0;
-const controlled=monster(control,195),outside=monster(control,260);control.update(0);
+const controlled=monster(control,195),outside=monster(control,280);control.update(0);
 assert(damage(controlled)>0);assert.equal(damage(outside),0);assert.equal(control._pulseEchoes.length,0,'control expands the first wave without spawning an echo');
 const clean=arena(),cleanEnemy=monster(clean,controlled.x,controlled.y);
 controlled.speed=cleanEnemy.speed=100;
@@ -138,9 +140,9 @@ assert.equal(guardedTarget.hp,guardedHp);assert.equal(guarded._branchMovementMul
 assert.equal(guarded._branchMovementMultiplier(immuneBoss),1,'control never slows a Boss');
 
 const chain=arena();select(chain,'lightning','chain');chain._lightning=0;
-const chainTargets=[60,140,220,300,380,460].map(x=>monster(chain,x));chain.update(0);
-assert.equal(chainTargets.filter(e=>damage(e)>0).length,5);
-assert(chainTargets.slice(0,3).every(e=>damage(e)===88));assert(chainTargets.slice(3,5).every(e=>Math.abs(damage(e)-35.2)<1e-8));
+const chainTargets=[60,120,180,240,300,360,420,480].map(x=>monster(chain,x));chain.update(0);
+assert.equal(chainTargets.filter(e=>damage(e)>0).length,7);
+assert(chainTargets.slice(0,3).every(e=>damage(e)===88));assert(chainTargets.slice(3,7).every(e=>Math.abs(damage(e)-74.8)<1e-8));assert.equal(damage(chainTargets[7]),0);
 const focus=arena();select(focus,'lightning','focus');focus._lightning=0;
 const close=monster(focus,80),healthy=monster(focus,150),boss=monster(focus,310,0,'boss');healthy.hp=healthy.maxHp=20000;
 focus.update(0);
@@ -167,8 +169,10 @@ for(const branch of ['chain','focus']) {
 const travel=arena();select(travel,'arrow','ricochet');select(travel,'pulse','control');select(travel,'lightning','focus');
 const beforeTravel=structuredClone(travel.branches),travelBoss=monster(travel,280,0,'boss');travel._hurtEnemy(travelBoss,travelBoss.hp+1);
 travel.player.x=travel.portal.x;travel.player.y=portalDoor(travel.portal).y-groundOffset(travel.player,true);
-travel.regions.flushReward();assert(travel.chooseSuper(travel.getSuperChoices()[0].id));assert(travel.enterPortal());
-assert.deepEqual(travel.branches,beforeTravel,'travel preserves all mutually exclusive branch choices');
+travel.regions.flushReward();assert(travel.chooseSuper(travel.getSuperChoices()[0].id));
+for(const [id,branch] of Object.entries(beforeTravel))if(branch!==null)assert.equal(travel.branches[id],branch,'accepting a region reward preserves already chosen branches');
+const rewardedBranches=structuredClone(travel.branches);assert(travel.enterPortal());
+assert.deepEqual(travel.branches,rewardedBranches,'travel preserves all mutually exclusive branch choices including the newly awarded domain');
 assert.equal(travel._pulseEchoes.length,0);assert.equal(travel.bullets.length,0);
 assert(Object.values(arena().branches).every(b=>b===null),'a new run resets branch choices');
 

@@ -7,8 +7,9 @@ import { Environment, ENVIRONMENT_BALANCE } from './dist/environment.js';
 // Short, deterministic interactions. Long-run pacing is checked separately.
 let seed=719613;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
-function arena(options={}) {
+function arena({fresh=false,...options}={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
+  if(!fresh)g.build.setEquipped('sword',false);
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   return g;
@@ -25,28 +26,27 @@ function offer(g,id) {
   for(let i=0;i<100;i++) {g._choices=null;if(g.getUpgradeChoices().some(c=>c.id===id))return;}
   assert.fail(`expected an eligible ${id} upgrade`);
 }
-function shootOnce(g) {g._shot=0;g.update(0);g._shot=Infinity;}
+function shootOnce(g) {g.levels.arrow=1;g._shot=0;g.update(0);g._shot=Infinity;}
 
 assert.deepEqual(HEROES.map(h=>h.id),['traveler'],'there is only one playable protagonist');
 for(const hero of ['traveler','ranger','warden','stormcaller','unknown']) {
-  const g=arena({hero});
+  const g=arena({hero,fresh:true});
   assert.equal(g.hero.id,'traveler');assert.equal(g.player.heroId,'traveler','obsolete saved selections cannot restore removed starting roles');
   assert.equal(g.player.maxHp,100);assert.equal(g.player.hp,100);
   assert.equal(g.player.speed,220);assert.equal(g.player.skillCooldownMax,15);
-  assert(Object.values(g.levels).every(level=>level===0),'the restored protagonist starts without a free weapon or passive upgrade');
+  assert(Object.entries(g.levels).every(([id,level])=>level===(id==='sword'?1:0)),'the protagonist starts with only the default sword and no earned passive upgrades');
   assert.equal(g.player.xp,0);assert.equal(g.player.level,1);assert.equal(g.status,'playing');
-  assert.deepEqual(g.weapons.map(w=>[w.id,w.level]),[['arrow',1]],'automatic arrows remain available without a held weapon or side weapon');
+  assert.deepEqual(g.weapons.map(w=>[w.id,w.level]),[['sword',1]],'the default sword is available without a permanently held weapon');
   // Character level never gates access to any of the three secondary skills.
   for(const id of ['orbit','pulse','lightning']) {
     offer(g,id);assert(g.chooseUpgrade(id));assert.equal(g.levels[id],1);
     assert.equal(g.player.level,1,'all skills can be acquired while still character level one');
   }
-  g.branches.arrow='pierce'; // Movement-only fixture has already resolved its arrow branch.
   const baseSpeed=g.player.speed;offer(g,'speed');assert(g.chooseUpgrade('speed'));
   assert(Math.abs(g.player.speed/baseSpeed-1.08)<1e-10,'earned movement upgrades still change real movement speed');
   assert.equal(arena({hero,difficulty:'casual'}).player.maxHp,140);
-  const restarted=arena({hero:g.player.heroId});
-  assert.equal(restarted.player.heroId,'traveler');assert(Object.values(restarted.levels).every(level=>level===0));
+  const restarted=arena({hero:g.player.heroId,fresh:true});
+  assert.equal(restarted.player.heroId,'traveler');assert(Object.entries(restarted.levels).every(([id,level])=>level===(id==='sword'?1:0)));
   assert.equal(restarted.player.xp,0);assert.equal(restarted.player.level,1);
 }
 const quick=arena(),regular=arena();quick.levels.rapid=1;quick._refreshStats();
@@ -85,9 +85,9 @@ assert(!rupture.e.bleed);const rupturedHp=rupture.e.hp;advance(rupture.g,.6);
 assert.equal(rupture.e.hp,rupturedHp,'consumed bleed does not continue ticking');
 
 const echoed=arena();echoed.levels.pulse=5;echoed.branches.pulse='echoes';echoed._pulse=0;
-const echoTarget=monster(echoed,'slime',185);echoed.update(0);
+const echoTarget=monster(echoed,'slime',205);echoed.update(0);
 assert.equal(echoTarget.hp,10000,'the target is outside the first pulse');
-echoed.player.x=111;echoed.levels.orbit=1;echoed.update(0);assert(echoTarget.bleed);
+echoed.player.x=131;echoed.levels.orbit=1;echoed.update(0);assert(echoTarget.bleed);
 echoed.levels.orbit=0;echoed.player.x=480;const beforeEcho=echoTarget.hp;
 advance(echoed,.36);
 assert(Math.abs(beforeEcho-echoTarget.hp-90*.6*1.25)<1e-8,'the delayed original-location echo also consumes bleed for bonus damage');
@@ -175,9 +175,9 @@ for(const source of ['arrow','orbit','pulse','echo','lightning','storm']) {
   const g=landscape(),prop=mushroom(g,source==='echo'?190:source==='orbit'?74:100);
   if(source==='arrow') {monster(g,'slime',220);shootOnce(g);advance(g,.2);}
   if(source==='orbit') {g.levels.orbit=1;g.update(0);}
-  if(source==='pulse') {g.levels.pulse=1;g._pulse=0;g.update(0);}
+  if(source==='pulse') {monster(g,'slime',100);g.levels.pulse=1;g._pulse=0;g.update(0);}
   if(source==='echo') {
-    g.levels.pulse=5;g.branches.pulse='echoes';g._pulse=0;g.update(0);
+    monster(g,'slime',205);g.levels.pulse=5;g.branches.pulse='echoes';g._pulse=0;g.update(0);
     assert.equal(prop.state,'idle','the outer mushroom is beyond the first pulse');advance(g,.36);
   }
   if(source==='lightning') {monster(g,'slime',100);g.levels.lightning=1;g._lightning=0;g.update(0);}

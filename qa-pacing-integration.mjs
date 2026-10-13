@@ -12,14 +12,25 @@ function arena(terrain=new Terrain({obstacles:[]})){
 }
 function advance(g,seconds){for(let i=0;i<Math.round(seconds/.025);i++){g.update(.025);g.events.length=0;}}
 
-// Every first choice adds a visible attack; the same crystal purchase rules
-// and the second threshold still apply, without another opening interruption.
-for(const weapon of ['orbit','pulse','lightning']){
+// The first offer has ranged offense, automatic protection and one alternate
+// attack. All acquisitions retain the same crystal transaction and timing.
+for(const weapon of ['arrow','barrier','orbit','pulse','lightning']){
   const g=arena();g.addCrystals(40);g.update(0);
-  assert.deepEqual(new Set(g.getUpgradeChoices().map(c=>c.id)),new Set(['orbit','pulse','lightning']));
+  const alternatives=['orbit','pulse','lightning'],roll=Math.random;
+  try {Math.random=()=>Math.max(0,alternatives.indexOf(weapon))/3+.01;g.getUpgradeChoices();}
+  finally {Math.random=roll;}
+  const ids=g.getUpgradeChoices().map(c=>c.id);
+  assert.equal(ids.length,3);assert.equal(new Set(ids).size,3);assert(ids.includes('arrow'));assert(ids.includes('barrier'));
+  assert(alternatives.includes(ids[2]));assert(ids.includes(weapon));
   const first=g.getUpgradeChoices();assert.equal(g.getUpgradeChoices(),first,'opening the panel cannot reroll it');
   assert(g.chooseUpgrade(weapon));assert.equal(g.crystals,0);assert.equal(g.crystalsNext,110);assert.equal(g.skillLevel,2);
-  assert.equal(g.player.level,1);assert((weapon==='orbit'?g.weapons:g.skills).some(w=>w.id===weapon));
+  assert.equal(g.player.level,1);assert((['arrow','orbit'].includes(weapon)?g.weapons:g.skills).some(w=>w.id===weapon));
+  assert(g.build.setEquipped('sword',false),'isolate the acquired ability from innate sword damage');
+  if(weapon==='barrier'){
+    assert(g.barrier.ready);g.player.invuln=0;assert(g._hurtPlayer(8));assert.equal(g.player.hp,100);assert.equal(g.barrier.remaining,22);
+    continue;
+  }
+  if(weapon==='arrow')g._shot=0;
   const target=g._spawnEnemy('brute',1);Object.assign(target,{x:75,y:0,speed:0,hp:1000,maxHp:1000});
   advance(g,.25);
   if(weapon==='orbit')assert(g.orbitals.length>=2);
@@ -64,4 +75,4 @@ assert.equal(paused.pressurePhase,'warning','return grace holds the warning rath
 assert(paused.phaseEndsAt-paused.time>2.9,'the player retains the full warning after return protection');
 advance(paused,3.1);assert.equal(paused.pressurePhase,'siege','the stored wave resumes after safe return');
 
-console.log('Pacing integration: first attack choices, real kill credit, directional safe spawns, modal pauses and castle return passed.');
+console.log('Pacing integration: first attack/protection choices, real kill credit, directional safe spawns, modal pauses and castle return passed.');

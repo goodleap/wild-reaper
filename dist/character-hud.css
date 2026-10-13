@@ -30,6 +30,11 @@
 #character-hud .combat-loadout .combat-slot>span{font-size:13px;line-height:1}
 #character-hud .combat-loadout .combat-slot>small{font:8px/1 ui-monospace,monospace;margin:0;letter-spacing:-.5px}
 #character-hud .combat-loadout .combat-slot i{font-size:6px}
+#character-hud .combat-loadout .barrier-slot{position:relative}
+#character-hud .combat-loadout .barrier-state{position:absolute;right:-2px;top:-4px;min-width:8px;padding:0 1px;border-radius:3px;background:#142b25;color:#bedfe0;font:7px/9px ui-monospace,monospace;text-align:center;pointer-events:none}
+#character-hud .combat-loadout .barrier-ready .barrier-state{color:#dcf5cf}
+#character-hud .combat-loadout .barrier-active{border-color:#ccefeb;background:#c7efeb22}
+#character-hud .combat-loadout .barrier-active .barrier-state{color:#f1fff4}
 #character-hud .combat-loadout .super-slot{border-color:#cfb7e637;background:#ceadf00a}
 #character-hud .combat-loadout .weapon-slot.evolved{border-color:#dfce8052;background:#debd6810}
 #character-hud .combat-loadout .weapon-slot.evolved::after{top:-3px;right:-2px;font-size:6px}

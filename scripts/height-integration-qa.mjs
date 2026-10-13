@@ -13,6 +13,7 @@ Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 const barrier=heightBand=>({id:`${heightBand}-barrier`,type:'log',heightBand,x:0,y:0,r:14,halfLength:80,angle:Math.PI/2});
 function arena(obstacles=[],island=null){
   const g=new Game({terrain:new Terrain({obstacles,island}),adventure:false,encounters:false,environment:false,settlements:false,companions:false,elites:false});
+  g.levels.arrow=1;g.build.setEquipped('sword',false);
   g.enemies=[];g.effects=[];g.events=[];g.gems=[];g.coins=[];g.bullets=[];g.enemyBullets=[];
   g._spawn=g._shot=g._pulse=g._lightning=g.nextBossAt=Infinity;
   g.player.xpNext=g.crystalsNext=Infinity;g._updatePressure=()=>{};

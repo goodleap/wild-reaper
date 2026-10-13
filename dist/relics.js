@@ -2,9 +2,9 @@
 // The world owns the portal transition; this module owns only its reward.
 export const RELICS=Object.freeze([
   Object.freeze({id:'thunderstone',name:'引雷石',icon:'ϟ',color:'#bfcafa',desc:'雷电、天雷或感电传导击杀敌人，天雷冷却减少 0.3 秒；每秒最多减少 1.2 秒'}),
-  Object.freeze({id:'bloodstone',name:'赤心',icon:'◆',color:'#eaa08f',desc:'生命低于 40% 时，所有武器伤害提升 25%'}),
+  Object.freeze({id:'bloodstone',name:'赤心',icon:'◆',color:'#eaa08f',desc:'生命低于 40% 时，主角所有伤害提升 25%'}),
   Object.freeze({id:'herbalEcho',name:'春芽符',icon:'✿',color:'#b9dda5',desc:'拾取药草并实际恢复生命时，释放一道范围 125、基础伤害 60 的冲击波'}),
-  Object.freeze({id:'leafWard',name:'铁叶护符',icon:'⬡',color:'#d2dbae',desc:'立即获得护罩，抵消下一次受击的至多 12 点伤害；消耗后 20 秒恢复一层'}),
+  Object.freeze({id:'leafWard',name:'铁叶护符',icon:'⬡',color:'#d2dbae',desc:'守护屏障容量提升 15%，冷却缩短 15%；尚未掌握时获得 1 级守护屏障'}),
   Object.freeze({id:'swiftFeather',name:'风羽',icon:'↗',color:'#a9d9de',desc:'移动速度额外提升 8%，可与轻盈步伐共同生效'}),
   Object.freeze({id:'deepRoot',name:'深根',icon:'♧',color:'#dac395',desc:'药草的治疗量提升 40%，从 25 点增加至 35 点'})
 ]);
@@ -13,7 +13,7 @@ export const RELIC_RULES=Object.freeze({
   thunderReduction:.3,thunderWindow:1,thunderLimit:4,
   lowHealthThreshold:.4,lowHealthDamage:1.25,
   herbRadius:125,herbDamage:60,herbHealing:1.4,
-  shieldAbsorption:12,shieldRecharge:20,movement:1.08,collectionHeal:.2
+  barrierCapacityMultiplier:1.15,barrierCooldownMultiplier:.85,movement:1.08,collectionHeal:.2
 });
 const THUNDER_SOURCES=new Set(['lightning','storm','conduction']);
 
@@ -21,7 +21,6 @@ export class Relics {
   constructor(game) {
     this.game=game;
     this.owned=[];this.pending=false;this.choices=[];
-    this.shieldReady=false;this.shieldCooldown=0;
     this.wardAmount=0;
     // Four timestamps bound both the rolling one-second allowance and memory.
     this._thunderKills=[];
@@ -29,12 +28,20 @@ export class Relics {
 
   has(id) { return this.owned.includes(id); }
 
+  // Read-only aliases let existing status consumers refer to the single
+  // barrier state; the relic no longer owns a rechargeable shield or timer.
+  get shieldReady(){return this.has('leafWard')&&!!this.game.barrier?.ready;}
+  get shieldCooldown(){return this.has('leafWard')?(this.game.barrier?.cooldown||0):0;}
+
   acquire(id) {
     const relic=RELICS.find(item=>item.id===id);
     if(!relic||this.has(id)||!['playing','shop','relic'].includes(this.game.status))return false;
     this.owned.push(id);
-    if(id==='leafWard'){this.shieldReady=true;this.shieldCooldown=0;}
+    let grantedBarrier=false;
+    if(id==='leafWard'&&!this.game.build?.getSkill('barrier')?.acquired)
+      grantedBarrier=this.game.build?.increment('barrier')||false;
     this.game._refreshStats?.();
+    if(grantedBarrier){this.game._refreshWeapons?.();this.game._emit('skillAcquired',{skillId:'barrier',name:'守护屏障'});}
     this.game._emit('relicChosen',{relicId:id,name:relic.name});
     return true;
   }
@@ -84,14 +91,7 @@ export class Relics {
     return true;
   }
 
-  update(dt) {
-    if(this.game.status!=='playing'||!Number.isFinite(dt)||dt<=0||!this.has('leafWard')||this.shieldReady)return;
-    this.shieldCooldown=Math.max(0,this.shieldCooldown-dt);
-    if(this.shieldCooldown===0) {
-      this.shieldReady=true;
-      this.game._effect(this.game.player.x,this.game.player.y,'ring',.3,25,'#d2dbae');
-    }
-  }
+  update() {}
 
   damageMultiplier() {
     const p=this.game.player;
@@ -108,11 +108,7 @@ export class Relics {
       amount=Math.max(0,amount-this.wardAmount);this.wardAmount=0;
       this.game._effect(this.game.player.x,this.game.player.y,'ring',.35,34,'#f1e3b7');
     }
-    if(amount<=0||!this.has('leafWard')||!this.shieldReady)return amount;
-    this.shieldReady=false;this.shieldCooldown=RELIC_RULES.shieldRecharge;
-    const p=this.game.player;
-    this.game._effect(p.x,p.y,'ring',.35,31,'#d2dbae');
-    return Math.max(0,amount-RELIC_RULES.shieldAbsorption);
+    return amount;
   }
 
   modifyHerbHealing(base) { return base*(this.has('deepRoot')?RELIC_RULES.herbHealing:1); }
