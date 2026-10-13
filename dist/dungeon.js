@@ -81,7 +81,7 @@ export class Dungeon {
       spawn:g._spawn,superPending:g.superSkills?.pending,companionCamp:c?.camp,companionGeneration:c?.generation,companionNextAt:c?.nextAt,enteredClock:g._clock};
   }
   _clearScene(){
-    const g=this.game;g.bullets=[];g.enemyBullets=[];g.effects=[];g.orbitals=[];g.storm=null;g._pulseEchoes=[];g._grid.clear();
+    const g=this.game;g.attacks?.clearTrails();g.bullets=[];g.enemyBullets=[];g.effects=[];g.orbitals=[];g.storm=null;g._pulseEchoes=[];g._grid.clear();
     g.superSkills?.clearScene();
     if(g.companions?.active)g.companions.active._echoes=[];
     // No old warning may resolve at an unrelated position after a boundary.

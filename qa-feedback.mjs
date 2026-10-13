@@ -81,6 +81,17 @@ for(let i=0;i<80;i++)crowd._effect(i,0,'defeat',.5,16,'#fff',undefined,{boss:fal
 assert.equal(crowd.effects.filter(e=>e.type==='defeat').length,24);assert(crowd.effects.includes(savedBoss));
 for(let i=0;i<500;i++)crowd._effect(i,0,'hit',.24,8,'#fff');
 assert.equal(crowd.effects.length,200);assert(crowd.effects.includes(savedBoss));
+const warningGame=arena();
+warningGame._effect(30,40,'rescueWarning',1.2,28,'#fff');
+const spawnWarning=warningGame.effects[0];
+for(let i=0;i<600;i++)warningGame._effect(i,0,'hit',.24,8,'#fff');
+assert(warningGame.effects.includes(spawnWarning),'a screen-wide attack cannot hide a live spawn warning');
+assert.equal(warningGame.effects.length,200);
+warningGame.effects=[];
+for(let i=0;i<200;i++)warningGame._effect(i,0,'rescueWarning',1.2,28,'#fff');
+warningGame._effect(500,0,'hit',.24,8,'#fff');
+assert(warningGame.effects.every(e=>e.type==='rescueWarning'),'decoration yields when only protected cues remain');
+assert.equal(warningGame.effects.length,200);
 crowd.effects=[];
 for(let i=0;i<24;i++)crowd._effect(i,0,'defeat',.95,49,'#fff',undefined,{boss:true});
 crowd._effect(99,0,'defeat',.5,16,'#fff',undefined,{boss:false});assert.equal(crowd.effects.length,24);assert(crowd.effects.every(e=>e.boss));

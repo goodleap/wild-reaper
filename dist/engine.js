@@ -36,6 +36,8 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const rand = (a, b) => a + Math.random() * (b - a);
 const sq = (v) => v * v;
 const dist2 = (a, b) => sq(a.x - b.x) + sq(a.y - b.y);
+const decorativeEffects=new Set(['hit','damage','defeat','arrowRicochet']);
+const protectedEffect=e=>e.type==='rescueWarning'||(e.type==='defeat'&&e.boss);
 // Visual variation must never consume the combat/loot random stream.
 const feedbackSeed = (x,y,time,id=0) => (Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
 export const BALANCE=Object.freeze({firstXp:40,xpBase:110,xpLinear:65,xpCurve:8,firstBossAt:120,bossInterval:150,arrowDamage:32,arrowInterval:.38,arrowRange:420,magnet:105,spawnBase:1.05,spawnGrowth:.018,spawnMax:10.5,maxEnemyBullets:60,boarCap:5,sporeCap:4});
@@ -119,8 +121,11 @@ export class Game {
       this.effects.splice(oldest,1);
     }
     while(this.effects.length>=200) {
-      const oldest=this.effects.findIndex(e=>e.type!=='defeat'||!e.boss);
-      this.effects.splice(Math.max(0,oldest),1);
+      // Decorative feedback yields before spawn warnings or a boss farewell.
+      let oldest=this.effects.findIndex(e=>decorativeEffects.has(e.type)&&!protectedEffect(e));
+      if(oldest<0)oldest=this.effects.findIndex(e=>!protectedEffect(e));
+      if(oldest<0){if(!protectedEffect({type,...extra}))return;oldest=0;}
+      this.effects.splice(oldest,1);
     }
     this.effects.push({x,y,type,life,maxLife:life,r,color,text,seed:feedbackSeed(x,y,this._clock),...extra});
   }
@@ -430,6 +435,7 @@ export class Game {
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];
     this.status='playing';this.regionGrace=2;this.sceneKind='world';
     this.regionTransition={life:.7,maxLife:.7,name:this.region.name,from,to:this.region.id};
+    this.attacks.clearTrails();
     this.bullets=[];this.enemyBullets=[];this.effects=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];this._grid.clear();this._choices=null;
     this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply'||e.type==='superChosen');
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;

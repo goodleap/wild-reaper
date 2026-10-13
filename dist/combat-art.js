@@ -32,7 +32,7 @@ export class CombatArt {
     const angle=Number.isFinite(b.angle)?b.angle:Math.atan2(b.vy||0,b.vx||1),piercing=b.branch==='pierce',ricochet=b.branch==='ricochet';
     const color=piercing?'#a9eed8':ricochet?'#f0d89b':'#cfe9ab';
     ctx.save();ctx.translate(b.x,b.y);ctx.rotate(angle);ctx.lineJoin='round';
-    if(!reduced){
+    if(!reduced&&!b.trail){
       // A tapered ribbon, rather than a line, keeps velocity readable at 640px/s.
       ctx.globalAlpha=.12;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(-45,0);ctx.lineTo(-7,-4.6);ctx.lineTo(6,0);ctx.lineTo(-7,4.6);ctx.closePath();ctx.fill();
       ctx.globalAlpha=.34;ctx.beginPath();ctx.moveTo(-36,0);ctx.lineTo(-5,-1.8);ctx.lineTo(7,0);ctx.lineTo(-5,1.8);ctx.closePath();ctx.fill();

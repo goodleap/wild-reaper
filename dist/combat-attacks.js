@@ -2,6 +2,7 @@ import { STORM_DURATION } from './storm-geometry.js';
 import { groundOffset } from './terrain.js';
 import { blocksObstacle, isGrounded } from './height-rules.js';
 import { weaponStats, skillStats, ATTACK_DEFAULTS } from './combat-stats.js';
+import { WeaponTrail } from './weapon-trails.js';
 
 const TAU=Math.PI*2;
 const sq=v=>v*v;
@@ -13,6 +14,10 @@ const canTarget=(g,e,origin,options={})=>g.combat?.canTarget
   :e.hp>0&&!(e.rescueSpawnGrace>0)&&(options.canHitFlying!==false||isGrounded(e))&&(!options.requireView||g._inView(e))&&(!e.dungeonId||g.dungeon.canDamage(e,origin));
 const clearPath=(g,origin,target,options={})=>g.combat?.clearPath?.(origin,target,options)!==false;
 const propPath=(g,origin,prop,source)=>clearPath(g,origin,{x:prop.x,y:prop.aimY??prop.y,groundY:prop.y},{source,radius:source==='arrow'?4:0});
+function syncTrailScene(trail,g) {
+  if(trail.terrain!==g.terrain||trail.scene!==g.dungeon?.active||trail.region!==g.region?.id||trail.sceneKind!==g.sceneKind)trail.clear();
+  trail.terrain=g.terrain;trail.scene=g.dungeon?.active;trail.region=g.region?.id;trail.sceneKind=g.sceneKind;
+}
 function nearestProp(g,props,fallback,range,eligible){
   const p=g.player;let result=null,best=range*range;
   for(const prop of props||[fallback].filter(Boolean))if(eligible(prop)){
@@ -47,7 +52,12 @@ export function obstacleImpact(o,x,y,dx,dy,r) {
 // Execution owns attack cadence and transient effects. Build state and derived
 // stats live elsewhere; it never edits upgrade ranks or reapplies global power.
 export class CombatAttacks {
-  constructor(game){this.game=game;}
+  constructor(game){this.game=game;this._orbitTrails=new Map();}
+
+  clearTrails() {
+    for(const b of this.game.bullets)b.trail?.clear();
+    this._orbitTrails.clear();this._orbitTrailClock=undefined;
+  }
 
   castStorm() {
     const g=this.game,p=g.player,stats=skillStats(g,'storm');
@@ -96,6 +106,12 @@ export class CombatAttacks {
     const g=this.game;
     if(b.life<=0)return;
     const elapsed=Math.min(dt,b.life);b.life-=dt;
+    // Samples are taken at sweep boundaries, including the exact ricochet
+    // impact before its remaining motion. Rendering never guesses a direction.
+    const trail=b.trail||(b.trail=new WeaponTrail('arrow')),clock=Number.isFinite(g._clock)?g._clock:0;
+    syncTrailScene(trail,g);
+    if(trail.count&&!trail.endsAt(b.x,b.y))trail.clear();
+    if(!trail.count)trail.add(b.x,b.y,clock-elapsed);
     let remaining=elapsed;
     const targetLimit=Math.min(ATTACK_DEFAULTS.maxArrowTargets,b.targetLimit??3);
     // Sweep each segment, including the remainder after a bounce. Bounded
@@ -117,6 +133,7 @@ export class CombatAttacks {
       }
       const fraction=Number.isFinite(first)?first:1;
       b.x=x+dx*fraction;b.y=y+dy*fraction;
+      trail.add(b.x,b.y,clock-remaining+remaining*fraction);
       g.environment?.hitSegment(x,y,b.x,b.y,b.r,'arrow');
       if(!impact){if(Number.isFinite(wallHit)){b.life=0;g._effect(b.x,b.y,'hit',.18,7,'#d8cfba',undefined,{source:'arrow',angle:b.angle||0,strength:.18});}break;}
       if(isSupply){g.adventure.hitSupply(impact,b.damage);b.life=0;break;}
@@ -147,14 +164,24 @@ export class CombatAttacks {
   updateOrbit() {
     const g=this.game,p=g.player,stats=weaponStats(g,'orbit');
     g.orbitals=[];
-    if(!stats.equipped)return;
+    if(!stats.equipped){this._orbitTrails.clear();this._orbitTrailClock=undefined;return;}
+    const elapsed=g._clock-(this._orbitTrailClock??g._clock),travel=Math.hypot(p.x-(this._orbitTrailPlayerX??p.x),p.y-(this._orbitTrailPlayerY??p.y));
+    if(this._orbitTrailCount!==stats.count||this._orbitTrailRadius!==stats.radius||this._orbitTrailSpeed!==stats.rotationSpeed||this._orbitTrailEvolved!==g.evolutions.orbit||elapsed<0||elapsed>.25||travel>Math.max(48,Math.max(0,elapsed)*(p.speed||220)*1.8))this._orbitTrails.clear();
+    this._orbitTrailCount=stats.count;this._orbitTrailRadius=stats.radius;this._orbitTrailSpeed=stats.rotationSpeed;this._orbitTrailEvolved=g.evolutions.orbit;
+    this._orbitTrailClock=g._clock;this._orbitTrailPlayerX=p.x;this._orbitTrailPlayerY=p.y;
     const cycle=(g._clock-(g._orbitEvolutionStartedAt||0))%3;
     const surge=g.evolutions.orbit&&cycle<.9?Math.sin(Math.PI*cycle/.9):0,radius=stats.radius+55*surge;
     for(let i=0;i<stats.count;i++) {
       const a=g._clock*stats.rotationSpeed+i*TAU/stats.count;
       const blade={x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,r:12,angle:a,evolved:g.evolutions.orbit,surge};
       const origin={x:blade.x,y:blade.y,groundY:blade.y+groundOffset(p,true)};
-      if(!clearPath(g,p,origin,{source:'orbit',radius:blade.r}))continue;
+      let trail=this._orbitTrails.get(i);if(!trail){trail=new WeaponTrail('orbit');this._orbitTrails.set(i,trail);}syncTrailScene(trail,g);
+      if(!clearPath(g,p,origin,{source:'orbit',radius:blade.r})){trail.clear();continue;}
+      if(trail.count&&!trail.endsAt(blade.x,blade.y)){
+        const last=trail.index(trail.count-1),prior={x:trail.points[last],y:trail.points[last+1],groundY:trail.points[last+1]+groundOffset(p,true)};
+        if(!clearPath(g,prior,origin,{source:'orbit',radius:blade.r}))trail.clear();
+      }
+      trail.add(blade.x,blade.y,g._clock);blade.trail=trail;
       g.orbitals.push(blade);
       g.environment?.hitAt(blade.x,blade.y,blade.r,'orbit',prop=>propPath(g,origin,prop,'orbit'));
       for(const e of g._nearby(blade.x,blade.y,65))if(e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)&&canTarget(g,e,origin,{source:'orbit',checkPath:true})) {
