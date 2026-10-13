@@ -1,11 +1,12 @@
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { canStartObjective } from './event-scheduling.js';
+import { beginRelicActivation, advanceRelicActivation } from './relic-activation.js';
 
 const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
-export const RELIC_SITE_RULES=Object.freeze({huntGuards:24,rescueGuards:9,interactRadius:82});
+export const RELIC_SITE_RULES=Object.freeze({huntGuards:24,rescueGuards:9,interactRadius:82,huntTouchRadius:26});
 export const RESCUE_BUILDING=Object.freeze({halfWidth:63,back:-46,front:61,doorHalfWidth:34,wallRadius:8});
 
 // The site is the durable world object; the encounter/camp is only its battle.
@@ -77,7 +78,7 @@ export class RelicSites {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return null;
     const p=this._foot();let nearest=null,best=Infinity;
     for(const site of this.sites) {
-      const d=distance(p,site.door);if(d>site.interactRadius||d>=best)continue;
+      const anchor=site.type==='hunt'?site:site.door,d=distance(p,anchor);if(d>site.interactRadius||d>=best)continue;
       let enabled=site.state==='ready',label='',description='';
       if(site.state==='cleared'){label='遗迹已完成';description=site.type==='rune'?'符文能量已耗尽，石台保留':'建筑与通路保留，宝藏不再刷新';}
       else if(site.state==='failed'){label='遗迹挑战已结束';description='守卫已散去，遗迹留在原地';}
@@ -85,27 +86,29 @@ export class RelicSites {
         const camp=site.type==='rescue'&&g.companions?.camp;
         label=site.type==='hunt'?`狩猎守卫 ${site.progress}/${site.goal}`:site.type==='rune'?`符文支援 ${Math.ceil(site.mechanism.remaining)} 秒`:camp?.siteId===site.id&&camp.state==='ready'?'靠近伙伴完成解救':`囚牢守卫 ${site.progress}/${site.goal}`;
         description=site.type==='rune'?'符文正在自动轰击附近怪物':'离开后进度保留，返回可继续挑战';
-      } else if(site.type==='hunt') {label='挑战狩猎遗迹';description='击败 24 名遗迹守卫 · 72 灵晶 / 18 金币';}
+      } else if(site.type==='hunt') {label='走进中央纹章开启狩猎';description='击败 24 名遗迹守卫 · 72 灵晶 / 18 金币';}
       else if(site.type==='rune') {label='激活遗迹符文阵';description='一次性 12 秒符文支援 · 自动攻击附近怪物';}
       else {label='挑战囚牢守卫';description='击败 9 名强化守卫，解救伙伴并提升援助之力';}
       if(enabled&&site.type!=='rune') {
         const busy=site.type==='hunt'?!!g.encounters?.active:!!g.companions?.camp||!!g.companions?.active;
         if(busy||!canStartObjective(g)){enabled=false;description=busy?'先完成当前挑战或等待同行伙伴离开':'附近战斗尚未结束，稍后再开启遗迹';}
       }
-      nearest={id:site.id,siteId:site.id,type:'relic',relicType:site.type,category:'relic',label,description,x:site.door.x,y:site.door.y,enabled};best=d;
+      nearest={id:site.id,siteId:site.id,type:'relic',relicType:site.type,category:'relic',label,description,x:anchor.x,y:anchor.y,enabled,...(site.type==='hunt'?{touchRadius:RELIC_SITE_RULES.huntTouchRadius}:{})};best=d;
     }
     return nearest;
   }
   interact(id) {
     const current=this.getInteraction();if(!current||current.id!==id||!current.enabled)return false;
     const site=this.sites.find(s=>s.id===id),g=this.game;
+    if(site.type==='hunt'&&distance(this._foot(),site)>RELIC_SITE_RULES.huntTouchRadius)return false;
     if(site.type==='rune') {
       if(!g.environment?.mechanisms.activateRune(site.mechanism))return false;
-      site.state='active';site.discovered=true;return true;
+      site.state='active';site.discovered=true;beginRelicActivation(site);return true;
     }
     const battle=site.type==='hunt'?g.encounters?.spawn('hunt',site.x,site.y,{siteId:site.id}):g.companions?.spawn(site.kind,site.x,site.y,{siteId:site.id});
     if(!battle)return false;
     site.state='active';site.discovered=true;site.battleId=battle.id;site.progress=0;
+    if(site.type==='rescue')beginRelicActivation(site);
     g._emit('relicSiteStarted',{siteId:site.id,relicType:site.type,name:site.name});return true;
   }
   complete(siteId,success) {
@@ -118,6 +121,7 @@ export class RelicSites {
   update(dt=0) {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
+    for(const site of this.sites)if(site.type!=='hunt')advanceRelicActivation(site,dt);
     for(const site of this.sites)if(site.type==='rune'&&site.state==='active') {
       g.environment?.mechanisms._rune(site.mechanism,dt);
       site.progress=site.goal-site.mechanism.remaining;

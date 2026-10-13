@@ -82,7 +82,8 @@ export class HumanoidArt {
     this._part(c,'traveler','head',flip,ratio);
     c.save();c.scale(flip,1);this._face(c,'traveler',humanoidFaceState(entity,time,reduced));c.restore();
     this._part(c,'traveler','left',flip,ratio);
-    c.save();c.scale(flip,1);c.beginPath();c.moveTo(-8,1);c.quadraticCurveTo(-18,4,-24,1+p.cloth);c.lineTo(-21,8);c.quadraticCurveTo(-13,9,-8,5);paint(c,'#70964f');c.restore();
+    const settled=1-clamp(p.cloakLift??entity.cloakLift??(entity.moving?1:0),0,1);
+    c.save();c.scale(flip,1);c.beginPath();c.moveTo(-8,1);c.quadraticCurveTo(-18+settled*2,4+settled*3,-24+settled*4,1+settled*8+p.cloth);c.lineTo(-21+settled*4,8+settled*5);c.quadraticCurveTo(-13,9+settled*3,-8,5);paint(c,'#70964f');c.restore();
     this._part(c,'traveler','right',flip,ratio,0,p.arm);
     c.restore();
   }

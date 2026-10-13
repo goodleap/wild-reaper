@@ -44,6 +44,10 @@ try{
   assert.deepEqual(draw('angel',{time:5,reduced:true}).calls,draw('angel',{time:8,reduced:true}).calls,'reduced motion keeps idle facial work steady');
   const still=draw('traveler',{time:2,reduced:true}).calls,walking=draw('traveler',{time:2,reduced:true,pose:{step:1,leftLift:3.2,rightLift:0,bodyY:-1.15,arm:1.8,cloth:1.7}}).calls;
   assert.notDeepEqual(walking,still,'caller-provided grounded movement still animates boots and cloth');
+  const idleHem=draw('traveler',{entity:{cloakLift:0},pose:{cloth:0},time:2}).calls;
+  const liftedHem=draw('traveler',{entity:{cloakLift:1},pose:{cloth:0},time:2}).calls;
+  assert(idleHem.some(call=>call[0]==='quadraticCurveTo'&&call[3]===-20&&call[4]===9),'idle trailing tip hangs lower and closer to the body');
+  assert(liftedHem.some(call=>call[0]==='quadraticCurveTo'&&call[3]===-24&&call[4]===1),'motion retains the established outward lift');
   assert.deepEqual(still.filter(call=>call[0]==='ellipse').slice(-2).map(call=>call.slice(1,5)),[[-2,-12,1.5,2],[6,-12,1.5,2]],'the familiar two eyes retain their original position and size');
   assert.equal(still.filter(call=>call[0]==='fill'&&call[1]==='#ecf6c8').length,2,'the original pale eye color remains intact');
   assert.equal(draw('traveler',{entity:{hurtFace:.2},time:2}).calls.filter(call=>call[0]==='stroke'&&call[1]==='#ecf6c8').length,2,'the restored eyes still squeeze briefly on a real hit');

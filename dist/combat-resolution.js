@@ -3,9 +3,9 @@ import { isGrounded } from './height-rules.js';
 import { clearBossAttacks } from './bosses.js';
 import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } from './combat-stats.js';
 import { queueAttackKnockback } from './weapon-knockback.js';
+import { emitDamageNumber } from './damage-numbers.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
-const rand=(a,b)=>a+Math.random()*(b-a);
 const feedbackSeed=(x,y,time,id=0)=>(Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
 const HIT_COLORS=Object.freeze({sword:'#f1e5bb',arrow:'#e8f3ad',runeArrow:'#c4e7df',orbit:'#f2d492',lightning:'#cce9ff',companionLightning:'#cce9ff',storm:'#d4e7ff',conduction:'#c4e8ff',pulse:'#b9dca0',echo:'#c6ead5',companionPulse:'#b9dca0',companionEcho:'#c6ead5',bleed:'#e8a486',mushroom:'#ffbd70',super:'#ead4aa',relic:'#ddc8f5'});
 
@@ -107,7 +107,7 @@ export class CombatResolution {
     enemy.hitAngle=angle;enemy.hitSource=source;enemy.hitStrength=strength;
     if(knockback>0)queueAttackKnockback(g,enemy,knockback,origin,source);
     g._effect(enemy.x,enemy.y,'hit',.24,enemy.r*.7,color,undefined,{source,angle,strength,seed});
-    if(Math.random()<.24 || enemy.type==='boss') g._effect(enemy.x+rand(-8,8),enemy.y-enemy.r,'damage',.65,0,'#f1e4aa',String(Math.round(amount)));
+    emitDamageNumber(g,enemy,actual,source);
     if(enemy.trainingDummy&&enemy.hp<=0){enemy.hp=enemy.maxHp;enemy.bleed=null;enemy.shock=null;return actual;}
     if(enemy.hp<=0) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy._weaponPush=null;

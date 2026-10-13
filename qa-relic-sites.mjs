@@ -21,12 +21,18 @@ function world() {
 }
 const site=(g,type)=>g.relicSites.sites.find(s=>s.type===type);
 function begin(g,type) {
-  const target=site(g,type);assert(target);feet(g,target.door);
+  const target=site(g,type);assert(target);feet(g,type==='hunt'?target:target.door);
   assert.equal(g.relicSites.getInteraction()?.enabled,true);
   assert(g.relicSites.interact(target.id));assert.equal(target.state,'active');return target;
 }
 function finishWarnings(g) {
   for(let i=0;i<17;i++)for(const enemy of g.enemies)if(enemy.rescueId)g.companions.updateEnemy(enemy,.05);
+}
+function finishHuntWaves(g) {
+  for(let i=0;i<241;i++) {
+    g.encounters.update(.05);
+    for(const enemy of g.enemies)if(enemy.eventRole==='huntGuard')g.encounters.updateEnemy(enemy,.05);
+  }
 }
 const generated=world(),initial=structuredClone(generated.relicSites.sites);
 assert.deepEqual(initial.map(s=>s.type),['hunt','rescue']);
@@ -58,6 +64,8 @@ for(const [type,r,doorOffset] of [['hunt',210,190],['rescue',105,80],['rune',72,
 }
 
 const hunt=world(),arena=begin(hunt,'hunt'),active=hunt.encounters.active;
+assert.equal(hunt.enemies.filter(e=>e.eventId===active.id).length,0,'center activation precedes the first telegraphed perimeter wave');
+finishHuntWaves(hunt);
 const defenders=hunt.enemies.filter(e=>e.eventId===active.id);
 assert.equal(defenders.length,24);assert.equal(active.goal,24);assert(defenders.every(e=>e.relicSiteId===arena.id&&e.eventRole==='huntGuard'));
 const stranger=hunt._spawnEnemy('slime',1);hunt._hurtEnemy(stranger,stranger.hp+1);
@@ -78,6 +86,7 @@ for(const enemy of defenders)hunt.encounters.onEnemyKilled(enemy);
 assert.equal(hunt.gold-gold,18);assert.equal(hunt.crystals-crystals,72,'repeated death callbacks cannot pay the relic twice');
 
 const removed=world(),broken=begin(removed,'hunt'),lost=removed.encounters.active;
+finishHuntWaves(removed);
 const missingId=lost.guardIds[0],before={gold:removed.gold,crystals:removed.crystals,kills:removed.kills};
 removed.enemies=removed.enemies.filter(e=>e.id!==missingId);removed.encounters.update(.05);
 assert.equal(broken.state,'failed');assert.equal(removed.encounters.active,null);
@@ -129,6 +138,7 @@ feet(runes,platform.door);assert.equal(runes.relicSites.interact(platform.id),fa
 for(const type of ['hunt','rescue']) {
   const traveler=new Game();traveler.player.xpNext=Infinity;traveler.crystalsNext=Infinity;
   const structure=begin(traveler,type),battle=type==='hunt'?traveler.encounters.active:traveler.companions.camp;
+  if(type==='hunt')finishHuntWaves(traveler);
   finishWarnings(traveler);
   const ids=battle.guardIds,first=traveler.enemies.find(e=>e.id===ids[0]);traveler._hurtEnemy(first,first.hp+1);
   const remaining=traveler.enemies.filter(e=>e.hp>0&&ids.includes(e.id)),remainingIds=remaining.map(e=>e.id);

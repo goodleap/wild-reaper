@@ -21,9 +21,9 @@ const persistent=g=>({time:g.time,runTime:g.runTime,clock:g._clock,hp:g.player.h
 const scene=g=>({x:g.player.x,y:g.player.y,invuln:g.player.invuln,grace:g.regionGrace,shot:g._shot,pulse:g._pulse,lightning:g._lightning,spawn:g._spawn,
   enemies:g.enemies.map(e=>[e.id,e.x,e.y,e.hp,e.guardActive,e.orbitHit]),effects:structuredClone(g.effects),gems:structuredClone(g.gems),coins:structuredClone(g.coins),bullets:structuredClone(g.bullets),enemyBullets:structuredClone(g.enemyBullets)});
 const heldInput={x:1,y:1,skill:true,interact:true};
-function finish(g){for(let i=0;g.sceneTransition.active&&i<20;i++)g.update(.025,heldInput);assert.equal(g.sceneTransition.active,false);}
+function finish(g){for(let i=0;g.sceneTransition.active&&i<32;i++)g.update(.025,heldInput);assert.equal(g.sceneTransition.active,false);}
 
-assert.deepEqual(SCENE_TRANSITION_RULES,{outDuration:.15,inDuration:.25});
+assert.deepEqual(SCENE_TRANSITION_RULES,{outDuration:.15,inDuration:.25,castleRitualDuration:.2});
 for(const type of ['supply','occupied','castle']){
   const g=fresh(),door=site(g,type),world=g.terrain;
   g.player.hurtFlash=.8;
@@ -35,11 +35,15 @@ for(const type of ['supply','occupied','castle']){
   g.interact=id=>{cuts.push({opacity:g.sceneTransition.opacity,phase:g.sceneTransition.phase});return originalInteract(id);};
   const before=persistent(g),beforeScene=scene(g),revision=g.sceneTransition.inputRevision;
   assert.equal(g.requestInteraction('missing-door'),false);assert.equal(g.sceneTransition.active,false);
-  assert(g.requestInteraction(door.id));assert.equal(g.sceneTransition.phase,'out');assert.equal(g.sceneTransition.opacity,0);
+  assert(g.requestInteraction(door.id));assert.equal(g.sceneTransition.phase,type==='castle'?'ritual':'out');assert.equal(g.sceneTransition.opacity,0);
   assert.equal(g.sceneTransition.inputRevision,revision+1,'queued movement is invalidated at transition start');
   assert.equal(g.requestInteraction(door.id),false,'duplicate requests cannot restart a fade');
   assert.equal(originalInteract(door.id),false,'the direct interaction entrypoint cannot bypass an active transition');
   assert.equal(g.enterPortal(),false);
+  if(type==='castle'){
+    for(let i=0;i<4;i++){g.update(.05,heldInput);assert.equal(g.sceneTransition.opacity,0);assert.deepEqual(persistent(g),before);assert.deepEqual(scene(g),beforeScene);}
+    assert.equal(g.sceneTransition.phase,'out');assert.equal(door.activationAge,.2);
+  }
   for(let i=0;i<2;i++){
     g.update(.05,heldInput);assert.equal(g.dungeon.active,null);assert.equal(g.terrain,world);
     assert(g.sceneTransition.opacity>0&&g.sceneTransition.opacity<1);
@@ -67,6 +71,10 @@ for(const type of ['supply','occupied','castle']){
   place(g,indoor.entrance);assert(g.requestInteraction(g.getInteraction().id));finish(g);
   assert.equal(g.dungeon.active,null);assert.equal(g.terrain,world);assert.deepEqual(persistent(g),before);
   assert.equal(cuts.length,2,'entering and leaving each commit one scene change');
+  if(type==='castle'){
+    place(g,door.door);assert(g.requestInteraction(door.id));assert.equal(g.sceneTransition.phase,'out','repeat castle entry only uses the ordinary fade');
+    assert.equal(door.activationDuration,.15);finish(g);assert.equal(cuts.length,3);
+  }
 }
 
 const paused=fresh(),pausedDoor=site(paused,'supply');place(paused,pausedDoor.door);
@@ -115,4 +123,4 @@ const back=travel.regions.portals.find(p=>p.direction==='back');place(travel,por
 assert.equal(travel.regionIndex,0);assert.equal(travel.terrain,oldTerrain);assert.deepEqual(persistent(travel),saved,'portal round trips freeze time and preserve progression');
 assert.equal(travel.superSkills.pending,null,'transitions do not replay the portal reward');
 
-console.log('Scene transitions: opaque atomic cuts, 0.15/0.25-second phases, full simulation freeze, input revisions, pause/time-clamp safety, immediate shops/chests and persistent castle/hut/portal round trips passed.');
+console.log('Scene transitions: opaque atomic cuts, short first-castle activation and 0.15/0.25-second fades, full simulation freeze, input revisions, pause/time-clamp safety, immediate shops/chests and persistent castle/hut/portal round trips passed.');

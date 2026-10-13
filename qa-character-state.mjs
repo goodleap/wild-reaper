@@ -23,6 +23,13 @@ const blocked=arena();blocked.relics.modifyIncomingDamage=()=>0;blocked._hurtPla
 const entry=arena();assert(entry.dungeon.enter({id:'face-castle',type:'castle',door:{x:0,y:19.8}}));assert(entry.player.invuln>0);assert.equal(entry.player.hurtFace,0);
 const storm=arena();storm._castStorm();assert.equal(storm.player.castFace,.25);advance(storm,.3);assert.equal(storm.player.castFace,0);assert.equal(storm.player.hurtFace,0);
 
+const cloak=arena();assert.equal(cloak.player.cloakLift,0);
+cloak.update(.04,{x:1});const firstLift=cloak.player.cloakLift;assert(firstLift>0&&firstLift<1,'the cloak eases into movement');
+for(let i=0;i<12;i++)cloak.update(.04,{x:1});assert(cloak.player.cloakLift>.99);
+cloak.update(.04);const settling=cloak.player.cloakLift;assert(settling>0&&settling<.99,'stopping settles the fabric gradually');
+cloak.status='paused';advance(cloak,.5);assert.equal(cloak.player.cloakLift,settling,'paused cloth does not keep settling');
+cloak.status='playing';advance(cloak,.6);assert(cloak.player.cloakLift<.001,'idle cloth returns to its low silhouette');
+
 const crawl=arena(),beetle=crawl._spawnEnemy('beetle',1);Object.assign(beetle,{x:180,y:70,hp:10000,maxHp:10000,speed:100});
 const old={x:beetle.x,y:beetle.y};crawl.update(.04);assert(beetle.moving);assert(beetle.walkPhase>0);
 assert(Math.abs(beetle.visualFacing-Math.atan2(beetle.y-old.y,beetle.x-old.x))<1e-9);

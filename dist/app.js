@@ -27,6 +27,9 @@ import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-m
 import { backingResolution, RenderSchedule, FrameMetrics } from './render-performance.js';
 import { debugConfigFromSearch } from './debug-mode.js';
 import { drawTrainingDummy } from './training-art.js';
+import { ACTOR_VISUALS } from './actor-visuals.js';
+import { drawDamageNumber } from './damage-numbers.js';
+import { drawCastleActivation } from './relic-activation.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
@@ -494,17 +497,7 @@ function backgroundLand(camX,camY,intro){decorativeShadowShapes.length=0;if(!int
 }
 function drawRegionBackground(camX,camY){regionalArt.drawGround(ctx,game.region.id,camX,camY,width,height);}
 function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,.6);ctx.rotate(t*.11);ctx.globalAlpha=alpha;ctx.strokeStyle='#c4e699';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.stroke();ctx.setLineDash([2,8]);ctx.beginPath();ctx.arc(0,0,r-10,0,TAU);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<8;i++){const a=i*TAU/8;ctx.save();ctx.rotate(a);ctx.translate(r,0);diamond(0,0,4,'#cced9e');line(-6,0,6,0,'#c4e699',1);ctx.restore();}ctx.restore();}
-const ACTOR_VISUALS={
-  trainingDummy:{radius:16,foot:18,halfWidth:24,top:42,shadowWidth:12,shadowLength:18},
-  player:{radius:15,foot:18,halfWidth:29,top:35,shadowWidth:14,shadowLength:24},
-  slime:{radius:16,foot:14,halfWidth:22,top:20,shadowWidth:14,shadowLength:17},
-  bat:{radius:11,foot:20,halfWidth:31,top:27,shadowWidth:18,shadowLength:16},
-  beetle:{radius:18,foot:18,halfWidth:30,top:27,shadowWidth:16,shadowLength:18},
-  brute:{radius:26,foot:23,halfWidth:33,top:32,shadowWidth:23,shadowLength:27},
-  boar:{radius:22,foot:20,halfWidth:36,top:29,shadowWidth:23,shadowLength:25},
-  spore:{radius:20,foot:18,halfWidth:27,top:34,shadowWidth:18,shadowLength:21},
-  boss:{radius:49,foot:41,halfWidth:60,top:68,shadowWidth:39,shadowLength:44}
-};
+
 // All three humanoids share the traveler's body envelope and grounded shadow.
 const HERO_VISUALS={traveler:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:{...ACTOR_VISUALS.player,top:40,halfWidth:39}};
 function actorVisual(entity,isPlayer=false,scaleOverride){
@@ -582,7 +575,7 @@ function drawActors(actors){for(const actor of sortActors(actors))drawActor(acto
 function terrainInView(camX,camY){
   return game?.terrain?.query(camX-width/2-260,camY-height/2-260,camX+width/2+260,camY+height/2+260)||[];
 }
-function sceneVisible(entity){if(!game?.dungeon?.active||!game.dungeon.vision)return true;const actor=entity.type&&ACTOR_VISUALS[entity.type]||entity.isCompanion;const y=entity.groundY??(entity.y+(actor?groundOffset(entity,!!entity.isCompanion):0));return game.dungeon.vision.isVisible(entity.x,y,actor?entity.r||0:0);}
+function sceneVisible(entity){if(!game?.dungeon?.active||!game.dungeon.vision)return true;const actor=entity.type&&ACTOR_VISUALS[entity.type]||entity.isCompanion;const y=entity.groundY??(entity.y+(actor?groundOffset(entity,!!entity.isCompanion):0));return game.dungeon.vision.isVisible(entity.groundX??entity.x,y,actor?entity.r||0:0);}
 function flightCrossesProp(actor,prop){
   const half=prop.type==='log'?(prop.halfLength||0):0,dx=Math.cos(prop.angle||0),dy=Math.sin(prop.angle||0);
   const along=clamp((actor.x-prop.x)*dx+(actor.footY-prop.y)*dy,-half,half);
@@ -883,7 +876,7 @@ function drawRelicGround(){
   const p=game.player;
   for(const site of game.relicSites?.sites||[]){
     if(Math.abs(site.x-p.x)>width/2+280||Math.abs(site.y-p.y)>height/2+280)continue;
-    if(site.type==='hunt')encounterArt.drawGround(ctx,site,combatOptions);else relicArt.drawGround(ctx,site,combatOptions);
+    if(site.type==='hunt')encounterArt.drawGround(ctx,site,{...combatOptions,encounter:game.encounters?.active?.siteId===site.id?game.encounters.active:null});else relicArt.drawGround(ctx,site,combatOptions);
     ctx.save();ctx.textAlign='center';ctx.font='600 10px system-ui';ctx.fillStyle=site.state==='cleared'?'#9eaf91':'#d7c79b';
     ctx.fillText(site.name+(site.state==='cleared'?' · 已完成':site.state==='active'?' · 挑战中':''),site.x,site.y-(site.type==='hunt'?245:site.type==='rune'?104:120));ctx.restore();
   }
@@ -929,7 +922,7 @@ function humanoidPose(entity={},intro=false,t=0){
   const motion=reduced?.65:1;
   return {step:step*motion,leftLift:Math.max(0,step)*3.2*motion,rightLift:Math.max(0,-step)*3.2*motion,
     bodyY:reduced?0:moving?-Math.abs(step)*1.15:intro?Math.sin(t*2)*.65:0,
-    arm:reduced?0:step*1.8,cloth:reduced?0:moving?step*1.7:intro?Math.sin(t*3)*2:0};
+    arm:reduced?0:step*1.8,cloakLift:intro?0:clamp(entity.cloakLift??(moving?1:0),0,1),cloth:reduced?0:moving?step*1.7:intro?Math.sin(t*3)*.65:0};
 }
 function player(x,y,t,scale=1,facing=0,hurtFlash=0,entity={}){
   const time=game?._clock??t,pose=humanoidPose(entity,!game,time);
@@ -957,7 +950,7 @@ function effectInView(e){
   return Math.max(e.x,x2)+margin>=px-width/2&&Math.min(e.x,x2)-margin<=px+width/2&&Math.max(e.y,y2)+margin>=py-height/2&&Math.min(e.y,y2)-margin<=py+height/2;
 }
 function effects(e){if(!sceneVisible(e))return;if(e.type==='rescueWarning'){const age=1-e.life/e.maxLife,r=e.r||24;ctx.save();ctx.globalAlpha=.7;ctx.fillStyle='#e5b77222';ctx.strokeStyle='#efd2a0';ctx.lineWidth=1.8;ctx.beginPath();ctx.ellipse(e.x,e.y,r,r*.65,0,0,TAU);ctx.fill();ctx.stroke();ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(e.x,e.y,r+4,(r+4)*.65,0,-Math.PI/2,-Math.PI/2+TAU*age);ctx.stroke();for(let i=0;i<4;i++){const a=i*TAU/4;diamond(e.x+Math.cos(a)*(r+9),e.y+Math.sin(a)*(r+9)*.65,3,'#eac994');}ctx.restore();return;}if(angelArt.drawStrike(ctx,e,combatOptions))return;
-  if(!effectInView(e)||drawBarrierEffect(ctx,e,game,combatOptions)||combatVfx.drawHit(ctx,e,combatOptions)||combatVfx.drawBurst(ctx,e,combatOptions,'air')||combatArt.drawEffect(ctx,e,combatOptions)||superArt.drawEffect(ctx,e,combatOptions))return;
+  if(!effectInView(e)||drawDamageNumber(ctx,e,combatOptions)||drawBarrierEffect(ctx,e,game,combatOptions)||combatVfx.drawHit(ctx,e,combatOptions)||combatVfx.drawBurst(ctx,e,combatOptions,'air')||combatArt.drawEffect(ctx,e,combatOptions)||superArt.drawEffect(ctx,e,combatOptions))return;
   const alpha=clamp(e.life/e.maxLife,0,1),progress=1-alpha;ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=e.color||'#e9e4b7';ctx.fillStyle=e.color||'#e9e4b7';
   if(e.type==='ring'){
     if(e.control||e.branch==='control'){ctx.strokeStyle='#9fe5cf';ctx.fillStyle='#9fe5cf';}
@@ -983,7 +976,7 @@ function effects(e){if(!sceneVisible(e))return;if(e.type==='rescueWarning'){cons
     const radius=(e.r||20)*(reduced?.8:.5+progress*.6);ctx.lineWidth=1.8;ctx.strokeStyle='#e8a486';for(let i=0;i<5;i++){const a=i*TAU/5+.25;line(e.x+Math.cos(a)*radius*.5,e.y+Math.sin(a)*radius*.5,e.x+Math.cos(a)*radius,e.y+Math.sin(a)*radius,'#e8a486',1.8);}
   }else if(e.type==='conduction'){
     const dx=e.x2-e.x,dy=e.y2-e.y,d=Math.hypot(dx,dy)||1,mx=e.x+dx*.5,my=e.y+dy*.5;ctx.strokeStyle='#bde5f9';ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+dx*.32-dy/d*7,e.y+dy*.32+dx/d*7);ctx.lineTo(mx+dy/d*5,my-dx/d*5);ctx.lineTo(e.x2,e.y2);ctx.moveTo(mx+dy/d*5,my-dx/d*5);ctx.lineTo(mx+dx/d*5+dy/d*12,my+dy/d*5-dx/d*12);ctx.stroke();
-  }else if(e.type==='damage'||e.type==='heal'){ctx.font=`600 ${e.type==='heal'?15:11}px ui-monospace,monospace`;ctx.textAlign='center';ctx.fillText(e.text||'',e.x,e.y);}
+  }else if(e.type==='heal'){ctx.font='600 15px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(e.text||'',e.x,e.y);}
   ctx.restore();
 }
 // A fixed ground boundary shows the exact danger zone; only its countdown
@@ -1095,7 +1088,7 @@ function drawSettlement(site){
   ctx.save();ctx.translate(x,y);ctx.lineJoin='round';
   if(type==='angel'){ctx.restore();return;}
   const foot=game.player.y+19.8,behind=foot<y+4&&Math.abs(game.player.x-x)<w/2+27&&game.player.y>y-depth-135;
-  ctx.restore();regionalArt.drawCastle(ctx,site,behind);ctx.save();ctx.translate(x,y);ctx.textAlign='center';ctx.font='600 10px system-ui,sans-serif';ctx.fillStyle=site.state==='spent'?'#a3b39a':castle?'#d5c6e2':'#dfd3ad';ctx.shadowColor='#10251c';ctx.shadowBlur=3;ctx.fillText(site.name||({merchant:'旅人商铺',supply:'林间小屋',occupied:'被占据的小屋',castle:'旧王城堡'}[type]),0,castle?-164:-depth-82);ctx.shadowBlur=0;
+  ctx.restore();regionalArt.drawCastle(ctx,site,behind);drawCastleActivation(ctx,site,behind);ctx.save();ctx.translate(x,y);ctx.textAlign='center';ctx.font='600 10px system-ui,sans-serif';ctx.fillStyle=site.state==='spent'?'#a3b39a':castle?'#d5c6e2':'#dfd3ad';ctx.shadowColor='#10251c';ctx.shadowBlur=3;ctx.fillText(site.name||({merchant:'旅人商铺',supply:'林间小屋',occupied:'被占据的小屋',castle:'旧王城堡'}[type]),0,castle?-164:-depth-82);ctx.shadowBlur=0;
   if(site.state==='spent'||site.state==='claimed'||site.explored){ctx.font='9px system-ui';ctx.fillStyle='#99ad91';ctx.fillText('已探索',0,33);}else if(site.type==='occupied'&&site.state==='active'){ctx.font='9px system-ui';ctx.fillStyle='#edc29c';ctx.fillText('屋内尚有守卫',0,35);}
   ctx.restore();
 }

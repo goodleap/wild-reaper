@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 const fresh=()=>{const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});g.enemies=[];g._spawn=Infinity;g._shot=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;};
-const finishTransition=g=>{assert(g.sceneTransition.active,'doorway contact queues a scene transition');for(let i=0;g.sceneTransition.active&&i<20;i++)g.update(.025);assert.equal(g.sceneTransition.active,false,'scene transition completes within its short duration');};
+const finishTransition=g=>{assert(g.sceneTransition.active,'doorway contact queues a scene transition');for(let i=0;g.sceneTransition.active&&i<32;i++)g.update(.025);assert.equal(g.sceneTransition.active,false,'scene transition completes within its short duration');};
 const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
 const site=(g,type,x=120)=>{const s={id:`touch:${type}`,type,name:type,x,y:0,door:{x,y:30},width:54,depth:28,interactRadius:82,state:'ready',seed:1,guardIds:[],stock:{heal:1}};g.settlements.sites=[s];return s;};
 const merchant=fresh(),shop=site(merchant,'merchant');

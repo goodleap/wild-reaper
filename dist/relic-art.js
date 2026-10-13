@@ -1,6 +1,7 @@
 // Persistent rescue ruins: shallow masonry is split at its real foot positions
 // so actors can walk in front of or behind each wall. No gameplay RNG, baked
 // cast shadows or invisible collision geometry is introduced by this module.
+import { relicActivationStrength } from './relic-activation.js';
 const TAU = Math.PI * 2, PIXEL_LIMIT = 1024 * 1024;
 const hash = (a, b = 0) => { const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return n - Math.floor(n); };
 const poly = (c, p, fill, edge, width = 1) => {
@@ -243,11 +244,16 @@ export class RelicArt {
       const image = this._runeFloor(); c.drawImage(image.canvas, site.x - image.ox, site.y - image.oy, image.w, image.h);
       if (site.state === 'active') {
         const time = options.reduced ? 0 : Number.isFinite(options.time) ? options.time : 0;
-        c.save(); c.translate(site.x, site.y + 2); c.globalAlpha *= .65 + Math.sin(time * 2) * .13;
+        const activation = relicActivationStrength(site);
+        c.save(); c.translate(site.x, site.y + 2); c.globalAlpha *= Math.min(1, .65 + Math.sin(time * 2) * .13 + activation * .35);
         for (let i = 0; i < 3; i++) {
           c.save(); c.rotate(i * TAU / 3);
           poly(c, [[-1, -1], [-9, -9], [-3, -14], [4, -8], [2, -2]], '#c4e9c9');
           line(c, [[0, -20], [0, -30], [-5, -35]], '#bfdac48c', 1.2); c.restore();
+        }
+        if (activation > 0) {
+          c.globalAlpha *= activation;
+          poly(c, [[0, -21], [23, -8], [22, 12], [0, 25], [-22, 11], [-24, -8]], '#d6f3c52a', '#eff2c7', 1.7);
         }
         c.restore();
       }
@@ -288,7 +294,12 @@ export class RelicArt {
       const image = this._runeTablet(); c.drawImage(image.canvas, prop.x - image.ox, prop.y - image.oy, image.w, image.h);
       if (prop.site?.state === 'active') {
         const time = options.reduced ? 0 : Number.isFinite(options.time) ? options.time : 0;
-        c.save(); c.globalAlpha *= .8 + Math.sin(time * 2 + prop.dx * .03) * .12;
+        const activation = relicActivationStrength(prop.site);
+        c.save(); c.globalAlpha *= Math.min(1, .8 + Math.sin(time * 2 + prop.dx * .03) * .12 + activation * .2);
+        if (activation > 0) {
+          c.save(); c.globalAlpha *= activation;
+          line(c, [[prop.x - 2, prop.y - 26], [prop.x + 2, prop.y - 23], [prop.x - 2, prop.y - 19], [prop.x + 2, prop.y - 16], [prop.x - 2, prop.y - 12]], '#d4efb777', 5); c.restore();
+        }
         line(c, [[prop.x - 2, prop.y - 26], [prop.x + 2, prop.y - 23], [prop.x - 2, prop.y - 19], [prop.x + 2, prop.y - 16], [prop.x - 2, prop.y - 12]], '#c9efce', 1.4); c.restore();
       }
       return true;
@@ -298,6 +309,14 @@ export class RelicArt {
     const image = part === 'back' ? this._back() : part.startsWith('side') ? this._side() : part.startsWith('post') ? this._post() : this._gate(open);
     c.save(); c.translate(prop.x, prop.y);
     if (part === 'sideRight' || part === 'gateRight') c.scale(-1, 1);
-    c.drawImage(image.canvas, -image.ox, -image.oy, image.w, image.h); c.restore(); return true;
+    c.drawImage(image.canvas, -image.ox, -image.oy, image.w, image.h);
+    const activation = relicActivationStrength(prop.site);
+    if (activation > 0 && part.startsWith('post')) {
+      c.globalAlpha *= activation;
+      const frame = [[-9, -3], [-9, -39], [-4, -47], [6, -47], [11, -39], [11, -3]];
+      line(c, frame, '#a3c9ac63', 6); line(c, frame, '#f4e3ac', 1.5);
+      poly(c, [[-2, -33], [3, -28], [0, -22], [-5, -28]], '#fff0be');
+    }
+    c.restore(); return true;
   }
 }

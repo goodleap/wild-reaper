@@ -194,6 +194,58 @@ export class EncounterArt {
       for (let i = 0; i < 7; i++) leaf(c, -9 + i * 2.7, 1 + (i % 3), 4, 1.6, i * 1.8, ['#648749', '#92a25c', '#416c3b'][i % 3]);
     });
   }
+  _crestGlow() {
+    return this._image('arena-crest-glow', 144, 144, 1.5, c => {
+      c.translate(72, 72);
+      // Trace the crest already carved in the floor; it never grows outward.
+      c.beginPath(); c.arc(0, 0, 62, 0, TAU); c.strokeStyle = '#e7d992a6'; c.lineWidth = 2; c.stroke();
+      const stag = [[-7, -16], [-17, -26], [-13, -12], [-12, 0], [-5, 18], [0, 26], [5, 18], [12, 0], [13, -12], [17, -26], [7, -16], [0, -20]];
+      polygon(c, stag, '#d5df8d22', '#f1e3a3', 1.5);
+      for (const side of [-1, 1]) {
+        line(c, [[side * 8, -17], [side * 18, -31], [side * 18, -42], [side * 23, -46]], '#fff0b9', 2);
+        line(c, [[side * 18, -31], [side * 27, -32], [side * 31, -38]], '#f4e3a4', 1.5);
+        line(c, [[side * 18, -37], [side * 10, -41], [side * 8, -46]], '#f4e3a4', 1.5);
+        line(c, [[side * 15, 38], [side * 35, 27], [side * 45, 6], [side * 39, -17], [side * 28, -32]], '#e8de9bc9', 1.5);
+      }
+    });
+  }
+  _rimGlow() {
+    return this._image('arena-rim-glow', 456, 456, 1, c => {
+      c.translate(228, 228);
+      for (let i = 0; i < 40; i++) {
+        const from = i * TAU / 40 + .013, to = (i + 1) * TAU / 40 - .013;
+        if (Math.min(Math.abs(Math.sin((from + to) / 2)), Math.abs(Math.cos((from + to) / 2))) < .17) continue;
+        bandPath(c, 199, 220, from, to); c.fillStyle = '#f4dda92d'; c.fill();
+        c.beginPath(); c.arc(0, 0, TEMPLATE_R, from, to); c.strokeStyle = '#e9d39173'; c.lineWidth = 7; c.stroke();
+        c.strokeStyle = '#fff0b8'; c.lineWidth = 1.7; c.stroke();
+      }
+    });
+  }
+  _activation(c, site, options) {
+    const battle = options.encounter || site, age = battle.activationAge, duration = battle.activationDuration || .7;
+    const half = duration * .5;
+    const center = site.state === 'ready' ? .22 : Number.isFinite(age) && age >= 0 && age < half ? Math.sin(Math.PI * age / half) : 0;
+    const rim = Number.isFinite(age) && age >= half && age < duration ? Math.sin(Math.PI * (age - half) / half) : 0;
+    if (center > 0) {
+      const image = this._crestGlow(); c.save(); c.globalAlpha *= center;
+      c.drawImage(image.canvas, -72, -72, 144, 144); c.restore();
+    }
+    if (rim > 0) {
+      const image = this._rimGlow(); c.save(); c.globalAlpha *= rim;
+      c.drawImage(image.canvas, -228, -228, 456, 456); c.restore();
+    }
+  }
+  _spawnWarnings(c, site, options) {
+    const battle = options.encounter || site;
+    for (const warning of battle.spawnWarnings || []) {
+      const progress = clamp((warning.age || 0) / (warning.duration || .45), 0, 1);
+      c.save(); c.translate(warning.x, warning.y); c.globalAlpha *= .35 + progress * .55;
+      // Ground-fixed split diamonds mark approaching guards without blast rings.
+      polygon(c, [[-14, 0], [0, -8], [14, 0], [0, 8]], '#efd49025', '#ead097b0', 1.3);
+      line(c, [[-8, -1], [-3, -4], [0, -2], [3, -4], [8, -1]], '#ffedbe', 1.4);
+      line(c, [[-5, 4], [0, 1], [5, 4]], '#c9d9a5', 1.2); c.restore();
+    }
+  }
   drawGround(c, active, options = {}) {
     if (active?.type !== 'hunt' || !(active.r > 0)) return;
     const scale = active.r / TEMPLATE_R, floor = this._floor(), goal = clamp(Math.round(active.goal || 12), 1, 36);
@@ -209,7 +261,9 @@ export class EncounterArt {
       c.save(); c.rotate(angle); c.translate(TEMPLATE_R, 0); c.rotate(Math.PI / 2);
       c.drawImage(image.canvas, -14, -10, 28, 20); c.restore();
     }
+    this._activation(c, active, options);
     c.restore();
+    this._spawnWarnings(c, active, options);
   }
   props(active) {
     if (active?.type !== 'hunt' || !(active.r > 0)) return [];

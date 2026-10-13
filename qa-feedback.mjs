@@ -4,7 +4,7 @@ import { Terrain, groundOffset } from './dist/terrain.js';
 import { updateWeaponKnockback } from './dist/weapon-knockback.js';
 
 // Count every gameplay-random draw: rendering metadata must not change the
-// subsequent damage-number/loot rolls, even during a screen-clearing attack.
+// subsequent loot rolls, even during a screen-clearing attack.
 let randomCalls=0,rolls=[];
 Math.random=()=>{randomCalls++;return rolls.length?rolls.shift():.7;};
 const resetRolls=(...values)=>{randomCalls=0;rolls=values;};
@@ -23,7 +23,7 @@ function advance(g,seconds) {
 const g=arena(),target=enemy(g);g._clock=12.345;
 resetRolls(.7);
 assert.equal(g._hurtEnemy(target,20,10,{x:100,y:50},'arrow'),20);
-assert.equal(randomCalls,1,'a normal nonlethal hit keeps its sole pre-existing damage-label roll');
+assert.equal(randomCalls,0,'a normal nonlethal hit uses deterministic damage-number lanes');
 assert.equal(target.hp,80);assert.equal(target.hit,.12);assert.equal(target.hitSource,'arrow');
 assert(Math.abs(target.hitAngle-Math.atan2(30,40))<1e-12,'hit direction is captured before physical knockback');
 assert(Math.abs(target.hitStrength-.6)<1e-12);assert.equal(target.x,140);assert.equal(target.y,80);
@@ -33,12 +33,12 @@ assert.equal(hit.maxLife,.24);assert.equal(hit.x,target.x);assert.equal(hit.y,ta
 assert([hit.x,hit.y,hit.r,hit.angle,hit.strength,hit.seed,hit.life].every(Number.isFinite));
 updateWeaponKnockback(g,target,.16);
 assert.equal(target.x,148);assert.equal(target.y,86);
-assert.equal(randomCalls,1,'decaying displacement does not consume gameplay randomness');
+assert.equal(randomCalls,0,'decaying displacement does not consume gameplay randomness');
 
 const same=arena(),sameTarget=enemy(same,'slime',{id:target.id});same._clock=g._clock;
 resetRolls(.1,.75);
 same._hurtEnemy(sameTarget,20,0,{x:100,y:50},'arrow');
-assert.equal(randomCalls,2,'showing a damage label still draws only its existing chance and jitter rolls');
+assert.equal(randomCalls,0,'showing a damage label consumes no chance or jitter rolls');
 assert.equal(same.effects.find(e=>e.type==='hit').seed,hit.seed,'hit variation depends only on enemy identity and game time');
 same._clock+=.025;resetRolls(.7);same._hurtEnemy(sameTarget,1);
 assert.notEqual(same.effects.filter(e=>e.type==='hit').at(-1).seed,hit.seed);
@@ -49,14 +49,14 @@ same._effect(10,20,'test',.5,10,'#fff',undefined,{seed:12345});assert.equal(same
 const deathGame=arena(),victim=enemy(deathGame,'slime',{hp:5}),beforeXp=deathGame.player.xp;
 resetRolls(.7,.7);
 assert.equal(deathGame._hurtEnemy(victim,500,0,deathGame.player,'lightning'),5);
-assert.equal(randomCalls,2,'ordinary death keeps exactly the existing label and coin rolls');
+assert.equal(randomCalls,1,'ordinary death uses only its existing coin roll');
 assert.equal(deathGame.kills,1);assert.equal(deathGame.player.xp,beforeXp+victim.xp);
 assert.equal(deathGame.gems.reduce((sum,e)=>sum+e.value,0),victim.xp);assert.equal(deathGame.coins.length,0);
 const defeat=deathGame.effects.find(e=>e.type==='defeat');
 assert.equal(defeat.maxLife,.5);assert.equal(defeat.enemyType,'slime');assert.equal(defeat.boss,false);
 assert.equal(defeat.source,'lightning');assert.equal(defeat.r,victim.r);assert.equal(defeat.color,'#cce9ff');
 assert.equal(deathGame._hurtEnemy(victim,500),0);assert.equal(deathGame.effects.filter(e=>e.type==='defeat').length,1);
-assert.equal(deathGame.kills,1);assert.equal(randomCalls,2,'repeated hits on a corpse cannot consume randomness or create a second burst');
+assert.equal(deathGame.kills,1);assert.equal(randomCalls,1,'repeated hits on a corpse cannot consume randomness or create a second burst');
 const boss=enemy(deathGame,'boss',{hp:5});deathGame._hurtEnemy(boss,100,0,deathGame.player,'storm');
 const bossDefeat=deathGame.effects.find(e=>e.type==='defeat'&&e.boss);
 assert.equal(bossDefeat.maxLife,.95);assert.equal(bossDefeat.enemyType,'boss');assert.equal(bossDefeat.r,boss.r);

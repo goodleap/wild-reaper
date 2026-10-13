@@ -1,9 +1,13 @@
 import { groundOffset } from './terrain.js';
 import { canStartObjective, objectivePointSafe } from './event-scheduling.js';
+import { placementAllowed } from './placement-rules.js';
 
 const TAU=Math.PI*2;
 const TYPES=['treasure','hunt'];
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+export const ARENA_ACTIVATION_RULES=Object.freeze({warmup:.7,batchSize:3,batchInterval:1.25,warning:.45,spawnGrace:.3,spawnDistance:150,enemyLimit:180});
+const guardType=index=>index%8===0?'brute':index%3===0?'beetle':'slime';
+const guardRadius=type=>type==='brute'?26:type==='beetle'?18:16;
 
 // Optional objectives have distinct resource identities: chase for gold, hunt
 // for skill crystals. Rewards are detached before payment to prevent repeats.
@@ -40,7 +44,6 @@ export class Encounters {
     if(type==='treasure'&&g.enemies.length>=180)return null;
     const relic=type==='hunt'&&!!siteId,goal=relic?24:12;
     if(siteId&&!g.relicSites?.sites.some(s=>s.id===siteId&&s.type==='hunt'&&s.state==='ready'))return null;
-    if(relic&&g.enemies.length+goal>180)return null;
     const point=this._point(x,y,type,!!siteId);if(!point)return null;
     const life=type==='hunt'?40:35;
     const active={id:`encounter:${++this._id}`,type,...point,r:210,life,maxLife:life,goal,progress:0,enemyId:null,state:'active',siteId,category:relic?'relic':'random'};
@@ -55,23 +58,75 @@ export class Encounters {
       active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);
     }
     if(relic) {
-      active._remaining=new Set();active.guardIds=[];
-      for(let i=0;i<goal;i++) {
-        const type=i%8===0?'brute':i%3===0?'beetle':'slime',enemy=g._spawnEnemy(type,1);
-        if(!enemy){g.enemies=g.enemies.filter(e=>e.eventId!==active.id);return null;}
-        const angle=i*TAU/12+(i>=12?TAU/24:0),radius=i<12?155:195;
-        enemy.eventRole='huntGuard';enemy.eventId=active.id;enemy.relicSiteId=siteId;
-        enemy.huntHome={x:point.x+Math.cos(angle)*radius,y:point.y+Math.sin(angle)*radius};
-        enemy.x=enemy.huntHome.x;enemy.y=enemy.huntHome.y-groundOffset(enemy);
-        enemy.hp*=1.5;enemy.maxHp=enemy.hp;enemy.xp=2;enemy.guardActive=false;
-        enemy._navTimer=0;g._moveEntity(enemy,0,0);
-        active.guardIds.push(enemy.id);active._remaining.add(enemy.id);
-      }
+      active._remaining=new Set();active.guardIds=[];active.spawnedCount=0;
+      active.activationAge=0;active.activationDuration=ARENA_ACTIVATION_RULES.warmup;
+      active.spawnTimer=0;active.spawnWarnings=[];
+      active.pendingGuards=Array.from({length:goal},(_,index)=>({index,type:guardType(index)}));
     }
     this.active=active;this._nextType='treasure';
     g._emit(type==='hunt'?'encounterHunt':'encounterTreasure');
-    g._effect(active.x,active.y,'ring',.75,type==='hunt'?80:48,'#e8ce85');
+    if(!relic)g._effect(active.x,active.y,'ring',.75,type==='hunt'?80:48,'#e8ce85');
     return active;
+  }
+  _arenaPointSafe(point,type,active,ignoreWarning=null) {
+    const g=this.game,r=guardRadius(type),p=this._foot();
+    if(distance(point,p)<ARENA_ACTIVATION_RULES.spawnDistance||!placementAllowed(g,'loot',{x:point.x,y:point.y,r:r+5}))return false;
+    if(g.environment?.isHazardFree?.(point.x,point.y,r+6)===false||g.settlements?.isSafePoint(point.x,point.y,r+6)===false)return false;
+    if(g.environment?.props.some(o=>o.state!=='spent'&&distance(point,o)<(o.blastRadius||82)+r+8))return false;
+    if(g.adventure?.props.some(o=>distance(point,o)<r+(o.r||18)+10))return false;
+    if(g.enemies.some(e=>e.hp>0&&distance(point,this._foot(e,false))<r+e.r+12))return false;
+    return !active.spawnWarnings.some(w=>w!==ignoreWarning&&distance(point,w)<r+guardRadius(w.type)+12);
+  }
+  _arenaSpawnPoint(active,guard,ignoreWarning=null) {
+    // Search the existing rim only. If all approaches are occupied, wait rather
+    // than teleporting a defender into the player, water or nearby scenery.
+    for(const radius of [190,205,220])for(let i=0;i<24;i++) {
+      const angle=guard.index*2.399963229728653+i*TAU/24;
+      const point={x:active.x+Math.cos(angle)*radius,y:active.y+Math.sin(angle)*radius};
+      if(this._arenaPointSafe(point,guard.type,active,ignoreWarning))return point;
+    }
+    return null;
+  }
+  _spawnArenaGuard(active,warning) {
+    const g=this.game;if(g.enemies.length>=ARENA_ACTIVATION_RULES.enemyLimit)return false;
+    const enemy=g._spawnEnemy(warning.type,1);if(!enemy)return false;
+    enemy.eventRole='huntGuard';enemy.eventId=active.id;enemy.relicSiteId=active.siteId;
+    enemy.huntHome={x:warning.x,y:warning.y};enemy.x=warning.x;enemy.y=warning.y-groundOffset(enemy);
+    enemy.hp*=1.5;enemy.maxHp=enemy.hp;enemy.xp=2;enemy.guardActive=false;
+    enemy.rescueSpawnGrace=ARENA_ACTIVATION_RULES.spawnGrace;enemy._navTimer=0;
+    active.guardIds.push(enemy.id);active._remaining.add(enemy.id);active.spawnedCount++;return true;
+  }
+  _updateArena(active,dt) {
+    const rules=ARENA_ACTIVATION_RULES;
+    if(active.activationAge<active.activationDuration) {
+      active.activationAge=Math.min(active.activationDuration,active.activationAge+dt);
+      if(active.activationAge<active.activationDuration)return;
+    }
+    active.spawnTimer=Math.max(0,active.spawnTimer-dt);
+    for(const warning of [...active.spawnWarnings]) {
+      warning.age=Math.min(warning.duration,warning.age+dt);
+      if(warning.age<warning.duration)continue;
+      // Walking into a warning cancels that location, including on the exact
+      // spawn frame. A replacement is telegraphed for the full duration again.
+      if(!this._arenaPointSafe(warning,warning.type,active,warning)) {
+        const point=this._arenaSpawnPoint(active,warning,warning);
+        if(point)Object.assign(warning,point);
+        warning.age=0;continue;
+      }
+      if(this._spawnArenaGuard(active,warning)) {
+        active.spawnWarnings.splice(active.spawnWarnings.indexOf(warning),1);
+        if(!active.spawnWarnings.length)active.spawnTimer=Math.max(active.spawnTimer,rules.batchInterval-rules.warning);
+      }
+    }
+    if(active.spawnWarnings.length||!active.pendingGuards.length||active.spawnTimer>0)return;
+    if(this.game.enemies.length>=rules.enemyLimit)return;
+    for(let i=0;i<rules.batchSize&&active.pendingGuards.length;i++) {
+      const guard=active.pendingGuards[0],point=this._arenaSpawnPoint(active,guard);
+      if(!point)break;
+      active.pendingGuards.shift();active.spawnWarnings.push({...guard,...point,age:0,duration:rules.warning});
+    }
+    // A delayed wave never accumulates an overdue burst after a scene return.
+    active.spawnTimer=active.spawnWarnings.length?rules.batchInterval:.2;
   }
   _finish(success) {
     const active=this.active;if(!active)return false;
@@ -98,9 +153,9 @@ export class Encounters {
     }
     if(active.siteId) {
       if(enemy.eventId!==active.id||enemy.eventRole!=='huntGuard'||!active._remaining.delete(enemy.id))return;
-      active.progress=active.goal-active._remaining.size;
+      active.progress++;
       const site=this.game.relicSites?.sites.find(s=>s.id===active.siteId);if(site)site.progress=active.progress;
-      if(!active._remaining.size)this._finish(true);
+      if(active.spawnedCount===active.goal&&!active.pendingGuards.length&&!active.spawnWarnings.length&&!active._remaining.size)this._finish(true);
       return;
     }
     if(enemy.type==='boss'||enemy.guardianId||enemy.rescueId||enemy.elite||enemy.affix||enemy.summoned||enemy.eventRole||enemy._encounterCounted===active.id)return;
@@ -112,6 +167,11 @@ export class Encounters {
     if(enemy.eventRole==='huntGuard') {
       const active=this.active,g=this.game;
       if(!active||active.id!==enemy.eventId||enemy.hp<=0||g.status!=='playing')return true;
+      if(enemy.rescueSpawnGrace>0) {
+        enemy.rescueSpawnGrace=Math.max(0,enemy.rescueSpawnGrace-Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0)));
+        enemy.guardActive=false;enemy.guardReturnTarget=null;enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
+        return true;
+      }
       const foot=this._foot(enemy,false),engaged=distance(this._foot(),active)<active.r+140&&distance(foot,active)<active.r+120;
       enemy.guardActive=engaged;enemy.guardReturnTarget=null;
       if(engaged)g._moveEnemy(enemy,dt);
@@ -147,7 +207,7 @@ export class Encounters {
     active.x=enemy.x;active.y=enemy.y+groundOffset(enemy);return true;
   }
   update(dt) {
-    const g=this.game;if(g.status!=='playing')return;
+    const g=this.game;if(g.status!=='playing'||g.dungeon?.active||g.sceneTransition?.active)return;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
     const active=this.active;
     if(active) {
@@ -155,7 +215,8 @@ export class Encounters {
         // Only real lethal hits remove IDs. Scene/range cleanup must never
         // finish a relic or silently refresh its finite defenders.
         const present=new Set(g.enemies.filter(e=>e.hp>0&&e.eventId===active.id).map(e=>e.id));
-        if([...active._remaining].some(id=>!present.has(id)))this._finish(false);
+        if([...active._remaining].some(id=>!present.has(id))){this._finish(false);return;}
+        this._updateArena(active,dt);
         return;
       }
       active.life=Math.max(0,active.life-dt);
