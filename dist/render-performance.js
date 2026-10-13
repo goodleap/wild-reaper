@@ -12,12 +12,12 @@ export function backingResolution(width, height, nativeDpr = 1, maxPixels = MAX_
   return { width: bufferWidth, height: bufferHeight, scaleX, scaleY, pixelRatio: Math.max(scaleX, scaleY) };
 }
 
-const sceneKeys = ['game', 'scene', 'status', 'paused', 'helpOpen', 'mapOpen', 'characterOpen', 'runEnded', 'hidden'];
+const sceneKeys = ['game', 'scene', 'status', 'paused', 'helpOpen', 'mapOpen', 'characterOpen', 'archiveOpen', 'runEnded', 'hidden'];
 export class RenderSchedule {
   constructor() { this.dirty = true; this.lastState = null; }
   invalidate() { this.dirty = true; }
   isLive(state) {
-    return !state.hidden && !state.paused && !state.helpOpen && !state.mapOpen && !state.characterOpen && !state.runEnded && (!state.game || state.status === 'playing');
+    return !state.hidden && !state.paused && !state.helpOpen && !state.mapOpen && !state.characterOpen && !state.archiveOpen && !state.runEnded && (!state.game || state.status === 'playing');
   }
   shouldRender(state) {
     if (state.hidden) return false;

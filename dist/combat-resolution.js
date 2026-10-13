@@ -112,7 +112,7 @@ export class CombatResolution {
     if(enemy.hp<=0) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy._weaponPush=null;
       g._effect(enemy.x,enemy.y,'defeat',enemy.type==='boss'?.95:.5,enemy.r,color,undefined,{enemyType:enemy.type,source,boss:enemy.type==='boss',angle,strength,seed});
-      g.kills++; g._emit('kill');
+      g.kills++; g.onEnemyDefeated?.(enemy); g._emit('kill');
       // Kill XP is automatic. Loot is a separate skill/currency resource and
       // never opens a modal in the middle of an attack's target loop.
       if(enemy.xp>0&&!enemy.summoned) {
