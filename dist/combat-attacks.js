@@ -4,7 +4,7 @@ import { blocksObstacle, isGrounded } from './height-rules.js';
 import { weaponStats, skillStats, ATTACK_DEFAULTS } from './combat-stats.js';
 import { WeaponTrail } from './weapon-trails.js';
 import { SwordCombat } from './sword-combat.js';
-import { clearWeaponKnockbackScene } from './weapon-knockback.js';
+import { clearWeaponKnockbackScene, weaponKnockbackDistance } from './weapon-knockback.js';
 
 const TAU=Math.PI*2;
 const sq=v=>v*v;
@@ -101,7 +101,7 @@ export class CombatAttacks {
           const angle=base+(i?Math.ceil(i/2)*.16*(i%2?1:-1)*(g._volley%2?1:-1):0);
           // A projectile snapshots its source and numbers. Later upgrades or
           // expiry of fury do not alter a volley already crossing the screen.
-          g.bullets.push({weaponId:'arrow',x:p.x,y:p.y,r:4,angle,color:branch==='ricochet'?'#ead59b':branch==='pierce'?'#a5eed1':'#c3e9a4',vx:Math.cos(angle)*stats.speed,vy:Math.sin(angle)*stats.speed,speed:stats.speed,life:stats.life,damage:stats.damage*(i?stats.sideDamageMultiplier:1),volley,branch,pierce:stats.targetLimit,targetLimit:stats.targetLimit,maxBounces:stats.maxBounces,retention:stats.retention,bounces:0,hitIds:new Set()});
+          g.bullets.push({weaponId:'arrow',x:p.x,y:p.y,r:4,angle,color:branch==='ricochet'?'#ead59b':branch==='pierce'?'#a5eed1':'#c3e9a4',vx:Math.cos(angle)*stats.speed,vy:Math.sin(angle)*stats.speed,speed:stats.speed,life:stats.life,damage:stats.damage*(i?stats.sideDamageMultiplier:1),knockback:stats.knockback,volley,branch,pierce:stats.targetLimit,targetLimit:stats.targetLimit,maxBounces:stats.maxBounces,retention:stats.retention,bounces:0,hitIds:new Set()});
         }
         if(stats.runic>0)g.superSkills?.castRunicVolley?.(stats,target);
         g._emit('shoot');
@@ -150,7 +150,7 @@ export class CombatAttacks {
       const used=b.volley?.damageByTarget.get(impact.id)||0;
       const damage=b.volley?Math.max(0,Math.min(b.damage,b.volley.limit-used)):b.damage;
       if(damage>1e-8) {
-        const dealt=g._hitEnemy(impact,damage,4,origin,'arrow');g._emit('hit');
+        const dealt=g._hitEnemy(impact,damage,b.knockback??weaponKnockbackDistance(),origin,'arrow');g._emit('hit');
         if(b.volley&&dealt>0)b.volley.damageByTarget.set(impact.id,used+dealt);
       }
       if(--b.pierce<=0||b.hitIds.size>=targetLimit){b.life=0;break;}
@@ -203,7 +203,7 @@ export class CombatAttacks {
       g.orbitals.push(blade);
       g.environment?.hitAt(blade.x,blade.y,blade.r,'orbit',prop=>propPath(g,origin,prop,'orbit'));
       for(const e of g._nearby(blade.x,blade.y,65))if(e.orbitHit<=0&&dist2(e,blade)<sq(e.r+blade.r)&&canTarget(g,e,origin,{source:'orbit',checkPath:true})) {
-        g._hitEnemy(e,stats.damage,4,origin,'orbit');e.orbitHit=stats.hitInterval;
+        g._hitEnemy(e,stats.damage,stats.knockback,origin,'orbit');e.orbitHit=stats.hitInterval;
       }
       for(const prop of g.adventure?.props||[])if(prop.hp>0&&(prop._orbitNext||0)<=g.time&&sq(prop.x-blade.x)+sq((prop.aimY??prop.y)-blade.y)<sq(prop.r+blade.r)&&propPath(g,origin,prop,'orbit')) {
         g.adventure.hitSupply(prop,stats.damage);prop._orbitNext=g.time+stats.hitInterval;

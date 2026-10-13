@@ -149,6 +149,7 @@ for(const defense of [0,20,100,119]) {
   near(defenseDamageMultiplier(defense),100/(100+defense),'damage multiplier');
   near(defenseReduction(defense),defense/(100+defense),'displayed reduction');
   assert(game._hurtPlayer(40));near(hp-game.player.hp,40*100/(100+defense),`actual damage at defense ${defense}`);
+  assert.equal(game.player.hurtFlash,.8,'actual health loss starts a separate hurt blink');
   assert.equal(game.player.invuln,.8);const afterHit=game.player.hp;
   assert.equal(game._hurtPlayer(40),false);assert.equal(game.player.hp,afterHit);
   advance(game,.75);assert.equal(game._hurtPlayer(40),false,'existing invulnerability persists for 0.8 seconds');
@@ -163,6 +164,7 @@ assert.equal(shielded.relics.shieldCooldown,12.75);assert.equal(shielded.player.
 const blocked=arena();blocked.levels.toughness=5;blocked._refreshStats();
 assert(blocked.relics.acquire('leafWard'));assert(blocked.relics.grantWard(18));
 assert(blocked._hurtPlayer(30));assert.equal(blocked.player.hp,100);
+assert.equal(blocked.player.hurtFlash,0,'a fully absorbed hit does not blink like health damage');
 assert.equal(blocked.relics.wardAmount,0);assert.equal(blocked.relics.shieldReady,true,'a ward that absorbs the reduced hit preserves the automatic barrier');
 assert.equal(blocked.player.invuln,.8);
 

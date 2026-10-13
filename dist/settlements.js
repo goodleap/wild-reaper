@@ -236,7 +236,7 @@ export class Settlements {
       if(nearby){inAura=true;site.healing=player.hp<player.maxHp;}
       site._attack=Math.max(0,(site._attack||0)-dt);
       if(site._attack>1e-8||!g._inView(site,ANGEL_RULES.guardRadius))continue;
-      const canHit=enemy=>enemy.hp>0&&!enemy.dungeonId&&!(enemy.rescueSpawnGrace>0)&&enemy.guardActive!==false&&g._inView(enemy)&&
+      const canHit=enemy=>enemy.hp>0&&!enemy.trainingDummy&&!enemy.dungeonId&&!(enemy.rescueSpawnGrace>0)&&enemy.guardActive!==false&&g._inView(enemy)&&
         Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y)<=ANGEL_RULES.guardRadius;
       let target=null,nearest=Infinity;
       for(const enemy of g.enemies)if(canHit(enemy)){const d=Math.hypot(enemy.x-site.x,enemy.y+groundOffset(enemy)-site.y);if(d<nearest){target=enemy;nearest=d;}}

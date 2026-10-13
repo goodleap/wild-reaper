@@ -30,6 +30,7 @@ import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { SceneTransition } from './scene-transition.js';
 import { spawnDebugWave } from './debug-wave.js';
+import { applyFullDebugBuild, spawnDebugTrainingDummy } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
@@ -50,10 +51,11 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false}={}) {
+  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false}={}) {
     this.terrain=terrain??new Terrain({island:new Island({region:'forest',seed:0})});
     this._islandWorlds=!!this.terrain.island;
     this.debug=debug===true;
+    this.debugFull=this.debug&&debugFull===true;
     this.regionIndex=0;this.region=regionFor(0);this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
     this.difficulty = difficulty;
@@ -63,7 +65,7 @@ export class Game {
     this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
     const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
-    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
+    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
     this.build=new CombatBuild();
     this.levels=this.build.levels;this.branches=this.build.branches;this.evolutions=this.build.evolutions;
@@ -108,6 +110,7 @@ export class Game {
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
     if(this.debug)this.grantResources({gold:500},'debugStart');
+    applyFullDebugBuild(this);spawnDebugTrainingDummy(this);
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -229,6 +232,8 @@ export class Game {
     entity.x=moved.x;entity.y=moved.y-offset;return moved;
   }
   _moveEnemy(e,dt,target=null) {
+    dt=Math.max(0,dt-(e._weaponPushTime||0));
+    if(!(dt>0))return;
     const x=e.x,y=e.y+groundOffset(e,!!e.isCompanion),rawX=target?.x??this.player.x,rawY=target?.y??this.player.y+groundOffset(this.player,true);
     e._navTimer=(e._navTimer||0)-dt;
     if(e._navTimer<=0) {
@@ -441,7 +446,7 @@ export class Game {
     this.bullets=[];this.enemyBullets=[];this.effects=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];this._grid.clear();this._choices=null;
     this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply'||e.type==='superChosen');
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
-    p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);
+    p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;
     if(!this.regions.restoreWorld(this.regionIndex)) {
       this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex,island:new Island({region:this.region.id,seed:this.regionIndex})});this.enemies=[];this.gems=[];this.coins=[];
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.discoveredMap=new Set();
@@ -491,6 +496,7 @@ export class Game {
     this.barrier.update(dt);
     if(!inDungeon){this.regions.update(dt);this._updatePressure(dt);}
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debug?0:Math.max(0,p.skillCooldown-dt);
+    p.hurtFlash=Math.max(0,(p.hurtFlash||0)-dt);
     p.hurtFace=Math.max(0,(p.hurtFace||0)-dt);p.castFace=Math.max(0,(p.castFace||0)-dt);
     this.environment?.update(dt);
     if(this.status==='dead')return;
@@ -529,7 +535,8 @@ export class Game {
       if(e.hp<=0) continue;
       if(e.type==='beetle'){e._walkStartX=e.x;e._walkStartY=e.y;}
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
-      updateWeaponKnockback(this,e,dt);
+      e._weaponPushTime=updateWeaponKnockback(this,e,dt);
+      if(e.trainingDummy)continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
       if(this.companions.updateEnemy(e,dt))continue;
@@ -553,8 +560,8 @@ export class Game {
         const dx=e.x-n.x,dy=e.y-n.y,d=Math.hypot(dx,dy),overlap=(e.r+n.r)*.76-d;
         if(overlap>0 && d>.1) {
           const force=Math.min(overlap,30*dt)*.5;
-          if(e.type!=='boss'&&!e.charge&&e.guardActive!==false)this._moveEntity(e,dx/d*force,dy/d*force);
-          if(n.type!=='boss'&&!n.charge&&n.guardActive!==false)this._moveEntity(n,-dx/d*force,-dy/d*force);
+          if(e.type!=='boss'&&!e.trainingDummy&&!e.charge&&e.guardActive!==false)this._moveEntity(e,dx/d*force,dy/d*force);
+          if(n.type!=='boss'&&!n.trainingDummy&&!n.charge&&n.guardActive!==false)this._moveEntity(n,-dx/d*force,-dy/d*force);
         }
       }
     }
@@ -567,7 +574,7 @@ export class Game {
     }
     if(input.skill && p.skillCooldown<=0) this._castStorm();
     for(const e of this._nearby(p.x,p.y,85)) {
-      if(e.hp>0 && e.eventRole!=='treasure' && e.guardActive!==false && !e.charge && !e._chargeSegment && !e.slam && !(e.slamRecovery>0) && !e.bloomAttack && !(e.bloomRecovery>0) && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
+      if(e.hp>0 && !e.trainingDummy && e.eventRole!=='treasure' && e.guardActive!==false && !e.charge && !e._chargeSegment && !e.slam && !(e.slamRecovery>0) && !e.bloomAttack && !(e.bloomRecovery>0) && p.invuln<=0 && dist2(p,e)<sq(p.r+e.r-3)) {
         this._hurtPlayer(e.damage);
         if(this.status==='dead')return;
       }
@@ -583,7 +590,7 @@ export class Game {
     for(const e of this.enemies)if(e.type==='boss'&&e.bossKind==='bloom')resolveBloomBoss(this,e);
     this._resolveEnemyAttacks(dt);
     if(this.status==='dead')return;
-    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.type==='boss'||e.dungeonId||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
+    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.trainingDummy||e.type==='boss'||e.dungeonId||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
     this._collectDrops(this.gems,dt,'crystals');
     this._collectDrops(this.coins,dt,'gold');
     this.gems=this.gems.filter(g=>g.value>0);this.coins=this.coins.filter(c=>c.value>0);

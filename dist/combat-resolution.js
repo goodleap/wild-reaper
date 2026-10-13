@@ -2,7 +2,7 @@ import { groundOffset } from './terrain.js';
 import { isGrounded } from './height-rules.js';
 import { clearBossAttacks } from './bosses.js';
 import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } from './combat-stats.js';
-import { isWeaponKnockbackSource, queueWeaponKnockback } from './weapon-knockback.js';
+import { queueAttackKnockback } from './weapon-knockback.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -61,6 +61,7 @@ export class CombatResolution {
   canTarget(enemy,origin=this.game.player,{requireView=false,range=Infinity,canHitFlying=true,source='raw',profile,checkPath=false,pathRadius=0}={}){
     const g=this.game;
     if(!enemy||enemy.hp<=0||enemy.rescueSpawnGrace>0)return false;
+    if(enemy.trainingDummy&&(attackSource(source).owner==='ally'||origin?.isCompanion||origin?.isTownNpc))return false;
     if((!canHitFlying||(checkPath&&(profile??attackProfile(source))==='ground'))&&!isGrounded(enemy))return false;
     if(requireView&&!g._inView(enemy))return false;
     if(Number.isFinite(range)&&Math.hypot(enemy.x-origin.x,enemy.y-origin.y)>range)return false;
@@ -80,7 +81,7 @@ export class CombatResolution {
   }
 
   resolve(enemy,attack,{reactions=true}={}){
-    if(!attack||this.game.status!=='playing'||!this.canTarget(enemy,attack.origin)||!(attack.damage>0))return 0;
+    if(!attack||this.game.status!=='playing'||!this.canTarget(enemy,attack.origin,{source:attack.source})||!(attack.damage>0))return 0;
     return reactions?this.game.combatStatus.hit(enemy,attack.damage,attack.knockback,attack.origin,attack.source,attack):this.applyEnemyDamage(enemy,attack.damage,attack.knockback,attack.origin,attack.source);
   }
 
@@ -90,11 +91,12 @@ export class CombatResolution {
 
   applyEnemyDamage(enemy,amount,knockback=0,origin=this.game.player,source='raw') {
     const g=this.game;
-    if(!this.canTarget(enemy,origin)||!Number.isFinite(amount)||amount<=0)return 0;
+    if(!this.canTarget(enemy,origin,{source})||!Number.isFinite(amount)||amount<=0)return 0;
     if(g.regions?.canDamage(enemy)===false)return 0;
     // A shield absorbing a valid hit still alerts its defender. Visibility
     // and origin checks above remain pure and reject blocked strikes first.
     if(enemy.dungeonId)g.dungeon.awaken?.(enemy);
+    amount*=defenseDamageMultiplier(Number.isFinite(enemy.defense)?enemy.defense:0);
     amount=g.elites?.beforeDamage(enemy,amount)??amount;
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
@@ -103,16 +105,10 @@ export class CombatResolution {
     const seed=feedbackSeed(0,0,g._clock,enemy.id);
     enemy.hp -= amount; enemy.hit = .12;
     enemy.hitAngle=angle;enemy.hitSource=source;enemy.hitStrength=strength;
-    if(knockback && enemy.type!=='boss') {
-      if(isWeaponKnockbackSource(source))queueWeaponKnockback(g,enemy,knockback,origin,source);
-      else {
-        const dx=enemy.x-origin.x,dy=enemy.y-origin.y,d=Math.hypot(dx,dy)||1;
-        g._moveEntity(enemy,dx/d*knockback,dy/d*knockback);
-        if(enemy.charge?.phase==='windup'){enemy.charge.startX=enemy.x;enemy.charge.startY=enemy.y+groundOffset(enemy);}
-      }
-    }
+    if(knockback>0)queueAttackKnockback(g,enemy,knockback,origin,source);
     g._effect(enemy.x,enemy.y,'hit',.24,enemy.r*.7,color,undefined,{source,angle,strength,seed});
     if(Math.random()<.24 || enemy.type==='boss') g._effect(enemy.x+rand(-8,8),enemy.y-enemy.r,'damage',.65,0,'#f1e4aa',String(Math.round(amount)));
+    if(enemy.trainingDummy&&enemy.hp<=0){enemy.hp=enemy.maxHp;enemy.bleed=null;enemy.shock=null;return actual;}
     if(enemy.hp<=0) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy._weaponPush=null;
       g._effect(enemy.x,enemy.y,'defeat',enemy.type==='boss'?.95:.5,enemy.r,color,undefined,{enemyType:enemy.type,source,boss:enemy.type==='boss',angle,strength,seed});
@@ -158,7 +154,7 @@ export class CombatResolution {
     amount=g.barrier?.absorbDamage(amount)??amount;
     const previousHp=p.hp;
     p.hp=Math.max(0,p.hp-amount);p.invuln=.8;
-    if(p.hp<previousHp){p.hurtFace=.24;g._emit('hurt');g._effect(p.x,p.y,'ring',.3,42,'#e48d78');}
+    if(p.hp<previousHp){p.hurtFlash=.8;p.hurtFace=.24;g._emit('hurt');g._effect(p.x,p.y,'ring',.3,42,'#e48d78');}
     else g._emit('shieldAbsorbed');
     if(p.hp<=0)g.status='dead';return true;
   }

@@ -26,6 +26,7 @@ function finish(g){for(let i=0;g.sceneTransition.active&&i<20;i++)g.update(.025,
 assert.deepEqual(SCENE_TRANSITION_RULES,{outDuration:.15,inDuration:.25});
 for(const type of ['supply','occupied','castle']){
   const g=fresh(),door=site(g,type),world=g.terrain;
+  g.player.hurtFlash=.8;
   place(g,door.door);
   const enemy=g._spawnEnemy('slime',1);Object.assign(enemy,{x:door.door.x+15,y:g.player.y,hp:1000,maxHp:1000,speed:100});
   g.effects.push({type:'ring',x:door.x,y:door.y,life:.6,maxLife:.6,r:10});
@@ -49,6 +50,7 @@ for(const type of ['supply','occupied','castle']){
   assert.equal(g.sceneTransition.opacity,1,'the scene changes only under a fully opaque frame');
   assert.equal(g.sceneTransition.phase,'in');assert.equal(g.sceneTransition.active,true);
   assert.equal(g.dungeon.active.kind,type==='castle'?'castle':'hut');assert.notEqual(g.terrain,world);
+  assert(g.player.invuln>=2,'arrival protection remains active');assert.equal(g.player.hurtFlash,0,'arrival clears the old hurt flash without removing protection');
   assert.deepEqual(cuts,[{opacity:1,phase:'out'}],'exactly one scene change is committed');
   assert.deepEqual(persistent(g),before);
   const indoor=g.dungeon.active,afterCut=scene(g);

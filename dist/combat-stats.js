@@ -2,6 +2,7 @@
 // balance while giving the character an actual attack attribute. A weapon's
 // base damage / reference attack is its coefficient, not another attack bonus.
 import { getUpgradeDefinition } from './combat-catalog.js';
+import { weaponKnockbackDistance } from './weapon-knockback.js';
 
 export const COMBAT_REFERENCE_ATTACK=32;
 export const CHARACTER_DEFENSE_PER_LEVEL=1;
@@ -65,7 +66,7 @@ export function weaponStats(game,id) {
     const baseDamage=(54+level*10)*(heavy?1.85:1)*(1+effectTotal(game,'swordMastery','baseDamageBonus')+energyBonus);
     return {id,level,equipped:equipped&&level>0,branch,energyRank,energyBonus,meleeRange,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
       interval:(.72-Math.max(0,level-1)*.025)*(heavy?1.38:1)-effectTotal(game,'swordMastery','intervalReduction'),
-      range:meleeRange+(energy?.range||0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,hitTime:.115,duration:.28,knockback:heavy?20:12};
+      range:meleeRange+(energy?.range||0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,hitTime:.115,duration:.28,knockback:weaponKnockbackDistance(heavy?{distance:20}:undefined)};
   }
   if(id==='arrow') {
     const branch=game.build?.getWeapon?.(id)?.branch??game.branches?.arrow??null;
@@ -77,7 +78,7 @@ export function weaponStats(game,id) {
     return {id,equipped,branch,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
       runic,runicBaseDamage,runicDamage:scalePlayerDamage(game,runicBaseDamage,{weaponId:id}),runicInterval:4.2-Math.max(0,runic-1)*.3,
       interval:ATTACK_DEFAULTS.arrowInterval/fireRate,range:ATTACK_DEFAULTS.arrowRange,
-      speed:ATTACK_DEFAULTS.arrowSpeed,life:ATTACK_DEFAULTS.arrowLife,
+      speed:ATTACK_DEFAULTS.arrowSpeed,life:ATTACK_DEFAULTS.arrowLife,knockback:weaponKnockbackDistance(),
       count:Math.min(ATTACK_DEFAULTS.maxArrowProjectiles,1+effectTotal(game,'multishot','projectileCount')),
       sideDamageMultiplier:ATTACK_DEFAULTS.arrowSideDamage,volleyTargetMultiplier:ATTACK_DEFAULTS.arrowVolleyTarget,
       targetLimit:branch?Math.min(ATTACK_DEFAULTS.maxArrowTargets,3+reach):1,
@@ -90,7 +91,7 @@ export function weaponStats(game,id) {
     const damage=scalePlayerDamage(game,baseDamage,{weaponId:id});
     return {id,equipped:equipped&&level>0,level,baseDamage,damage,baseBleedDamage:baseDamage*ORBIT_BLEED_RATIO,bleedDamage:damage*ORBIT_BLEED_RATIO,
       count:2+Math.floor((Math.max(1,level)-1)/2),radius:74+effectTotal(game,'orbitRadius','radius'),
-      rotationSpeed:2.9,hitInterval:.42};
+      rotationSpeed:2.9,hitInterval:.42,knockback:weaponKnockbackDistance()};
   }
   return null;
 }

@@ -204,15 +204,20 @@ document.hidden=false;listeners['document:visibilitychange']();fpsNow+=120000;
 run(`frame(${fpsNow})`);assert.equal(fpsNode.textContent,'-- FPS');
 for(let i=1;i<=30;i++)run(`frame(${fpsNow+i*1000/60})`);
 assert.equal(fpsNode.textContent,'已暂停','returning from a background tab starts a fresh sample while preserving pause');
-// Normal URLs neither expose nor look up/update telemetry in initialization,
-// a real frame or visibility changes. Explicit false debug values behave alike.
+// FPS is visible in ordinary play too, without enabling debug diagnostics.
 for(const search of ['','?debug=0','?debug=false']){
   let fpsLookups=0;fpsNode.classList.add('hidden');fpsWrites=[];
   const normalDocument={...document,getElementById:id=>{if(id==='debug-fps')fpsLookups++;return document.getElementById(id);}};
   const normalSandbox={...sandbox,document:normalDocument,window:{...sandbox.window,location:{search}}};
   vm.createContext(normalSandbox);vm.runInContext(source,normalSandbox);
-  vm.runInContext('renderIntro=()=>{};frame(1000);frame(1600);',normalSandbox);
-  listeners['document:visibilitychange']();
-  assert(fpsNode.classList.contains('hidden'));assert.equal(fpsLookups,0);assert.deepEqual(fpsWrites,[]);
+  assert(!fpsNode.classList.contains('hidden'));assert.equal(fpsLookups,1);
+  assert.equal(vm.runInContext('debugPerformanceNode',normalSandbox),null);
+  vm.runInContext('renderIntro=()=>{};renderGame=()=>{};startGame();game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;frame(1000);',normalSandbox);
+  for(let i=1;i<=60;i++)vm.runInContext(`frame(${1000+i*1000/60})`,normalSandbox);
+  assert.equal(fpsNode.textContent,'60 FPS');
+  vm.runInContext('pause();',normalSandbox);
+  for(let i=1;i<=31;i++)vm.runInContext(`frame(${2000+i*1000/60})`,normalSandbox);
+  assert.equal(fpsNode.textContent,'已暂停');
+  listeners['document:visibilitychange']();assert.equal(fpsNode.textContent,'-- FPS');
 }
-console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity, clean re-press behavior and debug-only live FPS at 10/60/120 Hz with paused labeling and visibility resets passed.');
+console.log('HUD map and scene transitions: compact bounds, modal pause, discovery privacy, held-key/touch reset, blocked actions, pause/help continuity, clean re-press behavior, all-mode live FPS and debug-only diagnostics with paused labeling and visibility resets passed.');

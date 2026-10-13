@@ -88,7 +88,7 @@ export class Dungeon {
     for(const enemy of g.enemies){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;clearBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
   }
   _placePlayer(point){
-    const g=this.game,p=g.player;p.x=point.x;p.y=point.y-groundOffset(p,true);g._moveEntity(p,0,0,true);p.invuln=Math.max(p.invuln,2);resetLocomotion(p);
+    const g=this.game,p=g.player;p.x=point.x;p.y=point.y-groundOffset(p,true);g._moveEntity(p,0,0,true);p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;resetLocomotion(p);
     const active=g.companions?.active;
     if(active){active.x=p.x;active.y=p.y;g.companions._resetFollowing?.(active);g.companions._safeReturn?.(active);}
   }

@@ -13,7 +13,7 @@ export class CombatStatus {
 
   hit(enemy,amount,knockback=0,origin=this.game.player,source='arrow',attack=null) {
     const game=this.game,rules=STATUS_RULES;
-    if(game.status!=='playing'||!Number.isFinite(amount)||amount<=0||!game.combat.canTarget(enemy,origin))return 0;
+    if(game.status!=='playing'||!Number.isFinite(amount)||amount<=0||!game.combat.canTarget(enemy,origin,{source}))return 0;
     const x=enemy.x,y=enemy.y;
     const profile=attackSource(source);
     const owner=attack?.ownerScope??profile.owner;
