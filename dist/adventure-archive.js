@@ -49,17 +49,15 @@ export class AdventureArchive {
   }
   begin(game) {
     if(!plain(game))return false;
-    if(this._runs.has(game))return !this._runs.get(game).excluded;
+    if(this._runs.has(game))return true;
     if(this._active)this.finish(this._active,'exit');
-    const excluded=game.debug===true||game.debugFull===true;
     const difficulty=game.difficulty==='casual'||game.difficulty==='easy'?'casual':'normal';
-    const run={excluded,difficulty,ended:false,reason:null,baseline:{...this.data.best[difficulty]},counted:emptyBest(),lastSavedTime:0,defeated:new WeakSet(),defeatedBosses:0,acquired:new Set(),discoveries:[],final:null};
+    const run={difficulty,ended:false,reason:null,baseline:{...this.data.best[difficulty]},counted:emptyBest(),lastSavedTime:0,defeated:new WeakSet(),defeatedBosses:0,acquired:new Set(),discoveries:[],final:null};
     this._runs.set(game,run);this._active=game;
-    if(excluded)return false;
     this.data.totals.runs=integer(this.data.totals.runs+1);this._dirty=true;
     this.checkpoint(game,{force:true});return true;
   }
-  _eligible(game){const run=this._runs.get(game);return run&&!run.excluded&&!run.ended?run:null;}
+  _eligible(game){const run=this._runs.get(game);return run&&!run.ended?run:null;}
   _entry(run,id){
     if(!ENTRY_IDS.has(id))return null;
     if(!this.data.entries[id]){this.data.entries[id]=emptyEntry();run.discoveries.push(id);this._dirty=true;}
@@ -110,7 +108,7 @@ export class AdventureArchive {
   finish(game,reason='death'){
     const run=this._runs.get(game);if(!run)return this.summary(game);
     if(!run.ended){
-      if(!run.excluded)this.checkpoint(game,{force:true});
+      this.checkpoint(game,{force:true});
       run.final={...run.counted};run.ended=true;run.reason=typeof reason==='string'?reason.slice(0,32):'death';
       if(this._active===game)this._active=null;
     }
@@ -120,7 +118,7 @@ export class AdventureArchive {
     const run=this._runs.get(game);
     if(!run)return {excluded:true,reason:null,discoveries:[],records:[],run:emptyBest()};
     const snapshot=run.final||run.counted;
-    return {excluded:run.excluded,reason:run.reason,discoveries:[...run.discoveries],records:run.excluded?[]:Object.keys(snapshot).filter(key=>snapshot[key]>run.baseline[key]).map(key=>({key,previous:run.baseline[key],value:snapshot[key]})),run:{...snapshot}};
+    return {excluded:false,reason:run.reason,discoveries:[...run.discoveries],records:Object.keys(snapshot).filter(key=>snapshot[key]>run.baseline[key]).map(key=>({key,previous:run.baseline[key],value:snapshot[key]})),run:{...snapshot}};
   }
   flush(){
     if(!this._dirty)return this.storageOk;

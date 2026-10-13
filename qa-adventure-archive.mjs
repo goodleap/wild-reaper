@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { AdventureArchive, ARCHIVE_STORAGE_KEY } from './dist/adventure-archive.js';
 import { CombatBuild } from './dist/combat-build.js';
+import { ARCHIVE_ENTRIES } from './dist/archive-catalog.js';
 import { Game } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
 
@@ -68,11 +69,39 @@ restored.observe(unstarted);restored.checkpoint(unstarted);restored.finish(unsta
 
 const debugStorage=memory(),debugArchive=new AdventureArchive({storage:debugStorage});
 for(const extra of [{debug:true},{debug:true,debugFull:true},{debugFull:true}]){
-  const debug=run(extra);assert(!debugArchive.begin(debug));debug.runTime=500;debug.kills=900;debug.player.level=99;
-  debugArchive.observe(debug,{visibleEnemies:[{type:'boss',hp:99}]});debugArchive.recordDefeat(debug,{type:'boss',hp:0});debugArchive.checkpoint(debug,{force:true});
-  assert(debugArchive.finish(debug).excluded);
+  const debug=run(extra);assert(debugArchive.begin(debug));debug.runTime=500;debug.kills=900;debug.player.level=99;
+  debug.build.skills.barrier.baseRank=2;
+  debugArchive.observe(debug,{visibleEnemies:[{type:'boar',hp:99}]});debugArchive.recordDefeat(debug,{type:'boss',hp:0});debugArchive.checkpoint(debug,{force:true});
+  const summary=debugArchive.finish(debug);assert.equal(summary.run.kills,900);
+  assert(summary.discoveries.includes('enemy:boar')||debugArchive.data.entries['enemy:boar'].seen);
+  const settled=JSON.stringify(debugArchive.data);debugArchive.finish(debug);debugArchive.checkpoint(debug,{force:true});
+  assert.equal(JSON.stringify(debugArchive.data),settled,'debug settlement is idempotent like an ordinary run');
 }
-assert.equal(debugArchive.data.totals.runs,0);assert.deepEqual(debugArchive.data.entries,{});assert.equal(debugStorage.writes,0,'debug never persists formal progress');
+assert.equal(debugArchive.data.totals.runs,3);assert.equal(debugArchive.data.totals.time,1500);assert.equal(debugArchive.data.totals.kills,2700);
+assert.equal(debugArchive.data.best.normal.time,500);assert.equal(debugArchive.data.best.normal.level,99);
+assert.equal(debugArchive.data.entries['boss:ancient'].defeats,3);
+assert.equal(debugArchive.data.entries['weapon:sword'].acquisitions,3);assert.equal(debugArchive.data.entries['skill:barrier'].maxLevel,2);
+assert(debugStorage.writes>0,'debug progress uses the normal persistent archive');
+assert.deepEqual(new AdventureArchive({storage:debugStorage}).data,debugArchive.data,'debug observations, victories and builds survive reload');
+
+const fullStorage=memory(),fullArchive=new AdventureArchive({storage:fullStorage});
+const fullGame=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,debug:true,debugFull:true});
+assert(fullArchive.begin(fullGame));
+for(const entry of ARCHIVE_ENTRIES.filter(entry=>['weapons','skills','weaponSkills'].includes(entry.category))){
+  assert(fullArchive.data.entries[entry.id]?.seen,`debug=full immediately records owned ${entry.id}`);
+  assert.equal(fullArchive.data.entries[entry.id].acquisitions,1);
+  assert(fullArchive.data.entries[entry.id].maxLevel>0);
+}
+fullArchive.finish(fullGame);
+assert.deepEqual(new AdventureArchive({storage:fullStorage}).data,fullArchive.data,'full debug initial equipment survives reload');
+
+const sharedStorage=memory({[ARCHIVE_STORAGE_KEY]:JSON.stringify(archive.data)}),sharedArchive=new AdventureArchive({storage:sharedStorage});
+const sharedDebug=run({debug:true});sharedArchive.begin(sharedDebug);sharedDebug.kills=1;sharedArchive.finish(sharedDebug);
+assert.equal(sharedArchive.data.totals.runs,archive.data.totals.runs+1);
+assert.equal(sharedArchive.data.totals.kills,archive.data.totals.kills+1);
+assert.deepEqual(sharedArchive.data.entries['boss:castle'],archive.data.entries['boss:castle'],'debug recording preserves existing ordinary discoveries and victories');
+assert.equal(sharedArchive.data.entries['weapon:sword'].acquisitions,archive.data.entries['weapon:sword'].acquisitions+1);
+assert.deepEqual(new AdventureArchive({storage:sharedStorage}).data,sharedArchive.data,'ordinary and debug progress share one persistent archive');
 
 const legacy=memory({'wild-echoes-endless-record':JSON.stringify({time:222,kills:777,bossKills:2})});
 const migrated=new AdventureArchive({storage:legacy});
@@ -99,4 +128,4 @@ assert.equal(battle.events.length,100);assert(!battle.events.some(event=>event.t
 assert.equal(combatArchive.data.entries['enemy:slime'].defeats,1);assert.equal(combatArchive.data.entries['boss:castle'].defeats,1);
 assert.equal(combatArchive.data.totals.kills,2);assert.equal(combatArchive.data.totals.bossKills,1,'direct defeat hook records castle Boss despite dropped UI events');
 
-console.log('Adventure archive QA passed: bounded persistence, codex progress, all Bosses, difficulty records, legacy separation and debug isolation.');
+console.log('Adventure archive QA passed: bounded persistence, codex progress, all Bosses, difficulty records, legacy separation and normal/debug/full-debug recording.');

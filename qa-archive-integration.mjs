@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { harness, html } from './qa-app-harness.mjs';
 import { ARCHIVE_STORAGE_KEY } from './dist/adventure-archive.js';
+import { ARCHIVE_ENTRIES } from './dist/archive-catalog.js';
 
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert.equal(new Set(ids).size,ids.length,'shipped modal and entry IDs remain unique');
@@ -112,11 +113,31 @@ const archiveControl=(h,attribute,value)=>{
 }
 
 for(const search of ['?debug','?debug=full']){
-  const storage=new Map(),h=harness(search,{storage});const before=JSON.stringify(data(h));start(h);
-  h.run("game.runTime=300;game.kills=999;game.bossKills=10;game.player.level=50;game.onEnemyDefeated({type:'boss',hp:0,dungeonBoss:true});checkpointArchive();game.status='dead';");h.tick();
-  assert.equal(JSON.stringify(data(h)),before,`${search} cannot change formal stats or unlock the full build`);
-  assert.match(h.nodes['end-archive-summary'].textContent,/调试对局/);assert.equal(storage.has(ARCHIVE_STORAGE_KEY),false);
-  click(h,'end-archive-button');key(h,'Escape');click(h,'home-button');assert.equal(JSON.stringify(data(h)),before);
+  const storage=new Map(),h=harness(search,{storage});start(h);
+  assert.equal(data(h).totals.runs,1);assert(data(h).entries['weapon:sword']);assert(data(h).entries['skill:storm']);
+  if(search==='?debug=full')for(const entry of ARCHIVE_ENTRIES.filter(entry=>['weapons','skills','weaponSkills'].includes(entry.category))){
+    assert(data(h).entries[entry.id]?.seen,`${search} records the initial ${entry.id}`);
+    assert.equal(data(h).entries[entry.id].acquisitions,1);assert(data(h).entries[entry.id].maxLevel>0);
+  }
+  else assert.equal(data(h).entries['weapon:arrow'],undefined,'ordinary debug only unlocks equipment actually acquired');
+  h.run(`
+  const debugSeen=game._spawnEnemy('boar',1);debugSeen.x=game.player.x+40;debugSeen.y=game.player.y;
+  observeArchive();
+  const debugSlime=game._spawnEnemy('slime',1);debugSlime.x=game.player.x+50;debugSlime.y=game.player.y;debugSlime.hp=1;debugSlime.xp=0;
+  game.combat.applyEnemyDamage(debugSlime,2,0,game.player,'sword');
+  const debugCastle=game._spawnEnemy('boss',1);debugCastle.x=game.player.x+60;debugCastle.y=game.player.y;debugCastle.hp=1;debugCastle.xp=0;debugCastle.dungeonBoss=true;
+  game.combat.applyEnemyDamage(debugCastle,2,0,game.player,'sword');
+  game.runTime=300;game.player.level=50;checkpointArchive();game.status='dead';`);h.tick();
+  assert(data(h).entries['enemy:boar']?.seen,`${search} discovers visible enemies without requiring a kill`);
+  assert.equal(data(h).entries['enemy:slime'].defeats,1);assert.equal(data(h).entries['boss:castle'].defeats,1);
+  assert.equal(data(h).totals.kills,2);assert.equal(data(h).totals.bossKills,1);assert.equal(data(h).best.normal.time,300);
+  assert.match(h.nodes['end-archive-summary'].textContent,/新增/);assert.doesNotMatch(h.nodes['end-archive-summary'].textContent,/不计入|不解锁|不记录/);
+  assert(storage.has(ARCHIVE_STORAGE_KEY));
+  const settled=JSON.stringify(data(h));
+  click(h,'end-archive-button');
+  assert.doesNotMatch(h.nodes['archive-content'].innerHTML,/调试对局不计入|调试对局不记录/);
+  key(h,'Escape');click(h,'home-button');assert.equal(JSON.stringify(data(h)),settled,'debug archive browsing and returning home cannot recount the run');
+  assert.deepEqual(data(harness('',{storage})),data(h),`${search} discoveries and stats reload in the ordinary URL`);
 }
 
-console.log('archive integration: modal freeze/input/focus, persistence/idempotence, difficulty, reliable defeat hooks, encounter visibility and debug isolation passed');
+console.log('archive integration: modal freeze/input/focus, persistence/idempotence, difficulty, reliable defeat hooks, encounter visibility and debug/full-debug recording passed');

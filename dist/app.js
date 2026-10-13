@@ -23,6 +23,7 @@ import { ImmersionArt } from './immersion-art.js';
 import { presentUpgrade, upgradeCardHTML } from './upgrade-presentation.js';
 import { characterPanelHTML } from './character-panel.js';
 import { AdventureArchive } from './adventure-archive.js';
+import { ARCHIVE_ENTRIES } from './archive-catalog.js';
 import { archivePanelHTML, drawArchiveArt, archiveMilestones } from './archive-panel.js';
 import { groundOffset, rockShadowParts } from './terrain.js';
 import { isGrounded, obstacleHeight } from './height-rules.js';
@@ -153,7 +154,13 @@ function playSuperFeedback(event){
   const voice=voices[event.skillId];if(voice)tone(voice[0],.16,voice[2],.018,voice[1]);
 }
 function notify(message,priority=0){if(Date.now()<toastUntil&&priority<toastPriority)return;toastPriority=priority;toastUntil=Date.now()+3200;$('toast').textContent=message;$('toast').classList.add('visible');if(game)updatePortalHUD();clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').classList.remove('visible');toastPriority=0;toastUntil=0;if(game)updatePortalHUD();},3200);}
-function bestText(){const best=archive.data.best[selectedDifficulty];$('best-label').textContent=best?.time>0?`${selectedDifficulty==='casual'?'轻松漫游':'标准试炼'} · 最长 ${timeLabel(best.time)} · 最高击败 ${best.kills}`:'新的冒险，等你书写。';}
+function refreshArchiveEntry(){
+  const count=ARCHIVE_ENTRIES.filter(entry=>archive.data.entries[entry.id]?.seen).length;
+  $('archive-entry-count').textContent=`${count} / ${ARCHIVE_ENTRIES.length}`;
+  $('archive-button').setAttribute('aria-label',`冒险档案，已发现 ${count} 项，共 ${ARCHIVE_ENTRIES.length} 项`);
+  $('archive-entry-note').textContent='图鉴 · 记录 · 里程碑';
+}
+function bestText(){const best=archive.data.best[selectedDifficulty];$('best-label').textContent=best?.time>0?`${selectedDifficulty==='casual'?'轻松漫游':'标准试炼'} · 最长 ${timeLabel(best.time)} · 最高击败 ${best.kills}`:'新的冒险，等你书写。';refreshArchiveEntry();}
 syncSound();bestText();
 function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty}));}catch{}}
 for(const difficulty of ['normal','casual']){const radio=$(`difficulty-${difficulty}`);radio.checked=difficulty===selectedDifficulty;radio.addEventListener('change',()=>{if(radio.checked){selectedDifficulty=difficulty;saveSetup();bestText();}});}
@@ -167,7 +174,7 @@ function focusGameDialog(){const id={relic:'relic-cards',upgrade:'upgrade-cards'
 function resume(){if(mapOpen||characterOpen||helpOpen||archiveOpen)return;paused=false;clearInput();show('pause-overlay',false);initAudio();focusGameDialog();refreshDiagnosticIndicator();}
 
 function observeArchive(){
-  if(!game||game.debug||game.debugFull)return;
+  if(!game)return;
   const visibleEnemies=game.sceneTransition?.active?[]:game.enemies.filter(enemy=>enemy.hp>0&&game._inView(enemy)&&sceneVisible(enemy));
   archive.observe(game,{visibleEnemies});
 }
@@ -175,7 +182,7 @@ function checkpointArchive(){if(game){observeArchive();archive.checkpoint(game,{
 function resetArchivePanel(){archiveOpen=false;archiveReturnFocus=null;show('archive-overlay',false);}
 function renderArchive(){
   const content=$('archive-content');
-  content.innerHTML=archivePanelHTML(archive.data,{...archiveView,debug:debugMode,storageOk:archive.storageOk});
+  content.innerHTML=archivePanelHTML(archive.data,{...archiveView,storageOk:archive.storageOk});
   drawArchiveArt(content);
 }
 function openArchive(){
@@ -192,7 +199,7 @@ function closeArchive(){
 }
 function renderArchiveSummary(report){
   const target=$('end-archive-summary');
-  if(report?.excluded){target.textContent='调试对局 · 不计入冒险档案';return;}
+  if(report?.excluded){target.textContent='本次冒险未建立记录';return;}
   const parts=[];
   if(report?.discoveries?.length)parts.push(`新增 ${report.discoveries.length} 项图鉴`);
   if(report?.records?.length)parts.push(`刷新 ${report.records.length} 项纪录`);
