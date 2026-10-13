@@ -134,7 +134,7 @@ game.settlements.sites=[diagnosticHut];game.player.x=diagnosticHut.door.x;game.p
   navigator.clipboard={async writeText(){throw new Error('clipboard denied');}};
   await nodes['diagnostic-copy'].onclick();const output=nodes['diagnostic-output'];
   assert.equal(document.activeElement,output);assert.equal(output.selectionStart,0);assert.equal(output.selectionEnd,output.value.length);assert.equal(nodes['diagnostic-details'].open,true);assert.match(nodes['diagnostic-status'].textContent,/⌘C/);
-  let prevented=false;listeners['qa-app:selectstart']({target:output,cancelable:true,preventDefault(){prevented=true;}});
+  let prevented=false;listeners['arena:selectstart']({target:output,cancelable:true,preventDefault(){prevented=true;}});
   assert.equal(prevented,false,'manual-copy textarea remains selectable under the game callout guard');
 }
 

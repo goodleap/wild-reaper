@@ -80,7 +80,41 @@ const tap=id=>{
 const start=()=>{click('start-button');run('renderGame=()=>{};renderIntro=()=>{};game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;');};
 const model=()=>JSON.parse(run('JSON.stringify({time:game.runTime,clock,skill:game.player.skillCooldown,point:[game.player.x,game.player.y]})'));
 assert($('run-summary').classList.contains('hidden'),'the menu starts without run statistics');
+assert(!fire($('game-canvas'),'touchstart',{cancelable:true}).defaultPrevented,'the intro has no canvas touch fallback');
 start();
+// Native menus need real WeChat devices. These checks verify the shipped guard
+// boundaries and the pointer controls that a touchstart fallback could disturb.
+for(const type of ['contextmenu','selectstart','dragstart']){
+  assert(fire($('arena'),type,{target:$('hp-label'),cancelable:true}).defaultPrevented);
+  assert(fire($('arena'),type,{target:{nodeType:3,parentElement:$('hp-label')},cancelable:true}).defaultPrevented);
+  assert(!fire($('arena'),type,{target:$('hp-label'),cancelable:false}).defaultPrevented);
+  for(const tag of ['input','textarea','select']){
+    const field=new Element(tag),child=new Element('span');field.append(child);
+    assert(!fire($('arena'),type,{target:field,cancelable:true}).defaultPrevented,`${tag} keeps native actions`);
+    assert(!fire($('arena'),type,{target:child,cancelable:true}).defaultPrevented);
+  }
+  const editable=new Element('span');editable.isContentEditable=true;
+  assert(!fire($('arena'),type,{target:editable,cancelable:true}).defaultPrevented,'editable descendants keep selection');
+  assert(!documentListeners[type]&&!windowListeners[type],'the page outside the game has no callout interception');
+}
+assert(!documentListeners.touchstart&&!windowListeners.touchstart&&!$('arena').listeners.touchstart,'no broad touchstart interception');
+assert(!documentListeners.touchmove&&!windowListeners.touchmove&&!$('arena').listeners.touchmove,'native scrolling has no broad touchmove interception');
+for(const id of ['pause-button','start-button','touch-skill','character-content','diagnostic-output'])assert(!$(id).listeners.touchstart,`${id} keeps native touchstart`);
+const canvasTouch=fire($('game-canvas'),'touchstart',{cancelable:true});assert(canvasTouch.defaultPrevented&&!canvasTouch.stopped);
+assert(!fire($('game-canvas'),'touchstart',{cancelable:false}).defaultPrevented);
+for(const flag of ['paused','helpOpen','mapOpen','characterOpen','archiveOpen']){
+  run(`${flag}=true`);assert(!fire($('game-canvas'),'touchstart',{cancelable:true}).defaultPrevented,`${flag} leaves native touch alone`);run(`${flag}=false`);
+}
+for(const eventOrder of [['pointerdown','touchstart'],['touchstart','pointerdown']]){
+  run('clearInput();game.player.skillCooldown=0;');
+  for(const type of eventOrder)fire($('game-canvas'),type,{pointerId:73,pointerType:'touch',clientX:100,clientY:300,cancelable:true});
+  fire($('game-canvas'),'pointermove',{pointerId:73,clientX:130,clientY:300});
+  assert(run('touch.id===73&&touch.dx>0'),'dragging continues with the canvas fallback');
+  fire($('touch-skill'),'pointerdown',{pointerId:74,pointerType:'touch'});
+  assert(run('skillRequested&&touch.id===73&&touch.dx>0'),'a second finger can cast while moving');
+  fire($('game-canvas'),'pointercancel',{pointerId:73});assert.equal(run('touch'),null);
+}
+run('clearInput();');
 // Entrance feedback is a non-interactive, single text node. It shares the
 // notice lane with routine messages and yields to significant combat notices.
 assert.equal($('portal-action').querySelectorAll('button,small,kbd').length,0);
