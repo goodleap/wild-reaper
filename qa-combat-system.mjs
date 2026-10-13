@@ -37,7 +37,7 @@ assert.equal(weaponStats(base,'arrow').interval,.38);
 assert.equal(skillStats(base,'storm').damage,160);
 assert.equal(skillStats(base,'storm').cooldown,15);
 assert.equal(base.build.getWeapon('arrow').level,0);
-assert.equal(base.build.getWeapon('sword').level,1);assert.equal(weaponStats(base,'sword').baseDamage,54);
+assert.equal(base.build.getWeapon('sword').level,1);assert.equal(weaponStats(base,'sword').baseDamage,64);
 
 // Merely inspecting a portal guardian cannot awaken it, announce a Boss or
 // increment progression. The first valid hit activates it, even if shielded.
@@ -103,7 +103,7 @@ for(const actorScope of ['ally','player'])for(const source of ['lightning','orbi
   assert.equal(attack.ownerScope,actorScope);assert.equal(attack.damage,actorScope==='player'?200:100);
   g.combat.resolve(victim,attack);
   near(10000-victim.hp,actorScope==='player'?200:100,'shared ability damage retains explicit caster ownership');
-  const state=source==='lightning'?victim.shock:victim.bleed,base=source==='lightning'?12:4;
+  const state=source==='lightning'?victim.shock:victim.bleed,base=source==='lightning'?12:15;
   near(state.damage,base*(actorScope==='player'?2:1),'secondary reaction snapshots retain explicit caster ownership');
   if(source==='orbit') {
     g.levels.power=6;g.combatStatus.update(.5);
@@ -143,9 +143,9 @@ for(const route of ['pierce','ricochet']) {
 // Evolved abilities remain growable, with each new rank local to its owner.
 const evolved=arena();evolved.levels.orbit=5;evolved._syncEvolutions(false);
 paid(evolved,'orbitPower');paid(evolved,'orbitRadius');
-const orbitVictim=enemy(evolved,98);evolved._rebuildGrid();evolved._updateWeapons(0);
-near(10000-orbitVictim.hp,54*1.15,'post-evolution orbit damage');
-near(Math.hypot(evolved.orbitals[0].x,evolved.orbitals[0].y),98,'post-evolution orbit radius');
+const orbitVictim=enemy(evolved,82);evolved._rebuildGrid();evolved._updateWeapons(0);
+near(10000-orbitVictim.hp,44*1.15,'post-evolution orbit damage');
+near(Math.hypot(evolved.orbitals[0].x,evolved.orbitals[0].y),82,'post-evolution orbit radius');
 assert.equal(evolved.build.getWeapon('orbit').level,7);assert.equal(skillStats(evolved,'storm').damage,160);
 for(const [id,route,baseDamage] of [['pulse','echoes',90],['lightning','chain',88]]) {
   const g=arena();g.levels[id]=4;paid(g,`branch:${id}:${route}`);paid(g,`${id}Mastery`);paid(g,`${id}Mastery`);

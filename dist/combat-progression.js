@@ -64,10 +64,10 @@ export class CombatProgression {
       desc=rank?'提高护盾容量与持续时间，缩短冷却':'受击自动展开，吸收首击与随后伤害；无受击时持续待命';kind=rank?'技能强化':'独立技能';
     }else if(id==='orbit') {
       if(rank) {
-        desc=(rank+1)%2===1?'增加一枚环刃，提升伤害与环绕范围':'提升环刃伤害与环绕范围';
+        desc=(rank+1)%2===1?'增加一枚环刃，更持续地切割四周敌人':'提高环刃直接伤害与流血伤害';
         kind='武器强化';
       }
-      if(rank===4){desc=`进化为「${EVOLUTIONS.orbit.name}」：${EVOLUTIONS.orbit.desc}`;kind='武器进化';}
+      if(rank===4){desc=`增加一枚环刃，进化为「${EVOLUTIONS.orbit.name}」：${EVOLUTIONS.orbit.desc}`;kind='武器进化';}
       else desc+='；达到 5 级自动进化';
     }else if(id==='pulse'||id==='lightning') {
       if(rank) {

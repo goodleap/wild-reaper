@@ -38,7 +38,32 @@ for(const id of ['power','rapid','multishot','speed','magnet','vitality','toughn
 for(const id of ['orbit','pulse','lightning']){
   const g=game();g.levels[id]=2;const c=find(g,id),m=presentUpgrade(c,g);assert.equal(m.levelLabel,'Lv.2 → 3');assert(g.chooseUpgrade(c.id));
   const e=g._spawnEnemy('slime');Object.assign(e,{x:id==='orbit'?82:40,y:0,hp:10000,maxHp:10000,orbitHit:0});g.enemies=[e];g._clock=0;g._pulse=0;g._lightning=0;g._rebuildGrid();g._updateWeapons(0);
-  assert.equal(10000-e.hp,after(m.rows[0]),`${id}: displayed base damage equals actual attack`);
+  if(id==='orbit'){
+    assert.deepEqual(m.rows.map(row=>row.label),['环绕利刃'],'the third orbit level advertises only the extra blade');
+    assert.equal(after(m.rows[0]),weaponStats(g,'orbit').count);
+    assert.equal(10000-e.hp,weaponStats(g,'orbit').baseDamage,'the extra blade does not silently raise per-hit damage');
+  }else assert.equal(10000-e.hp,after(m.rows[0]),`${id}: displayed base damage equals actual attack`);
+}
+for(const owned of [0,1,2,3,4]){
+  const current=game();current.levels.orbit=owned;
+  const choice=find(current,'orbit'),model=presentUpgrade(choice,current);
+  const expected=[['基础伤害','环绕利刃','环绕半径'],['基础伤害'],['环绕利刃'],['基础伤害'],['环绕利刃','新增效果']][owned];
+  assert.deepEqual(model.rows.map(row=>row.label),expected,'orbit upgrades list only new or changed effects');
+  if(owned===2||owned===4)assert.doesNotMatch(model.summary,/伤害|半径/,'extra blades do not imply free damage or range growth');
+  if(owned===4)assert.match(model.summary,/每 3 秒扩张收拢/,'the fifth level clearly adds the existing evolution');
+  assert(current.chooseUpgrade(choice.id));
+  const actual=weaponStats(current,'orbit');
+  for(const row of model.rows){
+    if(row.label==='基础伤害')assert.equal(after(row),actual.baseDamage);
+    if(row.label==='环绕利刃')assert.equal(after(row),actual.count);
+    if(row.label==='环绕半径')assert.equal(after(row),actual.radius);
+  }
+}
+{
+  const current=game();current.levels.arrow=1;
+  const model=presentUpgrade(find(current,'multishot'),current);
+  assert.equal(model.rows[1].after,'100% / 45%');
+  assert.match(model.summary,/副箭为 45% 伤害/);assert.doesNotMatch(model.summary,/60%/);
 }
 for(const [weapon,branches] of Object.entries(WEAPON_BRANCHES).filter(([id])=>id!=='domain'))for(const c of branches){
   const g=game();if(weapon==='arrow')g.levels.arrow=1;g.levels[weapon==='arrow'?'rapid':weapon]=weapon==='arrow'?3:4;

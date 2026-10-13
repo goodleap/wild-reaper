@@ -69,19 +69,21 @@ function weapons(game) {
     if(!s)return '';
     if(item.id==='arrow') {
       rows.push(['主箭伤害',number(s.damage),'damage'],['攻击间隔',seconds(s.interval),'interval'],['索敌范围',number(s.range),'range'],['每轮箭数',number(s.count),'count']);
-      if(s.count>1)rows.push(['副箭伤害',number(s.damage*.6),'secondaryDamage']);
+      notes.push('远程攻击，单箭命中数量有限');
+      if(s.count>1){rows.push(['副箭伤害',number(s.damage*s.sideDamageMultiplier),'secondaryDamage']);notes.push(`同轮对同一目标累计最多造成主箭伤害的 ${percent(s.volleyTargetMultiplier)}`);}
       if(item.branch)rows.push(['最多命中',`${s.targetLimit} 个`,'targetLimit'],['每段伤害保留',percent(s.retention),'retention']);
       if(item.branch==='ricochet')rows.push(['弹射次数',number(s.maxBounces),'bounces'],['弹射范围','150','chainRange']);
       if(s.runic){rows.push(['符文穿击伤害',number(s.runicDamage),'runicDamage'],['符文触发间隔',seconds(s.runicInterval),'runicInterval']);notes.push('符文穿击：飞矢专属能力，自动贯穿沿途敌人；卸下飞矢时停用');}
     }else if(item.id==='sword') {
       rows.push(['挥砍伤害',number(s.damage),'damage'],['攻击间隔',seconds(s.interval),'interval'],[s.energyRank?'攻击覆盖距离':'挥砍距离',number(s.range),'range'],['挥砍角度',`${number(s.arc*180/Math.PI)}°`,'arc']);
-      notes.push('自动朝范围内敌人挥砍；移动方向不限制攻击方向');
+      notes.push('近身定向爆发；自动朝敌人挥砍，移动方向不限制攻击方向');
       if(s.energyRank){rows.push(['剑气等级',`${s.energyRank} / 3`,'swordEnergyRank'],['剑气伤害增幅',bonus(s.energyBonus),'swordEnergyBonus']);notes.push('剑气随挥剑扩大覆盖，增幅已计入挥砍伤害；卸下长剑时停用');}
       if(item.branch==='heavy')notes.push('重斩集中处理强敌，攻击节奏更慢');
       else if(item.branch==='sweep')notes.push('横扫覆盖更宽的敌群');
     }else if(item.id==='orbit') {
       rows.push(['单次伤害',number(s.damage),'damage'],['同敌命中间隔',seconds(s.hitInterval),'interval'],['刃数',number(s.count),'count'],['环绕半径',item.evolved?`${number(s.radius)}—${number(s.radius+55)}`:number(s.radius),'range'],['旋转一周',seconds(Math.PI*2/s.rotationSpeed),'rotation']);
-      notes.push(`流血：每 ${seconds(STATUS_RULES.bleedInterval)} 造成 ${number(scalePlayerDamage(game,STATUS_RULES.bleedDamage,{weaponId:'orbit'}))} 伤害，持续 ${seconds(STATUS_RULES.bleedDuration)}`);
+      notes.push('环绕持续攻击，移动调整与敌人的距离');
+      notes.push(`流血：每 ${seconds(STATUS_RULES.bleedInterval)} 造成 ${number(s.bleedDamage)} 伤害，持续 ${seconds(STATUS_RULES.bleedDuration)}；单层刷新`);
       if(item.evolved)notes.push('每 3 秒向外扩张一次');
     }
     const disabled=game.status!=='playing'||(item.equipped&&equipped<=1),action=item.equipped?'卸下':'装备';

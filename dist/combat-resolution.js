@@ -2,6 +2,7 @@ import { groundOffset } from './terrain.js';
 import { isGrounded } from './height-rules.js';
 import { clearBossAttacks } from './bosses.js';
 import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } from './combat-stats.js';
+import { isWeaponKnockbackSource, queueWeaponKnockback } from './weapon-knockback.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -103,14 +104,17 @@ export class CombatResolution {
     enemy.hp -= amount; enemy.hit = .12;
     enemy.hitAngle=angle;enemy.hitSource=source;enemy.hitStrength=strength;
     if(knockback && enemy.type!=='boss') {
-      const dx=enemy.x-origin.x,dy=enemy.y-origin.y,d=Math.hypot(dx,dy)||1;
-      g._moveEntity(enemy,dx/d*knockback,dy/d*knockback);
-      if(enemy.charge?.phase==='windup'){enemy.charge.startX=enemy.x;enemy.charge.startY=enemy.y+groundOffset(enemy);}
+      if(isWeaponKnockbackSource(source))queueWeaponKnockback(g,enemy,knockback,origin,source);
+      else {
+        const dx=enemy.x-origin.x,dy=enemy.y-origin.y,d=Math.hypot(dx,dy)||1;
+        g._moveEntity(enemy,dx/d*knockback,dy/d*knockback);
+        if(enemy.charge?.phase==='windup'){enemy.charge.startX=enemy.x;enemy.charge.startY=enemy.y+groundOffset(enemy);}
+      }
     }
     g._effect(enemy.x,enemy.y,'hit',.24,enemy.r*.7,color,undefined,{source,angle,strength,seed});
     if(Math.random()<.24 || enemy.type==='boss') g._effect(enemy.x+rand(-8,8),enemy.y-enemy.r,'damage',.65,0,'#f1e4aa',String(Math.round(amount)));
     if(enemy.hp<=0) {
-      enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
+      enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy._weaponPush=null;
       g._effect(enemy.x,enemy.y,'defeat',enemy.type==='boss'?.95:.5,enemy.r,color,undefined,{enemyType:enemy.type,source,boss:enemy.type==='boss',angle,strength,seed});
       g.kills++; g._emit('kill');
       // Kill XP is automatic. Loot is a separate skill/currency resource and

@@ -30,6 +30,7 @@ import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { SceneTransition } from './scene-transition.js';
 import { spawnDebugWave } from './debug-wave.js';
+import { updateWeaponKnockback } from './weapon-knockback.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
@@ -528,6 +529,7 @@ export class Game {
       if(e.hp<=0) continue;
       if(e.type==='beetle'){e._walkStartX=e.x;e._walkStartY=e.y;}
       e.hit=Math.max(0,e.hit-dt); e.orbitHit=Math.max(0,e.orbitHit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
+      updateWeaponKnockback(this,e,dt);
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
       if(this.companions.updateEnemy(e,dt))continue;

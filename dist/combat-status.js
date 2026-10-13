@@ -1,10 +1,10 @@
 import { attackSource } from './combat-resolution.js';
-import { scalePlayerDamage } from './combat-stats.js';
+import { scalePlayerDamage, ORBIT_BLEED_RATIO } from './combat-stats.js';
 
 // Weapon reactions share the normal damage/death path, but never call hit()
 // recursively. Each enemy keeps only one bleed and one shock record.
 export const STATUS_RULES=Object.freeze({
-  bleedDuration:2,bleedInterval:.5,bleedDamage:4,
+  bleedDuration:2,bleedInterval:.5,bleedRatio:ORBIT_BLEED_RATIO,
   pulseBonus:.25,shockDuration:2.5,conductionRange:130,conductionDamage:12
 });
 
@@ -38,7 +38,7 @@ export class CombatStatus {
       // Repeated blade hits are faster than the tick interval. Refresh the
       // lifetime, not the tick phase, so contact cannot postpone all damage.
       const nextTick=enemy.bleed?.life>0?enemy.bleed.nextTick:rules.bleedInterval;
-      enemy.bleed={life:rules.bleedDuration,maxLife:rules.bleedDuration,nextTick,damage:owner==='player'?scalePlayerDamage(game,rules.bleedDamage,{weaponId:attack?.weaponId||'orbit'}):rules.bleedDamage};
+      enemy.bleed={life:rules.bleedDuration,maxLife:rules.bleedDuration,nextTick,damage:amount*rules.bleedRatio};
     }else if(dealt>0&&profile.shock) {
       enemy.shock={life:rules.shockDuration,maxLife:rules.shockDuration,damage:owner==='player'?scalePlayerDamage(game,rules.conductionDamage,{skillId:attack?.skillId||profile.skillId}):Math.max(rules.conductionDamage,amount*.12)};
     }

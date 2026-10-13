@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { updateWeaponKnockback } from './dist/weapon-knockback.js';
 
 // Count every gameplay-random draw: rendering metadata must not change the
 // subsequent damage-number/loot rolls, even during a screen-clearing attack.
@@ -25,11 +26,14 @@ assert.equal(g._hurtEnemy(target,20,10,{x:100,y:50},'arrow'),20);
 assert.equal(randomCalls,1,'a normal nonlethal hit keeps its sole pre-existing damage-label roll');
 assert.equal(target.hp,80);assert.equal(target.hit,.12);assert.equal(target.hitSource,'arrow');
 assert(Math.abs(target.hitAngle-Math.atan2(30,40))<1e-12,'hit direction is captured before physical knockback');
-assert(Math.abs(target.hitStrength-.6)<1e-12);assert.equal(target.x,148);assert.equal(target.y,86);
+assert(Math.abs(target.hitStrength-.6)<1e-12);assert.equal(target.x,140);assert.equal(target.y,80);
 const hit=g.effects.find(e=>e.type==='hit');
 assert.equal(hit.source,'arrow');assert.equal(hit.angle,target.hitAngle);assert.equal(hit.strength,target.hitStrength);
 assert.equal(hit.maxLife,.24);assert.equal(hit.x,target.x);assert.equal(hit.y,target.y);
 assert([hit.x,hit.y,hit.r,hit.angle,hit.strength,hit.seed,hit.life].every(Number.isFinite));
+updateWeaponKnockback(g,target,.16);
+assert.equal(target.x,148);assert.equal(target.y,86);
+assert.equal(randomCalls,1,'decaying displacement does not consume gameplay randomness');
 
 const same=arena(),sameTarget=enemy(same,'slime',{id:target.id});same._clock=g._clock;
 resetRolls(.1,.75);

@@ -7,7 +7,9 @@ export const COMBAT_REFERENCE_ATTACK=32;
 export const CHARACTER_DEFENSE_PER_LEVEL=1;
 export const defenseDamageMultiplier=defense=>100/(100+Math.max(0,defense||0));
 export const defenseReduction=defense=>1-defenseDamageMultiplier(defense);
-export const ATTACK_DEFAULTS=Object.freeze({arrowDamage:32,arrowInterval:.38,arrowRange:420,arrowSpeed:640,arrowLife:.82,magnet:105,maxArrowTargets:4,maxArrowProjectiles:4});
+export const ATTACK_DEFAULTS=Object.freeze({arrowDamage:32,arrowInterval:.38,arrowRange:420,arrowSpeed:640,arrowLife:.82,arrowSideDamage:.45,arrowVolleyTarget:1.45,magnet:105,maxArrowTargets:4,maxArrowProjectiles:4});
+export const ORBIT_BLEED_RATIO=.15;
+const ORBIT_DAMAGE=Object.freeze([30,30,36,36,44,44]);
 const rank=(g,id)=>Math.max(0,g.build?.getRank?.(id)??g.levels?.[id]??0);
 const boundedRank=(g,id,cap)=>Math.min(cap,rank(g,id));
 // Catalog effects are the source of truth for every selectable modifier.
@@ -60,10 +62,10 @@ export function weaponStats(game,id) {
     const energyRank=level>=3?boundedRank(game,'swordEnergy',3):0;
     const energy=getUpgradeDefinition('swordEnergy').rankBonuses[energyRank-1];
     const energyBonus=energy?.damageBonus||0,meleeRange=88+level*4+(sweep?18:0);
-    const baseDamage=(46+level*8)*(heavy?1.85:1)*(1+effectTotal(game,'swordMastery','baseDamageBonus')+energyBonus);
+    const baseDamage=(54+level*10)*(heavy?1.85:1)*(1+effectTotal(game,'swordMastery','baseDamageBonus')+energyBonus);
     return {id,level,equipped:equipped&&level>0,branch,energyRank,energyBonus,meleeRange,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
       interval:(.72-Math.max(0,level-1)*.025)*(heavy?1.38:1)-effectTotal(game,'swordMastery','intervalReduction'),
-      range:meleeRange+(energy?.range||0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,hitTime:.115,duration:.28,knockback:heavy?14:5};
+      range:meleeRange+(energy?.range||0),arc:heavy?1.5:sweep?2.8:1.95,windup:.065,hitTime:.115,duration:.28,knockback:heavy?20:12};
   }
   if(id==='arrow') {
     const branch=game.build?.getWeapon?.(id)?.branch??game.branches?.arrow??null;
@@ -77,16 +79,18 @@ export function weaponStats(game,id) {
       interval:ATTACK_DEFAULTS.arrowInterval/fireRate,range:ATTACK_DEFAULTS.arrowRange,
       speed:ATTACK_DEFAULTS.arrowSpeed,life:ATTACK_DEFAULTS.arrowLife,
       count:Math.min(ATTACK_DEFAULTS.maxArrowProjectiles,1+effectTotal(game,'multishot','projectileCount')),
+      sideDamageMultiplier:ATTACK_DEFAULTS.arrowSideDamage,volleyTargetMultiplier:ATTACK_DEFAULTS.arrowVolleyTarget,
       targetLimit:branch?Math.min(ATTACK_DEFAULTS.maxArrowTargets,3+reach):1,
       maxBounces:branch==='ricochet'?2+reach:0,
       retention:branch ? .65+effectTotal(game,'arrowRetention','damageRetention') : 1};
   }
   if(id==='orbit') {
     const level=Math.min(5,rank(game,'orbit'));
-    const baseDamage=(24+level*6)*(1+effectTotal(game,'orbitPower','baseDamageBonus'));
-    return {id,equipped:equipped&&level>0,level,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
-      count:2+Math.floor((Math.max(1,level)-1)/2),radius:70+level*4+effectTotal(game,'orbitRadius','radius'),
-      rotationSpeed:2.15+level*.14,hitInterval:.42};
+    const baseDamage=ORBIT_DAMAGE[level]*(1+effectTotal(game,'orbitPower','baseDamageBonus'));
+    const damage=scalePlayerDamage(game,baseDamage,{weaponId:id});
+    return {id,equipped:equipped&&level>0,level,baseDamage,damage,baseBleedDamage:baseDamage*ORBIT_BLEED_RATIO,bleedDamage:damage*ORBIT_BLEED_RATIO,
+      count:2+Math.floor((Math.max(1,level)-1)/2),radius:74+effectTotal(game,'orbitRadius','radius'),
+      rotationSpeed:2.9,hitInterval:.42};
   }
   return null;
 }

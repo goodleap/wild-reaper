@@ -118,7 +118,7 @@ export function presentUpgrade(choice,game) {
   if(id==='rapid') {
     model.scope=`${owner.name} · 专属强化`;model.rows=[change('飞矢攻击频率加成',current*15,next*15,'%'),change('发射间隔',before.interval,after.interval,'秒')];model.summary=`飞矢发射间隔 ${pair(before.interval,after.interval)} 秒，其他武器与技能不变。`;
   }else if(id==='multishot'){
-    model.scope=`${owner.name} · 专属强化`;model.rows=[change('每轮箭矢',before.count,after.count,'支'),fixed('主箭 / 副箭伤害','100% / 60%')];model.summary=`飞矢每轮 ${before.count}→${after.count} 支；主箭保持全伤，副箭为 60% 伤害。`;
+    model.scope=`${owner.name} · 专属强化`;model.rows=[change('每轮箭矢',before.count,after.count,'支'),fixed('主箭 / 副箭伤害',`100% / ${num(after.sideDamageMultiplier*100)}%`)];model.summary=`飞矢每轮 ${before.count}→${after.count} 支；主箭保持全伤，副箭为 ${num(after.sideDamageMultiplier*100)}% 伤害。`;
   }else if(id==='arrowReach'){
     model.rows=[change('单箭最多命中',before.targetLimit,after.targetLimit,'个目标')];model.summary=before.branch==='ricochet'?`弹射次数 ${before.maxBounces}→${after.maxBounces}，继承已强化的伤害保留比例。`:`飞矢最多命中 ${before.targetLimit}→${after.targetLimit} 个目标，继承穿透伤害强化。`;
   }else if(id==='arrowRetention'){
@@ -143,8 +143,12 @@ export function presentUpgrade(choice,game) {
   }else if(id==='storm'){
     model.rows=[change('基础伤害',base(before),base(after)),change('冷却',before.cooldown,after.cooldown,'秒')];model.summary=`天雷伤害 ${pair(base(before),base(after))}，冷却 ${pair(before.cooldown,after.cooldown)} 秒。`;model.note='手动超级技能 · 最高 3 级';
   }else if(id==='orbit'){
-    model.rows=[change('基础伤害',owned?base(before):null,base(after)),change('环绕利刃',owned?before.count:null,after.count,'枚'),choice.evolves?fixed('新增效果','每3秒扩张并收拢'):change('环绕半径',owned?before.radius:null,after.radius)];
-    model.summary=!owned?`${after.count} 枚利刃环绕护身，每次 ${num(base(after))} 伤害并附加流血。`:choice.evolves?`伤害 ${pair(base(before),base(after))}，利刃 ${pair(before.count,after.count)} 枚；每 3 秒扩张收拢。`:`伤害 ${pair(base(before),base(after))}，${before.count!==after.count?`利刃 ${before.count}→${after.count} 枚，`:''}半径 ${pair(before.radius,after.radius)}。`;
+    model.rows=[];const changes=[];
+    if(!owned||base(before)!==base(after)){model.rows.push(change('基础伤害',owned?base(before):null,base(after)));changes.push(`伤害 ${pair(base(before),base(after))}`);}
+    if(!owned||before.count!==after.count){model.rows.push(change('环绕利刃',owned?before.count:null,after.count,'枚'));changes.push(`利刃 ${pair(before.count,after.count)} 枚`);}
+    if(!owned||before.radius!==after.radius){model.rows.push(change('环绕半径',owned?before.radius:null,after.radius));changes.push(`半径 ${pair(before.radius,after.radius)}`);}
+    if(choice.evolves){model.rows.push(fixed('新增效果','每3秒扩张并收拢'));changes.push('每 3 秒扩张收拢');}
+    model.summary=!owned?`${after.count} 枚利刃环绕护身，每次 ${num(base(after))} 伤害并附加流血。`:`${changes.join('，')}。`;
     model.note=choice.evolves?'进化形态 · 仍可继续强化':'附加流血 · 基础成长 5 级进化';
   }else if(id==='pulse'){
     model.rows=[change('基础伤害',owned?base(before):null,base(after)),change('冲击范围',owned?before.radius:null,after.radius),fixed('施放间隔',`${after.cooldown} 秒`)];model.summary=owned?`伤害 ${pair(base(before),base(after))}，范围 ${pair(before.radius,after.radius)}。`:`敌人靠近时震退并造成 ${num(base(after))} 伤害；消耗流血增伤 25%。`;

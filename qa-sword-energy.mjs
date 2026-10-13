@@ -12,7 +12,7 @@ function arena() {
 const close=(a,b,message)=>assert(Math.abs(a-b)<1e-8,`${message}: ${a} / ${b}`);
 const fresh=arena(),base=weaponStats(fresh,'sword');
 assert.equal(base.energyRank,0);assert.equal(base.range,92);assert.equal(base.range,base.meleeRange);
-assert.equal(base.baseDamage,54);assert.equal(base.interval,.72);
+assert.equal(base.baseDamage,64);assert.equal(base.interval,.72);
 assert.equal(canTakeUpgrade(fresh.build,'swordEnergy'),false);
 assert.equal(fresh.build.increment('swordEnergy'),false);
 assert.equal(fresh.getUpgradeChoices().some(c=>c.id==='swordEnergy'),false);
@@ -44,7 +44,7 @@ for(const [index,range,bonus] of [[1,22,.08],[2,32,.14],[3,42,.20]]) {
   if(index>1)assert(fresh.build.increment('swordEnergy'));
   const s=weaponStats(fresh,'sword');
   assert.equal(s.energyRank,index);assert.equal(s.range,s.meleeRange+range);
-  close(s.baseDamage,70*(1+bonus),'sword-only energy bonus');
+  close(s.baseDamage,84*(1+bonus),'sword-only energy bonus');
   assert.deepEqual(weaponStats(fresh,'arrow'),arrow);
   assert.deepEqual(skillStats(fresh,'pulse'),pulse);
   assert.deepEqual(skillStats(fresh,'storm'),storm);
@@ -72,7 +72,7 @@ for(const branch of ['sweep','heavy']) {
   assert.equal(empowered.arc,ordinary.arc);assert.equal(empowered.range,ordinary.range+22);
   assert.equal(empowered.interval,ordinary.interval);close(empowered.damage,ordinary.damage*1.08,'branch energy damage');
   assert(g.build.increment('swordMastery'));assert(g.build.increment('power'));
-  close(weaponStats(g,'sword').damage,86*(branch==='heavy'?1.85:1)*1.20*1.25,'local and character bonuses apply once');
+  close(weaponStats(g,'sword').damage,104*(branch==='heavy'?1.85:1)*1.20*1.25,'local and character bonuses apply once');
   assert.deepEqual(CombatBuild.fromSnapshot(g.build.serialize()).serialize(),g.build.serialize());
 }
 console.log('Sword energy: zero at spawn, rank gating, crystal purchase, weapon-scoped growth, exclusive branches, equip retention and snapshot compatibility passed.');

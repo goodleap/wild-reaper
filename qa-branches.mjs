@@ -115,7 +115,7 @@ for(const [width,height,axis] of [[390,690,'x'],[1100,300,'y']]) {
 }
 const spread=arena();select(spread,'arrow','ricochet');spread.levels.multishot=3;monster(spread,120);shot(spread);
 assert.equal(spread.bullets.length,4,'branch selection preserves the existing multishot projectile budget');
-assert.equal(spread.bullets[0].damage,32);assert(spread.bullets.slice(1).every(b=>b.damage===32*.6));
+assert.equal(spread.bullets[0].damage,32);assert(spread.bullets.slice(1).every(b=>b.damage===32*.45));
 
 const echo=arena();select(echo,'pulse','echoes');echo._pulse=0;
 const echoOuter=monster(echo,205);echo.update(0);
