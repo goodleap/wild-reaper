@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { REGIONS,WORLD_IDS,WORLD_CONNECTIONS,worldForId } from './dist/world-definitions.js';
+import { STAGES } from './dist/stage-definitions.js';
+import { validateWorlds } from './dist/config-validation/worlds.js';
+import { Game } from './dist/engine.js';
+import { Terrain } from './dist/terrain.js';
+import { Environment } from './dist/environment.js';
+
+// Fixed pre-extraction fingerprints verify this refactor changes neither tuning
+// nor generated terrain. Deliberate content changes must update these fixtures.
+const expected={
+  "exports": {
+    "environment": "5a2e7540eee34a6d3ef9ea0b5029222765e9f6bd5b0b869552f15993a5f164c3",
+    "world-definitions": "a58eb61487656558e384372f39684da14c8efcbe94e2cfca15e66227501d34ad",
+    "stage-definitions": "4aa1774f262712a9010ee0bd1d639e0618a076a63ffd5466a8292150a65097b4",
+    "world-sites": "31546e1f1db7a911f55177cd5395ee8bc3d508b7f6c6254f978018f2b9bb0a3a",
+    "world-hazards": "1bda6969e34de2b9e50c502f2c9359998fb901561f39acf1daab0b4a2cfcc222",
+    "regional-mechanisms": "b538127784763cf62edb39e73602c627e4238224678f7e1a1323ee64fd169aad",
+    "interior-profiles": "f36d970a301265b72f4231dc1144c46dea2ffebe56339cdc0e10708b852e55d1",
+    "placement-rules": "edfec75f083697a46b12c45dd0af7e96f37b462a67c718abc3256e0585f44d4e"
+  },
+  "traces": {
+    "forest": "deb6014d3eba6d4a594f54bef473876fef321c3875c64241a58967ded910a325",
+    "marsh": "a02415996344468a28ed0aeb4424b9410f9ba35c2d2afb00d6b53764a35921ff",
+    "ruins": "43e9a1e21d1b317eb0b81c2f333a2d47b8671131d6b4a09812a68a52d58b8985",
+    "beach": "b294379a2b1e07902a56c2d7cf4bc37b3a670a89e98de71ebfb6009003cc2c90",
+    "city": "94ecfacdf19e847371e0867dd4327e32fdbc459d735a23bd94077e75ec745b5c",
+    "mountain": "6ae7839f4a491e7e824fd7c4e5fd853ccfee8bfcc2599dfa11ca8ca78f0be2f5",
+    "snow": "1393d1d571bca29f82af4b0066131007fd81289c1fa3e843e6923d5126d276a2",
+    "volcano": "420cabb482f2a3afefe2c783e2b60d20d81b550aedeac76a445378eca304cdf3"
+  }
+};
+const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+for(const [id,hash]of Object.entries(expected.exports)){
+  const module=await import(`./dist/${id}.js`),data=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(module).filter(([,value])=>typeof value!=='function'))));
+  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;}
+  assert.equal(digest(data),hash,`${id}: authored values preserved`);
+}
+for(const world of REGIONS){
+  const out=[];
+  for(const zoneId of ['default',...world.biomeZones])for(let seed=0;seed<80;seed++){
+    const hash=(a,b)=>{const n=Math.sin(a*127.1+b*311.7+seed*19.19)*43758.5453123;return n-Math.floor(n);},roll=n=>hash(n,seed+7),calls=[];
+    world.terrain.generate({tx:seed-40,ty:40-seed,key:`${seed-40},${40-seed}`,region:world.id,hash,roll,zone:{id:zoneId},add:o=>calls.push(['add',o]),place:(...args)=>calls.push(['place',...args]),treeProfiles:[{trunkWidth:1},{trunkWidth:.9},{trunkWidth:1.1},{trunkWidth:.8},{trunkWidth:1.2}],cell:520,settings:world.terrain});
+    out.push(calls);
+  }
+  assert.equal(digest(out),expected.traces[world.id],`${world.id}: exact deterministic terrain placements`);
+  assert(Object.isFrozen(world)&&Object.isFrozen(world.terrain));
+}
+assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,8);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
+const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
+assert(validateWorlds(sections));
+const reject=(edit,label)=>{const bad=structuredClone(sections);edit(bad);assert.throws(()=>validateWorlds(bad),undefined,label);};
+reject(s=>s.worlds.definitions[0].terrain.generatorId='remote-code','unregistered behavior');
+reject(s=>s.worlds.order.reverse(),'persistent numeric world identities');
+reject(s=>s.worlds.connections.push(['forest','unknown']),'unknown world route');
+reject(s=>s.worlds.definitions[0].enemyWeights.unknown=1,'unknown monster');
+reject(s=>s.stages.definitions[0].core.boss.kind='unknown','unknown boss');
+reject(s=>s.stages.definitions[0].outer.boss.hp=-1,'invalid encounter HP');
+reject(s=>s.stages.definitions[1].core.id='forest-heart','duplicate map identity');
+reject(s=>s.geography.siteFeatures.shipwreck.guardPackId='unknown','unknown guard pack');
+reject(s=>s.worlds.definitions[3].terrain.placements.default[0].properties.scale={base:1,gain:1,roll:'code'},'numeric recipes cannot execute code');
+reject(s=>delete s.geography.environmentRules.mushroom.growthTimePeriod,'missing environmental formula input');
+for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
+  const g=new Game({hero:'princess',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
+  g.time=time;g.enemies=[];g.player.x=g.player.y=0;g.player.invuln=0;
+  g.environment=new Environment(g,{generation:false});
+  const enemy=g._spawnEnemy('slime');Object.assign(enemy,{x:5,y:0,hp:1000,maxHp:1000});
+  const hp=g.player.hp;g.environment._explode({x:0,y:19.8,r:17,blastRadius:82});
+  assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
+  assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
+}
+console.log('World configuration checked: 8 world identities, 8 stages, 10 routes, pre-extraction values and all deterministic terrain placement traces; invalid cross-references rejected.');

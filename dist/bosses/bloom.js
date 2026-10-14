@@ -5,7 +5,7 @@ import { selectFriendlyTarget, friendlyTargets, friendlyFoot, isFriendlyActive, 
 import { BLOOM_BOSS } from '../boss-definitions.js';
 
 export function initBloomBoss(enemy) {
-  enemy.bloomAttack=null;enemy.bloomCooldown=2;enemy.bloomRecovery=0;
+  enemy.bloomAttack=null;enemy.bloomCooldown=BLOOM_BOSS.initialCooldown;enemy.bloomRecovery=0;
   enemy.bloomNext='fan';enemy.bloomRetreat=0;enemy.bloomRetreatCooldown=0;
 }
 export function clearBloomBossAttacks(enemy) {
@@ -48,7 +48,7 @@ function startAttack(game,enemy,state) {
     enemy.bloomAttack={kind:'fan',x:state.x,y:state.y,angle,spread:BLOOM_BOSS.fanSpread,life:BLOOM_BOSS.fanWindup,maxLife:BLOOM_BOSS.fanWindup};
     enemy.bloomNext='burst';
   }
-  enemy.bloomCooldown=enemy.hp<enemy.maxHp*.5?BLOOM_BOSS.enragedCooldown:BLOOM_BOSS.cooldown;
+  enemy.bloomCooldown=enemy.hp<enemy.maxHp*BLOOM_BOSS.enragedHealthRatio?BLOOM_BOSS.enragedCooldown:BLOOM_BOSS.cooldown;
   enemy.bloomRetreat=0;game._emit('bloomWindup');
   return true;
 }
@@ -70,20 +70,20 @@ export function updateBloomBoss(game,enemy,dt) {
   const state=groundState(game,enemy);
   if(enemy.bloomCooldown<=0&&canAttack(game,enemy,state)) {
     if(startAttack(game,enemy,state))return true;
-    game._moveEnemy(enemy,dt*.75);return true;
+    game._moveEnemy(enemy,dt*BLOOM_BOSS.advanceSpeedMultiplier);return true;
   }
   if(state.distance>BLOOM_BOSS.preferredMax||!game._inView(enemy)||!clearAttackPath(game,state)) {
-    game._moveEnemy(enemy,dt*.75);return true;
+    game._moveEnemy(enemy,dt*BLOOM_BOSS.advanceSpeedMultiplier);return true;
   }
   // A short retreat creates shooting room without continually kiting the
   // player. The existing terrain-aware navigation handles rocks and trunks.
-  if(state.distance<170&&enemy.bloomRetreatCooldown<=0) {
-    enemy.bloomRetreat=.7;enemy.bloomRetreatCooldown=3;
+  if(state.distance<BLOOM_BOSS.retreatRange&&enemy.bloomRetreatCooldown<=0) {
+    enemy.bloomRetreat=BLOOM_BOSS.retreatDuration;enemy.bloomRetreatCooldown=BLOOM_BOSS.retreatCooldown;
   }
   if(enemy.bloomRetreat>0) {
     enemy.bloomRetreat=Math.max(0,enemy.bloomRetreat-dt);
     const length=state.distance||1;
-    game._moveEnemy(enemy,dt*.45,{x:state.x-state.dx/length*90,y:state.y-state.dy/length*90});
+    game._moveEnemy(enemy,dt*BLOOM_BOSS.retreatSpeedMultiplier,{x:state.x-state.dx/length*BLOOM_BOSS.retreatDistance,y:state.y-state.dy/length*BLOOM_BOSS.retreatDistance});
   } else if(state.distance>BLOOM_BOSS.preferredMin) {
     // Hold the middle distance; attacks provide pressure while it stands still.
     return true;
@@ -105,10 +105,11 @@ export function resolveBloomBoss(game,enemy) {
   if(attack.kind==='fan') {
     const available=Math.max(0,BLOOM_BOSS.maxEnemyBullets-game.enemyBullets.length);
     // Under the shared cap, keep the central shot and add symmetric pairs.
-    const offsets=available>=5?[0,-1,1,-2,2]:available>=3?[0,-1,1]:available>=1?[0]:[];
+    const count=Math.max(0,Math.min(BLOOM_BOSS.fanCount,available)),pairs=Math.max(0,Math.floor((count-1)/2));
+    const offsets=count>=1?[0,...Array.from({length:pairs},(_,i)=>[-(i+1),i+1]).flat()]:[];
     for(const offset of offsets) {
       const angle=attack.angle+offset*attack.spread/(BLOOM_BOSS.fanCount-1);
-      game.enemyBullets.push({id:++game._id,type:'bloom',x:attack.x,y:attack.y,r:7,vx:Math.cos(angle)*BLOOM_BOSS.bulletSpeed,vy:Math.sin(angle)*BLOOM_BOSS.bulletSpeed,life:BLOOM_BOSS.bulletLife,maxLife:BLOOM_BOSS.bulletLife,color:'#dcb4f5',damage:enemy.damage*.65});
+      game.enemyBullets.push({id:++game._id,type:'bloom',x:attack.x,y:attack.y,r:BLOOM_BOSS.bulletRadius,vx:Math.cos(angle)*BLOOM_BOSS.bulletSpeed,vy:Math.sin(angle)*BLOOM_BOSS.bulletSpeed,life:BLOOM_BOSS.bulletLife,maxLife:BLOOM_BOSS.bulletLife,color:BLOOM_BOSS.bulletColor,damage:enemy.damage*BLOOM_BOSS.bulletDamageMultiplier});
     }
     if(offsets.length)game._emit('bloomShot');
   } else {
@@ -122,7 +123,7 @@ export function resolveBloomBoss(game,enemy) {
           !game.terrain.firstBlocker(circle.x,circle.y,foot.x,foot.y,0,'ground'))hit.add(target);
       }
     }
-    for(const target of hit)damageFriendly(game,target,enemy.damage*.85,enemy);
+    for(const target of hit)damageFriendly(game,target,enemy.damage*BLOOM_BOSS.burstDamageMultiplier,enemy);
     game._emit('bloomBurst');
   }
   return true;

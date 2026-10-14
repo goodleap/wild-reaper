@@ -1,9 +1,10 @@
+import { getConfigSection } from '../content-config.js';
 import { groundOffset } from '../terrain.js';
 import { isGrounded } from '../height-rules.js';
 import { circleImpact } from '../combat-attacks.js';
 import { selectFriendlyTarget, friendlyFoot, isFriendlyActive, damageFriendly, clearFriendlyPath } from '../friendly-combat.js';
 
-export const BOAR_RULES=Object.freeze({speed:320,rushLife:.8,stunLife:1.2,minRange:90,maxRange:320,windup:.8,chargeLength:256,cooldown:4.5,damageMultiplier:1.3});
+export const BOAR_RULES=getConfigSection('enemies').behaviorRules.boar;
 
 export function updateBoar(game,e,dt) {
   e.chargeCooldown=Math.max(0,(e.chargeCooldown||0)-dt);e._chargeSegment=null;

@@ -1,0 +1,154 @@
+{
+  "relics": [
+    {
+      "id": "thunderstone",
+      "name": "引雷石",
+      "icon": "ϟ",
+      "color": "#bfcafa",
+      "desc": "雷电、天雷或感电传导击杀敌人，天雷冷却减少 {thunderReduction} 秒；{thunderWindowLabel}最多减少 {thunderWindowReduction} 秒"
+    },
+    {
+      "id": "bloodstone",
+      "name": "赤心",
+      "icon": "◆",
+      "color": "#eaa08f",
+      "desc": "生命低于 {lowHealthPercent}% 时，主角所有伤害提升 {lowHealthDamagePercent}%"
+    },
+    {
+      "id": "herbalEcho",
+      "name": "春芽符",
+      "icon": "✿",
+      "color": "#b9dda5",
+      "desc": "拾取药草并实际恢复生命时，释放一道范围 {herbRadius}、基础伤害 {herbDamage} 的冲击波"
+    },
+    {
+      "id": "leafWard",
+      "name": "铁叶护符",
+      "icon": "⬡",
+      "color": "#d2dbae",
+      "desc": "守护屏障容量提升 {barrierCapacityPercent}%，冷却缩短 {barrierCooldownPercent}%；尚未掌握时获得 1 级守护屏障"
+    },
+    {
+      "id": "swiftFeather",
+      "name": "风羽",
+      "icon": "↗",
+      "color": "#a9d9de",
+      "desc": "移动速度额外提升 {movementPercent}%，可与轻盈步伐共同生效"
+    },
+    {
+      "id": "deepRoot",
+      "name": "深根",
+      "icon": "♧",
+      "color": "#dac395",
+      "desc": "药草的治疗量提升 {herbHealingPercent}%，从 {herbBaseHealing} 点增加至 {herbTotalHealing} 点"
+    }
+  ],
+  "relicRules": {
+    "thunderReduction": 0.3,
+    "thunderWindow": 1,
+    "thunderLimit": 4,
+    "lowHealthThreshold": 0.4,
+    "lowHealthDamage": 1.25,
+    "herbRadius": 125,
+    "herbDamage": 60,
+    "herbHealing": 1.4,
+    "barrierCapacityMultiplier": 1.15,
+    "barrierCooldownMultiplier": 0.85,
+    "movement": 1.08,
+    "collectionHeal": 0.2,
+    "maxWard": 40,
+    "choiceCount": 3
+  },
+  "shop": {
+    "relicPrice": 60,
+    "stock": {
+      "heal": 1,
+      "magnet": 1,
+      "fury": 1,
+      "shield": 1,
+      "relic": 1
+    },
+    "items": [
+      {
+        "id": "heal",
+        "name": "旅人药剂",
+        "description": "立即恢复 {healing} 点生命",
+        "icon": "✚",
+        "color": "#b9dda5",
+        "price": 12,
+        "healing": 35,
+        "reason": "生命已满"
+      },
+      {
+        "id": "magnet",
+        "name": "磁引符",
+        "description": "拾取范围扩大，持续 {duration} 秒",
+        "icon": "◉",
+        "color": "#a8dcec",
+        "price": 8,
+        "duration": 8,
+        "reason": "效果已生效"
+      },
+      {
+        "id": "fury",
+        "name": "狂暴药剂",
+        "description": "伤害与射速提升，持续 {duration} 秒",
+        "icon": "✦",
+        "color": "#efb46b",
+        "price": 8,
+        "duration": 8,
+        "reason": "效果已生效"
+      },
+      {
+        "id": "shield",
+        "name": "守护符",
+        "description": "抵消下一次受击的至多 {ward} 点伤害",
+        "icon": "⬡",
+        "color": "#d2dbae",
+        "price": 16,
+        "reason": "护盾已充盈"
+      }
+    ]
+  },
+  "pickups": {
+    "types": [
+      "herb",
+      "magnet",
+      "fury"
+    ],
+    "buffDuration": 8,
+    "minBuffDuration": 1,
+    "maxBuffDuration": 12,
+    "herbHealing": 25,
+    "furyDamage": 1.35,
+    "furyFireRate": 1.2,
+    "magnetRange": 320,
+    "magnetAttractRange": 480,
+    "life": 55,
+    "supplyHp": 42,
+    "supplyChance": 0.42
+  },
+  "treasure": {
+    "firstAt": 50,
+    "spawnInterval": 90,
+    "life": 180,
+    "unlockedLife": 80,
+    "despawnDelay": 30,
+    "openDelay": 65,
+    "reward": {
+      "gold": 18,
+      "crystals": 35
+    },
+    "guardian": {
+      "radius": 1.2,
+      "hp": 3,
+      "damage": 1.1,
+      "speed": 1.1,
+      "xp": 30
+    },
+    "engageRange": 230,
+    "playerLeash": 580,
+    "guardLeash": 450,
+    "returnRange": 480
+  }
+}

@@ -1,3 +1,4 @@
+import { getConfigSection } from './content-config.js';
 import { drawWorldArchiveArt } from './world-archive-art.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { worldArchiveHTML, WORLD_ARCHIVE_WORLDS, WORLD_ARCHIVE_LOCATIONS } from './world-archive.js';
@@ -20,23 +21,18 @@ const enemyEntry=entry=>entry.category==='enemies'||entry.category==='bosses';
 const safeChoice=(value,choices,fallback)=>choices.includes(value)?value:fallback;
 const bestTime=data=>Math.max(data?.best?.normal?.time||0,data?.best?.casual?.time||0);
 const recordedHeroName=id=>HEROES.some(hero=>hero.id===id)?getHero(id).name:'';
+const milestoneDefinitions=getConfigSection('codex').milestones;
 
 export function archiveMilestones(data={}){
   const totals=data.totals||{},entries=data.entries||{};
   const branches=Object.values(entries).reduce((sum,entry)=>sum+(Array.isArray(entry.branches)?entry.branches.length:0),0);
   const skills=knownCount(data,'skills')+knownCount(data,'weaponSkills');
   const companions=ARCHIVE_ENTRIES.filter(entry=>entry.category==='companions'&&entries[entry.id]?.acquisitions>0).length;
-  return [
-    {id:'first-victory',name:'踏出第一步',description:'累计击败 1 个敌人',progress:totals.kills||0,target:1},
-    {id:'field-notes',name:'林间观察者',description:'发现 6 种怪物',progress:knownCount(data,'enemies'),target:6},
-    {id:'armed-explorer',name:'三般武艺',description:'获得全部 3 种武器',progress:knownCount(data,'weapons'),target:3},
-    {id:'first-boss',name:'挑战领主',description:'击败 1 位首领',progress:totals.bossKills||0,target:1},
-    {id:'survivor',name:'长路未尽',description:'单局存活 10 分钟',progress:Math.floor(bestTime(data)),target:600,unit:'time'},
-    {id:'branch-explorer',name:'另辟蹊径',description:'体验 3 种武器或技能分支',progress:branches,target:3},
-    {id:'skill-explorer',name:'力量的回响',description:'获得 6 种技能或武器技能',progress:skills,target:6},
-    {id:'fellow-travelers',name:'并肩前行',description:'招募 3 种伙伴',progress:companions,target:3},
-    {id:'veteran',name:'荒野历练',description:'累计击败 1,000 个敌人',progress:totals.kills||0,target:1000}
-  ].map(item=>({...item,progress:Math.min(item.target,Math.max(0,item.progress)),complete:item.progress>=item.target}));
+  const progressValues={kills:totals.kills||0,bossKills:totals.bossKills||0,knownEnemies:knownCount(data,'enemies'),knownWeapons:knownCount(data,'weapons'),bestTime:Math.floor(bestTime(data)),branches,knownSkills:skills,knownCompanions:companions};
+  return milestoneDefinitions.map(({progressKey,...item})=>{
+    const progress=progressValues[progressKey];
+    return {...item,progress:Math.min(item.target,Math.max(0,progress)),complete:progress>=item.target};
+  });
 }
 
 function vectorArt(entry){
@@ -57,11 +53,11 @@ function vectorArt(entry){
 }
 function portrait(entry,known,large=false){
   if(!known)return `<span class="archive-art archive-unknown${large?' archive-art-large':''}" aria-hidden="true">?</span>`;
-  return `<span class="archive-art${large?' archive-art-large':''}" style="--archive-accent:${entry.color}">${enemyEntry(entry)||entry.category==='weapons'||entry.category==='companions'?`<canvas width="256" height="224" data-archive-art="${entry.id}" aria-hidden="true"></canvas>`:vectorArt(entry)}</span>`;
+  return `<span class="archive-art${large?' archive-art-large':''}" style="--archive-accent:${escape(entry.color)}">${enemyEntry(entry)||entry.category==='weapons'||entry.category==='companions'?`<canvas width="256" height="224" data-archive-art="${escape(entry.id)}" aria-hidden="true"></canvas>`:vectorArt(entry)}</span>`;
 }
 function entryButton(entry,data,selected){
   const known=seen(data,entry),record=data.entries?.[entry.id]||{},status=!known?'未发现':enemyEntry(entry)?record.defeats?'已击败':'已发现':entry.category==='companions'?record.acquisitions?'已同行':'已发现':'已获得';
-  return `<button type="button" class="archive-card${known?'':' is-unknown'}${selected?' is-selected':''}" data-archive-entry="${entry.id}" aria-pressed="${selected}" aria-label="${escape(known?entry.name:'未发现条目')}，${status}">${portrait(entry,known)}<strong>${known?escape(entry.name):'未发现'}</strong><small>${status}</small></button>`;
+  return `<button type="button" class="archive-card${known?'':' is-unknown'}${selected?' is-selected':''}" data-archive-entry="${escape(entry.id)}" aria-pressed="${selected}" aria-label="${escape(known?entry.name:'未发现条目')}，${status}">${portrait(entry,known)}<strong>${known?escape(entry.name):'未发现'}</strong><small>${status}</small></button>`;
 }
 function detailHTML(entry,data){
   const known=seen(data,entry),record=data.entries?.[entry.id]||{};
@@ -72,9 +68,9 @@ function detailHTML(entry,data){
 }
 function codexHTML(data,category,selectedId){
   const list=ARCHIVE_ENTRIES.filter(entry=>entry.category===category),selected=list.find(entry=>entry.id===selectedId)||list.find(entry=>seen(data,entry))||list[0];
-  return `<div class="archive-categories" aria-label="图鉴分类">${ARCHIVE_CATEGORIES.map(item=>{const count=knownCount(data,item.id),total=ARCHIVE_ENTRIES.filter(entry=>entry.category===item.id).length;return `<button type="button" data-archive-category="${item.id}" aria-pressed="${item.id===category}">${item.name}<small>${count}/${total}</small></button>`;}).join('')}</div><div class="archive-codex-layout"><div class="archive-index"><div class="archive-grid" aria-label="${ARCHIVE_CATEGORIES.find(item=>item.id===category).name}条目">${list.map(entry=>entryButton(entry,data,entry===selected)).join('')}</div></div>${detailHTML(selected,data)}</div>`;
+  return `<div class="archive-categories" aria-label="图鉴分类">${ARCHIVE_CATEGORIES.map(item=>{const count=knownCount(data,item.id),total=ARCHIVE_ENTRIES.filter(entry=>entry.category===item.id).length;return `<button type="button" data-archive-category="${escape(item.id)}" aria-pressed="${item.id===category}">${escape(item.name)}<small>${count}/${total}</small></button>`;}).join('')}</div><div class="archive-codex-layout"><div class="archive-index"><div class="archive-grid" aria-label="${escape(ARCHIVE_CATEGORIES.find(item=>item.id===category).name)}条目">${list.map(entry=>entryButton(entry,data,entry===selected)).join('')}</div></div>${detailHTML(selected,data)}</div>`;
 }
-function stat(label,value,unit=''){return `<div class="archive-stat"><span>${label}</span><strong>${value}${unit?`<small>${unit}</small>`:''}</strong></div>`;}
+function stat(label,value,unit=''){return `<div class="archive-stat"><span>${escape(label)}</span><strong>${value}${unit?`<small>${escape(unit)}</small>`:''}</strong></div>`;}
 function stageRecordsHTML(data,difficulty){
   return `<section class="archive-stage-records"><h3>关卡通关</h3><div class="archive-stage-grid">${STAGES.map(stage=>{
     const record=data.stages?.[stage.id]?.[difficulty]||{},clears=record.clears||0;
@@ -88,12 +84,12 @@ function recordsHTML(data,difficulty){
 }
 function milestonesHTML(data){
   const items=archiveMilestones(data),completed=items.filter(item=>item.complete).length;
-  return `<div class="archive-milestones-heading"><h3>冒险的足迹</h3><span>${completed} / ${items.length} 已达成</span></div><p class="archive-small-note">记录探索与挑战的成果，不提供战斗属性加成。</p><div class="archive-milestones">${items.map(item=>`<div class="archive-milestone${item.complete?' is-complete':''}"><span class="archive-milestone-mark" aria-hidden="true">${item.complete?'✓':'◇'}</span><div><h4>${item.name}</h4><p>${item.description}</p><div class="archive-progress" role="progressbar" aria-label="${item.name}" aria-valuenow="${item.progress}" aria-valuemin="0" aria-valuemax="${item.target}"><i style="width:${Math.min(100,100*item.progress/item.target)}%"></i></div></div><span class="archive-milestone-status">${item.complete?'已达成':item.unit==='time'?`${Math.floor(item.progress/60)} / ${item.target/60} 分`:`${number(item.progress)} / ${number(item.target)}`}</span></div>`).join('')}</div>`;
+  return `<div class="archive-milestones-heading"><h3>冒险的足迹</h3><span>${completed} / ${items.length} 已达成</span></div><p class="archive-small-note">记录探索与挑战的成果，不提供战斗属性加成。</p><div class="archive-milestones">${items.map(item=>`<div class="archive-milestone${item.complete?' is-complete':''}"><span class="archive-milestone-mark" aria-hidden="true">${item.complete?'✓':'◇'}</span><div><h4>${escape(item.name)}</h4><p>${escape(item.description)}</p><div class="archive-progress" role="progressbar" aria-label="${escape(item.name)}" aria-valuenow="${item.progress}" aria-valuemin="0" aria-valuemax="${item.target}"><i style="width:${Math.min(100,100*item.progress/item.target)}%"></i></div></div><span class="archive-milestone-status">${item.complete?'已达成':item.unit==='time'?`${Math.floor(item.progress/60)} / ${item.target/60} 分`:`${number(item.progress)} / ${number(item.target)}`}</span></div>`).join('')}</div>`;
 }
 export function archivePanelHTML(data={},options={}){
   const tab=safeChoice(options.tab,ARCHIVE_TABS.map(item=>item.id),'codex'),category=safeChoice(options.category,ARCHIVE_CATEGORIES.map(item=>item.id),'enemies'),difficulty=safeChoice(options.difficulty,['normal','casual'],'normal');
   const progress=`${knownCount(data)} / ${ARCHIVE_ENTRIES.length}`;
-  return `<div class="archive-overview"><span>${tab==='world'?'岛屿、遗迹与冒险据点':'每次冒险，都留下新的发现'}</span><strong>${tab==='world'?`${WORLD_ARCHIVE_WORLDS.length} 个世界 · ${WORLD_ARCHIVE_LOCATIONS.length} 类地点`:`已发现 ${progress}`}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${ARCHIVE_TABS.map(({id,name:label})=>`<button type="button" data-archive-tab="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='world'?worldArchiveHTML({category:options.worldCategory,selectedId:options.worldSelectedId}):tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
+  return `<div class="archive-overview"><span>${tab==='world'?'岛屿、遗迹与冒险据点':'每次冒险，都留下新的发现'}</span><strong>${tab==='world'?`${WORLD_ARCHIVE_WORLDS.length} 个世界 · ${WORLD_ARCHIVE_LOCATIONS.length} 类地点`:`已发现 ${progress}`}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${ARCHIVE_TABS.map(({id,name:label})=>`<button type="button" data-archive-tab="${escape(id)}" aria-pressed="${id===tab}">${escape(label)}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='world'?worldArchiveHTML({category:options.worldCategory,selectedId:options.worldSelectedId}):tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
 }
 
 let monsterArt=null,combatArt=null,humanoidArt=null,companionArt=null;

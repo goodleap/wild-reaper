@@ -1,8 +1,10 @@
+import { getConfigSection } from './content-config.js';
 import { groundOffset } from './terrain.js';
 
-export const ATTACK_KNOCKBACK=Object.freeze({distance:13,window:1,minimumInterval:.25,secondMultiplier:.6,duration:.16});
+const CONFIG=getConfigSection('combat').knockback;
+export const ATTACK_KNOCKBACK=CONFIG.attack;
 export const WEAPON_KNOCKBACK=ATTACK_KNOCKBACK;
-export const BOSS_KNOCKBACK=Object.freeze({minimumInterval:2});
+export const BOSS_KNOCKBACK=CONFIG.boss;
 // Ordinary attacks share one world-space distance. A special attack may use a
 // multiplier or an explicit distance without replacing resistance or limits.
 export function weaponKnockbackDistance({multiplier=1,distance}={}) {
@@ -32,7 +34,8 @@ export function queueAttackKnockback(game,enemy,distance,origin,source) {
   if(Number.isFinite(origin?.knockbackX)&&Number.isFinite(origin?.knockbackY)) {dx=origin.knockbackX;dy=origin.knockbackY;}
   else {const from=source==='orbit'?game.player:origin;dx=enemy.x-(from?.x??enemy.x);dy=enemy.y-(from?.y??enemy.y);}
   const length=Math.hypot(dx,dy);if(!Number.isFinite(length)||!(length>1e-7))return false;
-  const sizeScale=Math.min(1,20/Math.max(20,enemy.r||20)),resistance=boss?1:enemy.type==='brute'?Math.min(.45,sizeScale):enemy.type==='boar'?Math.min(.6,sizeScale):sizeScale;
+  const reference=CONFIG.resistance.referenceRadius,sizeScale=Math.min(1,reference/Math.max(reference,enemy.r||reference));
+  const resistance=boss?1:Math.min(CONFIG.resistance[enemy.type]??1,sizeScale);
   const scale=!boss&&now-last+1e-9<rules.window?rules.secondMultiplier:1;
   state??={};Object.assign(state,{scene:sceneId(game),previousAt:last,lastAt:now,age:0,distance:distance*scale*resistance,dx:dx/length,dy:dy/length});
   enemy._weaponPush=state;return true;

@@ -15,6 +15,10 @@ else if(args.length===0){
 }else throw new Error('Usage: node scripts/stamp-version.mjs [--commit-count <GitHub main commit count>]');
 if(!/^[1-9]\d*$/.test(count)||!Number.isSafeInteger(Number(count)))throw new Error('Commit count must be a positive safe integer.');
 
+// JSON is the authored source; rebuild both transport and fallback atomically
+// before hashing modules for this release. No runtime file is hand-maintained.
+execFileSync(process.execPath,[fileURLToPath(new URL('./build-content-config.mjs',import.meta.url))],{cwd:root,stdio:'pipe'});
+
 // GitHub main is canonical. Sites has a separate Git history, so its publisher
 // supplies the verified GitHub count including the pending release commit.
 const version=`v0.0.${Number(count)}`;

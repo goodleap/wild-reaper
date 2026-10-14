@@ -1,13 +1,15 @@
+import { getConfigSection } from './content-config.js';
 import { mapSeed } from './map-context.js';
 import { treasureGuardianType } from './encounter-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { WORLD_IDS } from './world-definitions.js';
+const economy=getConfigSection('economy'),pickups=economy.pickups,treasureRules=economy.treasure;
 
 const TAU=Math.PI*2,CELL=520,MAX_SUPPLIES=18,MAX_PICKUPS=24;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-const TYPES=['herb','magnet','fury'];
+const TYPES=pickups.types;
 
 // A fixed-size consumed-location filter prevents short revisits from farming
 // the same supply. False positives can only omit a crate; they never add loot.
@@ -24,15 +26,15 @@ export class Adventure {
     this.region=WORLD_IDS.includes(game.region?.id)?game.region.id:'forest';
     this.seed=mapSeed(game);
     this.props=[];this.pickups=[];this.treasure=null;
-    this.furyTime=0;this.magnetTime=0;this.buffDuration=8;
-    this._id=0;this._treasureCount=0;this._nextTreasureAt=(game.time||0)+50;
+    this.furyTime=0;this.magnetTime=0;this.buffDuration=pickups.buffDuration;
+    this._id=0;this._treasureCount=0;this._nextTreasureAt=(game.time||0)+treasureRules.firstAt;
     this._supplyClock=0;this._consumed=new ConsumedSupplies();
     if(generation)this._refreshSupplies(true);
   }
   _hash(x,y=0){const index=WORLD_IDS.indexOf(this.region),offset=index===1?419:index===2?811:index>2?index*431:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
-  damageMultiplier(){return this.furyTime>0?1.35:1;}
-  fireRateMultiplier(){return this.furyTime>0?1.2:1;}
-  magnetRange(base=this.game.stats.magnet){return this.magnetTime>0?Math.max(base,320):base;}
+  damageMultiplier(){return this.furyTime>0?pickups.furyDamage:1;}
+  fireRateMultiplier(){return this.furyTime>0?pickups.furyFireRate:1;}
+  magnetRange(base=this.game.stats.magnet){return this.magnetTime>0?Math.max(base,pickups.magnetRange):base;}
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<g.viewHeight*.5+margin;}
   _free(x,y,r=36){return this.game.terrain.isFree(x,y,r)&&this.game.terrain.island?.isDry(x,y,r)!==false;}
@@ -61,13 +63,13 @@ export class Adventure {
   _supplyAt(tx,ty){
     const seed=this._hash(tx+313,ty+167);
     const starter=tx===0&&ty===0&&this.region==='forest'&&this.seed===0;
-    if(!starter&&seed>.42)return null;
+    if(!starter&&seed>pickups.supplyChance)return null;
     const id=`supply:${tx},${ty}`;
     if(this._consumed.has(id))return null;
     const x=starter?220:tx*CELL+145+this._hash(tx+131,ty+197)*225,y=starter?160:ty*CELL+145+this._hash(tx+199,ty+83)*225;
     const point=this._safePoint(x,y,38,{generated:true});
     if(!point||Math.hypot(point.x,point.y)<145||!this._environmentFree(point.x,point.y,18))return null;
-    return {id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:42,maxHp:42,hit:0,seed,drop:starter?'herb':TYPES[Math.floor(this._hash(tx+233,ty+271)*TYPES.length)]};
+    return {id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:pickups.supplyHp,maxHp:pickups.supplyHp,hit:0,seed,drop:starter?'herb':TYPES[Math.floor(this._hash(tx+233,ty+271)*TYPES.length)]};
   }
   _refreshSupplies(initial=false){
     const g=this.game,p=this._foot(),halfW=Math.min(900,g.viewWidth*.5)+240,halfH=Math.min(650,g.viewHeight*.5)+240;
@@ -107,20 +109,20 @@ export class Adventure {
   dropPickup(type,x,y,duration=this.buffDuration){
     if(!TYPES.includes(type))return null;
     const point=this._safePoint(x,y,18);if(!point)return null;
-    const pickup={id:`pickup:${++this._id}`,type,...point,r:10,life:55,maxLife:55,duration:Math.max(1,Math.min(12,duration))};
+    const pickup={id:`pickup:${++this._id}`,type,...point,r:10,life:pickups.life,maxLife:pickups.life,duration:Math.max(pickups.minBuffDuration,Math.min(pickups.maxBuffDuration,duration))};
     if(this.pickups.length>=MAX_PICKUPS)this.pickups.shift();
     this.pickups.push(pickup);return pickup;
   }
   _collect(pickup){
     const g=this.game,p=g.player;if(pickup.life<=0)return false;let healed=0;
     if(pickup.type==='herb'){
-      const healing=g.relics?.modifyHerbHealing(25)??25;
-      healed=Math.min(Math.max(0,Number.isFinite(healing)?healing:25),Math.max(0,p.maxHp-p.hp));p.hp+=healed;
+      const healing=g.relics?.modifyHerbHealing(pickups.herbHealing)??pickups.herbHealing;
+      healed=Math.min(Math.max(0,Number.isFinite(healing)?healing:pickups.herbHealing),Math.max(0,p.maxHp-p.hp));p.hp+=healed;
       if(healed>0){g._effect(p.x,p.y-28,'heal',.8,0,'#b9e89c',`+${Math.ceil(healed)}`);g.relics?.onHerb(healed);}
       else g._effect(p.x,p.y,'ring',.3,24,'#b9e89c');
     }else if(pickup.type==='magnet'){
       this.magnetTime=Math.max(this.magnetTime,pickup.duration);
-      for(const gem of g.gems)if(Math.hypot(gem.x-p.x,gem.y-p.y)<480)gem.attracted=true;
+      for(const gem of g.gems)if(Math.hypot(gem.x-p.x,gem.y-p.y)<pickups.magnetAttractRange)gem.attracted=true;
       g._effect(p.x,p.y,'ring',.5,95,'#a8dcec');
     }else{
       this.furyTime=Math.max(this.furyTime,pickup.duration);
@@ -146,8 +148,8 @@ export class Adventure {
     }
     if(!point||!this._environmentFree(point.x,point.y,40))return null;
     this._treasureCount++;
-    this.treasure={id:`treasure:${++this._id}`,...point,r:27,sortY:point.y,state:'locked',guardianId:null,life:180,maxLife:180,openedLife:0};
-    this._nextTreasureAt=g.time+90;g._emit('treasure');
+    this.treasure={id:`treasure:${++this._id}`,...point,r:27,sortY:point.y,state:'locked',guardianId:null,life:treasureRules.life,maxLife:treasureRules.life,openedLife:0};
+    this._nextTreasureAt=g.time+treasureRules.spawnInterval;g._emit('treasure');
     g._effect(point.x,point.y,'ring',1,65,'#f3d28c');return this.treasure;
   }
   _activateTreasure(){
@@ -159,7 +161,7 @@ export class Adventure {
     const enemy=g._spawnEnemy(type,1);
     if(!enemy)return;
     enemy.elite=true;enemy.guardianId=t.id;enemy.guardActive=true;enemy.guardReturnTarget=null;
-    enemy.r*=1.2;enemy.hp*=3;enemy.maxHp=enemy.hp;enemy.damage*=1.1;enemy.speed*=1.1;enemy.xp=30;
+    enemy.r*=treasureRules.guardian.radius;enemy.hp*=treasureRules.guardian.hp;enemy.maxHp=enemy.hp;enemy.damage*=treasureRules.guardian.damage;enemy.speed*=treasureRules.guardian.speed;enemy.xp=treasureRules.guardian.xp;
     enemy.x=point.x;enemy.y=point.y-groundOffset(enemy);g._moveEntity(enemy,0,0);
     t.guardianId=enemy.id;t.state='active';t.anchorX=enemy.x;t.anchorY=enemy.y+groundOffset(enemy);
     g._emit('treasureGuard');g._effect(enemy.x,enemy.y,'ring',.7,55,'#dfb572');
@@ -167,37 +169,37 @@ export class Adventure {
   onEnemyKilled(enemy){
     const t=this.treasure;
     if(!t||t.state!=='active'||!(enemy.hp<=0)||enemy.id!==t.guardianId||enemy.guardianId!==t.id)return;
-    t.state='unlocked';t.guardianId=null;t.life=80;t.maxLife=80;
+    t.state='unlocked';t.guardianId=null;t.life=treasureRules.unlockedLife;t.maxLife=treasureRules.unlockedLife;
     this.game._emit('treasureUnlocked');this.game._effect(t.x,t.y,'ring',.8,70,'#f3d28c');
   }
   _clearTreasure(){
     const t=this.treasure;if(!t)return;
     // Despawn is not a kill: it must not trigger XP, kill counts or an unlock.
     this.game.enemies=this.game.enemies.filter(e=>e.guardianId!==t.id);
-    this.treasure=null;this._nextTreasureAt=Math.max(this._nextTreasureAt,this.game.time+30);
+    this.treasure=null;this._nextTreasureAt=Math.max(this._nextTreasureAt,this.game.time+treasureRules.despawnDelay);
   }
   _openTreasure(){
     const t=this.treasure;if(!t||t.state!=='unlocked')return;
     t.state='opened';t.openedLife=2;t.life=2;
-    this.game.grantResources({gold:18,crystals:35},'守卫宝箱');
+    this.game.grantResources(treasureRules.reward,'守卫宝箱');
     for(let i=0;i<TYPES.length;i++){
       const a=-Math.PI/2+i*TAU/TYPES.length;
       this.dropPickup(TYPES[i],t.x+Math.cos(a)*28,t.y+Math.sin(a)*28);
     }
-    this._nextTreasureAt=Math.max(this._nextTreasureAt,this.game.time+65);
+    this._nextTreasureAt=Math.max(this._nextTreasureAt,this.game.time+treasureRules.openDelay);
     this.game._emit('treasureOpened');this.game._effect(t.x,t.y,'ring',.7,75,'#f3d28c');
   }
   _updateTreasure(dt){
     const g=this.game,t=this.treasure;if(!t)return;
     t.life-=dt;const p=this._foot(),d=distance(t,p);
     if(t.life<=0||d>1250){this._clearTreasure();return;}
-    if(t.state==='locked'&&d<230)this._activateTreasure();
+    if(t.state==='locked'&&d<treasureRules.engageRange)this._activateTreasure();
     if(t.state==='active'){
       const guard=g.enemies.find(e=>e.id===t.guardianId&&e.guardianId===t.id&&e.hp>0);
       if(!guard){this._clearTreasure();return;}
       const gx=guard.x,gy=guard.y+groundOffset(guard),fromChest=Math.hypot(gx-t.x,gy-t.y);
-      if(d>580||fromChest>450)guard._guardReturning=true;
-      if(guard._guardReturning&&d<480&&Math.hypot(gx-t.anchorX,gy-t.anchorY)<90)guard._guardReturning=false;
+      if(d>treasureRules.playerLeash||fromChest>treasureRules.guardLeash)guard._guardReturning=true;
+      if(guard._guardReturning&&d<treasureRules.returnRange&&Math.hypot(gx-t.anchorX,gy-t.anchorY)<90)guard._guardReturning=false;
       guard.guardActive=!guard._guardReturning;
       guard.guardReturnTarget=guard._guardReturning&&Math.hypot(gx-t.anchorX,gy-t.anchorY)>12?{x:t.anchorX,y:t.anchorY}:null;
     }else if(t.state==='unlocked'&&d<40)this._openTreasure();

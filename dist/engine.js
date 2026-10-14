@@ -38,6 +38,7 @@ import { spawnDebugWave } from './debug-wave.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBoss } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, selectFriendlyTarget, damageFriendly, clearFriendlyPath } from './friendly-combat.js';
+import { getConfigSection, getConfigSnapshot } from './content-config.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
 const TAU = Math.PI * 2;
@@ -49,15 +50,18 @@ const decorativeEffects=new Set(['hit','damage','defeat','arrowRicochet']);
 const protectedEffect=e=>e.type==='rescueWarning'||(e.type==='defeat'&&e.boss);
 // Visual variation must never consume the combat/loot random stream.
 const feedbackSeed = (x,y,time,id=0) => (Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
-export const BALANCE=Object.freeze({firstXp:40,xpBase:110,xpLinear:65,xpCurve:8,firstBossAt:120,bossInterval:150,arrowDamage:32,arrowInterval:.38,arrowRange:420,magnet:105,spawnBase:1.05,spawnGrowth:.018,spawnMax:10.5,maxEnemyBullets:60,boarCap:SPECIAL_ENEMY_CAPS.boar,sporeCap:SPECIAL_ENEMY_CAPS.spore});
+const DIFFICULTY=getConfigSection('difficulty'),PRESSURE=DIFFICULTY.pressure,ENEMY_GROWTH=DIFFICULTY.enemyGrowth,EXPLORATION_SPAWN=DIFFICULTY.explorationSpawn;
+const HERO_DEFAULTS=getConfigSection('heroes').defaults,COMBAT_RULES=getConfigSection('combat').stats,ATTACK_DEFAULTS=COMBAT_RULES.attackDefaults;
+export const BALANCE=Object.freeze({...DIFFICULTY.balance,arrowDamage:ATTACK_DEFAULTS.arrowDamage,arrowInterval:ATTACK_DEFAULTS.arrowInterval,arrowRange:ATTACK_DEFAULTS.arrowRange,magnet:ATTACK_DEFAULTS.magnet,boarCap:SPECIAL_ENEMY_CAPS.boar,sporeCap:SPECIAL_ENEMY_CAPS.spore});
 export function xpCost(level) {
   if(level<=1)return BALANCE.firstXp;
-  const n=level-2;return Math.round(BALANCE.xpBase+BALANCE.xpLinear*n+BALANCE.xpCurve*Math.pow(n,1.3));
+  const n=level-2;return Math.round(BALANCE.xpBase+BALANCE.xpLinear*n+BALANCE.xpCurve*Math.pow(n,DIFFICULTY.xp.exponent));
 }
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
   constructor({difficulty='normal',hero='traveler',initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false,debugWorld=null,stageId=null}={}) {
+    this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
     this.debugFull=this.debug&&debugFull===true;
     this.stage=stageId?new StageRun(this,stageId):null;
@@ -75,7 +79,7 @@ export class Game {
     this.status = 'playing'; this.time = 0; this.runTime=0; this.kills = 0; this.wave = 1;
     this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
-    const baseMaxHp=this.easy?140:100,maxHp=Math.max(1,Math.round(applyHeroStat(this.hero,'maxHealth',baseMaxHp)));
+    const baseMaxHp=this.easy?HERO_DEFAULTS.easyBaseHealth:HERO_DEFAULTS.baseHealth,maxHp=Math.max(1,Math.round(applyHeroStat(this.hero,'maxHealth',baseMaxHp)));
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
     this.initialWeaponId=normalizeInitialWeaponId(initialWeaponId);
@@ -103,7 +107,7 @@ export class Game {
     this._refreshStats();this._refreshWeapons();
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     this._moveEntity(this.player,0,0,true);
-    for(let i=0;i<4;i++) this._spawnEnemy('slime', adventure?undefined:330+i*24);
+    for(let i=0;i<EXPLORATION_SPAWN.initialCount;i++)this._spawnEnemy(EXPLORATION_SPAWN.initialType,adventure?undefined:EXPLORATION_SPAWN.testStartRadius+i*EXPLORATION_SPAWN.testRadiusStep);
     this.adventure=null;
     this.encounters=encounters?new Encounters(this):null;
     this.combat=new CombatResolution(this);this.attacks=new CombatAttacks(this);
@@ -168,18 +172,18 @@ export class Game {
     return best;
   }
   _difficultyTime() {
-    if(this.stage)return Math.max(0,(this.stage.definition.dangerFactor??1)-1)*600+Math.min(this.time,600)*.18;
+    if(this.stage)return Math.max(0,(this.stage.definition.dangerFactor??1)-1)*PRESSURE.dangerSeconds+Math.min(this.time,PRESSURE.timeCap)*PRESSURE.timeFactor;
     // Pressure follows cleared connections and elapsed time, not the world
     // array index. The first three cleared routes start the endless clock.
     if(!this._features.adventure||!this._islandWorlds)return this.time;
-    const base=Math.max(0,(this.region.danger||1)-1)*600+Math.min(3,this.regions?.defeatedConnectionsCount||0)*45+Math.min(this.time,600)*.18;
+    const base=Math.max(0,(this.region.danger||1)-1)*PRESSURE.dangerSeconds+Math.min(PRESSURE.connectionCap,this.regions?.defeatedConnectionsCount||0)*PRESSURE.connectionSeconds+Math.min(this.time,PRESSURE.timeCap)*PRESSURE.timeFactor;
     return base+(this.regions?.endlessUnlocked?Math.max(0,this.time-this.regions.endlessStartedAt):0);
   }
   _waveTier() {
-    if(this.stage)return Math.round(Math.max(0,(this.stage.definition.dangerFactor??1)-1)*20)+Math.min(3,Math.floor(this.time/180));
+    if(this.stage)return Math.round(Math.max(0,(this.stage.definition.dangerFactor??1)-1)*PRESSURE.waveDanger)+Math.min(PRESSURE.waveTimeCap,Math.floor(this.time/PRESSURE.wavePeriod));
     if(!this._features.adventure||!this._islandWorlds)return null;
-    const exploration=Math.round(Math.max(0,(this.region.danger||1)-1)*20)+Math.min(3,this.regions?.defeatedConnectionsCount||0)*2+Math.min(3,Math.floor(this.time/180));
-    return exploration+(this.regions?.endlessUnlocked?Math.floor(Math.max(0,this.time-this.regions.endlessStartedAt)/50):0);
+    const exploration=Math.round(Math.max(0,(this.region.danger||1)-1)*PRESSURE.waveDanger)+Math.min(PRESSURE.connectionCap,this.regions?.defeatedConnectionsCount||0)*PRESSURE.waveConnection+Math.min(PRESSURE.waveTimeCap,Math.floor(this.time/PRESSURE.wavePeriod));
+    return exploration+(this.regions?.endlessUnlocked?Math.floor(Math.max(0,this.time-this.regions.endlessStartedAt)/PRESSURE.endlessWavePeriod):0);
   }
   _findSpawnPoint(type='slime',angle,radius) {
     const r=enemyDefinition(type).r,p=this.player;
@@ -213,11 +217,11 @@ export class Game {
     const islandSpawn=this.terrain.island&&radius!==1;
     const point=islandSpawn?this._findSpawnPoint(type,Number.isFinite(angle)?angle:undefined,radius):{x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance};
     if(!point)return null;
-    const lateMinutes=Math.max(0,t-150)/60,bossIndex=Math.max(1,this.bossCount);
-    const endurance=Math.max(0,t-300)/60;
-    const health=hp*(type==='boss'?1+(bossIndex-1)*.65+sq(bossIndex-1)*.12:1+Math.min(t,300)*.0018+endurance*.13+Math.pow(endurance,1.25)*.05);
-    const danger=type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.18;
-    const enemy={id:++this._id,...point,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(1.85,1+t*.0006)*(this.easy?.9:1),damage:damage*danger*(this.easy?.72:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*.3:1+lateMinutes*.055)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),attackCooldown:0,slamCooldown:0,slamRecovery:0,slam:null,charge:null,chargeCooldown:1.5,cast:null,castCooldown:1};
+    const lateMinutes=Math.max(0,t-ENEMY_GROWTH.lateAfter)/ENEMY_GROWTH.minute,bossIndex=Math.max(1,this.bossCount);
+    const endurance=Math.max(0,t-ENEMY_GROWTH.enduranceAfter)/ENEMY_GROWTH.minute;
+    const health=hp*(type==='boss'?1+(bossIndex-1)*ENEMY_GROWTH.bossHealthLinear+sq(bossIndex-1)*ENEMY_GROWTH.bossHealthCurve:1+Math.min(t,ENEMY_GROWTH.healthTimeCap)*ENEMY_GROWTH.healthTimeGrowth+endurance*ENEMY_GROWTH.enduranceLinear+Math.pow(endurance,ENEMY_GROWTH.enduranceExponent)*ENEMY_GROWTH.enduranceCurve);
+    const danger=type==='boss'?1+(bossIndex-1)*ENEMY_GROWTH.bossDamageGrowth:1+lateMinutes*ENEMY_GROWTH.damageLateGrowth;
+    const enemy={id:++this._id,...point,r,hp:health,maxHp:health,type,hit:0,speed:speed*Math.min(ENEMY_GROWTH.speedMax,1+t*ENEMY_GROWTH.speedTimeGrowth)*(this.easy?ENEMY_GROWTH.easySpeedMultiplier:1),damage:damage*danger*(this.easy?ENEMY_GROWTH.easyDamageMultiplier:1),xp:Math.round(xp*(type==='boss'?1+(bossIndex-1)*ENEMY_GROWTH.bossXpGrowth:1+lateMinutes*ENEMY_GROWTH.xpLateGrowth)),bossIndex:type==='boss'?bossIndex:undefined,wave:this.wave,phase:rand(0,TAU),attackCooldown:0,slamCooldown:0,slamRecovery:0,slam:null,charge:null,chargeCooldown:ENEMY_GROWTH.initialChargeCooldown,cast:null,castCooldown:ENEMY_GROWTH.initialCastCooldown};
     if(!islandSpawn) {
       this._moveEntity(enemy,0,0);
       if(!radius)for(let i=0;i<6&&this._inView(enemy);i++) {
@@ -487,9 +491,9 @@ export class Game {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
       const bossActive=this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false);
-      const rate=Math.min(4.5,BALANCE.spawnBase+this._difficultyTime()*.008)*(this.easy?.78:1)*(bossActive?.38:1);
+      const rate=Math.min(EXPLORATION_SPAWN.maxRate,BALANCE.spawnBase+this._difficultyTime()*EXPLORATION_SPAWN.timeGrowth)*(this.easy?EXPLORATION_SPAWN.easyMultiplier:1)*(bossActive?EXPLORATION_SPAWN.bossMultiplier:1);
       this._spawn=1/rate;
-      if(this.enemies.length<180) {
+      if(this.enemies.length<EXPLORATION_SPAWN.enemyLimit) {
         const enemy=this._spawnEnemy(regionEnemyType(this,Math.random()));
         if(enemy)this.elites.maybePromote(enemy);
       }
@@ -577,7 +581,7 @@ export class Game {
 
   _updateArrow(b,dt) {return this.attacks.updateArrow(b,dt);}
   _branchMovementMultiplier(enemy) {
-    return (enemy.type!=='boss'&&!enemy.isCompanion&&(enemy.branchSlowUntil||0)>this._clock ? .65 : 1)*(this.superSkills?.movementMultiplier(enemy)??1);
+    return (enemy.type!=='boss'&&!enemy.isCompanion&&(enemy.branchSlowUntil||0)>this._clock ? COMBAT_RULES.skillRules.pulse.controlMoveMultiplier : 1)*(this.superSkills?.movementMultiplier(enemy)??1);
   }
 
   _updateWeapons(dt) {return this.attacks.updateAbilities(dt);}

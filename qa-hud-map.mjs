@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { harness } from './qa-app-harness.mjs';
 // Reuse the current app DOM model so input guards, debug controls and scene
 // tests share the same parent relationships and browser surface.
-const {nodes,listeners,document,run}=harness('?debug');
+const {nodes,listeners,document,run,flush}=harness('?debug');
 const key=(code,repeat=false)=>listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat,target:nodes['game-canvas'],preventDefault(){}});
-nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();await flush();
 // Freeze rendering only: the actual frame, game clock, input and HUD run normally.
 run('renderGame=()=>{};renderIntro=()=>{}');
 assert(run('game.status')==='playing');
@@ -85,7 +85,7 @@ assert.equal(chestRendering.calls[2].clipped,true);assert.equal(chestRendering.c
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('mapOpen'),false);assert(nodes['map-overlay'].classList.contains('hidden'));
 // Drive the real frame and native UI handlers across a door fade. Only drawing
 // is stubbed: movement, input revisions and the scene controller are live.
-nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();await flush();
 run(`game=new Game({terrain:new game.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
 game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;
 const fadeHut={id:'ui-fade-hut',type:'supply',name:'测试小屋',x:400,y:0,door:{x:400,y:30},width:54,depth:28,interactRadius:82,state:'ready',seed:1,guardIds:[]};
@@ -128,7 +128,7 @@ nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('
 // Pause and the independent character panel share one detail view. Equipment
 // controls, tab state, gestures and reward guards are covered by
 // qa-character-hud.mjs with a DOM that parses the new dynamic panel markup.
-nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();nodes['pause-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();await flush();nodes['pause-button'].onclick();
 assert(run('paused'));nodes['pause-character-button'].onclick();
 assert(run('paused&&characterOpen'));assert(nodes['character-content'].innerHTML.includes('攻击'));
 nodes['character-done'].onclick();assert(run('paused&&!characterOpen'));
@@ -141,11 +141,11 @@ const fpsNode=nodes['debug-fps'];
 assert(!fpsNode.classList.contains('hidden'),'debug mode exposes the FPS readout');
 let fpsText=fpsNode.textContent,fpsWrites=[];
 Object.defineProperty(fpsNode,'textContent',{get:()=>fpsText,set:value=>{fpsText=String(value);fpsWrites.push(fpsText);},configurable:true});
-nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();await flush();
 let fpsNow=100000;
-const sampleRate=rate=>{
+const sampleRate=async rate=>{
   // A new game is a real reset boundary, not a direct call to telemetry internals.
-  nodes['restart-button'].onclick();assert.equal(fpsNode.textContent,'-- FPS');
+  nodes['restart-button'].onclick();await flush();assert.equal(fpsNode.textContent,'-- FPS');
   run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
   fpsWrites=[];fpsNow+=10000;run(`frame(${fpsNow})`);
   const interval=1000/rate,halfFrames=rate/2;
@@ -156,7 +156,7 @@ const sampleRate=rate=>{
   assert.equal(fpsNode.textContent,`${rate} FPS`);assert(fpsWrites.length<=2,'FPS text updates at most twice per second');
   assert.equal(run('paused'),false);assert(run('game.runTime')>0,'FPS samples come from actual live gameplay');
 };
-sampleRate(60);sampleRate(120);sampleRate(10);
+await sampleRate(60);await sampleRate(120);await sampleRate(10);
 // Frozen scenes keep sampling RAF cadence but must not display an apparent
 // performance failure merely because retaining the canvas skips submissions.
 nodes['pause-button'].onclick();assert(run('paused'));
@@ -176,7 +176,7 @@ for(const search of ['','?debug=0','?debug=false']){
   const normal=harness(search),normalFps=normal.nodes['debug-fps'];
   assert(!normalFps.classList.contains('hidden'));
   assert.equal(normal.run('debugPerformanceNode'),null);
-  normal.run('startGame();game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;frame(1000);');
+  normal.run('startGame();');await normal.flush();normal.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;frame(1000);');
   for(let i=1;i<=60;i++)normal.run(`frame(${1000+i*1000/60})`);
   assert.equal(normalFps.textContent,'60 FPS');
   normal.run('pause();');

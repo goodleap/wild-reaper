@@ -1,3 +1,4 @@
+import { getConfigSection } from './content-config.js';
 import { groundOffset } from './terrain.js';
 import { SUPER_SKILL_DEFS } from './combat-catalog.js';
 import { scalePlayerDamage } from './combat-stats.js';
@@ -6,13 +7,11 @@ import { SWORD_FLIGHT_RULES, swordFormationAnchor, createSwordFlight, advanceSwo
 
 const freeze=Object.freeze;
 export const SUPER_SKILLS=SUPER_SKILL_DEFS;
-export const SUPER_RULES=freeze({maxLevel:3,maxFields:12,maxTargets:16,regionFallback:freeze({gold:60,crystals:100}),castleFallback:freeze({gold:120,crystals:180})});
+const CONFIG=getConfigSection('combat').super,TIMING=CONFIG.timing;
+export const SUPER_RULES=CONFIG.rules;
 const DEFINITIONS=new Map(SUPER_SKILLS.map(skill=>[skill.id,skill]));
-const PROPAGATION=freeze({domain:'ground',runeArrow:'projectile',meteor:'overhead',swords:'projectile',vortex:'projectile'});
-const DOMAIN_BRANCHES=freeze({
-  binding:freeze({name:'荆棘领域',desc:'反复刺击领域内的地面敌人，短暂束缚普通怪并减缓首领',icon:'♧',color:'#a9d888'}),
-  erosion:freeze({name:'侵蚀领域',desc:'侵蚀领域持续减速并伤害地面敌人，离开后仍短暂受侵蚀',icon:'♨',color:'#cea1da'})
-});
+const PROPAGATION=CONFIG.propagation;
+const DOMAIN_BRANCHES=CONFIG.domainBranches;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
 // Rank authored enemy identity, never its remaining health (including dummies).
@@ -24,20 +23,8 @@ const segmentDistance=(x,y,x1,y1,x2,y2)=>{
 };
 // One immutable source supplies both combat and the upgrade-card comparisons.
 // damage is a single hit/tick, before the player's shared damage multiplier.
-const LEVEL_STATS=freeze(Object.fromEntries(['meteor','swords','vortex'].map(id=>[id,freeze([1,2,3].map(level=>{
-  const n=level-1,stats={
-    meteor:{cooldown:9-n*.5,damage:145+n*40,radius:86+n*9,count:level===1?2:3},
-    swords:{cooldown:6.6-n*.4,damage:124+n*32,count:3+level,interval:.22},
-    vortex:{cooldown:9-n*.5,damage:27+n*10,radius:125+n*15,duration:3.2,interval:.4,pull:82+n*14}
-  }[id];
-  return freeze({level,...stats});
-}))])));
-const DOMAIN_STATS=freeze(Object.fromEntries(Object.keys(DOMAIN_BRANCHES).map(branch=>[branch,freeze([1,2,3].map(level=>{
-  const n=level-1;
-  return freeze({level,branch,...(branch==='binding'
-    ?{cooldown:7-n*.5,damage:28+n*10,impactDamage:40+n*15,radius:118+n*14,duration:3,interval:.75,root:.45+n*.05,slow:.15}
-    :{cooldown:7-n*.3,damage:24+n*7,impactDamage:32+n*8,radius:112+n*12,duration:4,interval:.5,slow:.2,linger:1.05})});
-}))])));
+const LEVEL_STATS=CONFIG.levelStats;
+const DOMAIN_STATS=CONFIG.domainStats;
 export const getSuperSkillStats=(id,level=1,branch='binding')=>id==='domain'?(DOMAIN_STATS[branch]||DOMAIN_STATS.binding)[level-1]||null:LEVEL_STATS[id]?.[level-1]||null;
 const upgradeDescription=(id,level,branch)=>{
   const s=getSuperSkillStats(id,level,branch);
@@ -133,7 +120,7 @@ export class SuperSkills {
     if(skillId==='domain') {
       if(!g.build.awardDomain(choice.domainBranch))return false;
     }else this.owned[skillId]=current+1;
-    this.cooldowns[skillId]=current?Math.min(this.cooldowns[skillId]??0,this._cooldown(skillId,current+1)):.6;
+    this.cooldowns[skillId]=current?Math.min(this.cooldowns[skillId]??0,this._cooldown(skillId,current+1)):TIMING.initialCooldown;
     this.pending=null;
     g._emit('superChosen',{skillId,name:choice.name,level:this.owned[skillId],source});
     return true;
@@ -215,7 +202,7 @@ export class SuperSkills {
   }
 
   _cast(id,level) {
-    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,420,{strongest:true,skillId:id});
+    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,TIMING.targetRange,{strongest:true,skillId:id});
     if(!targets.length)return false;
     const stats=getSuperSkillStats(id,level,this._branch());
     if(!stats)return false;
@@ -234,18 +221,18 @@ export class SuperSkills {
       const {radius,count}=stats,points=[];
       for(const enemy of targets) {
         const at=this._foot(enemy);
-        if(points.some(point=>distance(point,at)<radius*.9))continue;
+        if(points.some(point=>distance(point,at)<radius*TIMING.meteorSpacingRatio))continue;
         points.push(at);if(points.length===count)break;
       }
       // Against a lone boss, the second star still lands nearby rather than
       // silently deleting half the reward's damage potential.
       while(points.length<count)points.push({...points[0]});
-      for(let i=0;i<points.length;i++)this._field(id,points[i],radius,.7+i*.25,{stage:'warning',damage});
+      for(let i=0;i<points.length;i++)this._field(id,points[i],radius,TIMING.meteorDelay+i*TIMING.meteorStagger,{stage:'warning',damage});
     } else if(id==='swords') {
-      if(this._volleys.length>=2)return false;
+      if(this._volleys.length>=TIMING.maxVolleys)return false;
       const formationId=++this._id;
-      this._volleys.push({skillId:id,formationId,remaining:stats.count,count:stats.count,index:0,tick:.16,interval:stats.interval,damage,targetHits:new Map()});
-      g._effect(p.x,p.y,'superBurst',.16+stats.count*stats.interval,48,DEFINITIONS.get(id).color,undefined,{skillId:id,count:stats.count,interval:stats.interval,released:0,castX:p.x,castY:p.y,seed:formationId});
+      this._volleys.push({skillId:id,formationId,remaining:stats.count,count:stats.count,index:0,tick:TIMING.volleyDelay,interval:stats.interval,damage,targetHits:new Map()});
+      g._effect(p.x,p.y,'superBurst',TIMING.volleyDelay+stats.count*stats.interval,48,DEFINITIONS.get(id).color,undefined,{skillId:id,count:stats.count,interval:stats.interval,released:0,castX:p.x,castY:p.y,seed:formationId});
     } else if(id==='vortex') {
       const {radius,duration,interval,pull}=stats;
       if(!this._field(id,this._center(targets,radius),radius,duration,{tick:interval,interval,damage,pull}))return false;
@@ -258,12 +245,12 @@ export class SuperSkills {
     if(field.domainBranch==='binding'&&enemy.type!=='boss') {
       enemy.superRootUntil=Math.max(enemy.superRootUntil||0,now+field.root);
       enemy.charge=null;enemy._chargeSegment=null;
-      enemy.chargeCooldown=Math.max(enemy.chargeCooldown||0,field.root+.6);
+      enemy.chargeCooldown=Math.max(enemy.chargeCooldown||0,field.root+TIMING.rootChargeDelay);
     }else {
-      enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,now+.65);
-      enemy.superSlowFactor=enemy.type==='boss'?Math.max(.85,1-field.slow):1-field.slow;
+      enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,now+TIMING.slowRefresh);
+      enemy.superSlowFactor=enemy.type==='boss'?Math.max(TIMING.bossMinimumMoveRatio,1-field.slow):1-field.slow;
     }
-    if(field.domainBranch==='erosion')this._erosion.set(enemy,{fieldId:field.id,origin:{x:field.x,y:field.y},damage:field.damage*.5,life:field.linger,tick:.5});
+    if(field.domainBranch==='erosion')this._erosion.set(enemy,{fieldId:field.id,origin:{x:field.x,y:field.y},damage:field.damage*TIMING.erosionDamageRatio,life:field.linger,tick:TIMING.erosionInterval});
   }
   _updateErosion(dt) {
     const g=this.game;
@@ -271,14 +258,14 @@ export class SuperSkills {
       residue.life-=dt;residue.tick-=dt;
       if(enemy.hp<=0||residue.life<-1e-9||!isGrounded(enemy)) {this._erosion.delete(enemy);continue;}
       if(residue.tick>1e-9)continue;
-      residue.tick+=.5;
+      residue.tick+=TIMING.erosionInterval;
       if(!this._visible(enemy,residue.origin)||!this._lineClear(residue.origin,this._foot(enemy),0,'ground'))continue;
       // The field owns all in-area ticks. Residue only pays after leaving it.
       const field=this.fields.find(field=>field.id===residue.fieldId&&field.life>1e-9);
       if(field&&distance(field,this._foot(enemy))<=field.r+enemy.r)continue;
       if(this._damage(enemy,residue.damage,residue.origin)>0&&enemy.hp>0){
-        enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,g._clock+.5);
-        enemy.superSlowFactor=enemy.type==='boss'?.9:.8;
+        enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,g._clock+TIMING.erosionSlowDuration);
+        enemy.superSlowFactor=enemy.type==='boss'?TIMING.erosionBossMoveRatio:TIMING.erosionMoveRatio;
       }
     }
   }
@@ -286,12 +273,12 @@ export class SuperSkills {
   castRunicVolley(stats,target) {
     const g=this.game;
     if(g.status!=='playing'||!stats?.equipped||!g.build.isEquipped('arrow')||!(stats.runic>0)||this._runicCooldown>1e-9||this._runicShots.length)return false;
-    target=target||this._targets(this._foot(),450,{skillId:'runeArrow'})[0];
+    target=target||this._targets(this._foot(),TIMING.runicRange,{skillId:'runeArrow'})[0];
     if(!target||!Number.isFinite(target.x)||!Number.isFinite(target.y))return false;
     const origin=this._foot(),visual={x:g.player.x,y:g.player.y},angle=Math.atan2((target.aimY??target.y)-visual.y,target.x-visual.x);
-    this._runicShots.push({origin,visual,angle,tick:.12,width:11+3*(stats.runic-1),range:450,damage:stats.runicDamage??stats.damage*(3+.9375*(stats.runic-1))});
-    this._runicCooldown=stats.runicInterval??4.2-.3*(stats.runic-1);
-    g._effect(visual.x,visual.y,'superRunicCharge',.12,18,'#89ddd8',undefined,{skillId:'runeArrow',angle,seed:++this._id});
+    this._runicShots.push({origin,visual,angle,tick:TIMING.runicDelay,width:TIMING.runicWidth+TIMING.runicWidthPerRank*(stats.runic-1),range:TIMING.runicRange,damage:stats.runicDamage??stats.damage*(TIMING.runicDamageFallbackMultiplier+TIMING.runicDamageFallbackPerRank*(stats.runic-1))});
+    this._runicCooldown=stats.runicInterval??TIMING.runicInterval-TIMING.runicIntervalReductionPerRank*(stats.runic-1);
+    g._effect(visual.x,visual.y,'superRunicCharge',TIMING.runicDelay,18,'#89ddd8',undefined,{skillId:'runeArrow',angle,seed:++this._id});
     return true;
   }
   _updateRunic(dt) {
@@ -359,7 +346,7 @@ export class SuperSkills {
       const anchor=swordFormationAnchor(p,index,volley.count),{x,y}=anchor;
       const origin={x,y:y+groundOffset(p,true),groundY:y+groundOffset(p,true)};
       if(!this._lineClear(this._foot(),origin,9,'projectile'))continue;
-      const targets=this._targets(origin,430,{strongest:true,skillId:'swords'});
+      const targets=this._targets(origin,TIMING.swordTargetRange,{strongest:true,skillId:'swords'});
       let target=null,fewest=Infinity;
       for(const candidate of targets) {
         if(targetTier(candidate)!==targetTier(targets[0]))break;
@@ -404,7 +391,7 @@ export class SuperSkills {
     for(const skill of SUPER_SKILLS) {
       const level=this.owned[skill.id];if(!level)continue;
       this.cooldowns[skill.id]=Math.max(0,(this.cooldowns[skill.id]||0)-dt);
-      if(this.cooldowns[skill.id]<=1e-9)this.cooldowns[skill.id]=this._cast(skill.id,level)?this._cooldown(skill.id,level):.2;
+      if(this.cooldowns[skill.id]<=1e-9)this.cooldowns[skill.id]=this._cast(skill.id,level)?this._cooldown(skill.id,level):TIMING.retryCooldown;
     }
   }
 }

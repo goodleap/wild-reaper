@@ -1,7 +1,8 @@
+import { getConfigSection } from './content-config.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 
-export const OBJECTIVE_RULES=Object.freeze({bossWarning:25,campEngage:240,houseEngage:480});
+export const OBJECTIVE_RULES=getConfigSection('encounters').objectiveRules;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
@@ -18,9 +19,9 @@ export function bossApproaching(g) {
 export function optionalFightNearby(g,{skipCamp=false,skipEncounter=false,skipSite=null}={}) {
   const p=feet(g),camps=g.companions?.camps||(g.companions?.camp?[g.companions.camp]:[]),activities=g.encounters?.activities||(g.encounters?.active?[g.encounters.active]:[]),chest=g.adventure?.treasure;
   if(!skipCamp&&camps.some(camp=>camp.state==='trapped'&&distance(p,camp)<(camp.engageRadius||OBJECTIVE_RULES.campEngage)))return true;
-  if(!skipEncounter&&activities.some(encounter=>distance(p,encounter)<(encounter.type==='treasure'?420:encounter.r+80)))return true;
+  if(!skipEncounter&&activities.some(encounter=>distance(p,encounter)<(encounter.type==='treasure'?OBJECTIVE_RULES.treasureEngage:encounter.r+OBJECTIVE_RULES.encounterPadding)))return true;
   if(g.settlements?.sites.some(site=>site!==skipSite&&site.state==='active'&&distance(p,site.door)<OBJECTIVE_RULES.houseEngage))return true;
-  return chest?.state==='active'&&distance(p,chest)<600;
+  return chest?.state==='active'&&distance(p,chest)<OBJECTIVE_RULES.treasureChestEngage;
 }
 
 export function canStartObjective(g,options) {
@@ -33,8 +34,8 @@ export function objectivePointSafe(g,point,radius=0,{skipCamp=false,skipEncounte
   // Ignored objectives no longer veto generation, but still reserve their own
   // ground so a new fight does not land on top of a waiting rescue or house.
   const camps=g.companions?.camps||(g.companions?.camp?[g.companions.camp]:[]),activities=g.encounters?.activities||(g.encounters?.active?[g.encounters.active]:[]);
-  if(!skipCamp&&camps.some(camp=>distance(point,camp)<(camp.state==='trapped'?330:100)+radius))return false;
-  if(!skipEncounter&&activities.some(encounter=>distance(point,encounter)<encounter.r+80+radius))return false;
+  if(!skipCamp&&camps.some(camp=>distance(point,camp)<(camp.state==='trapped'?OBJECTIVE_RULES.trappedCampSpacing:OBJECTIVE_RULES.clearedCampSpacing)+radius))return false;
+  if(!skipEncounter&&activities.some(encounter=>distance(point,encounter)<encounter.r+OBJECTIVE_RULES.encounterPadding+radius))return false;
   if(g.settlements?.sites.some(site=>site.state==='active'&&distance(point,site.door)<OBJECTIVE_RULES.houseEngage+radius))return false;
   return true;
 }

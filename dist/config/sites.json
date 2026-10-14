@@ -1,0 +1,287 @@
+{
+  "settlementRules": {
+    "maxSites": 7,
+    "interactRadius": 82,
+    "ward": 18,
+    "guards": 4
+  },
+  "angelRules": {
+    "guardRadius": 150,
+    "auraRadius": 150,
+    "attackRange": 150,
+    "healingPerSecond": 0.03,
+    "strikeRadius": 60,
+    "attackInterval": 0.1,
+    "damage": 115,
+    "connectionGrowth": 0.15,
+    "maxGrowthConnections": 3
+  },
+  "settlementDefinitions": [
+    {
+      "type": "merchant",
+      "name": "荒野游商",
+      "width": 42,
+      "depth": 24,
+      "radius": 410,
+      "angle": 0.12
+    },
+    {
+      "type": "supply",
+      "name": "林间小屋",
+      "width": 64,
+      "depth": 28,
+      "radius": 610,
+      "angle": 2.2
+    },
+    {
+      "type": "occupied",
+      "name": "被占据的小屋",
+      "width": 68,
+      "depth": 30,
+      "radius": 970,
+      "angle": 3.1
+    },
+    {
+      "type": "castle",
+      "name": "古堡入口",
+      "width": 240,
+      "depth": 90,
+      "radius": 1180,
+      "angle": 5.65
+    }
+  ],
+  "settlementTypes": {
+    "merchant": {
+      "foundation": false,
+      "bodyOffset": false,
+      "doorOffset": 0,
+      "interaction": "shop"
+    },
+    "angel": {
+      "foundation": false,
+      "bodyOffset": true,
+      "doorOffset": 0,
+      "interaction": null
+    },
+    "supply": {
+      "foundation": true,
+      "bodyOffset": true,
+      "doorOffset": 30,
+      "interaction": "interior",
+      "interior": "hut"
+    },
+    "occupied": {
+      "foundation": true,
+      "bodyOffset": true,
+      "doorOffset": 30,
+      "interaction": "interior",
+      "interior": "hut"
+    },
+    "castle": {
+      "foundation": true,
+      "bodyOffset": true,
+      "doorOffset": 30,
+      "interaction": "interior",
+      "interior": "castle"
+    }
+  },
+  "relicSiteRules": {
+    "rescueGuards": 9,
+    "interactRadius": 82,
+    "huntTouchRadius": 26
+  },
+  "armySiteRules": {
+    "dogCost": 8,
+    "vaultGold": 45,
+    "vaultCrystals": 90,
+    "smashDuration": 0.9,
+    "smashReach": 110,
+    "altarTouchRadius": 30
+  },
+  "rescueBuilding": {
+    "halfWidth": 63,
+    "back": -46,
+    "front": 61,
+    "doorHalfWidth": 34,
+    "wallRadius": 8
+  },
+  "relicSiteDefinitions": [
+    {
+      "key": "hunt",
+      "type": "hunt",
+      "name": "林间狩猎"
+    },
+    {
+      "key": "rescue",
+      "type": "rescue",
+      "kind": "stormcaller",
+      "name": "唤雷者囚牢",
+      "guardCount": 9
+    },
+    {
+      "key": "rescue-warden",
+      "type": "rescue",
+      "kind": "warden",
+      "name": "守林人囚牢",
+      "guardCount": 9
+    },
+    {
+      "key": "dogcamp",
+      "type": "dogcamp",
+      "kind": "dog",
+      "name": "旅犬营地"
+    },
+    {
+      "key": "owlroost",
+      "type": "rescue",
+      "kind": "owl",
+      "appearance": "owlroost",
+      "name": "林间鸟笼",
+      "guardCount": 3
+    },
+    {
+      "key": "golemaltar",
+      "type": "rescue",
+      "kind": "golem",
+      "appearance": "golemaltar",
+      "name": "沉睡石像",
+      "guardCount": 8
+    },
+    {
+      "key": "stonevault",
+      "type": "stonevault",
+      "name": "封石宝库"
+    }
+  ],
+  "worldRelicDefinitions": {
+    "ruins": [
+      {
+        "key": "rune",
+        "type": "rune",
+        "name": "遗迹符文阵"
+      }
+    ],
+    "snow": [
+      {
+        "key": "rune",
+        "type": "rune",
+        "featureId": "icealtar",
+        "appearance": "icealtar",
+        "name": "冰封祭坛"
+      }
+    ]
+  },
+  "relicSiteTypes": {
+    "default": {
+      "r": 105,
+      "width": 128,
+      "depth": 66,
+      "doorOffset": 100,
+      "clearance": 100,
+      "hazardRadius": 105,
+      "feature": "companions"
+    },
+    "hunt": {
+      "r": 210,
+      "width": 420,
+      "depth": 420,
+      "doorOffset": 190,
+      "clearance": 245,
+      "hazardRadius": 70,
+      "feature": "encounters",
+      "anchor": "center"
+    },
+    "rescue": {
+      "r": 105,
+      "width": 128,
+      "depth": 66,
+      "doorOffset": 100,
+      "clearance": 135,
+      "hazardRadius": 105,
+      "feature": "companions",
+      "gated": true
+    },
+    "stonevault": {
+      "r": 105,
+      "width": 128,
+      "depth": 66,
+      "doorOffset": 138,
+      "clearance": 135,
+      "hazardRadius": 105,
+      "feature": "companions",
+      "gated": true
+    },
+    "dogcamp": {
+      "r": 62,
+      "width": 90,
+      "depth": 65,
+      "doorOffset": 36,
+      "clearance": 100,
+      "hazardRadius": 105,
+      "feature": "companions"
+    },
+    "rune": {
+      "r": 72,
+      "width": 96,
+      "depth": 82,
+      "doorOffset": 45,
+      "clearance": 100,
+      "hazardRadius": 105,
+      "goal": 12,
+      "mechanism": {
+        "type": "rune",
+        "r": 48,
+        "state": "idle",
+        "charge": 0,
+        "remaining": 0,
+        "maxRemaining": 12
+      }
+    }
+  },
+  "relicAppearances": {
+    "golemaltar": {
+      "doorOffset": 0,
+      "gateOpen": true,
+      "anchor": "center",
+      "gated": false
+    }
+  },
+  "settlementGuards": {
+    "leaderXp": 8,
+    "guardXp": 4,
+    "leaderHp": 1.6,
+    "guardHp": 1.25
+  },
+  "castleCombat": {
+    "difficultyPeriod": 120,
+    "difficultyCap": 15,
+    "difficultyGrowth": 0.32,
+    "guardHp": 1.05,
+    "guardXpMultiplier": 0.7,
+    "minGuardXp": 3,
+    "maxGuardXp": 5,
+    "healEveryRooms": 3,
+    "shieldRoute": 3,
+    "eliteRoute": 5,
+    "eliteChance": 0.3,
+    "shieldChance": 0.5,
+    "boss": {
+      "name": "旧王城守卫",
+      "hp": {
+        "easy": 2100,
+        "normal": 2800
+      },
+      "damage": {
+        "easy": 18,
+        "normal": 25
+      },
+      "speed": {
+        "easy": 44,
+        "normal": 49
+      },
+      "damageGrowthPeriod": 600,
+      "xp": 180,
+      "xpGrowthPeriod": 10
+    }
+  }
+}

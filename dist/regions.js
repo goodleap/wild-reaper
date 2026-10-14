@@ -1,3 +1,5 @@
+import { getConfigSection } from './content-config.js';
+import { enemyDefinition } from './enemy-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { PORTAL_GEOMETRY, portalDoor, portalEntranceContains, portalObstacles } from './portal-geometry.js';
@@ -7,7 +9,8 @@ export const worldConnectionId=(a,b)=>[normalizeWorldIndex(a),normalizeWorldInde
 
 export { ordinaryEnemyType as regionEnemyType } from './encounter-definitions.js';
 
-export const PORTAL_RULES=Object.freeze({engageRadius:420,leashRadius:630,interactRadius:82});
+export const PORTAL_RULES=getConfigSection('geography').portalRules;
+const GUARDIAN_RULES=getConfigSection('geography').portalGuardian,ENEMY_GROWTH=getConfigSection('difficulty').enemyGrowth;
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 
@@ -17,7 +20,7 @@ export class Regions {
   constructor(game){this.game=game;this._lastBossId=null;this.portals=[];this.states=new Map();this.guarded=!!(game.stage||game._features.adventure);this.rewardPortal=null;this.unlockedConnections=new Set();this.claimedConnections=new Set();this.endlessStartedAt=null;this._rewardQueue=[];}
   _setStructures(){this.game.terrain.setStructures?.(this.portals.flatMap(portalObstacles),'portals');}
   get defeatedConnectionsCount(){return this.unlockedConnections.size;}
-  get endlessUnlocked(){return !this.game.stage&&this.unlockedConnections.size>=3;}
+  get endlessUnlocked(){return !this.game.stage&&this.unlockedConnections.size>=GUARDIAN_RULES.endlessConnections;}
   _endpoint(target,{origin=null,back=false}={}) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
     const point=plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
@@ -41,9 +44,9 @@ export class Regions {
     for(const state of this.states.values())state.enemies=sync(state.portals,state.enemies);
   }
   _spawnGuardian(portal) {
-    const g=this.game,boss=g._spawnEnemy('boss',1),progress=this.unlockedConnections.size+Math.min(3,Math.max(0,g.time||0)/240),danger=g.region.danger||1;
+    const g=this.game,boss=g._spawnEnemy('boss',1),base=enemyDefinition('boss'),rules=GUARDIAN_RULES,progress=this.unlockedConnections.size+Math.min(rules.timeProgressCap,Math.max(0,g.time||0)/rules.timeProgressPeriod),danger=g.region.danger||1;
     boss.bossIndex=this.unlockedConnections.size+1;
-    boss.hp=boss.maxHp=(g.easy?1700:2300)*(1+progress*.24)*danger;boss.damage=22*(1+progress*.1)*danger*(g.easy?.72:1);boss.xp=Math.round(160*(1+progress*.18)*danger);
+    boss.hp=boss.maxHp=(g.easy?base.easyHp:base.baseHp)*(1+progress*rules.hpGrowth)*danger;boss.damage=base.damage*(1+progress*rules.damageGrowth)*danger*(g.easy?ENEMY_GROWTH.easyDamageMultiplier:1);boss.xp=Math.round(base.xp*(1+progress*rules.xpGrowth)*danger);
     boss.portalId=portal.id;boss.portalHome={x:portal.x,y:portal.y+115};boss.x=boss.portalHome.x;boss.y=boss.portalHome.y-groundOffset(boss);boss.guardActive=false;boss._portalAnnounced=false;portal.bossId=boss.id;
     g._initializeRegionalBoss?.(boss);g._moveEntity(boss,0,0);
   }
@@ -145,7 +148,7 @@ export class Regions {
     portal.state='active';portal.discovered=true;portal.bossId=enemy.id;
     this._syncConnections();
     this._rewardQueue.push(portal);this._offerReward();
-    if(this.endlessUnlocked&&this.endlessStartedAt===null){this.endlessStartedAt=g.time;g._emit('worldsConnected',{count:3});}
+    if(this.endlessUnlocked&&this.endlessStartedAt===null){this.endlessStartedAt=g.time;g._emit('worldsConnected',{count:GUARDIAN_RULES.endlessConnections});}
     g.settlements?.ensureAngels?.();
     g._emit('portalOpened',{nextRegionId:portal.nextRegion.id,name:portal.nextRegion.name});return portal;
   }

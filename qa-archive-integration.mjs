@@ -7,8 +7,8 @@ const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert.equal(new Set(ids).size,ids.length,'shipped modal and entry IDs remain unique');
 const key=(h,code)=>h.listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat:false,target:h.nodes['game-canvas'],preventDefault(){}});
 const click=(h,id)=>{h.nodes[id].focus();h.nodes[id].onclick();};
-const start=h=>{
-  click(h,'start-button');click(h,'prepare-start-button');
+const start=async h=>{
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();
   h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
 };
 const data=h=>JSON.parse(h.run('JSON.stringify(archive.data)'));
@@ -32,7 +32,7 @@ const archiveControl=(h,attribute,value)=>{
   key(h,'Escape');assert.equal(run('archiveOpen'),false);assert.equal(document.activeElement.id,'archive-button');
   assert.equal(data(h).totals.runs,0,'browsing before the first run never creates a run');
 
-  start(h);tick();
+  await start(h);tick();
   assert.equal(data(h).totals.runs,1);
   assert(data(h).entries['weapon:sword']);assert(data(h).entries['skill:storm']);
   assert.equal(data(h).entries['weapon:arrow'],undefined,'unowned weapons remain undiscovered');
@@ -79,7 +79,7 @@ const archiveControl=(h,attribute,value)=>{
   assert.equal(data(h).totals.runs,1);assert.equal(data(h).totals.time,12);assert.equal(data(h).totals.kills,7,'death then repeated home never double counts');
   const loaded=harness('',{storage});assert.equal(data(loaded).totals.kills,7,'reload reads the persisted archive');assert.equal(data(loaded).totals.runs,1);
 
-  nodes['difficulty-casual'].checked=true;start(h);run('game.runTime=3;game.kills=2;');click(h,'pause-button');click(h,'quit-button');
+  nodes['difficulty-casual'].checked=true;await start(h);run('game.runTime=3;game.kills=2;');click(h,'pause-button');click(h,'quit-button');
   assert.equal(data(h).totals.runs,2);assert.equal(data(h).totals.time,15);assert.equal(data(h).totals.kills,9);
   assert.equal(data(h).best.casual.time,3);assert.equal(data(h).best.normal.time,12,'best records are separated by selected difficulty');
 }
@@ -87,7 +87,7 @@ const archiveControl=(h,attribute,value)=>{
 // Actual combat-resolution hook remains independent of the capped sound/VFX
 // event queue. Castle kills and invulnerable practice dummies have distinct rules.
 {
-  const h=harness();start(h);
+  const h=harness();await start(h);
   h.run(`
   game.events=Array.from({length:100},()=>({type:'shoot'}));
   const archiveSlime=game._spawnEnemy('slime',1);archiveSlime.x=game.player.x+50;archiveSlime.y=game.player.y;archiveSlime.hp=1;archiveSlime.xp=0;
@@ -108,7 +108,7 @@ const archiveControl=(h,attribute,value)=>{
 // Observe the same screen-and-ground-visibility gate used by the shipped app.
 // Dormant visible guards are discoverable; offscreen and wall-hidden guards are not.
 {
-  const h=harness();start(h);
+  const h=harness();await start(h);
   h.run(`
   game.player.x=game.player.y=0;
   game.enemies=[{type:'boar',id:2001,x:20,y:0,r:17,hp:10,guardActive:false},{type:'spore',id:2002,x:80,y:0,r:17,hp:10},{type:'beetle',id:2003,x:5000,y:0,r:17,hp:10}];
@@ -120,7 +120,7 @@ const archiveControl=(h,attribute,value)=>{
 }
 
 for(const search of ['?debug','?debug=full']){
-  const storage=new Map(),h=harness(search,{storage});start(h);
+  const storage=new Map(),h=harness(search,{storage});await start(h);
   assert.equal(data(h).totals.runs,1);assert(data(h).entries['weapon:sword']);assert(data(h).entries['skill:storm']);
   if(search==='?debug=full')for(const entry of ARCHIVE_ENTRIES.filter(entry=>['weapons','skills','weaponSkills'].includes(entry.category))){
     assert(data(h).entries[entry.id]?.seen,`${search} records the initial ${entry.id}`);

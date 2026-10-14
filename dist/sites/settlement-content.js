@@ -1,5 +1,7 @@
+import { getConfigSection } from '../content-config.js';
 import { RELICS } from '../relics.js';
 import { SETTLEMENT_RULES, settlementType } from '../site-definitions.js';
+const economy=getConfigSection('economy'),shop=economy.shop;
 const WARD=SETTLEMENT_RULES.ward;
 
 export function settlementInteraction(site){
@@ -17,13 +19,12 @@ export function settlementInteraction(site){
 export function getShopItems(settlements) {
     const g=settlements.game,site=settlements.activeShop;if(!site||g.status!=='shop')return [];
     const relic=RELICS.find(r=>r.id===site.relicId),ward=g.relics?.wardAmount??g.relics?.wardValue??0;
-    const items=[
-      {id:'heal',name:'旅人药剂',desc:'立即恢复 35 点生命',icon:'✚',color:'#b9dda5',price:12,usable:g.player.hp<g.player.maxHp,reason:'生命已满'},
-      {id:'magnet',name:'磁引符',desc:'拾取范围扩大，持续 8 秒',icon:'◉',color:'#a8dcec',price:8,usable:!!g.adventure&&g.adventure.magnetTime<8,reason:'效果已生效'},
-      {id:'fury',name:'狂暴药剂',desc:'伤害与射速提升，持续 8 秒',icon:'✦',color:'#efb46b',price:8,usable:!!g.adventure&&g.adventure.furyTime<8,reason:'效果已生效'},
-      {id:'shield',name:'守护符',desc:'抵消下一次受击的至多 18 点伤害',icon:'⬡',color:'#d2dbae',price:16,usable:!!g.relics&&ward<WARD,reason:'护盾已充盈'}
-    ];
-    if(relic)items.push({id:'relic',name:relic.name,desc:relic.desc,icon:relic.icon,color:relic.color,price:60,usable:!!g.relics&&!g.relics.has(relic.id),reason:'已拥有该遗物',relicId:relic.id,rarity:'遗物'});
+    const items=shop.items.map(def=>{
+      const usable=def.id==='heal'?g.player.hp<g.player.maxHp:def.id==='magnet'?!!g.adventure&&g.adventure.magnetTime<def.duration:def.id==='fury'?!!g.adventure&&g.adventure.furyTime<def.duration:!!g.relics&&ward<WARD;
+      const values={...def,ward:WARD};
+      return {...def,desc:def.description.replace(/\{([A-Za-z]+)\}/g,(_,key)=>String(values[key])),usable};
+    });
+    if(relic)items.push({id:'relic',name:relic.name,desc:relic.desc,icon:relic.icon,color:relic.color,price:shop.relicPrice,usable:!!g.relics&&!g.relics.has(relic.id),reason:'已拥有该遗物',relicId:relic.id,rarity:'遗物'});
     return items.map(item=>{const stock=site.stock[item.id]||0,reason=!stock?'已售罄':!item.usable?item.reason:g.gold<item.price?'金币不足':'';return {...item,stock,available:!reason,reason};});
   }
 
@@ -31,10 +32,10 @@ export function buyShopItem(settlements,id) {
     const g=settlements.game,site=settlements.activeShop,item=getShopItems(settlements).find(i=>i.id===id);
     if(!site||!item?.available||!Number.isFinite(g.gold)||g.gold<item.price)return false;
     if(id==='heal'){
-      const healed=Math.min(35,g.player.maxHp-g.player.hp);if(!(healed>0))return false;
+      const healed=Math.min(item.healing,g.player.maxHp-g.player.hp);if(!(healed>0))return false;
       g.player.hp+=healed;g._effect(g.player.x,g.player.y-28,'heal',.8,0,'#b9dda5',`+${Math.ceil(healed)}`);
-    } else if(id==='magnet'){g.adventure.magnetTime=8;for(const gem of g.gems)if(Math.hypot(gem.x-g.player.x,gem.y-g.player.y)<480)gem.attracted=true;}
-    else if(id==='fury')g.adventure.furyTime=8;
+    } else if(id==='magnet'){g.adventure.magnetTime=item.duration;for(const gem of g.gems)if(Math.hypot(gem.x-g.player.x,gem.y-g.player.y)<economy.pickups.magnetAttractRange)gem.attracted=true;}
+    else if(id==='fury')g.adventure.furyTime=item.duration;
     else if(id==='shield'){if(!g.relics.grantWard(WARD))return false;}
     else if(id==='relic'){if(!g.relics.acquire(item.relicId))return false;}
     else return false;

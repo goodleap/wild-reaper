@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {harness} from './qa-app-harness.mjs';
 import {armyPanelHTML} from './dist/army-panel.js';
-const h=harness('?debug');h.run('startGame();debugArmyAction(true);');
+const h=harness('?debug');h.run('startGame();');await h.flush();h.run('debugArmyAction(true);');
 assert.equal(h.run('game.companions.members.length'),5);h.run('shippedRenderGame();');
 assert.match(h.nodes['companion-time'].textContent,/5 · 12◉\/30s/);
 h.run('openCharacter("army");');assert.match(h.nodes['character-content'].innerHTML,/岩灵/);assert.match(h.nodes['character-content'].innerHTML,/猫头鹰/);
@@ -14,8 +14,8 @@ h.listeners['character-tab-status:keydown']({key:'ArrowRight',preventDefault(){}
 h.listeners['character-tab-attributes:keydown']({key:'End',preventDefault(){},stopPropagation(){}});assert.equal(h.run('characterTab'),'status');
 h.run('closeCharacter();debugArmyAction(false);');assert.equal(h.run('game.companions.members.length'),0);assert(h.nodes['companion-status'].classList.contains('hidden'));
 assert.match(armyPanelHTML({status:'playing',companions:{members:[{id:12,kind:'dog',name:'<img src=x>',hp:4,maxHp:100,state:'active'}]}}),/&lt;img src=x&gt;/);
-const normal=harness();normal.run('startGame();debugArmyAction(true);');assert.equal(normal.run('game.companions.members.length'),0,'debug action is unavailable in ordinary runs');
-const full=harness('?debug=full');full.run('startGame();');assert.equal(full.run('game.companions.members.length'),5);assert.equal(full.run('archive.data.entries["companion:golem"].acquisitions'),1);
+const normal=harness();normal.run('startGame();');await normal.flush();normal.run('debugArmyAction(true);');assert.equal(normal.run('game.companions.members.length'),0,'debug action is unavailable in ordinary runs');
+const full=harness('?debug=full');full.run('startGame();');await full.flush();full.run('');assert.equal(full.run('game.companions.members.length'),5);assert.equal(full.run('archive.data.entries["companion:golem"].acquisitions'),1);
 for(const kind of ['dog','owl','golem']){full.run(`{const site=game.relicSites.sites.find(s=>s.kind==='${kind}');game.player.x=site.x;game.player.y=site.y+100;shippedRenderGame();}`);}
 full.run(`{const mage=game.companions.members.find(m=>m.kind==='stormcaller');mage.invuln=0;game.companions.takeDamage(mage,10000);updateCompanionHUD();openCharacter('army');}`);
 assert.match(full.nodes['companion-time'].textContent,/5 · 9◉\/30s/,'recovering companions are excluded from the displayed wage total');

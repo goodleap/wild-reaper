@@ -1,0 +1,287 @@
+{
+  "definitions": {
+    "slime": {
+      "id": "slime",
+      "r": 16,
+      "baseHp": 26,
+      "baseSpeed": 85,
+      "damage": 9,
+      "xp": 4,
+      "movement": "ground",
+      "behavior": "chase",
+      "visual": "slime",
+      "codex": {
+        "name": "绿叶史莱姆",
+        "role": "地面 · 近身",
+        "description": "成群接近的林间生物，单体威胁不高，却会逐渐压缩走位空间。",
+        "advice": "边移动边清理前方，避免被四面的史莱姆包围。",
+        "color": "#a9cb84",
+        "source": "在荒野、事件与遗迹中遭遇"
+      }
+    },
+    "beetle": {
+      "id": "beetle",
+      "r": 18,
+      "baseHp": 43,
+      "baseSpeed": 100,
+      "damage": 12,
+      "xp": 6,
+      "movement": "ground",
+      "behavior": "chase",
+      "visual": "beetle",
+      "locomotion": true,
+      "codex": {
+        "name": "硬壳甲虫",
+        "role": "地面 · 追击",
+        "description": "贴地爬行的甲虫，比史莱姆更结实，会持续逼近。",
+        "advice": "提前清理行进路线上的甲虫，避免在障碍附近被围堵。",
+        "color": "#d5ba7c",
+        "source": "在荒野、事件与遗迹中遭遇"
+      }
+    },
+    "bat": {
+      "id": "bat",
+      "r": 11,
+      "baseHp": 24,
+      "baseSpeed": 145,
+      "damage": 7,
+      "xp": 4,
+      "movement": "air",
+      "behavior": "chase",
+      "visual": "bat",
+      "wobble": {
+        "frequency": 5,
+        "amplitude": 0.52
+      },
+      "codex": {
+        "name": "夜翼蝙蝠",
+        "role": "飞行 · 快速",
+        "description": "移动轻快的飞行敌人，可以越过水面和低矮障碍。",
+        "advice": "留意侧后方的追击；低矮石块挡不住它，利用高大障碍拉开距离。",
+        "color": "#b9b1cf",
+        "source": "在荒野、事件与遗迹中遭遇"
+      }
+    },
+    "brute": {
+      "id": "brute",
+      "r": 26,
+      "baseHp": 115,
+      "baseSpeed": 60,
+      "damage": 17,
+      "xp": 13,
+      "movement": "ground",
+      "behavior": "chase",
+      "visual": "brute",
+      "codex": {
+        "name": "林地巨兽",
+        "role": "地面 · 强壮",
+        "description": "体型大、生命厚重、步伐较慢，近身接触更危险。",
+        "advice": "保留退路，利用远程攻击或集中伤害削减生命，不要硬挤过去。",
+        "color": "#b7bd86",
+        "source": "在荒野、事件与遗迹中遭遇"
+      }
+    },
+    "boar": {
+      "id": "boar",
+      "r": 22,
+      "baseHp": 80,
+      "baseSpeed": 75,
+      "damage": 14,
+      "xp": 7,
+      "movement": "ground",
+      "behavior": "boar",
+      "visual": "boar",
+      "codex": {
+        "name": "冲锋野猪",
+        "role": "地面 · 冲撞",
+        "description": "蓄力后沿锁定方向高速冲锋，撞上障碍时会短暂眩晕。",
+        "advice": "看准蓄力方向向侧面避开，也可以诱导它撞向树石。",
+        "color": "#c9a982",
+        "source": "在荒野、事件与遗迹中遭遇"
+      }
+    },
+    "spore": {
+      "id": "spore",
+      "r": 20,
+      "baseHp": 65,
+      "baseSpeed": 55,
+      "damage": 12,
+      "xp": 7,
+      "movement": "ground",
+      "behavior": "spore",
+      "visual": "spore",
+      "codex": {
+        "name": "孢子菇",
+        "role": "地面 · 远程",
+        "description": "在中距离蓄力发射孢子，借助敌群从后方施压。",
+        "advice": "横向移动躲开孢子，利用高大树石挡住弹道，寻找机会近身。",
+        "color": "#d7aed8",
+        "source": "在荒野、事件与遗迹中遭遇"
+      }
+    },
+    "boss": {
+      "id": "boss",
+      "r": 49,
+      "baseHp": 2300,
+      "baseSpeed": 49,
+      "damage": 22,
+      "xp": 160,
+      "movement": "ground",
+      "behavior": "boss",
+      "visual": "boss",
+      "easyHp": 1700,
+      "surge": {
+        "frequency": 0.85,
+        "amplitude": 1.15
+      }
+    }
+  },
+  "codexIds": [
+    "slime",
+    "bat",
+    "beetle",
+    "brute",
+    "boar",
+    "spore"
+  ],
+  "bosses": {
+    "ancient": {
+      "id": "ancient",
+      "name": "荒野领主",
+      "visual": "ancient",
+      "behavior": "ancient",
+      "parameters": {
+        "range": 165,
+        "radius": 115,
+        "windup": 1,
+        "cooldown": 7,
+        "recovery": 0.3,
+        "damageMultiplier": 1.3
+      },
+      "codex": {
+        "role": "区域首领 · 震地",
+        "description": "守卫世界传送门的巨大领主，逼近后会蓄力发动范围震击。",
+        "advice": "离开震地预警区，在攻击后的停顿中反击；击败后领取奖励并激活传送门。",
+        "color": "#e7bc8a",
+        "source": "区域传送门的守卫"
+      }
+    },
+    "bloom": {
+      "id": "bloom",
+      "name": "孢冠领主",
+      "visual": "bloom",
+      "behavior": "bloom",
+      "parameters": {
+        "range": 430,
+        "preferredMin": 230,
+        "preferredMax": 300,
+        "cooldown": 5.2,
+        "enragedCooldown": 4.8,
+        "recovery": 1.1,
+        "fanWindup": 1,
+        "fanSpread": 0.8,
+        "fanCount": 5,
+        "bulletSpeed": 150,
+        "bulletLife": 4.5,
+        "burstWindup": 1.1,
+        "burstRadius": 52,
+        "burstSpacing": 145,
+        "maxEnemyBullets": 60,
+        "initialCooldown": 2,
+        "enragedHealthRatio": 0.5,
+        "advanceSpeedMultiplier": 0.75,
+        "retreatRange": 170,
+        "retreatDuration": 0.7,
+        "retreatCooldown": 3,
+        "retreatSpeedMultiplier": 0.45,
+        "retreatDistance": 90,
+        "bulletRadius": 7,
+        "bulletColor": "#dcb4f5",
+        "bulletDamageMultiplier": 0.65,
+        "burstDamageMultiplier": 0.85
+      },
+      "codex": {
+        "role": "区域首领 · 远程",
+        "description": "以扇形孢子弹和定点孢爆封锁走位，并尝试保持攻击距离。",
+        "advice": "绕向扇射侧面，离开地面孢爆预警；高大障碍可以遮挡飞行孢子。",
+        "color": "#d7aada",
+        "source": "区域传送门的守卫"
+      }
+    }
+  },
+  "bossRotation": [
+    "ancient",
+    "bloom"
+  ],
+  "behaviorRules": {
+    "boar": {
+      "speed": 320,
+      "rushLife": 0.8,
+      "stunLife": 1.2,
+      "minRange": 90,
+      "maxRange": 320,
+      "windup": 0.8,
+      "chargeLength": 256,
+      "cooldown": 4.5,
+      "damageMultiplier": 1.3
+    },
+    "spore": {
+      "range": 360,
+      "holdRange": 290,
+      "releaseRange": 430,
+      "windup": 0.65,
+      "cooldown": 3.8,
+      "bulletSpeed": 140,
+      "bulletLife": 4.5,
+      "bulletRadius": 6,
+      "color": "#d4a4e5"
+    }
+  },
+  "elite": {
+    "rules": {
+      "startAt": 45,
+      "chance": 0.04,
+      "cap": 3,
+      "health": 1.5,
+      "scale": 1.08,
+      "xp": 1.5,
+      "shield": 0.4,
+      "range": 430,
+      "swiftWindup": 0.5,
+      "swiftDuration": 1.1,
+      "swiftSpeed": 1.65,
+      "swiftCooldown": 4.5,
+      "summonWindup": 1.1,
+      "summonCooldown": 6,
+      "summonCount": 2,
+      "summonOwnerCap": 2,
+      "summonGlobalCap": 6,
+      "enemyCap": 180,
+      "swiftInitialCooldown": 2.2,
+      "otherInitialCooldown": 2.8,
+      "cancelCooldown": 1,
+      "summonAttempts": 18,
+      "summonStartRadius": 58,
+      "summonRingStep": 28,
+      "summonRingSlots": 6,
+      "summonPlayerClearance": 75
+    },
+    "affixes": {
+      "shield": {
+        "id": "shield",
+        "name": "护盾",
+        "color": "#9acbdf"
+      },
+      "swift": {
+        "id": "swift",
+        "name": "迅捷",
+        "color": "#e6cf89"
+      },
+      "summoner": {
+        "id": "summoner",
+        "name": "召唤",
+        "color": "#cbb0e2"
+      }
+    }
+  }
+}

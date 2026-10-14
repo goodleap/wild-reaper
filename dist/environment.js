@@ -1,3 +1,4 @@
+import { getConfigSection } from './content-config.js';
 import { mapSeed } from './map-context.js';
 import { ENEMY_BODY_HEIGHTS, enemyVisual } from './enemy-visuals.js';
 import { groundOffset } from './terrain.js';
@@ -14,15 +15,16 @@ const CELL=520,TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const WEAPON_SOURCES=new Set(['sword','arrow','runeArrow','orbit','pulse','echo','lightning','storm']);
-export const ENVIRONMENT_BALANCE=Object.freeze({maxProps:20,maxMuds:12,mushroomFuse:.9,blastRadius:82,mudMultiplier:.74,safeRadius:240,despawnDistance:1800});
+const RULES=getConfigSection('geography').environmentRules;
+export const ENVIRONMENT_BALANCE=RULES.balance;
 const BODY_HEIGHTS=Object.freeze({...ENEMY_BODY_HEIGHTS,dog:[30,12],golem:[62,21]});
 const humanoid=entity=>!!(entity.isCompanion||entity.isCaptive||entity.isTownNpc);
 const intersects=(a,b)=>a.maxX>=b.minX&&a.minX<=b.maxX&&a.maxY>=b.minY&&a.minY<=b.maxY;
 const boundsDistance=(b,p)=>Math.hypot(Math.max(b.minX-p.x,0,p.x-b.maxX),Math.max(b.minY-p.y,0,p.y-b.maxY));
-export const WATER_SIZES=Object.freeze([.65,1,1.6,2.5,3.6]);
-const WATER_ANGLES=Object.freeze([-.28,0,.28]);
-const WATER_PLACEMENTS=Object.freeze([[.78,.82],[.22,.82],[.78,.22],[.50,.88],[.88,.52],[.12,.55],[.50,.18],[.30,.48],[.75,.55],[.20,.16],[.48,.54],[.88,.88]]);
-export const WATER_BANK_CLEARANCE=8;
+export const WATER_SIZES=RULES.waterSizes;
+const WATER_ANGLES=RULES.waterAngles;
+const WATER_PLACEMENTS=RULES.waterPlacements;
+export const WATER_BANK_CLEARANCE=RULES.waterBankClearance;
 // Measured ground geometry, excluding raised branches and treetops. Slender
 // trees have narrow collision trunks but longer visible roots at their feet.
 export const waterObstacleFootprint=(o,padding=WATER_BANK_CLEARANCE)=>groundFootprint(o,padding);
@@ -88,8 +90,8 @@ export class Environment {
     };
     const result=[],first=make(point,0);if(first)result.push(first);
     // Occasional pairs show the delayed chain reaction without filling paths.
-    if(seed<.14){
-      const angle=this._hash(tx+853,ty+877)*TAU,next={x:point.x+Math.cos(angle)*88,y:point.y+Math.sin(angle)*88};
+    if(seed<RULES.mushroom.pairThreshold){
+      const angle=this._hash(tx+853,ty+877)*TAU,next={x:point.x+Math.cos(angle)*RULES.mushroom.pairDistance,y:point.y+Math.sin(angle)*RULES.mushroom.pairDistance};
       if(this._terrainClear(next.x,next.y,this.game.terrain.island?ENVIRONMENT_BALANCE.blastRadius:35)&&placementAllowed(this.game,'vegetation',{...next,r:25},{environment:this,checkTerrain:false})){const second=make(next,1);if(second)result.push(second);}
     }
     return result;
@@ -99,7 +101,7 @@ export class Environment {
     const remember=mud=>{this._waterCandidates.set(key,mud);while(this._waterCandidates.size>192)this._waterCandidates.delete(this._waterCandidates.keys().next().value);return mud;};
     const water=this.rules.water,chance=water.chance;
     const seed=this._hash(tx+911,ty+947);if(seed>chance||chance===0)return remember(null);
-    const sizeRoll=this._hash(tx+971,ty+977),scale=WATER_SIZES[sizeRoll<.36?0:sizeRoll<.72?1:sizeRoll<.89?2:sizeRoll<.97?3:4];
+    const sizeRoll=this._hash(tx+971,ty+977),scale=WATER_SIZES[sizeRoll<RULES.waterSizeThresholds[0]?0:sizeRoll<RULES.waterSizeThresholds[1]?1:sizeRoll<RULES.waterSizeThresholds[2]?2:sizeRoll<RULES.waterSizeThresholds[3]?3:4];
     const family=Math.floor(this._hash(tx+991,ty+997)*water.families),shape=WATER_SHAPES[family];
     const x=tx*CELL+260+(this._hash(tx+1013,ty+419)-.5)*120,y=ty*CELL+260+(this._hash(tx+503,ty+1013)-.5)*120;
     const rx=80*scale,ry=(shape==='elongated'?34:shape==='rounded'?50:47)*scale,angleIndex=Math.floor(this._hash(tx+1091,ty+1097)*3),angle=WATER_ANGLES[angleIndex];
@@ -212,14 +214,14 @@ export class Environment {
     // Only the sprite sinks: movement, collision and ordering keep their feet.
     for(const patch of this.muds){
       if(patch.kind==='ice'||patch.kind==='lava')continue;
-      const depthScale=patch.kind==='snow'?.35:this.rules.waterImmersion[this.rules.hazard?.type==='tide'&&this.worldHazards?.tideAt(patch)==='active'?'active':'idle'];
+      const depthScale=patch.kind==='snow'?RULES.snowImmersion:this.rules.waterImmersion[this.rules.hazard?.type==='tide'&&this.worldHazards?.tideAt(patch)==='active'?'active':'idle'];
       const d=waterDepth(patch,point.x,point.y)*depthScale;if(d>depth){depth=d;mud=patch;}
     }
     if(!mud)return null;
     const bodyKey=entity.isCompanion||entity.isCaptive?entity.kind||entity.heroId:entity.type;
     const human=isPlayer||(humanoid(entity)&&!BODY_HEIGHTS[bodyKey]),body=enemyVisual(entity)?.immersionBody||BODY_HEIGHTS[bodyKey]||[34,16];
     const radius=Number.isFinite(entity.r)&&entity.r>0?entity.r:15;
-    const maxSink=human?16:Math.min(18,body[0]*radius/body[1]*.35);
+    const maxSink=human?RULES.humanoidMaxSink:Math.min(RULES.otherMaxSink,body[0]*radius/body[1]*RULES.otherHeightSinkFactor);
     return {x:point.x,footY:point.y,waterY:point.y,depth,sink:maxSink*depth,maxSink,width:human?14:Math.max(5,Math.min(35,radius*.83)),mud};
   }
   movementMultiplier(entity,isPlayer=entity===this.game.player){
@@ -228,10 +230,10 @@ export class Environment {
     let mud=1;
     for(const patch of this.muds){
       if(!containsWater(patch,point.x,point.y))continue;
-      const slow=patch.kind==='ice'||patch.kind==='lava'?1:patch.kind==='snow'?.68:this.rules.waterMovement[this.rules.hazard?.type==='tide'&&this.worldHazards?.tideAt(patch)==='active'?'active':'idle'];
+      const slow=patch.kind==='ice'||patch.kind==='lava'?1:patch.kind==='snow'?RULES.snowMovement:this.rules.waterMovement[this.rules.hazard?.type==='tide'&&this.worldHazards?.tideAt(patch)==='active'?'active':'idle'];
       mud=Math.min(mud,slow);
     }
-    const shoreDepth=this.game.terrain.island?.depthAt(point.x,point.y)||0,shore=1-shoreDepth*.35;
+    const shoreDepth=this.game.terrain.island?.depthAt(point.x,point.y)||0,shore=1-shoreDepth*RULES.shoreSlowPerDepth;
     return Math.min(mud,shore,this.mechanisms.movementMultiplier(entity,isPlayer));
   }
   isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r)&&this.worldHazards.isHazardFree(x,y,r);}
@@ -262,7 +264,7 @@ export class Environment {
     const g=this.game,r=prop.blastRadius||ENVIRONMENT_BALANCE.blastRadius;
     prop.state='spent';g._effect(prop.x,prop.y,'mushroomBlast',.5,r,'#ffbd70',undefined,{source:prop.source});
     g._emit('mushroomBlast',{x:prop.x,y:prop.y});
-    const damage=90*(1+Math.min(Math.max(g.time,0),600)/1200);
+    const damage=RULES.mushroom.enemyDamage*(1+Math.min(Math.max(g.time,0),RULES.mushroom.growthTimeCap)/RULES.mushroom.growthTimePeriod);
     // Raw damage avoids recursively creating bleeding, shock, or new attacks.
     // Snapshotting also survives treasure/event kill handlers replacing arrays.
     const reaches=(entity,point)=>distance(point,prop)<=r+entity.r&&!g.terrain.firstBlocker(prop.x,prop.y,point.x,point.y,0,'projectile');
@@ -270,7 +272,7 @@ export class Environment {
     // The airborne blast reaches low-flying bodies, while solid walls stop it.
     for(const ally of friendlyTargets(g)){
       if(g.status!=='playing')break;
-      if(isFriendlyActive(g,ally)&&reaches(ally,friendlyFoot(ally)))damageFriendly(g,ally,12,'mushroom');
+      if(isFriendlyActive(g,ally)&&reaches(ally,friendlyFoot(ally)))damageFriendly(g,ally,RULES.mushroom.friendlyDamage,'mushroom');
     }
     if(g.status!=='playing')return;
     for(const next of this.props)if(next!==prop&&distance(next,prop)<=r+(next.r||17))this._arm(next,'chain');

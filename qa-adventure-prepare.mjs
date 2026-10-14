@@ -52,7 +52,7 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   assert.equal(h.run('prepareOpen'),false,'Escape works with focus in a radio, before the normal input guard');
   click(h,'start-button');
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0);
-  click(h,'prepare-start-button');quiet(h);
+  click(h,'prepare-start-button');await h.flush();quiet(h);
   assert.equal(h.run('prepareOpen'),false);assert.equal(prepare.classList.contains('hidden'),true);
   assert.equal(h.run('game.initialWeaponId'),'arrow');assert.deepEqual(equipment(h),[{id:'arrow',level:1}]);
   assert.equal(h.run('game.stage.id'),'snow-trial');assert.equal(h.run('game.difficulty'),'casual');
@@ -60,7 +60,7 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   assert.equal(h.run('!!archive.data.entries["weapon:sword"]'),false,'previewing weapons does not unlock unchosen weapons');
 
   h.run('game.build.increment("orbit");game.build.increment("orbit");game.build.increment("sword");game.build.increment("arrow");game.build.setEquipped("arrow",false);game.status="dead";');h.tick();
-  click(h,'restart-button');quiet(h);
+  click(h,'restart-button');await h.flush();quiet(h);
   assert.equal(h.run('game.initialWeaponId'),'arrow');assert.deepEqual(equipment(h),[{id:'arrow',level:1}],'restart uses the selected starter, not the strongest or currently equipped weapon');
   assert.equal(h.run('archive.data.totals.runs'),2);
   h.run('home();');click(h,'start-button');
@@ -92,7 +92,7 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   }
   choose(h,'mode','free');assert(node(h,'stage-picker').classList.contains('hidden'));
   choose(h,'mode','stage');assert.equal(node(h,'stage-volcano-trial').checked,true);
-  choose(h,'weapon','orbit');click(h,'prepare-start-button');quiet(h);
+  choose(h,'weapon','orbit');click(h,'prepare-start-button');await h.flush();quiet(h);
   const canvas=node(h,'game-canvas');
   assert(h.fire(canvas,'touchstart').defaultPrevented,'only live gameplay canvas retains its scoped callout fallback');
   h.fire(canvas,'pointerdown',{pointerId:42,clientX:80,clientY:220});
@@ -105,12 +105,12 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
 for(const saved of [{},{weaponId:'obsolete'},{weaponId:null},{weaponId:['arrow']}]){
   const h=harness('',{storage:new Map([['wild-echoes-setup',JSON.stringify(saved)]])});
   click(h,'start-button');assert.equal(node(h,'weapon-sword').checked,true);
-  click(h,'prepare-start-button');assert.deepEqual(equipment(h),[{id:'sword',level:1}]);
+  click(h,'prepare-start-button');await h.flush();assert.deepEqual(equipment(h),[{id:'sword',level:1}]);
 }
 for(const weaponId of ['sword','orbit','arrow']){
   const storage=new Map([['wild-echoes-setup',JSON.stringify({mode:'free',difficulty:'normal',stageId:'beach-trial',weaponId})]]);
   const h=harness('',{storage});click(h,'start-button');assert.equal(node(h,`weapon-${weaponId}`).checked,true);
-  click(h,'prepare-start-button');assert.equal(h.run('game.stage'),null);assert.deepEqual(equipment(h),[{id:weaponId,level:1}]);
+  click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage'),null);assert.deepEqual(equipment(h),[{id:weaponId,level:1}]);
   const loaded=harness('',{storage});click(loaded,'start-button');assert.equal(node(loaded,`weapon-${weaponId}`).checked,true);
 }
 console.log('Adventure preparation: real open/back/start/restart, no preview archive runs, remembered mode/theme/difficulty/starter, old save fallback, portrait reuse, horizontal browsing, radio Escape, short viewport state and live joystick passed (VM DOM / mocked Canvas).');

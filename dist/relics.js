@@ -1,20 +1,10 @@
+import { getConfigSection } from './content-config.js';
 // Run-only relics are awarded at a portal, at most once per unique item.
 // The world owns the portal transition; this module owns only its reward.
-export const RELICS=Object.freeze([
-  Object.freeze({id:'thunderstone',name:'引雷石',icon:'ϟ',color:'#bfcafa',desc:'雷电、天雷或感电传导击杀敌人，天雷冷却减少 0.3 秒；每秒最多减少 1.2 秒'}),
-  Object.freeze({id:'bloodstone',name:'赤心',icon:'◆',color:'#eaa08f',desc:'生命低于 40% 时，主角所有伤害提升 25%'}),
-  Object.freeze({id:'herbalEcho',name:'春芽符',icon:'✿',color:'#b9dda5',desc:'拾取药草并实际恢复生命时，释放一道范围 125、基础伤害 60 的冲击波'}),
-  Object.freeze({id:'leafWard',name:'铁叶护符',icon:'⬡',color:'#d2dbae',desc:'守护屏障容量提升 15%，冷却缩短 15%；尚未掌握时获得 1 级守护屏障'}),
-  Object.freeze({id:'swiftFeather',name:'风羽',icon:'↗',color:'#a9d9de',desc:'移动速度额外提升 8%，可与轻盈步伐共同生效'}),
-  Object.freeze({id:'deepRoot',name:'深根',icon:'♧',color:'#dac395',desc:'药草的治疗量提升 40%，从 25 点增加至 35 点'})
-]);
-
-export const RELIC_RULES=Object.freeze({
-  thunderReduction:.3,thunderWindow:1,thunderLimit:4,
-  lowHealthThreshold:.4,lowHealthDamage:1.25,
-  herbRadius:125,herbDamage:60,herbHealing:1.4,
-  barrierCapacityMultiplier:1.15,barrierCooldownMultiplier:.85,movement:1.08,collectionHeal:.2
-});
+const economy=getConfigSection('economy');
+export const RELIC_RULES=economy.relicRules;
+const rules=RELIC_RULES,values={...rules,thunderWindowLabel:rules.thunderWindow===1?'每秒':`每 ${rules.thunderWindow} 秒`,thunderWindowReduction:Math.round(rules.thunderReduction*rules.thunderLimit*100)/100,lowHealthPercent:Math.round(rules.lowHealthThreshold*100),lowHealthDamagePercent:Math.round((rules.lowHealthDamage-1)*100),barrierCapacityPercent:Math.round((rules.barrierCapacityMultiplier-1)*100),barrierCooldownPercent:Math.round((1-rules.barrierCooldownMultiplier)*100),movementPercent:Math.round((rules.movement-1)*100),herbHealingPercent:Math.round((rules.herbHealing-1)*100),herbBaseHealing:economy.pickups.herbHealing,herbTotalHealing:Math.round(economy.pickups.herbHealing*rules.herbHealing*100)/100};
+export const RELICS=Object.freeze(economy.relics.map(relic=>Object.freeze({...relic,desc:relic.desc.replace(/\{([A-Za-z]+)\}/g,(_,key)=>String(values[key]))})));
 const THUNDER_SOURCES=new Set(['lightning','storm','conduction']);
 
 export class Relics {
@@ -22,7 +12,7 @@ export class Relics {
     this.game=game;
     this.owned=[];this.pending=false;this.choices=[];
     this.wardAmount=0;
-    // Four timestamps bound both the rolling one-second allowance and memory.
+    // The configured rolling allowance also bounds timestamp memory.
     this._thunderKills=[];
   }
 
@@ -48,7 +38,7 @@ export class Relics {
 
   grantWard(amount) {
     if(!Number.isFinite(amount)||amount<=0||this.game.status==='dead')return false;
-    const ward=Math.min(40,amount);if(this.wardAmount>=ward)return false;
+    const ward=Math.min(RELIC_RULES.maxWard,amount);if(this.wardAmount>=ward)return false;
     this.wardAmount=ward;
     const p=this.game.player;this.game._effect(p.x,p.y,'ring',.5,34,'#f1e3b7');
     return true;
@@ -68,7 +58,7 @@ export class Relics {
       const j=Math.floor(Math.random()*(i+1));
       [available[i],available[j]]=[available[j],available[i]];
     }
-    this.choices=available.slice(0,3);
+    this.choices=available.slice(0,RELIC_RULES.choiceCount);
     return this.choices;
   }
 

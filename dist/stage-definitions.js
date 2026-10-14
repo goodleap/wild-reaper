@@ -1,13 +1,7 @@
-import forest from './stages/forest.js';
-import marsh from './stages/marsh.js';
-import ruins from './stages/ruins.js';
-import beach from './stages/beach.js';
-import city from './stages/city.js';
-import mountain from './stages/mountain.js';
-import snow from './stages/snow.js';
-import volcano from './stages/volcano.js';
+import { getConfigSection } from './content-config.js';
+import { defineStage } from './stages/define-stage.js';
 
-export const STAGES=Object.freeze([forest,marsh,ruins,beach,city,mountain,snow,volcano]);
+export const STAGES=Object.freeze(getConfigSection('stages').definitions.map(defineStage));
 const BY_ID=new Map(STAGES.map(stage=>[stage.id,stage]));
 if(BY_ID.size!==STAGES.length)throw new Error('Duplicate stage identity');
 const mapIds=STAGES.flatMap(stage=>stage.islands.map(map=>map.id));

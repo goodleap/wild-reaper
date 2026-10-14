@@ -3,14 +3,14 @@ import { harness } from './qa-app-harness.mjs';
 
 for(const search of ['', '?debug']){
   const h=harness(search);
-  h.run('startGame();game.crystals=game.crystalsNext;game._trySkillUpgrade();');
+  h.run('startGame();');await h.flush();h.run('game.crystals=game.crystalsNext;game._trySkillUpgrade();');
   h.tick();
   assert.equal(h.run('game.progressionTier'),1);
   assert.equal(h.nodes['upgrade-overlay'].classList.contains('hidden'),false,'ordinary runs keep manual choices');
 }
 
 const h=harness('?debug=full');
-h.run(`startGame();game.crystals=game.crystalsNext;game._trySkillUpgrade();
+h.run('startGame();');await h.flush();h.run(`game.crystals=game.crystalsNext;game._trySkillUpgrade();
   let selected=[];const chooseUpgrade=game.chooseUpgrade.bind(game);
   game.chooseUpgrade=id=>{const ok=chooseUpgrade(id);if(ok)selected.push(id);return ok;};
   const firstUpgrade=game.getUpgradeChoices()[0].id;keys.add('KeyD');`);

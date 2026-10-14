@@ -1,0 +1,631 @@
+{
+  "siteReservations": [
+    [
+      "merchant",
+      0.18,
+      710,
+      105
+    ],
+    [
+      "supply",
+      2.25,
+      1050,
+      125
+    ],
+    [
+      "occupied",
+      4.3,
+      1730,
+      225
+    ],
+    [
+      "castle",
+      2.8,
+      2610,
+      360
+    ],
+    [
+      "hunt",
+      0.94,
+      1830,
+      280
+    ],
+    [
+      "rescue",
+      5.42,
+      2060,
+      240
+    ],
+    [
+      "rune",
+      3.73,
+      2280,
+      185
+    ],
+    [
+      "rescue-warden",
+      3.8,
+      1120,
+      240
+    ],
+    [
+      "dogcamp",
+      0.25,
+      1430,
+      115
+    ],
+    [
+      "owlroost",
+      2.91,
+      1570,
+      240
+    ],
+    [
+      "golemaltar",
+      4.62,
+      2630,
+      270
+    ],
+    [
+      "stonevault",
+      0.13,
+      2830,
+      240
+    ]
+  ],
+  "siteFeatures": {
+    "shipwreck": {
+      "id": "shipwreck",
+      "world": "beach",
+      "type": "occupied",
+      "name": "沉船宝库",
+      "width": 78,
+      "depth": 36,
+      "interiorSize": 460,
+      "interiorHeight": 330,
+      "guardHp": 1.05,
+      "reward": {
+        "gold": 60,
+        "crystals": 35
+      },
+      "treasureName": "沉船珍藏",
+      "guardPackId": "shipwreck"
+    },
+    "belltower": {
+      "id": "belltower",
+      "world": "city",
+      "type": "castle",
+      "name": "暮钟塔",
+      "width": 136,
+      "depth": 70,
+      "cols": 3,
+      "rows": 4,
+      "cellSize": 320,
+      "bossDistance": 5,
+      "guardHp": 1.1,
+      "bossHp": 1.1,
+      "shieldRooms": true,
+      "bossIndex": 2,
+      "bossName": "暮钟守卫",
+      "treasureName": "钟楼秘藏",
+      "reward": {
+        "gold": 100,
+        "crystals": 125
+      }
+    },
+    "mine": {
+      "id": "mine",
+      "world": "mountain",
+      "type": "occupied",
+      "name": "废弃矿洞",
+      "width": 74,
+      "depth": 38,
+      "interiorSize": 440,
+      "guardHp": 1.2,
+      "reward": {
+        "gold": 28,
+        "crystals": 100
+      },
+      "treasureName": "矿脉珍藏",
+      "guardPackId": "mine"
+    },
+    "icealtar": {
+      "id": "icealtar",
+      "world": "snow",
+      "type": "rune",
+      "name": "冰封祭坛",
+      "element": "frost",
+      "treasureName": "寒霜支援"
+    },
+    "furnace": {
+      "id": "furnace",
+      "world": "volcano",
+      "type": "castle",
+      "name": "熔炉神殿",
+      "width": 212,
+      "depth": 86,
+      "cols": 4,
+      "rows": 4,
+      "cellSize": 340,
+      "bossDistance": 6,
+      "guardHp": 1.2,
+      "bossHp": 1.3,
+      "bossIndex": 1,
+      "bossName": "熔炉守卫",
+      "treasureName": "熔炉秘藏",
+      "reward": {
+        "gold": 130,
+        "crystals": 165
+      }
+    }
+  },
+  "hutNames": {
+    "forest": "林间小屋",
+    "marsh": "沼泽高脚屋",
+    "ruins": "遗迹石屋",
+    "beach": "海岸渔舍",
+    "city": "街角民居",
+    "mountain": "山间石屋",
+    "snow": "雪原木屋",
+    "volcano": "黑岩驿站"
+  },
+  "hazardRules": {
+    "maxProps": 6,
+    "safeRadius": 310,
+    "hitInterval": 0.9,
+    "rockfall": {
+      "radius": 60,
+      "warning": 1.35,
+      "active": 0.5,
+      "rest": 6,
+      "playerDamage": 16,
+      "enemyDamage": 65
+    },
+    "vent": {
+      "radius": 54,
+      "warning": 1.6,
+      "active": 1.35,
+      "rest": 5.5,
+      "playerDamage": 11,
+      "enemyDamage": 38
+    },
+    "tide": {
+      "warning": 1.8,
+      "active": 4,
+      "rest": 7
+    },
+    "lava": {
+      "playerDamage": 7,
+      "enemyDamage": 23
+    }
+  },
+  "regionalMechanismRules": {
+    "maxProps": 8,
+    "safeRadius": 280,
+    "vineRadius": 54,
+    "vineWarning": 1.1,
+    "vineActive": 2.5,
+    "vineSlow": 0.6,
+    "gasRadius": 70,
+    "gasWarning": 1.4,
+    "gasActive": 3.6,
+    "gasInterval": 1,
+    "gasPlayerDamage": 6,
+    "gasEnemyDamage": 20,
+    "runeRadius": 48,
+    "runeCharge": 0.6,
+    "runeDuration": 12,
+    "runeInterval": 1.4,
+    "runeTargets": 3,
+    "runeRange": 420
+  },
+  "interiors": {
+    "dungeon": {
+      "cols": 5,
+      "rows": 5,
+      "cellSize": 360,
+      "wallRadius": 14,
+      "doorWidth": 180,
+      "interactRadius": 74,
+      "sideChests": 3,
+      "bossDistance": 8,
+      "roomCrystals": 6,
+      "maxRoomEnemies": 6,
+      "maxStatesPerWorld": 2
+    },
+    "hut": {
+      "cellSize": 400,
+      "wallRadius": 12,
+      "doorWidth": 90,
+      "guards": 4,
+      "maxStatesPerWorld": 3
+    },
+    "hutLayouts": {
+      "default": {
+        "terrain": "forest",
+        "rocks": [],
+        "props": [
+          {
+            "type": "table",
+            "x": -118,
+            "y": -83
+          },
+          {
+            "type": "stool",
+            "x": -118,
+            "y": -32
+          },
+          {
+            "type": "bed",
+            "x": 120,
+            "y": -92
+          },
+          {
+            "type": "shelf",
+            "x": 0,
+            "y": -140
+          },
+          {
+            "type": "rug",
+            "x": 0,
+            "y": 55
+          }
+        ],
+        "guardPoints": [
+          {
+            "x": -100,
+            "y": -90
+          },
+          {
+            "x": 100,
+            "y": -90
+          },
+          {
+            "x": -65,
+            "y": -45
+          },
+          {
+            "x": 65,
+            "y": -45
+          }
+        ]
+      },
+      "shipwreck": {
+        "terrain": "forest",
+        "rocks": [],
+        "props": [
+          {
+            "type": "cargo",
+            "x": -175,
+            "y": -75
+          },
+          {
+            "type": "cargo",
+            "x": 175,
+            "y": -65
+          },
+          {
+            "type": "barrel",
+            "x": -180,
+            "y": 80
+          }
+        ],
+        "guardPoints": [
+          {
+            "x": -120,
+            "y": -110
+          },
+          {
+            "x": 120,
+            "y": -110
+          },
+          {
+            "x": -155,
+            "y": -60
+          },
+          {
+            "x": 155,
+            "y": -60
+          },
+          {
+            "x": -155,
+            "y": 0
+          },
+          {
+            "x": 155,
+            "y": 0
+          }
+        ]
+      },
+      "mine": {
+        "terrain": "mountain",
+        "rocks": [
+          {
+            "x": -98,
+            "y": 12,
+            "r": 25,
+            "rockForm": 1
+          },
+          {
+            "x": 98,
+            "y": 12,
+            "r": 25,
+            "rockForm": 1
+          }
+        ],
+        "props": [
+          {
+            "type": "minecart",
+            "x": -145,
+            "y": -130
+          },
+          {
+            "type": "cargo",
+            "x": 153,
+            "y": -130
+          }
+        ],
+        "guardPoints": [
+          {
+            "x": -135,
+            "y": -105
+          },
+          {
+            "x": 135,
+            "y": -105
+          },
+          {
+            "x": 0,
+            "y": -150
+          },
+          {
+            "x": -145,
+            "y": -35
+          },
+          {
+            "x": 145,
+            "y": -35
+          }
+        ]
+      }
+    },
+    "rewards": {
+      "supply": {
+        "gold": 4,
+        "crystals": 12
+      },
+      "occupied": {
+        "gold": 24,
+        "crystals": 40
+      },
+      "castle": {
+        "gold": 80,
+        "crystals": 100
+      },
+      "castleSide": {
+        "gold": 12,
+        "crystals": 24
+      }
+    },
+    "castleProfile": {
+      "name": "旧王城迷宫",
+      "treasureName": "王城宝藏",
+      "bossName": "旧王城守卫",
+      "terrain": "ruins",
+      "guardHp": 1,
+      "bossHp": 1
+    }
+  },
+  "coastRules": {
+    "shallowWidth": 100,
+    "beachWidth": 63,
+    "waterSetback": 12
+  },
+  "placementPolicies": {
+    "vegetation": {
+      "surface": "inland",
+      "water": "avoid",
+      "coastSetback": 0,
+      "waterGap": 8
+    },
+    "stone": {
+      "surface": "dry",
+      "water": "avoid",
+      "coastSetback": 0,
+      "waterGap": 8
+    },
+    "debris": {
+      "surface": "inland",
+      "water": "avoid",
+      "coastSetback": 0,
+      "waterGap": 8
+    },
+    "water": {
+      "surface": "inland",
+      "water": "avoid",
+      "coastSetback": 12,
+      "waterGap": 8
+    },
+    "structure": {
+      "surface": "inland",
+      "water": "avoid",
+      "coastSetback": 0,
+      "waterGap": 8
+    },
+    "loot": {
+      "surface": "inland",
+      "water": "avoid",
+      "coastSetback": 0,
+      "waterGap": 8
+    },
+    "hazard": {
+      "surface": "inland",
+      "water": "avoid",
+      "coastSetback": 0,
+      "waterGap": 8
+    },
+    "wetlandHazard": {
+      "surface": "inland",
+      "water": "allow",
+      "coastSetback": 0,
+      "waterGap": 0
+    }
+  },
+  "portalRules": {
+    "engageRadius": 420,
+    "leashRadius": 630,
+    "interactRadius": 82
+  },
+  "portalGuardian": {
+    "timeProgressCap": 3,
+    "timeProgressPeriod": 240,
+    "hpGrowth": 0.24,
+    "damageGrowth": 0.1,
+    "xpGrowth": 0.18,
+    "endlessConnections": 3
+  },
+  "naturalTerrainLayouts": {
+    "woodland": {
+      "tree": {
+        "threshold": 0.62,
+        "sizeThreshold": 0.86,
+        "scaleBase": 0.7,
+        "scaleGain": 0.64,
+        "largeScaleBase": 1.28,
+        "largeScaleGain": 0.22,
+        "crownWidthBase": 0.93,
+        "crownWidthGain": 0.14,
+        "crownHeightBase": 0.96,
+        "crownHeightGain": 0.08,
+        "x": 110,
+        "y": 50,
+        "radius": 24,
+        "largeScaleSpan": 0.14
+      },
+      "ground": {
+        "x": 240,
+        "xJitter": 90,
+        "y": 245,
+        "yJitter": 85
+      },
+      "log": {
+        "threshold": 0.49,
+        "radiusBase": 12,
+        "radiusGain": 10,
+        "lengthBase": 35,
+        "lengthGain": 43
+      },
+      "rock": {
+        "sizeThreshold": 0.9,
+        "scaleBase": 0.6,
+        "scaleGain": 0.91,
+        "largeScaleBase": 1.45,
+        "largeScaleGain": 3.5,
+        "radius": 36
+      }
+    }
+  },
+  "regionalMechanismCombat": {
+    "runeDamage": 30,
+    "runeGrowthTimeCap": 600,
+    "runeGrowthTimePeriod": 1200,
+    "runeFirstShot": 0.3,
+    "frostDuration": 1.6,
+    "frostBossSpeed": 0.88,
+    "frostEnemySpeed": 0.65
+  },
+  "environmentRules": {
+    "balance": {
+      "maxProps": 20,
+      "maxMuds": 12,
+      "mushroomFuse": 0.9,
+      "blastRadius": 82,
+      "mudMultiplier": 0.74,
+      "safeRadius": 240,
+      "despawnDistance": 1800
+    },
+    "waterSizes": [
+      0.65,
+      1,
+      1.6,
+      2.5,
+      3.6
+    ],
+    "waterAngles": [
+      -0.28,
+      0,
+      0.28
+    ],
+    "waterPlacements": [
+      [
+        0.78,
+        0.82
+      ],
+      [
+        0.22,
+        0.82
+      ],
+      [
+        0.78,
+        0.22
+      ],
+      [
+        0.5,
+        0.88
+      ],
+      [
+        0.88,
+        0.52
+      ],
+      [
+        0.12,
+        0.55
+      ],
+      [
+        0.5,
+        0.18
+      ],
+      [
+        0.3,
+        0.48
+      ],
+      [
+        0.75,
+        0.55
+      ],
+      [
+        0.2,
+        0.16
+      ],
+      [
+        0.48,
+        0.54
+      ],
+      [
+        0.88,
+        0.88
+      ]
+    ],
+    "waterBankClearance": 8,
+    "waterSizeThresholds": [
+      0.36,
+      0.72,
+      0.89,
+      0.97
+    ],
+    "snowImmersion": 0.35,
+    "snowMovement": 0.68,
+    "shoreSlowPerDepth": 0.35,
+    "humanoidMaxSink": 16,
+    "otherMaxSink": 18,
+    "otherHeightSinkFactor": 0.35,
+    "mushroom": {
+      "pairThreshold": 0.14,
+      "pairDistance": 88,
+      "enemyDamage": 90,
+      "friendlyDamage": 12,
+      "growthTimeCap": 600,
+      "growthTimePeriod": 1200
+    }
+  }
+}

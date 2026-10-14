@@ -13,8 +13,12 @@ for(const match of source.matchAll(/^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)[
   for(const specifier of match[1].split(',').map(value=>value.trim())){const [exported,local=exported]=specifier.split(/\s+as\s+/);modules[local]=exports[exported];}
 }
 source=source.replace(/^import[^\n]+;\s*$/gm,'');
-export function harness(search='',{storage=new Map()}={}){
-  let viewport={width:393,height:717,left:0,top:0},scheduled=0,clockReads=0,drawImages=0;
+export function harness(search='',{storage=new Map(),consoleImpl=console}={}){
+  let viewport={width:393,height:717,left:0,top:0},scheduled=0,clockReads=0,drawImages=0,now=1000,nextTask=0;
+  const frames=new Map(),timers=new Map();
+  const requestFrame=callback=>{scheduled++;const id=++nextTask;frames.set(id,callback);return id;};
+  const setTimer=(callback,delay=0)=>{const id=++nextTask;timers.set(id,{callback,at:now+Number(delay)});return id;};
+  const drainTimers=()=>{for(const [id,task] of [...timers])if(task.at<=now){timers.delete(id);task.callback();}};
   const nodes={},listeners={},document={activeElement:null,hidden:false};
   const gradient={addColorStop(){}};
   const drawing=new Proxy({measureText:text=>({width:String(text).length*6}),createLinearGradient:()=>gradient,createRadialGradient:()=>gradient,drawImage(){drawImages++;}},{get:(target,key)=>target[key]??(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
@@ -91,13 +95,24 @@ export function harness(search='',{storage=new Map()}={}){
   globalThis.document=document;
   const window={location:{search},devicePixelRatio:2,addEventListener:(type,handler)=>listen(`window:${type}`,handler)};
   const navigator={userAgent:'QA frame integration'};
-  const sandbox={...modules,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value))},requestAnimationFrame(){scheduled++;},setTimeout:()=>0,clearTimeout(){},console};
+  const sandbox={...modules,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},matchMedia:()=>({matches:false}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value))},requestAnimationFrame:requestFrame,cancelAnimationFrame:id=>frames.delete(id),setTimeout:setTimer,clearTimeout:id=>timers.delete(id),console:consoleImpl};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
   const run=script=>vm.runInContext(script,sandbox);
   run('const shippedRenderGame=renderGame;let gameDraws=0,introDraws=0;renderGame=()=>{gameDraws++;};renderIntro=()=>{introDraws++;};');
-  let now=1000;
-  const tick=(delta=1000/60)=>{const before=scheduled;run(`frame(${now+=delta})`);assert.equal(scheduled,before+1,'every callback schedules its successor without a frame-rate limiter');};
+  const tick=(delta=1000/60)=>{for(const [id,callback] of frames)if(callback===sandbox.frame)frames.delete(id);const before=scheduled;run(`frame(${now+=delta})`);assert.equal(scheduled,before+1,'every callback schedules its successor without a frame-rate limiter');drainTimers();};
+  // Drive real asynchronous startup through its paint/timer boundaries. Do not
+  // bypass startGame or substitute a synchronously constructed Game.
+  const flush=async()=>{
+    for(let count=0;count<100;count++){
+      await Promise.resolve();await Promise.resolve();
+      if(!run('typeof startLoading!=="undefined"&&startLoading')||nodes['scene-loading']?.classList.contains('has-error'))return;
+      now+=1000/60;const callbacks=[...frames.values()];frames.clear();
+      for(const callback of callbacks)callback(now);
+      drainTimers();
+    }
+    assert.fail('asynchronous startup did not settle within 100 simulated frames');
+  };
   const fire=(node,type,extra={})=>{const event={target:node,currentTarget:node,cancelable:true,preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.stopped=true;},...extra};listeners[`${node.id}:${type}`]?.(event);node[`on${type}`]?.(event);return event;};
-  return {nodes,listeners,document,window,navigator,run,tick,fire,pauseColumn,storage,clockReads:()=>clockReads,drawImages:()=>drawImages,resize(width,height){viewport={...viewport,width,height};run('resize();');for(const observer of observers)observer.callback();}};
+  return {nodes,listeners,document,window,navigator,run,tick,flush,fire,pauseColumn,storage,clockReads:()=>clockReads,drawImages:()=>drawImages,resize(width,height){viewport={...viewport,width,height};run('resize();');for(const observer of observers)observer.callback();}};
 }
 

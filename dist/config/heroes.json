@@ -1,0 +1,107 @@
+{
+  "defaults": {
+    "baseHealth": 100,
+    "easyBaseHealth": 140,
+    "baseMoveSpeed": 220,
+    "skillCooldown": 15
+  },
+  "statLabels": {
+    "maxHealth": "最大生命",
+    "attack": "自身伤害",
+    "defense": "防御",
+    "moveSpeed": "移速",
+    "pickupRange": "拾取范围"
+  },
+  "definitions": [
+    {
+      "id": "traveler",
+      "name": "帅气王子",
+      "role": "稳健均衡",
+      "summary": "生命和防御更充足，适合稳步成长与近身应战。",
+      "color": "#a8d8a0",
+      "statModifiers": {
+        "maxHealth": {
+          "multiplier": 1.1,
+          "fixed": 0
+        },
+        "attack": {
+          "multiplier": 1,
+          "fixed": 0
+        },
+        "defense": {
+          "multiplier": 1,
+          "fixed": 8
+        },
+        "moveSpeed": {
+          "multiplier": 1,
+          "fixed": 0
+        },
+        "pickupRange": {
+          "multiplier": 1,
+          "fixed": 0
+        }
+      },
+      "appearanceId": "traveler"
+    },
+    {
+      "id": "princess",
+      "name": "美丽公主",
+      "role": "灵巧游走",
+      "summary": "走位与收集更轻松，生命和伤害略低，擅长灵活周旋。",
+      "color": "#e9b3c8",
+      "statModifiers": {
+        "maxHealth": {
+          "multiplier": 0.9,
+          "fixed": 0
+        },
+        "attack": {
+          "multiplier": 0.92,
+          "fixed": 0
+        },
+        "defense": {
+          "multiplier": 1,
+          "fixed": 0
+        },
+        "moveSpeed": {
+          "multiplier": 1.12,
+          "fixed": 0
+        },
+        "pickupRange": {
+          "multiplier": 1.2,
+          "fixed": 0
+        }
+      },
+      "appearanceId": "princess"
+    },
+    {
+      "id": "elder",
+      "name": "年迈的老登",
+      "role": "挑战角色",
+      "summary": "生命、移速和伤害偏低，为熟悉荒野的玩家增加挑战。",
+      "color": "#c6cfbb",
+      "statModifiers": {
+        "maxHealth": {
+          "multiplier": 0.85,
+          "fixed": 0
+        },
+        "attack": {
+          "multiplier": 0.88,
+          "fixed": 0
+        },
+        "defense": {
+          "multiplier": 1,
+          "fixed": 0
+        },
+        "moveSpeed": {
+          "multiplier": 0.92,
+          "fixed": 0
+        },
+        "pickupRange": {
+          "multiplier": 1,
+          "fixed": 0
+        }
+      },
+      "appearanceId": "elder"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { getConfigSection } from './content-config.js';
 import { mapIdentity, mapSeed } from './map-context.js';
 import { settlementGuardType } from './encounter-definitions.js';
 import { Terrain, groundOffset } from './terrain.js';
@@ -10,6 +11,7 @@ import { updateAngels } from './sites/angel-guardian.js';
 import { settlementInteraction, activateSettlement, getShopItems, buyShopItem } from './sites/settlement-content.js';
 export { SETTLEMENT_RULES, ANGEL_RULES } from './site-definitions.js';
 import { worldSettlementDefinition, WORLD_HUT_NAMES } from './world-sites.js';
+const economy=getConfigSection('economy'),guardRules=getConfigSection('sites').settlementGuards;
 
 const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -82,7 +84,7 @@ export class Settlements {
       if(site.type==='supply')site.name=WORLD_HUT_NAMES[region]||WORLD_HUT_NAMES.forest;
       if(site.type==='merchant') {
         site.relicId=RELICS[Math.floor(this._hash(index+199,63)*RELICS.length)].id;
-        site.stock={heal:1,magnet:1,fury:1,shield:1,relic:1};
+        site.stock={...economy.shop.stock};
       }
       return site;
     }
@@ -175,8 +177,8 @@ export class Settlements {
     const points=this._guardPoints(site);if(points.length!==SETTLEMENT_RULES.guards)return false;
     site.state='active';site._remaining=new Set();site.guardIds=[];
     for(let i=0;i<points.length;i++) {
-      const enemy=g._spawnEnemy(settlementGuardType(i),1);enemy.settlementId=site.id;enemy.guardianId=site.id;enemy.eventRole='settlementGuard';enemy.xp=i===0?8:4;
-      enemy.hp*=i===0?1.6:1.25;enemy.maxHp=enemy.hp;enemy.guardActive=true;enemy.settlementHome={...points[i]};
+      const enemy=g._spawnEnemy(settlementGuardType(i),1);enemy.settlementId=site.id;enemy.guardianId=site.id;enemy.eventRole='settlementGuard';enemy.xp=i===0?guardRules.leaderXp:guardRules.guardXp;
+      enemy.hp*=i===0?guardRules.leaderHp:guardRules.guardHp;enemy.maxHp=enemy.hp;enemy.guardActive=true;enemy.settlementHome={...points[i]};
       enemy.x=points[i].x;enemy.y=points[i].y-groundOffset(enemy);g._moveEntity(enemy,0,0);
       site.guardIds.push(enemy.id);site._remaining.add(enemy.id);
     }

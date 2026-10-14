@@ -1,0 +1,62 @@
+{
+  "balance": {
+    "firstXp": 40,
+    "xpBase": 110,
+    "xpLinear": 65,
+    "xpCurve": 8,
+    "firstBossAt": 120,
+    "bossInterval": 150,
+    "spawnBase": 1.05,
+    "spawnGrowth": 0.018,
+    "spawnMax": 10.5,
+    "maxEnemyBullets": 60
+  },
+  "xp": {
+    "exponent": 1.3
+  },
+  "pressure": {
+    "dangerSeconds": 600,
+    "timeCap": 600,
+    "timeFactor": 0.18,
+    "connectionCap": 3,
+    "connectionSeconds": 45,
+    "waveDanger": 20,
+    "waveConnection": 2,
+    "waveTimeCap": 3,
+    "wavePeriod": 180,
+    "endlessWavePeriod": 50
+  },
+  "enemyGrowth": {
+    "lateAfter": 150,
+    "minute": 60,
+    "enduranceAfter": 300,
+    "bossHealthLinear": 0.65,
+    "bossHealthCurve": 0.12,
+    "healthTimeCap": 300,
+    "healthTimeGrowth": 0.0018,
+    "enduranceLinear": 0.13,
+    "enduranceExponent": 1.25,
+    "enduranceCurve": 0.05,
+    "bossDamageGrowth": 0.3,
+    "damageLateGrowth": 0.18,
+    "speedMax": 1.85,
+    "speedTimeGrowth": 0.0006,
+    "easySpeedMultiplier": 0.9,
+    "easyDamageMultiplier": 0.72,
+    "bossXpGrowth": 0.3,
+    "xpLateGrowth": 0.055,
+    "initialChargeCooldown": 1.5,
+    "initialCastCooldown": 1
+  },
+  "explorationSpawn": {
+    "maxRate": 4.5,
+    "timeGrowth": 0.008,
+    "easyMultiplier": 0.78,
+    "bossMultiplier": 0.38,
+    "enemyLimit": 180,
+    "initialCount": 4,
+    "initialType": "slime",
+    "testStartRadius": 330,
+    "testRadiusStep": 24
+  }
+}

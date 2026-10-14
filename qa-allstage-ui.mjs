@@ -24,12 +24,12 @@ for(const stage of STAGES){
   assert.match(h.nodes['stage-difficulty'].textContent,new RegExp(stage.difficultyLabel));
   assert.equal(STAGES.filter(item=>h.document.getElementById(`stage-${item.id}`).checked).length,1);
   assert.equal(h.document.getElementById(`stage-${stage.id}`).getAttribute('aria-label'),stage.name);
-  click(h,'start-button');click(h,'prepare-start-button');quiet(h);
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);
   assert.equal(h.run('game.stage.id'),stage.id);assert.equal(h.run('game.mapId'),stage.startMapId);
   assert.equal(h.run('game.region.id'),stage.themeId);
   h.run('openMap();');assert.equal(h.nodes['map-title'].textContent,stage.islands[0].name);h.run('closeMap();');
   h.run('game.status="dead";');h.tick();
-  click(h,'restart-button');quiet(h);
+  click(h,'restart-button');await h.flush();quiet(h);
   assert.equal(h.run('game.stage.id'),stage.id,'restart repeats the current stage');
   assert.equal(h.run('game.mapId'),stage.startMapId);
   h.run('home();');
@@ -45,7 +45,7 @@ for(const stage of STAGES){
 for(const initial of [{},{mode:'stage',stageId:'obsolete'}, {mode:'obsolete',stageId:[]}, {mode:'stage',stageId:null}]){
   const h=harness('',{storage:storageFrom(initial)});
   assert.equal(h.document.getElementById('stage-forest-trial').checked,true);
-  click(h,'start-button');click(h,'prepare-start-button');assert.equal(h.run('game.stage.id'),'forest-trial');
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage.id'),'forest-trial');
 }
 {
   const h=harness('',{storage:new Map([['wild-echoes-setup','{invalid']])});
@@ -54,16 +54,16 @@ for(const initial of [{},{mode:'stage',stageId:'obsolete'}, {mode:'obsolete',sta
 {
   const h=harness('',{storage:storageFrom({mode:'free',difficulty:'casual',stageId:'snow-trial'})});
   assert.equal(h.nodes['mode-free'].checked,true);assert.equal(h.nodes['difficulty-casual'].checked,true);
-  click(h,'start-button');click(h,'prepare-start-button');quiet(h);assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.difficulty'),'casual');
-  h.run('game.status="dead";');h.tick();click(h,'restart-button');assert.equal(h.run('game.stage'),null);
-  h.run('home();');selectMode(h,'stage');click(h,'start-button');click(h,'prepare-start-button');assert.equal(h.run('game.stage.id'),'snow-trial');
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.difficulty'),'casual');
+  h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();assert.equal(h.run('game.stage'),null);
+  h.run('home();');selectMode(h,'stage');click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage.id'),'snow-trial');
   assert.equal(h.run('game.difficulty'),'casual');
 }
 {
   const h=harness('?debug&world=beach',{storage:storageFrom({mode:'stage',stageId:'snow-trial'})});
   assert.equal(h.nodes['mode-free'].checked,true);
-  click(h,'start-button');click(h,'prepare-start-button');assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.region.id'),'beach');
-  h.run('home();');selectMode(h,'stage');selectStage(h,'volcano-trial');click(h,'start-button');click(h,'prepare-start-button');
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.region.id'),'beach');
+  h.run('home();');selectMode(h,'stage');selectStage(h,'volcano-trial');click(h,'start-button');click(h,'prepare-start-button');await h.flush();
   assert.equal(h.run('game.stage.id'),'volcano-trial');assert.equal(h.run('game.region.id'),'volcano');
   assert.equal(harness('?world=beach').nodes['mode-stage'].checked,true);
   assert.equal(harness('?debug&world=invalid').nodes['mode-stage'].checked,true);

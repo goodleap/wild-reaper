@@ -50,7 +50,7 @@ const select=(h,mode)=>{h.nodes['mode-stage'].checked=mode==='stage';h.nodes['mo
 // Canvas is mocked by the shared harness; this is not device/rendering QA.
 {
   const h=harness();assert.equal(h.nodes['mode-stage'].checked,true);
-  click(h,'start-button');click(h,'prepare-start-button');quiet(h);
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);
   assert.equal(h.run('game.stage.id'),'forest-trial');assert.equal(h.run('game.mapId'),'forest-outer');
   h.run('updateHUD();');assert.match(h.nodes['wave-label'].textContent,/核心岛/,'the objective remains visible in the narrow mobile HUD');
   h.run('openMap();');assert.equal(h.nodes['map-title'].textContent,'林间外岛');h.run('closeMap();');
@@ -62,13 +62,13 @@ const select=(h,mode)=>{h.nodes['mode-stage'].checked=mode==='stage';h.nodes['mo
   assert.equal(h.run("archive.data.stages['forest-trial'].normal.clears"),1);
   click(h,'end-archive-button');assert.equal(h.run('archiveOpen'),true);h.run('closeArchive();');
   assert.equal(h.run('runEnded'),true);assert.equal(h.document.activeElement.id,'end-archive-button');
-  click(h,'restart-button');quiet(h);assert.equal(h.run('game.stage.id'),'forest-trial');
+  click(h,'restart-button');await h.flush();quiet(h);assert.equal(h.run('game.stage.id'),'forest-trial');
   h.run("game.status='dead';");h.tick();
   assert.equal(h.nodes['end-time-label'].textContent,'存活时间');assert.doesNotMatch(h.nodes['end-title'].textContent,/通关/);
   assert.equal(h.run("archive.data.stages['forest-trial'].normal.clears"),1);
-  click(h,'home-button');select(h,'free');h.nodes['difficulty-casual'].checked=true;click(h,'start-button');click(h,'prepare-start-button');quiet(h);
+  click(h,'home-button');select(h,'free');h.nodes['difficulty-casual'].checked=true;click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);
   assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.difficulty'),'casual');
-  h.run("game.status='dead';");h.tick();click(h,'restart-button');assert.equal(h.run('game.stage'),null);
+  h.run("game.status='dead';");h.tick();click(h,'restart-button');await h.flush();assert.equal(h.run('game.stage'),null);
   const loaded=harness('',{storage:h.storage});assert.equal(loaded.nodes['mode-free'].checked,true);assert.equal(loaded.nodes['difficulty-casual'].checked,true);
   assert.match(loaded.nodes['stage-mode-note'].textContent,/八种主题/);
 }
@@ -76,8 +76,8 @@ const select=(h,mode)=>{h.nodes['mode-stage'].checked=mode==='stage';h.nodes['mo
 {
   const h=harness('?debug&world=beach');
   assert.equal(h.nodes['mode-free'].checked,true,'an explicit valid debug world opens its free-exploration theme');
-  click(h,'start-button');click(h,'prepare-start-button');assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.region.id'),'beach');
-  h.run('home();');select(h,'stage');click(h,'start-button');click(h,'prepare-start-button');
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.region.id'),'beach');
+  h.run('home();');select(h,'stage');click(h,'start-button');click(h,'prepare-start-button');await h.flush();
   assert.equal(h.run('game.stage.id'),'forest-trial');assert.equal(h.run('game.region.id'),'forest','manual stage selection overrides the debug-world default');
   assert.equal(harness('?world=beach').nodes['mode-stage'].checked,true,'ordinary world query never silently changes adventure mode');
   assert.equal(harness('?debug&world=invalid').nodes['mode-stage'].checked,true);

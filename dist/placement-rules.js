@@ -1,15 +1,11 @@
+import { getConfigSection } from './content-config.js';
 import { getWaterContours, waterIntersectsCircle, waterIntersectsCapsule } from './water-geometry.js';
 
 // Generation and shoreline art share these bands. Movement may enter the
 // shallows; ordinary land objects must clear the entire beach as well.
-const shallowWidth=100,beachWidth=63;
-export const COAST_RULES=Object.freeze({shallowWidth,beachWidth,inlandInset:shallowWidth+beachWidth,waterSetback:12});
-const policy=(surface,water='avoid',coastSetback=0,waterGap=water==='avoid'?8:0)=>Object.freeze({surface,water,coastSetback,waterGap});
-export const PLACEMENT_POLICIES=Object.freeze({
-  vegetation:policy('inland'),stone:policy('dry'),debris:policy('inland'),
-  water:policy('inland','avoid',COAST_RULES.waterSetback),structure:policy('inland'),
-  loot:policy('inland'),hazard:policy('inland'),wetlandHazard:policy('inland','allow')
-});
+const config=getConfigSection('geography'),{shallowWidth,beachWidth}=config.coastRules;
+export const COAST_RULES=Object.freeze({...config.coastRules,inlandInset:shallowWidth+beachWidth});
+export const PLACEMENT_POLICIES=config.placementPolicies;
 const finite=(...values)=>values.every(Number.isFinite),nonnegative=n=>Number.isFinite(n)&&n>=0;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function resolvePolicy(kind){

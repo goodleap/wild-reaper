@@ -1,0 +1,1380 @@
+{
+  "order": [
+    "forest",
+    "marsh",
+    "ruins",
+    "beach",
+    "city",
+    "mountain",
+    "snow",
+    "volcano"
+  ],
+  "connections": [
+    [
+      "forest",
+      "marsh"
+    ],
+    [
+      "marsh",
+      "ruins"
+    ],
+    [
+      "forest",
+      "ruins"
+    ],
+    [
+      "forest",
+      "beach"
+    ],
+    [
+      "beach",
+      "city"
+    ],
+    [
+      "city",
+      "mountain"
+    ],
+    [
+      "mountain",
+      "snow"
+    ],
+    [
+      "snow",
+      "volcano"
+    ],
+    [
+      "volcano",
+      "ruins"
+    ],
+    [
+      "city",
+      "ruins"
+    ]
+  ],
+  "definitions": [
+    {
+      "id": "forest",
+      "name": "低语之森",
+      "shortName": "密林",
+      "colors": {
+        "ground": "#263e30",
+        "light": "#35503a",
+        "dark": "#182b22",
+        "accent": "#a9d991",
+        "mist": "#c1d6a9",
+        "grass": "#648052",
+        "stone": "#788170"
+      },
+      "enemyWeights": {
+        "slime": 1,
+        "beetle": 1,
+        "bat": 1,
+        "brute": 1,
+        "boar": 1,
+        "spore": 1
+      },
+      "profile": {
+        "x": 4350,
+        "y": 4100,
+        "phase": 0.2,
+        "bays": 0.08
+      },
+      "danger": 1,
+      "coast": {},
+      "biomeZones": [],
+      "terrain": {
+        "generatorId": "natural",
+        "hashOffset": 0,
+        "variants": {},
+        "layoutId": "woodland"
+      },
+      "environment": {
+        "hashOffset": 0,
+        "mushroomChance": 0.57,
+        "water": {
+          "chance": 0.36,
+          "families": 4,
+          "kind": "water",
+          "zoneKinds": null,
+          "innerIslands": false
+        },
+        "mechanism": {
+          "type": "vine",
+          "chance": 0.64
+        },
+        "hazard": null,
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#193e48",
+          "sea": "#25535a",
+          "shallow": "#537e71",
+          "sand": "#97996d",
+          "grain": "#d8cc98",
+          "edge": "#779b85",
+          "fringe": "#415439"
+        },
+        "mapCoast": {
+          "land": "#476246",
+          "sand": "#919a6b",
+          "sea": "#264e54",
+          "shallow": "#507776"
+        },
+        "light": {
+          "id": "forest",
+          "rgb": "225,237,172",
+          "glow": "#c7d98a12",
+          "strength": 1,
+          "clear": "#e3ebaf00"
+        }
+      }
+    },
+    {
+      "id": "marsh",
+      "name": "迷雾沼泽",
+      "shortName": "沼泽",
+      "colors": {
+        "ground": "#253c3d",
+        "light": "#36504c",
+        "dark": "#192d31",
+        "accent": "#a0d0c4",
+        "mist": "#bbd5d2",
+        "grass": "#64877b",
+        "stone": "#708c85"
+      },
+      "enemyWeights": {
+        "slime": 1.25,
+        "beetle": 0.8,
+        "bat": 0.7,
+        "brute": 1.1,
+        "boar": 0.85,
+        "spore": 1.7
+      },
+      "profile": {
+        "x": 4450,
+        "y": 3950,
+        "phase": 1.6,
+        "bays": 0.14
+      },
+      "danger": 1.04,
+      "coast": {},
+      "biomeZones": [],
+      "terrain": {
+        "generatorId": "natural",
+        "hashOffset": 419,
+        "variants": {
+          "tree": "dead-tree",
+          "log": "sunken-log",
+          "rock": "moss-rock"
+        },
+        "layoutId": "woodland"
+      },
+      "environment": {
+        "hashOffset": 419,
+        "mushroomChance": 0.61,
+        "water": {
+          "chance": 0.52,
+          "families": 5,
+          "kind": "water",
+          "zoneKinds": null,
+          "innerIslands": true
+        },
+        "mechanism": {
+          "type": "gas",
+          "chance": 0.64
+        },
+        "hazard": null,
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#213e48",
+          "sea": "#30555a",
+          "shallow": "#57796b",
+          "sand": "#858e69",
+          "grain": "#bbc49a",
+          "edge": "#728c75",
+          "fringe": "#465846"
+        },
+        "mapCoast": {
+          "land": "#4a5e50",
+          "sand": "#7f896b",
+          "sea": "#294b51",
+          "shallow": "#507776"
+        }
+      }
+    },
+    {
+      "id": "ruins",
+      "name": "失落遗迹",
+      "shortName": "遗迹",
+      "colors": {
+        "ground": "#41413a",
+        "light": "#555345",
+        "dark": "#2b302e",
+        "accent": "#dbc891",
+        "mist": "#dbd2b4",
+        "grass": "#858467",
+        "stone": "#a09b82"
+      },
+      "enemyWeights": {
+        "slime": 0.8,
+        "beetle": 1.45,
+        "bat": 0.8,
+        "brute": 1.45,
+        "boar": 0.9,
+        "spore": 0.8
+      },
+      "profile": {
+        "x": 4250,
+        "y": 4050,
+        "phase": 3.5,
+        "bays": 0.115
+      },
+      "danger": 1.08,
+      "coast": {},
+      "biomeZones": [],
+      "terrain": {
+        "generatorId": "natural",
+        "hashOffset": 811,
+        "variants": {
+          "tree": "pillar",
+          "treeType": "rock",
+          "treeId": "pillar",
+          "log": "wall",
+          "rock": "slab"
+        },
+        "layoutId": "woodland"
+      },
+      "environment": {
+        "hashOffset": 811,
+        "mushroomChance": 0.48,
+        "water": {
+          "chance": 0.16,
+          "families": 4,
+          "kind": "water",
+          "zoneKinds": null,
+          "innerIslands": false
+        },
+        "mechanism": null,
+        "hazard": null,
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#243e51",
+          "sea": "#345967",
+          "shallow": "#668a85",
+          "sand": "#aaa995",
+          "grain": "#d5d1b5",
+          "edge": "#8aa399",
+          "fringe": "#626b57"
+        },
+        "mapCoast": {
+          "land": "#666d65",
+          "sand": "#969985",
+          "sea": "#345360",
+          "shallow": "#507776"
+        }
+      }
+    },
+    {
+      "id": "beach",
+      "name": "潮汐海岸",
+      "shortName": "海岸",
+      "colors": {
+        "ground": "#a99c71",
+        "light": "#c7b986",
+        "dark": "#766c4e",
+        "accent": "#f1d997",
+        "mist": "#cae3d9",
+        "grass": "#658c6c",
+        "stone": "#738d91"
+      },
+      "enemyWeights": {
+        "slime": 1.25,
+        "beetle": 1.35,
+        "bat": 0.7,
+        "brute": 0.9,
+        "boar": 0.75,
+        "spore": 0.75
+      },
+      "profile": {
+        "x": 4780,
+        "y": 3600,
+        "phase": 0.85,
+        "bays": 0.13
+      },
+      "danger": 1.02,
+      "coast": {
+        "beachWidth": 180
+      },
+      "biomeZones": [
+        "sands",
+        "reefs",
+        "palms"
+      ],
+      "terrain": {
+        "generatorId": "scenery",
+        "hashOffset": 1293,
+        "variants": {},
+        "placements": {
+          "palms": [
+            {
+              "type": "tree",
+              "variant": "world-palm",
+              "x": 135,
+              "y": 125
+            },
+            {
+              "type": "tree",
+              "variant": "world-palm",
+              "x": 365,
+              "y": 370,
+              "properties": {
+                "scale": {
+                  "base": 0.78,
+                  "roll": 9,
+                  "gain": 0.35
+                }
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-reef",
+              "x": 355,
+              "y": 135,
+              "properties": {
+                "r": {
+                  "base": 28,
+                  "roll": 8,
+                  "gain": 13
+                },
+                "rockForm": 1
+              },
+              "condition": {
+                "roll": 2,
+                "above": 0.45
+              }
+            }
+          ],
+          "reefs": [
+            {
+              "type": "rock",
+              "variant": "world-reef",
+              "x": 135,
+              "y": 145,
+              "properties": {
+                "r": {
+                  "base": 44,
+                  "roll": 2,
+                  "gain": 16
+                },
+                "rockForm": 2
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-reef",
+              "x": 365,
+              "y": 360,
+              "properties": {
+                "r": {
+                  "base": 31,
+                  "roll": 3,
+                  "gain": 17
+                },
+                "rockForm": 1
+              }
+            },
+            {
+              "type": "log",
+              "variant": "world-driftwood",
+              "x": 365,
+              "y": 125,
+              "properties": {
+                "halfLength": 44,
+                "r": 12,
+                "angle": 0.22
+              },
+              "condition": {
+                "roll": 4,
+                "above": 0.5
+              }
+            }
+          ],
+          "default": [
+            {
+              "type": "log",
+              "variant": "world-driftwood",
+              "x": 150,
+              "y": 160,
+              "properties": {
+                "halfLength": {
+                  "base": 48,
+                  "roll": 4,
+                  "gain": 18
+                },
+                "r": {
+                  "base": 12,
+                  "roll": 6,
+                  "gain": 4
+                },
+                "angle": {
+                  "base": -0.35,
+                  "roll": 5,
+                  "gain": 0.7
+                }
+              },
+              "condition": {
+                "roll": 1,
+                "above": 0.35
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-reef",
+              "x": 365,
+              "y": 355,
+              "properties": {
+                "r": {
+                  "base": 26,
+                  "roll": 3,
+                  "gain": 12
+                },
+                "rockForm": 1
+              },
+              "condition": {
+                "roll": 2,
+                "above": 0.65
+              }
+            }
+          ]
+        }
+      },
+      "environment": {
+        "hashOffset": 1257,
+        "mushroomChance": 0,
+        "water": {
+          "chance": 0.54,
+          "families": 4,
+          "kind": "water",
+          "zoneKinds": null,
+          "innerIslands": false
+        },
+        "mechanism": null,
+        "hazard": {
+          "type": "tide",
+          "source": "water",
+          "chance": 0.46
+        },
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.94,
+          "active": 0.62
+        },
+        "waterImmersion": {
+          "idle": 0.25,
+          "active": 0.8
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#174e62",
+          "sea": "#267c86",
+          "shallow": "#77b7a6",
+          "sand": "#c5b889",
+          "grain": "#efe0b3",
+          "edge": "#a6c8ad",
+          "fringe": "#a69870"
+        },
+        "mapCoast": {
+          "sand": "#dfc998",
+          "sea": "#347a88",
+          "shallow": "#75c1c3"
+        },
+        "ground": {
+          "floor": "#b8ad80",
+          "light": "#e9d3a0",
+          "dark": "#827d59",
+          "detail": "#6d9365"
+        },
+        "water": {
+          "bank": "#a5956bb0",
+          "rim": "#d8c99f",
+          "top": "#6eaa9b",
+          "deep": "#377d7b",
+          "light": "#daf3d0"
+        },
+        "light": {
+          "id": "beach",
+          "rgb": "246,225,184",
+          "glow": "#f2d8a80c",
+          "strength": 0.6,
+          "clear": "rgba(246,225,184,0)"
+        }
+      }
+    },
+    {
+      "id": "city",
+      "name": "暮钟古城",
+      "shortName": "古城",
+      "colors": {
+        "ground": "#767568",
+        "light": "#97917d",
+        "dark": "#4d514c",
+        "accent": "#e0b99a",
+        "mist": "#d3c9bc",
+        "grass": "#697556",
+        "stone": "#949181"
+      },
+      "enemyWeights": {
+        "slime": 0.7,
+        "beetle": 1.15,
+        "bat": 1.15,
+        "brute": 1.35,
+        "boar": 1,
+        "spore": 0.65
+      },
+      "profile": {
+        "x": 4020,
+        "y": 4400,
+        "phase": 2.65,
+        "bays": 0.05
+      },
+      "danger": 1.06,
+      "coast": {},
+      "biomeZones": [
+        "streets",
+        "plaza",
+        "courtyard"
+      ],
+      "terrain": {
+        "generatorId": "scenery",
+        "hashOffset": 1724,
+        "variants": {},
+        "placements": {
+          "plaza": [
+            {
+              "type": "log",
+              "variant": "world-city-wall",
+              "x": 145,
+              "y": 145,
+              "properties": {
+                "halfLength": 42,
+                "r": 15,
+                "angle": 0
+              },
+              "condition": {
+                "roll": 2,
+                "above": 0.45
+              }
+            },
+            {
+              "type": "tree",
+              "variant": "world-pine",
+              "x": 375,
+              "y": 370,
+              "properties": {
+                "scale": 0.8,
+                "r": 17
+              },
+              "condition": {
+                "roll": 3,
+                "above": 0.6
+              }
+            }
+          ],
+          "courtyard": [
+            {
+              "type": "log",
+              "variant": "world-building",
+              "x": 172,
+              "y": 155,
+              "properties": {
+                "halfLength": {
+                  "base": 54,
+                  "roll": 2,
+                  "gain": 10
+                },
+                "r": {
+                  "base": 28,
+                  "roll": 5,
+                  "gain": 5
+                },
+                "scale": 1
+              }
+            },
+            {
+              "type": "log",
+              "variant": "world-building",
+              "x": 355,
+              "y": 365,
+              "properties": {
+                "halfLength": {
+                  "base": 50,
+                  "roll": 3,
+                  "gain": 8
+                },
+                "r": {
+                  "base": 28,
+                  "roll": 6,
+                  "gain": 4
+                },
+                "scale": 1
+              }
+            },
+            {
+              "type": "tree",
+              "variant": "world-pine",
+              "x": 360,
+              "y": 140,
+              "properties": {
+                "scale": 0.7,
+                "r": 15
+              }
+            }
+          ],
+          "default": [
+            {
+              "type": "log",
+              "variant": "world-building",
+              "x": 172,
+              "y": 155,
+              "properties": {
+                "halfLength": {
+                  "base": 54,
+                  "roll": 2,
+                  "gain": 10
+                },
+                "r": {
+                  "base": 28,
+                  "roll": 5,
+                  "gain": 5
+                },
+                "scale": 1
+              }
+            },
+            {
+              "type": "log",
+              "variant": "world-building",
+              "x": 355,
+              "y": 365,
+              "properties": {
+                "halfLength": {
+                  "base": 50,
+                  "roll": 3,
+                  "gain": 8
+                },
+                "r": {
+                  "base": 28,
+                  "roll": 6,
+                  "gain": 4
+                },
+                "scale": 1
+              }
+            },
+            {
+              "type": "log",
+              "variant": "world-city-wall",
+              "x": 145,
+              "y": 360,
+              "properties": {
+                "halfLength": 43,
+                "r": 14,
+                "angle": 1.5707963267948966
+              },
+              "condition": {
+                "roll": 8,
+                "above": 0.45
+              }
+            }
+          ]
+        }
+      },
+      "environment": {
+        "hashOffset": 1676,
+        "mushroomChance": 0,
+        "water": {
+          "chance": 0,
+          "families": 4,
+          "kind": "water",
+          "zoneKinds": null,
+          "innerIslands": false
+        },
+        "mechanism": null,
+        "hazard": null,
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#294b58",
+          "sea": "#3e6970",
+          "shallow": "#83a391",
+          "sand": "#aaa98b",
+          "grain": "#d6d1ad",
+          "edge": "#9ba98f",
+          "fringe": "#777e69"
+        },
+        "mapCoast": {
+          "sand": "#ad9d80",
+          "sea": "#425f66",
+          "shallow": "#72928c"
+        },
+        "ground": {
+          "floor": "#65685f",
+          "light": "#a3a28d",
+          "dark": "#474d49",
+          "detail": "#8f8470"
+        },
+        "water": {
+          "bank": "#626a5990",
+          "rim": "#a3ab8c",
+          "top": "#759d8d",
+          "deep": "#456e69",
+          "light": "#d6e5c8"
+        },
+        "light": {
+          "id": "city",
+          "rgb": "240,229,211",
+          "glow": "#eee0c60a",
+          "strength": 0.48,
+          "clear": "rgba(240,229,211,0)"
+        }
+      }
+    },
+    {
+      "id": "mountain",
+      "name": "群峰山地",
+      "shortName": "山地",
+      "colors": {
+        "ground": "#596866",
+        "light": "#73817a",
+        "dark": "#354948",
+        "accent": "#b9d5c8",
+        "mist": "#c2d8de",
+        "grass": "#56785b",
+        "stone": "#92a19d"
+      },
+      "enemyWeights": {
+        "slime": 0.75,
+        "beetle": 1.05,
+        "bat": 1.2,
+        "brute": 1.2,
+        "boar": 1.55,
+        "spore": 0.55
+      },
+      "profile": {
+        "x": 3600,
+        "y": 4850,
+        "phase": 4.2,
+        "bays": 0.135
+      },
+      "danger": 1.07,
+      "coast": {},
+      "biomeZones": [
+        "foothills",
+        "pass",
+        "summit"
+      ],
+      "terrain": {
+        "generatorId": "scenery",
+        "hashOffset": 2155,
+        "variants": {},
+        "placements": {
+          "pass": [
+            {
+              "type": "log",
+              "variant": "world-ridge",
+              "x": 125,
+              "y": 245,
+              "properties": {
+                "halfLength": 128,
+                "r": {
+                  "base": 30,
+                  "roll": 2,
+                  "gain": 7
+                },
+                "angle": 1.5707963267948966
+              }
+            },
+            {
+              "type": "log",
+              "variant": "world-ridge",
+              "x": 395,
+              "y": 255,
+              "properties": {
+                "halfLength": {
+                  "base": 105,
+                  "roll": 3,
+                  "gain": 18
+                },
+                "r": 30,
+                "angle": 1.5707963267948966
+              }
+            }
+          ],
+          "summit": [
+            {
+              "type": "log",
+              "variant": "world-ridge",
+              "x": 150,
+              "y": 140,
+              "properties": {
+                "halfLength": {
+                  "base": 76,
+                  "roll": 2,
+                  "gain": 17
+                },
+                "r": 35,
+                "angle": 0.28
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-reef",
+              "x": 370,
+              "y": 365,
+              "properties": {
+                "r": {
+                  "base": 54,
+                  "roll": 3,
+                  "gain": 15
+                },
+                "rockForm": 2
+              }
+            }
+          ],
+          "default": [
+            {
+              "type": "tree",
+              "variant": "world-pine",
+              "x": 135,
+              "y": 135
+            },
+            {
+              "type": "rock",
+              "variant": "world-reef",
+              "x": 365,
+              "y": 365,
+              "properties": {
+                "r": {
+                  "base": 46,
+                  "roll": 3,
+                  "gain": 12
+                },
+                "rockForm": 2
+              }
+            },
+            {
+              "type": "tree",
+              "variant": "world-pine",
+              "x": 365,
+              "y": 135,
+              "properties": {
+                "scale": 0.75,
+                "r": 16
+              },
+              "condition": {
+                "roll": 4,
+                "above": 0.55
+              }
+            }
+          ]
+        }
+      },
+      "environment": {
+        "hashOffset": 2095,
+        "mushroomChance": 0,
+        "water": {
+          "chance": 0.18,
+          "families": 4,
+          "kind": "water",
+          "zoneKinds": null,
+          "innerIslands": false
+        },
+        "mechanism": null,
+        "hazard": {
+          "type": "rockfall",
+          "source": "terrain",
+          "chance": 0.46
+        },
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#224953",
+          "sea": "#386b72",
+          "shallow": "#799e94",
+          "sand": "#a3ac94",
+          "grain": "#d3d8ba",
+          "edge": "#99b1a1",
+          "fringe": "#687f6e"
+        },
+        "mapCoast": {
+          "sand": "#8f9e8d",
+          "sea": "#3c6878",
+          "shallow": "#79a3a6"
+        },
+        "ground": {
+          "floor": "#687369",
+          "light": "#a9b5a4",
+          "dark": "#465b53",
+          "detail": "#9b9e80"
+        },
+        "water": {
+          "bank": "#637b697d",
+          "rim": "#a8baa2",
+          "top": "#779f9a",
+          "deep": "#3c787c",
+          "light": "#e0edd5"
+        },
+        "light": {
+          "id": "mountain",
+          "rgb": "219,235,239",
+          "glow": "#d8e8eb09",
+          "strength": 0.46,
+          "clear": "rgba(219,235,239,0)"
+        }
+      }
+    },
+    {
+      "id": "snow",
+      "name": "霜雪荒原",
+      "shortName": "雪原",
+      "colors": {
+        "ground": "#aebfc5",
+        "light": "#d0dde0",
+        "dark": "#738f9d",
+        "accent": "#c9f0f5",
+        "mist": "#e3eef1",
+        "grass": "#52716b",
+        "stone": "#839ba8"
+      },
+      "enemyWeights": {
+        "slime": 1.05,
+        "beetle": 0.75,
+        "bat": 1.2,
+        "brute": 1.3,
+        "boar": 1.3,
+        "spore": 0.45
+      },
+      "profile": {
+        "x": 4540,
+        "y": 4200,
+        "phase": 5.35,
+        "bays": 0.065
+      },
+      "danger": 1.05,
+      "coast": {},
+      "biomeZones": [
+        "pines",
+        "icefield",
+        "drifts"
+      ],
+      "terrain": {
+        "generatorId": "scenery",
+        "hashOffset": 2586,
+        "variants": {},
+        "placements": {
+          "pines": [
+            {
+              "type": "tree",
+              "variant": "world-snowpine",
+              "x": 135,
+              "y": 125,
+              "properties": {
+                "scale": 1.08,
+                "r": 23
+              }
+            },
+            {
+              "type": "tree",
+              "variant": "world-snowpine",
+              "x": 365,
+              "y": 365,
+              "properties": {
+                "scale": 0.86,
+                "r": 19
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-ice",
+              "x": 365,
+              "y": 125,
+              "properties": {
+                "r": 28,
+                "rockForm": 1
+              },
+              "condition": {
+                "roll": 3,
+                "above": 0.5
+              }
+            }
+          ],
+          "icefield": [
+            {
+              "type": "rock",
+              "variant": "world-ice",
+              "x": 140,
+              "y": 140,
+              "properties": {
+                "r": {
+                  "base": 35,
+                  "roll": 3,
+                  "gain": 13
+                },
+                "rockForm": 2
+              },
+              "condition": {
+                "roll": 2,
+                "above": 0.3
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-ice",
+              "x": 370,
+              "y": 365,
+              "properties": {
+                "r": {
+                  "base": 29,
+                  "roll": 5,
+                  "gain": 13
+                },
+                "rockForm": 0
+              },
+              "condition": {
+                "roll": 4,
+                "above": 0.6
+              }
+            }
+          ],
+          "default": [
+            {
+              "type": "rock",
+              "variant": "world-ice",
+              "x": 365,
+              "y": 350,
+              "properties": {
+                "r": {
+                  "base": 41,
+                  "roll": 3,
+                  "gain": 16
+                },
+                "rockForm": 1
+              }
+            },
+            {
+              "type": "tree",
+              "variant": "world-snowpine",
+              "x": 135,
+              "y": 135,
+              "properties": {
+                "scale": 0.83,
+                "r": 18
+              },
+              "condition": {
+                "roll": 4,
+                "above": 0.5
+              }
+            }
+          ]
+        }
+      },
+      "environment": {
+        "hashOffset": 2514,
+        "mushroomChance": 0,
+        "water": {
+          "chance": 0.56,
+          "families": 4,
+          "kind": "snow",
+          "zoneKinds": {
+            "icefield": "ice"
+          },
+          "innerIslands": false
+        },
+        "mechanism": null,
+        "hazard": null,
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#274853",
+          "sea": "#517c88",
+          "shallow": "#9fbfc0",
+          "sand": "#b7c8c4",
+          "grain": "#e6f0dc",
+          "edge": "#d1e1d4",
+          "fringe": "#9cb8b0"
+        },
+        "mapCoast": {
+          "sand": "#a7c7cf",
+          "sea": "#416e84",
+          "shallow": "#85bdcf"
+        },
+        "ground": {
+          "floor": "#b7c9c9",
+          "light": "#e6efdf",
+          "dark": "#8aabae",
+          "detail": "#6c8e85"
+        },
+        "water": {
+          "bank": "#729a9c70",
+          "rim": "#d2e1d5",
+          "top": "#b8d7d3",
+          "deep": "#7eafb6",
+          "light": "#f1f9e5"
+        },
+        "light": {
+          "id": "snow",
+          "rgb": "216,240,255",
+          "glow": "#d4f1ff08",
+          "strength": 0.35,
+          "clear": "rgba(216,240,255,0)"
+        }
+      }
+    },
+    {
+      "id": "volcano",
+      "name": "熔火之境",
+      "shortName": "熔火",
+      "colors": {
+        "ground": "#474143",
+        "light": "#665452",
+        "dark": "#28282d",
+        "accent": "#ffbd79",
+        "mist": "#b69a91",
+        "grass": "#765f46",
+        "stone": "#796c6b"
+      },
+      "enemyWeights": {
+        "slime": 0.8,
+        "beetle": 1.35,
+        "bat": 1.3,
+        "brute": 1.4,
+        "boar": 0.85,
+        "spore": 0.55
+      },
+      "profile": {
+        "x": 4220,
+        "y": 4290,
+        "phase": 3.95,
+        "bays": 0.11
+      },
+      "danger": 1.1,
+      "coast": {},
+      "biomeZones": [
+        "ashfield",
+        "basalt",
+        "vents"
+      ],
+      "terrain": {
+        "generatorId": "scenery",
+        "hashOffset": 3017,
+        "variants": {},
+        "placements": {
+          "basalt": [
+            {
+              "type": "log",
+              "variant": "world-ridge",
+              "x": 155,
+              "y": 135,
+              "properties": {
+                "halfLength": 78,
+                "r": 32,
+                "angle": -0.2
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-basalt",
+              "x": 365,
+              "y": 365,
+              "properties": {
+                "r": 51,
+                "rockForm": 2
+              }
+            }
+          ],
+          "vents": [
+            {
+              "type": "rock",
+              "variant": "world-basalt",
+              "x": 135,
+              "y": 145,
+              "properties": {
+                "r": {
+                  "base": 36,
+                  "roll": 2,
+                  "gain": 13
+                },
+                "rockForm": 2
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-basalt",
+              "x": 370,
+              "y": 365,
+              "properties": {
+                "r": {
+                  "base": 31,
+                  "roll": 4,
+                  "gain": 13
+                },
+                "rockForm": 0
+              },
+              "condition": {
+                "roll": 3,
+                "above": 0.35
+              }
+            }
+          ],
+          "default": [
+            {
+              "type": "tree",
+              "variant": "world-charred",
+              "x": 145,
+              "y": 125,
+              "properties": {
+                "scale": {
+                  "base": 0.84,
+                  "roll": 2,
+                  "gain": 0.3
+                },
+                "r": 18
+              }
+            },
+            {
+              "type": "rock",
+              "variant": "world-basalt",
+              "x": 365,
+              "y": 355,
+              "properties": {
+                "r": 39,
+                "rockForm": 1
+              },
+              "condition": {
+                "roll": 3,
+                "above": 0.35
+              }
+            }
+          ]
+        }
+      },
+      "environment": {
+        "hashOffset": 2933,
+        "mushroomChance": 0,
+        "water": {
+          "chance": 0.38,
+          "families": 4,
+          "kind": "lava",
+          "zoneKinds": null,
+          "innerIslands": false
+        },
+        "mechanism": null,
+        "hazard": {
+          "type": "vent",
+          "source": "terrain",
+          "chance": 0.46
+        },
+        "damagingSurface": "lava",
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#273d4a",
+          "sea": "#395b63",
+          "shallow": "#668980",
+          "sand": "#77786b",
+          "grain": "#aaa891",
+          "edge": "#879588",
+          "fringe": "#585e55"
+        },
+        "mapCoast": {
+          "sand": "#937366",
+          "sea": "#453c48",
+          "shallow": "#776a71"
+        },
+        "ground": {
+          "floor": "#423f40",
+          "light": "#79706a",
+          "dark": "#292c31",
+          "detail": "#97674d"
+        },
+        "water": {
+          "bank": "#202730ab",
+          "rim": "#7c7c6b",
+          "top": "#567c77",
+          "deep": "#335454",
+          "light": "#c3d1ba"
+        },
+        "light": {
+          "id": "volcano",
+          "rgb": "247,171,110",
+          "glow": "#f5a86806",
+          "strength": 0.2,
+          "clear": "rgba(247,171,110,0)"
+        }
+      }
+    }
+  ]
+}

@@ -25,7 +25,7 @@ export function updateAngels(settlements,dt,p) {
       site._attack=ANGEL_RULES.attackInterval;
       site.castFace=.25;
       const impact={x:target.x,y:target.y+groundOffset(target)},origin={x:site.x,y:site.y-19.8,groundY:site.y};
-      const damage=ANGEL_RULES.damage*(1+Math.min(3,g.regions?.unlockedConnections?.size||0)*.15+Math.max(0,(g.region?.danger||1)-1));
+      const damage=ANGEL_RULES.damage*(1+Math.min(ANGEL_RULES.maxGrowthConnections,g.regions?.unlockedConnections?.size||0)*ANGEL_RULES.connectionGrowth+Math.max(0,(g.region?.danger||1)-1));
       for(const enemy of g.enemies)if(canHit(enemy)&&Math.hypot(enemy.x-impact.x,enemy.y+groundOffset(enemy)-impact.y)<=ANGEL_RULES.strikeRadius)
         g._hurtEnemy(enemy,damage,0,origin,'angel');
       // A long sky strike with a short lifetime: ten casts/second show at most

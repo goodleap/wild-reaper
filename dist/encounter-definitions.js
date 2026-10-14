@@ -1,48 +1,16 @@
+import { getConfigSection } from './content-config.js';
 import { enemyDefinition } from './enemy-definitions.js';
 
-const frozenList=items=>Object.freeze(items);
-const rule=(type,condition={})=>Object.freeze({type,...condition});
-const sequence=(id,fallback,rules=[],extra={})=>Object.freeze({id,fallback,rules:frozenList(rules),...extra});
-
-// Ordered rules preserve authored formations without consuming random rolls.
-export const ENCOUNTER_SEQUENCES=Object.freeze({
-  arena:sequence('arena','slime',[rule('brute',{every:8,remainder:0}),rule('beetle',{every:3,remainder:0})]),
-  rescue:sequence('rescue','slime',[rule('beetle',{every:3,remainder:0})]),
-  relicRescue:sequence('relicRescue','slime',[rule('brute',{every:4,remainder:0}),rule('beetle',{every:3,remainder:0})]),
-  settlement:sequence('settlement','beetle',[rule('brute',{index:0})]),
-  treasureRunner:sequence('treasureRunner','beetle'),
-  eliteSummon:sequence('eliteSummon','slime'),
-  treasureGuardian:sequence('treasureGuardian','brute',[rule('boar',{every:2,remainder:0,underCap:5})])
-});
-export const WAVE_PATTERNS=frozenList([
-  sequence('advance','slime',[rule('brute',{every:5,remainder:4,minTime:60}),rule('beetle',{every:3,remainder:0})],{name:'兽群推进'}),
-  sequence('wings','bat',[rule('beetle',{every:3,remainder:2})],{name:'疾翼掠袭'}),
-  sequence('pincer','slime',[rule('boar',{every:5,remainder:0,minTime:30}),rule('spore',{every:5,remainder:4,minTime:45}),rule('beetle',{every:3,remainder:1})],{name:'冲锋夹击'})
-]);
-export const SPECIAL_ENEMY_CAPS=Object.freeze({boar:5,spore:4});
-export const ENCOUNTER_CAPS=Object.freeze({
-  wave:Object.freeze({limits:SPECIAL_ENEMY_CAPS,fallback:'beetle'}),
-  castle:Object.freeze({limits:SPECIAL_ENEMY_CAPS,fallback:'bat'})
-});
-export const HUT_GUARD_PACKS=Object.freeze({
-  default:frozenList(['brute','beetle','beetle','beetle']),
-  shipwreck:frozenList(['brute','beetle','beetle','bat','beetle','slime']),
-  mine:frozenList(['brute','beetle','beetle','brute','beetle'])
-});
-export const CASTLE_GUARD_PACKS=frozenList([
-  frozenList(['slime','slime','beetle','bat']),
-  frozenList(['beetle','slime','beetle','slime','spore']),
-  frozenList(['slime','beetle','slime','beetle','boar']),
-  frozenList(['beetle','slime','beetle','brute','spore']),
-  frozenList(['slime','beetle','beetle','slime','boar','spore'])
-]);
-export const CASTLE_SIDE_PACKS=Object.freeze({
-  early:frozenList(['beetle','slime','beetle','bat']),
-  late:frozenList(['beetle','slime','beetle','boar']),
-  lateAfter:4
-});
-export const ELITE_ELIGIBLE_TYPES=frozenList(['slime','beetle','brute']);
-export const DEBUG_WAVE_TYPES=frozenList(['slime','beetle','slime','brute','beetle','slime']);
+const content=getConfigSection('encounters');
+export const ENCOUNTER_SEQUENCES=content.sequences;
+export const WAVE_PATTERNS=content.wavePatterns;
+export const SPECIAL_ENEMY_CAPS=content.specialEnemyCaps;
+export const ENCOUNTER_CAPS=Object.freeze(Object.fromEntries(Object.entries(content.caps).map(([id,profile])=>[id,Object.freeze({...profile,limits:Object.freeze(Object.fromEntries(profile.limits.map(type=>[type,SPECIAL_ENEMY_CAPS[type]])))})])));
+export const HUT_GUARD_PACKS=content.hutGuardPacks;
+export const CASTLE_GUARD_PACKS=content.castleGuardPacks;
+export const CASTLE_SIDE_PACKS=content.castleSidePacks;
+export const ELITE_ELIGIBLE_TYPES=content.eliteEligibleTypes;
+export const DEBUG_WAVE_TYPES=content.debugWaveTypes;
 
 function matches(rule,index,{time=0,enemies=[],counts=null}={}) {
   if(rule.index!=null&&index!==rule.index)return false;
@@ -70,16 +38,8 @@ export function cappedEncounterType(type,counts,profile='castle') {
   return limits[type]!=null&&counts[type]>=limits[type]?fallback:type;
 }
 
-export const ORDINARY_SPAWN_RULES=Object.freeze({
-  fallback:'slime',baselineWorld:'forest',lateAfter:150,latePeriod:60,
-  brute:Object.freeze({after:60,max:.15,base:.07,growth:.006}),
-  bat:Object.freeze({after:23,max:.8,base:.35,growth:.033}),
-  beetle:Object.freeze({after:12,min:.65,offset:.1}),
-  specials:frozenList([
-    Object.freeze({type:'boar',at:30,cap:SPECIAL_ENEMY_CAPS.boar,weight:.06,rollAbove:.89,rollThrough:.95}),
-    Object.freeze({type:'spore',at:45,cap:SPECIAL_ENEMY_CAPS.spore,weight:.05,rollAbove:.95,rollThrough:Infinity})
-  ])
-});
+// JSON null explicitly means an unbounded upper roll, never a missing value.
+export const ORDINARY_SPAWN_RULES=Object.freeze({...content.ordinarySpawnRules,specials:Object.freeze(content.ordinarySpawnRules.specials.map(rule=>Object.freeze({...rule,cap:SPECIAL_ENEMY_CAPS[rule.type],rollThrough:rule.rollThrough===null?Infinity:rule.rollThrough})))});
 
 // Preserve the baseline world's cumulative intervals and their historical
 // overlap. Other worlds use the same unlocked bands with regional weights.

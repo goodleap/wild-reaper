@@ -1,45 +1,23 @@
+import { getConfigSection } from './content-config.js';
 import { ENEMY_DEFS, ENEMY_CODEX_IDS } from './enemy-definitions.js';
 import { BOSS_DEFS } from './boss-definitions.js';
 import { WEAPON_DEFS, SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS, INITIAL_WEAPON_IDS } from './combat-catalog.js';
 import { WEAPON_BRANCHES } from './weapon-branches.js';
 import { companionDefinition } from './companion-catalog.js';
 
-export const ARCHIVE_TABS=Object.freeze([{id:'codex',name:'图鉴'},{id:'world',name:'世界'},{id:'records',name:'记录'},{id:'milestones',name:'里程碑'}].map(Object.freeze));
-export const ARCHIVE_CATEGORIES=Object.freeze([
-  {id:'enemies',name:'怪物'},{id:'bosses',name:'首领'},{id:'weapons',name:'武器'},
-  {id:'skills',name:'技能'},{id:'weaponSkills',name:'武器技能'},{id:'companions',name:'伙伴'}
-]);
+const codex=getConfigSection('codex');
+export const ARCHIVE_TABS=codex.tabs;
+export const ARCHIVE_CATEGORIES=codex.categories;
 const enemies=ENEMY_CODEX_IDS.map(id=>({id:`enemy:${id}`,category:'enemies',...ENEMY_DEFS[id].codex,type:id}));
 const bosses=[
   ...Object.values(BOSS_DEFS).map(def=>({id:`boss:${def.id}`,name:def.name,...def.codex,type:'boss',bossKind:def.id})),
-  {id:'boss:castle',name:'王城守望者',role:'城堡首领 · 最终挑战',description:'驻守旧王城迷宫深处的强敌，击败后才能开启王城宝藏。',advice:'先确认房间退路，根据震地或孢子预警闪避；击败守卫后前往宝箱领取城堡奖励。',type:'boss',bossKind:'ancient',color:'#ddbd89',source:'旧王城迷宫深处'}
+  codex.castleBoss
 ].map(def=>({...def,category:'bosses'}));
-const copy={
-  sword:{role:'近战 · 正面爆发',description:'自动朝附近敌人挥砍，集中打击身前一片区域。',growth:'提升基础等级强化挥砍；再选择横扫或重斩路线。剑气与剑术精研进一步扩展长剑能力。',advice:'用走位把敌人聚在正面；横扫处理敌群，重斩偏向集中爆发。'},
-  arrow:{role:'远程 · 持续输出',description:'自动发射飞矢，优先保持距离并持续攻击可见目标。',growth:'分别强化射速、分裂箭和伤害；选择穿透或弹射后，还可强化后续命中。',advice:'分裂箭提升覆盖，穿透适合直线敌群，弹射适合邻近的分散敌人。'},
-  orbit:{role:'近战 · 环绕切割',description:'飞刃沿周身环绕，反复掠过敌人并附加流血。每枚刃的一次穿过独立结算。',growth:'等级提升增加环刃数量与切割能力；满基础等级进化为裂风环刃，再强化伤害或半径。',advice:'让敌人靠近飞刃的环绕轨迹；流血可由大地回响消耗并增强冲击。'},
-  barrier:{role:'自动 · 防护',description:'就绪后自动待命，受击时展开护盾，吸收首击与随后伤害。',growth:'升级增强护盾容量、持续时间，并缩短再次就绪的冷却。',advice:'护盾帮助缓冲失误；触发后仍应及时离开包围。'},
-  pulse:{role:'自动 · 周身解围',description:'从自身向外释放环形冲击波，造成伤害并击退敌人；可消耗流血增强伤害。',growth:'升级后选择追加回波或扩大冲击与控制，再通过地脉精研强化。',advice:'配合环刃的流血清理近身敌人，为移动争取空间。'},
-  lightning:{role:'自动 · 感电联动',description:'连锁闪电攻击附近敌人并附加感电；飞矢或环刃命中感电目标可传导伤害。',growth:'升级后选择更长的雷暴链，或集中攻击强敌的聚雷轰击；雷鸣精研继续强化。',advice:'与飞矢、环刃配合触发感电；根据敌群或首领压力选择分支。'},
-  storm:{role:'手动 · 全屏轰击',description:'释放天雷打击屏内可见敌人，密集敌群可共享雷击；墙体隔断仍会限制目标。',growth:'强化天雷伤害并缩短冷却。',advice:'在敌群密集或需要突围时释放；只有这一项需要主动操作。'},
-  domain:{role:'自动 · 地面领域',description:'在敌人附近展开持续领域，可选择荆棘束缚或瘴雾侵蚀，优先关注强敌。',growth:'获得时选择领域路线；升级增强伤害、范围与释放频率，荆棘束缚也会增强。',advice:'领域作用于地面敌人；引导敌群在领域内停留，飞行敌人需要其他攻击处理。'},
-  meteor:{role:'自动 · 延迟爆发',description:'优先锁定范围内强敌所在位置，短暂预警后落下星陨，造成范围爆炸。',growth:'升级增强单次爆炸、作用范围和释放频率，并增加落点。',advice:'适合打击聚集的强敌；落点锁定后，敌人的移动会影响实际命中。'},
-  swords:{role:'自动 · 追击强敌',description:'灵剑从周身分散飞出，再沿曲线追向范围内敌人，优先选择首领与精英。',growth:'升级增加灵剑数量与伤害，并缩短冷却。',advice:'灵剑会追踪存活目标；目标提前被击败时仍飞向其最后位置。'},
-  vortex:{role:'自动 · 聚怪压制',description:'在敌人附近形成持续漩涡，牵引普通怪物并反复伤害，优先锁定强敌区域。',growth:'升级提升伤害、范围、牵引速度与释放频率。',advice:'利用聚怪配合范围攻击；首领会受伤，但不会被漩涡拉动。'}
-};
+const copy=codex.equipment;
 const sourceLabel=def=>def.category==='weapon'&&INITIAL_WEAPON_IDS.includes(def.id)?'冒险准备中选择，或消耗灵晶成长时获得':def.source==='innate'?'出场自带':def.source==='castle'?'击败城堡首领后，从王城宝藏获得':def.source==='region'?'击败区域首领后，从奖励中获得':'消耗灵晶成长时获得';
 const equipment=(def,category)=>({id:`${category==='weapons'?'weapon':'skill'}:${def.id}`,ownerId:def.id,category,name:def.name,color:def.color,icon:def.icon,tier:def.tier,activation:def.activation,source:sourceLabel(def),...copy[def.id],branches:(WEAPON_BRANCHES[def.id]||[]).map(branch=>({id:branch.branch,name:branch.name,description:branch.desc})),evolution:EVOLUTIONS[def.id]||null});
-const weaponSkills=[
-  {id:'weaponSkill:swordEnergy',category:'weaponSkills',ownerId:'sword',modifierId:'swordEnergy',name:'剑气',color:'#a9e4dc',tier:'regular',role:'长剑专属 · 短程延伸',description:'随挥砍释放多道略微发散的剑气，飞离剑身，延伸长剑的攻击距离。',growth:'升级增加剑气距离、威力和覆盖；同次挥砍对同一敌人只命中一次。',advice:'保持长剑的正面攻击节奏，用剑气打到稍远的敌人。',source:'长剑达到基础 3 级后，在灵晶成长中获得'},
-  {id:'weaponSkill:arrowRune',category:'weaponSkills',ownerId:'arrow',modifierId:'arrowRune',name:'符文穿击',color:'#89ddd8',tier:'super',role:'飞矢专属 · 贯穿重箭',description:'穿透飞矢周期性释放强力符文重箭，沿弹道贯穿敌群。',growth:'获得时进入穿透路线；后续强化符文伤害并缩短触发间隔。',advice:'与穿透路线绑定，弹射路线无法获得；利用直线站位穿过更多敌人。',source:'从区域首领奖励获得；随后可用灵晶强化'}
-];
-const companionCopy={
-  stormcaller:{role:'战斗 · 连锁雷电',description:'从自己的位置释放连锁闪电，协助清理敌群，提供稳定的远程支援。',advice:'让唤雷者跟随队伍进入战场，并留意它与目标之间的墙体。',source:'在营地解救被围困的唤雷者'},
-  warden:{role:'战斗 · 守护队伍',description:'守护附近的主角与伙伴，并用近身震击击退敌人，缓解队伍受到的围攻。',advice:'受到围攻时靠拢守林人；它的守护覆盖附近队友，离得太远便无法受益。',source:'在营地解救被围困的守林人'},
-  dog:{role:'冒险 · 寻宝向导',description:'嗅探附近的重要地点，往返引路，帮助队伍找到值得探索的目标。',advice:'留意小狗的行动方向；它擅长发现线索，具体的挑战仍需队伍共同完成。',source:'在荒野中遇见并招募小狗'},
-  owl:{role:'冒险 · 空中侦察',description:'飞行侦察附近的危险，提前提醒敌群的方向，让队伍有机会准备或绕行。',advice:'根据预警选择行进路线；猫头鹰不会看穿城堡中封闭的墙壁。',source:'在遗迹栖地解救猫头鹰'},
-  golem:{role:'战斗与探索 · 重击破障',description:'以沉重的近战攻击击退敌人，并能砸开封住特殊遗迹入口的岩石。',advice:'先唤醒岩灵，再带它返回封堵的遗迹；已经砸开的入口会保持畅通。',source:'完成古老石像的唤醒挑战'}
-};
+const weaponSkills=codex.weaponSkills;
+const companionCopy=codex.companions;
 const companions=Object.entries(companionCopy).map(([kind,copy])=>{
   const def=companionDefinition(kind);
   return {id:`companion:${kind}`,category:'companions',kind,name:def.name,color:def.color,...copy};

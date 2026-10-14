@@ -3,7 +3,7 @@ import { harness } from './qa-app-harness.mjs';
 import { AdventureArchive } from './dist/adventure-archive.js';
 
 const h=harness('?debug');
-h.run(`startGame();game.enemies=[];game.relicSites.sites=[];
+h.run('startGame();');await h.flush();h.run(`game.enemies=[];game.relicSites.sites=[];
   game.companions.camps=[
     {id:'far',kind:'stormcaller',name:'唤雷者',x:game.player.x+170,y:game.player.y+19.8,state:'trapped',siteId:'far-site',guardIds:[],guardTotal:6,remainingGuards:6,life:70},
     {id:'near',kind:'warden',name:'守林人',x:game.player.x+40,y:game.player.y+19.8,state:'ready',siteId:'near-site',guardIds:[],guardTotal:6,remainingGuards:0,life:70}

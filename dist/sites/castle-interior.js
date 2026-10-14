@@ -1,9 +1,11 @@
+import { getConfigSection } from '../content-config.js';
 import { castleRoomTypes, cappedEncounterType } from '../encounter-definitions.js';
 import { Terrain, groundOffset } from '../terrain.js';
 import { initBoss } from '../bosses.js';
 import { DUNGEON_RULES, castleProfileFor } from '../interior-profiles.js';
 import { featureForSite } from '../world-sites.js';
 import { seedFor, randomFor } from './interior-seed.js';
+const combatRules=getConfigSection('sites').castleCombat;
 const TAU=Math.PI*2;
 const DIRS=Object.freeze([{dx:0,dy:-1,opposite:2},{dx:1,dy:0,opposite:3},{dx:0,dy:1,opposite:0},{dx:-1,dy:0,opposite:1}]);
 
@@ -53,13 +55,13 @@ export function createCastleState(dungeon,site){
   }
 
 export function populateCastle(dungeon,state){
-    const g=dungeon.game,random=randomFor(state.seed^0x59B730D1),difficulty=1+Math.min(15,state.createdAt/120)*.32,feature=castleProfileFor(state.site);
+    const g=dungeon.game,random=randomFor(state.seed^0x59B730D1),difficulty=1+Math.min(combatRules.difficultyCap,state.createdAt/combatRules.difficultyPeriod)*combatRules.difficultyGrowth,feature=castleProfileFor(state.site);
     const roomIds=[...state.mainRoute.slice(2,-1),...state.chests.map(chest=>chest.cellId)],specialCounts={boar:0,spore:0};
 
     for(const [index,id] of roomIds.entries()){
       const cell=state.cells[id],route=state.distances.get(id),side=!state.mainRoute.includes(id);
       const types=castleRoomTypes(route,side);
-      const room={cellId:id,kind:side?'treasure':'battle',total:types.length,started:false,cleared:false,rewarded:false,heal:!side&&(index+1)%3===0};
+      const room={cellId:id,kind:side?'treasure':'battle',total:types.length,started:false,cleared:false,rewarded:false,heal:!side&&(index+1)%combatRules.healEveryRooms===0};
       state.rooms.set(id,room);
       const rotation=random()*TAU;
       for(const [i,archetype] of types.entries()){
@@ -69,18 +71,18 @@ export function populateCastle(dungeon,state){
         enemy.dungeonId=state.id;enemy.dungeonRoom=id;enemy.dungeonHome={x:cell.x+Math.cos(angle)*radius,y:cell.y+Math.sin(angle)*radius};enemy.guardActive=false;
         // Group encounters replace lonely, tougher guards. Per-enemy rewards
         // stay modest; the clear reward is finite and belongs to the room.
-        enemy.hp*=1.05*(feature?.guardHp||1);enemy.maxHp=enemy.hp;enemy.xp=Math.max(3,Math.min(5,Math.round(enemy.xp*.7)));
+        enemy.hp*=combatRules.guardHp*(feature?.guardHp||1);enemy.maxHp=enemy.hp;enemy.xp=Math.max(combatRules.minGuardXp,Math.min(combatRules.maxGuardXp,Math.round(enemy.xp*combatRules.guardXpMultiplier)));
         enemy.x=enemy.dungeonHome.x;enemy.y=enemy.dungeonHome.y-groundOffset(enemy);enemy._navTimer=0;g._moveEntity(enemy,0,0);
         // At most one authored shield/fast guard in a late room. Summoners
         // cannot turn this finite scene into an unlimited resource farm.
-        if(feature?.shieldRooms&&i===0&&route>=3)g.elites?.promote(enemy,'shield');
-        else if(route>5&&i===0&&random()<.3)g.elites?.promote(enemy,random()<.5?'shield':'swift');
+        if(feature?.shieldRooms&&i===0&&route>=combatRules.shieldRoute)g.elites?.promote(enemy,'shield');
+        else if(route>combatRules.eliteRoute&&i===0&&random()<combatRules.eliteChance)g.elites?.promote(enemy,random()<combatRules.shieldChance?'shield':'swift');
       }
     }
     state.rooms.set(state.bossRoom.id,{cellId:state.bossRoom.id,kind:'boss',total:1,started:false,cleared:false,rewarded:false,heal:false});
-    const boss=g._spawnEnemy('boss',1);boss.dungeonId=state.id;boss.dungeonRoom=state.bossRoom.id;boss.dungeonBoss=true;boss.name=feature?.bossName||'旧王城守卫';
+    const boss=g._spawnEnemy('boss',1);boss.dungeonId=state.id;boss.dungeonRoom=state.bossRoom.id;boss.dungeonBoss=true;boss.name=feature?.bossName||combatRules.boss.name;
     boss.bossIndex=feature?.bossIndex||(state.seed%2?2:1);initBoss(boss);
-    boss.hp=boss.maxHp=(g.easy?2100:2800)*difficulty*(feature?.bossHp||1);boss.damage=(g.easy?18:25)*(1+state.createdAt/600);boss.speed=g.easy?44:49;boss.xp=180+Math.floor(state.createdAt/10);
+    boss.hp=boss.maxHp=(g.easy?combatRules.boss.hp.easy:combatRules.boss.hp.normal)*difficulty*(feature?.bossHp||1);boss.damage=(g.easy?combatRules.boss.damage.easy:combatRules.boss.damage.normal)*(1+state.createdAt/combatRules.boss.damageGrowthPeriod);boss.speed=g.easy?combatRules.boss.speed.easy:combatRules.boss.speed.normal;boss.xp=combatRules.boss.xp+Math.floor(state.createdAt/combatRules.boss.xpGrowthPeriod);
     boss.dungeonHome={x:state.bossRoom.x,y:state.bossRoom.y+20};boss.x=boss.dungeonHome.x;boss.y=boss.dungeonHome.y-groundOffset(boss);boss.guardActive=false;boss._navTimer=0;g._moveEntity(boss,0,0);
     state.bossId=boss.id;state.enemies=g.enemies;
   }

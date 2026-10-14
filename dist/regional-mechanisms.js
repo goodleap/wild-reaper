@@ -1,3 +1,4 @@
+import { getConfigSection } from './content-config.js';
 import { worldForId } from './world-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
@@ -9,7 +10,8 @@ export { isGrounded } from './height-rules.js';
 
 const CELL=520,WEAPON_SOURCES=new Set(['sword','arrow','runeArrow','orbit','pulse','echo','lightning','storm']);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-export const REGIONAL_MECHANISM_RULES=Object.freeze({maxProps:8,safeRadius:280,vineRadius:54,vineWarning:1.1,vineActive:2.5,vineSlow:.6,gasRadius:70,gasWarning:1.4,gasActive:3.6,gasInterval:1,gasPlayerDamage:6,gasEnemyDamage:20,runeRadius:48,runeCharge:.6,runeDuration:12,runeInterval:1.4,runeTargets:3,runeRange:420});
+export const REGIONAL_MECHANISM_RULES=getConfigSection('geography').regionalMechanismRules;
+const COMBAT=getConfigSection('geography').regionalMechanismCombat;
 
 // A bounded filter preserves one-use locations without growing with distance.
 // False positives only omit an object; they can never grant another activation.
@@ -156,22 +158,22 @@ export class RegionalMechanisms {
     if(prop.state!=='active')return;
     prop.remaining-=dt;
     if(prop.remaining<=1e-9){this._phase(prop,'spent',0);return;}
-    prop._shot=(prop._shot??.3)-dt;if(prop._shot>1e-9)return;
+    prop._shot=(prop._shot??COMBAT.runeFirstShot)-dt;if(prop._shot>1e-9)return;
     prop._shot=REGIONAL_MECHANISM_RULES.runeInterval;
     if(!this._visible(prop,100))return;
     const g=this.game,targets=g.enemies.filter(e=>e.hp>0&&g._inView(e)&&distance(prop,e)<=REGIONAL_MECHANISM_RULES.runeRange&&!g.terrain.firstBlocker(prop.x,prop.y,e.x,e.y,0,'sight')).sort((a,b)=>distance(prop,a)-distance(prop,b)).slice(0,REGIONAL_MECHANISM_RULES.runeTargets);
-    const damage=30*(1+Math.min(Math.max(g.time,0),600)/1200);
+    const damage=COMBAT.runeDamage*(1+Math.min(Math.max(g.time,0),COMBAT.runeGrowthTimeCap)/COMBAT.runeGrowthTimePeriod);
     for(const enemy of targets){
       if(g.status!=='playing')break;
       g._effect(prop.x,prop.y,'runeBolt',.32,enemy.r,prop.element==='frost'?'#c2efff':'#85e2de',undefined,{x2:enemy.x,y2:enemy.y,seed:enemy.id});
       g._hurtEnemy(enemy,damage,0,prop,'rune');
-      if(prop.element==='frost'&&enemy.hp>0){const now=g._clock||0,previous=(enemy.superSlowUntil||0)>now?(enemy.superSlowFactor??1):1;enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,now+1.6);enemy.superSlowFactor=Math.min(previous,enemy.type==='boss'?.88:.65);}
+      if(prop.element==='frost'&&enemy.hp>0){const now=g._clock||0,previous=(enemy.superSlowUntil||0)>now?(enemy.superSlowFactor??1):1;enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,now+COMBAT.frostDuration);enemy.superSlowFactor=Math.min(previous,enemy.type==='boss'?COMBAT.frostBossSpeed:COMBAT.frostEnemySpeed);}
     }
   }
   activateRune(prop){
     if(this.game.status!=='playing'||prop.type!=='rune'||!['idle','charging'].includes(prop.state))return false;
     prop.charge=1;prop.id??=`rune:fixture:${++this._fixtureId}`;this._used.add(prop.id);
-    this._phase(prop,'active',REGIONAL_MECHANISM_RULES.runeDuration);prop._shot=.3;this.game._emit('runeActivated');return true;
+    this._phase(prop,'active',REGIONAL_MECHANISM_RULES.runeDuration);prop._shot=COMBAT.runeFirstShot;this.game._emit('runeActivated');return true;
   }
   _gasDamage(dt){
     const g=this.game,active=this.props.filter(o=>o.type==='gas'&&o.state==='active'&&this._visible(o));

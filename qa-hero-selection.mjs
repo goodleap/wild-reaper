@@ -38,7 +38,7 @@ for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   click(h,'prepare-back-button');assert.equal(h.run('game'),null);
   click(h,'start-button');assert.equal(node(h,`hero-${hero.id}`).checked,true);
   assert.equal(h.run('archive.data.totals.runs'),0,'changing or previewing roles never creates runs');
-  click(h,'prepare-start-button');
+  click(h,'prepare-start-button');await h.flush();
   assert.equal(h.run('game.hero.id'),hero.id);assert.equal(h.run('game.player.heroId'),hero.id);
   assert.equal(h.run('game.initialWeaponId'),weaponId);
   assert.equal(h.run('JSON.stringify(game.weapons.map(item=>item.id))'),JSON.stringify([weaponId]));
@@ -53,7 +53,7 @@ for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   assert.equal(h.run('archive.data.totals.runs'),1);
   const saved=JSON.parse(h.storage.get('wild-echoes-setup'));
   assert.equal(saved.heroId,hero.id);assert.equal(saved.weaponId,weaponId);
-  h.run('game.status="dead";');h.tick();click(h,'restart-button');
+  h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();
   assert.equal(h.run('game.hero.id'),hero.id);assert.equal(h.run('game.initialWeaponId'),weaponId);
   assert.equal(h.run('archive.data.totals.runs'),2);
   const loaded=harness('',{storage:h.storage});click(loaded,'start-button');
@@ -63,7 +63,7 @@ for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
 for(const heroId of [undefined,null,'warden','stormcaller','ranger','unknown','__proto__',['princess'],{}]){
   const saved={mode:'free',weaponId:'arrow',heroId},h=harness('',{storage:new Map([['wild-echoes-setup',JSON.stringify(saved)]])});
   click(h,'start-button');assert.equal(node(h,'hero-traveler').checked,true);
-  click(h,'prepare-start-button');assert.equal(h.run('game.hero.id'),'traveler');
+  click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.hero.id'),'traveler');
   assert.equal(h.run('game.initialWeaponId'),'arrow','legacy role fallback does not erase a valid starter');
 }
 

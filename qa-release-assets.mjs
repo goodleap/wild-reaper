@@ -30,7 +30,7 @@ function release(html,count){
   assert.ok(entry,'versioned module entry exists');
   assert.ok(maps[0].index<entry.index,'import map must precede module loading');
   const entryURL=entry[1].replaceAll('&amp;','&');
-  assert.equal(entryURL,`./app.js?v=v0.0.${count}&h=${assetHash('app.js')}`);
+  assert.equal(entryURL,`./bootstrap.js?v=v0.0.${count}&h=${assetHash('bootstrap.js')}`);
   assert.equal(html.match(/id="game-version"[^>]*>([^<]+)</)?.[1],`v0.0.${count}`);
   const styles=[...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map(match=>match[1].replaceAll('&amp;','&'));
   assert.ok(styles.length>=3);
@@ -56,6 +56,8 @@ function resolveImport(imports,specifier,parent,documentURL){
 try{
   mkdirSync(resolve(temporary,'scripts'));
   cpSync(resolve(root,'scripts/stamp-version.mjs'),resolve(temporary,'scripts/stamp-version.mjs'));
+  cpSync(resolve(root,'scripts/build-content-config.mjs'),resolve(temporary,'scripts/build-content-config.mjs'));
+  writeFileSync(resolve(temporary,'package.json'),JSON.stringify({type:'module'}));
   cpSync(resolve(root,'dist'),resolve(temporary,'dist'),{recursive:true});
   mkdirSync(resolve(temporary,'dist/release-fixture'));
   writeFileSync(resolve(temporary,'dist/release-fixture/child.js'),"import { value } from '../shared edge.js';\nexport { value };\n");
@@ -122,7 +124,7 @@ try{
   const missingCSS=readPage();
   stamp(53,/Missing local release asset/);
   assert.equal(readPage(),missingCSS,'missing CSS fails before writing');
-  writeFileSync(page,valid.replace('src="./app.js?','src="./missing-entry.js?'));
+  writeFileSync(page,valid.replace('src="./bootstrap.js?','src="./missing-entry.js?'));
   stamp(53,/Missing local release asset/);
 
   assert.equal(readFileSync(resolve(root,'dist/index.html'),'utf8'),originalHTML,'QA must not stamp the working checkout');

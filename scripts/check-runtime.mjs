@@ -20,3 +20,6 @@ for(const file of files){
   }
 }
 console.log(`Syntax checks passed for ${files.length} runtime and script modules.`);
+const config=spawnSync(process.execPath,[join(root,'scripts/build-content-config.mjs'),'--check'],{encoding:'utf8'});
+if(config.status!==0){console.error(config.error||config.stderr);process.exit(1);}
+console.log(config.stdout.trim());

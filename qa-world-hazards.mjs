@@ -4,6 +4,7 @@ import { Terrain, groundOffset } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
 import { REGIONS } from './dist/world-definitions.js';
 import { WORLD_HAZARD_RULES } from './dist/world-hazards.js';
+import { defenseDamageMultiplier } from './dist/combat-stats.js';
 import { WorldHazardArt } from './dist/world-hazard-art.js';
 
 function arena(region='forest'){
@@ -31,7 +32,7 @@ const ally={id:99,kind:'warden',isCompanion:true,state:'following',x:8,y:0,r:15,
 volcano.companions={members:[ally],takeDamage(a,amount){a.hp-=amount;return true;}};
 const heroHP=volcano.player.hp;hazards.update(0);
 assert.equal(ground.hp,1000-WORLD_HAZARD_RULES.lava.enemyDamage);assert.equal(air.hp,1000,'surface lava cannot hit flying enemies');
-assert.equal(volcano.player.hp,heroHP-WORLD_HAZARD_RULES.lava.playerDamage);assert.equal(ally.hp,100-WORLD_HAZARD_RULES.lava.playerDamage,'each friendly owns a separate contact interval');
+assert.equal(volcano.player.hp,heroHP-WORLD_HAZARD_RULES.lava.playerDamage*defenseDamageMultiplier(volcano.stats.defense));assert.equal(ally.hp,100-WORLD_HAZARD_RULES.lava.playerDamage,'each friendly owns a separate contact interval');
 const after=[volcano.player.hp,ally.hp,ground.hp];volcano.player.invuln=0;for(let i=0;i<10;i++)hazards.update(.05);
 assert.deepEqual([volcano.player.hp,ally.hp,ground.hp],after,'overlapping frames never repeatedly damage one entity during its interval');
 const newcomer=volcano._spawnEnemy('slime',1);newcomer.x=0;newcomer.y=19.8-groundOffset(newcomer);newcomer.hp=1000;hazards.update(0);

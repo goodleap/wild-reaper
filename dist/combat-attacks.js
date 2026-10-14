@@ -1,3 +1,4 @@
+import { getConfigSection } from './content-config.js';
 import { STORM_DURATION } from './storm-geometry.js';
 import { groundOffset } from './terrain.js';
 import { blocksObstacle, isGrounded } from './height-rules.js';
@@ -6,6 +7,8 @@ import { WeaponTrail } from './weapon-trails.js';
 import { SwordCombat } from './sword-combat.js';
 import { clearWeaponKnockbackScene, weaponKnockbackDistance } from './weapon-knockback.js';
 
+const CONFIG=getConfigSection('combat').stats;
+const ARROW_RULES=CONFIG.weaponRules.arrow,PULSE_RULES=CONFIG.skillRules.pulse,LIGHTNING_RULES=CONFIG.skillRules.lightning;
 const TAU=Math.PI*2;
 const sq=v=>v*v;
 const dist2=(a,b)=>sq(a.x-b.x)+sq(a.y-b.y);
@@ -102,7 +105,7 @@ export class CombatAttacks {
           const angle=base+(i?Math.ceil(i/2)*.16*(i%2?1:-1)*(g._volley%2?1:-1):0);
           // A projectile snapshots its source and numbers. Later upgrades or
           // expiry of fury do not alter a volley already crossing the screen.
-          g.bullets.push({weaponId:'arrow',x:p.x,y:p.y,r:4,angle,color:branch==='ricochet'?'#ead59b':branch==='pierce'?'#a5eed1':'#c3e9a4',vx:Math.cos(angle)*stats.speed,vy:Math.sin(angle)*stats.speed,speed:stats.speed,life:stats.life,damage:stats.damage*(i?stats.sideDamageMultiplier:1),knockback:stats.knockback,volley,branch,pierce:stats.targetLimit,targetLimit:stats.targetLimit,maxBounces:stats.maxBounces,retention:stats.retention,bounces:0,hitIds:new Set()});
+          g.bullets.push({weaponId:'arrow',x:p.x,y:p.y,r:4,angle,color:branch==='ricochet'?'#ead59b':branch==='pierce'?'#a5eed1':'#c3e9a4',vx:Math.cos(angle)*stats.speed,vy:Math.sin(angle)*stats.speed,speed:stats.speed,life:stats.life,damage:stats.damage*(i?stats.sideDamageMultiplier:1),knockback:stats.knockback,volley,branch,pierce:stats.targetLimit,targetLimit:stats.targetLimit,maxBounces:stats.maxBounces,ricochetRange:stats.ricochetRange,ricochetMinimumLife:stats.ricochetMinimumLife,retention:stats.retention,bounces:0,hitIds:new Set()});
         }
         if(stats.runic>0)g.superSkills?.castRunicVolley?.(stats,target);
         g._emit('shoot');
@@ -123,7 +126,7 @@ export class CombatAttacks {
     if(trail.count&&!trail.endsAt(b.x,b.y))trail.clear();
     if(!trail.count)trail.add(b.x,b.y,clock-elapsed);
     let remaining=elapsed;
-    const targetLimit=Math.min(ATTACK_DEFAULTS.maxArrowTargets,b.targetLimit??3);
+    const targetLimit=Math.min(ATTACK_DEFAULTS.maxArrowTargets,b.targetLimit??ARROW_RULES.branchTargets);
     // Sweep each segment, including the remainder after a bounce. Bounded
     // targets prevent extra branch ranks from growing collision work forever.
     for(let segment=0;segment<targetLimit;segment++) {
@@ -156,14 +159,14 @@ export class CombatAttacks {
       }
       if(--b.pierce<=0||b.hitIds.size>=targetLimit){b.life=0;break;}
       remaining*=1-first;
-      if(b.branch==='pierce'||b.branch==='ricochet')b.damage*=b.retention??.65;
+      if(b.branch==='pierce'||b.branch==='ricochet')b.damage*=b.retention??ARROW_RULES.retention;
       if(b.branch==='ricochet') {
-        const next=(b.bounces||0)<(b.maxBounces??2)?g._nearest(b.x,b.y,150,b.hitIds,{x:b.x,y:b.y,groundY:b.y+groundOffset(g.player,true)},{source:'arrow',pathRadius:b.r}):null;
+        const next=(b.bounces||0)<(b.maxBounces??ARROW_RULES.ricochetBounces)?g._nearest(b.x,b.y,b.ricochetRange??ARROW_RULES.ricochetRange,b.hitIds,{x:b.x,y:b.y,groundY:b.y+groundOffset(g.player,true)},{source:'arrow',pathRadius:b.r}):null;
         if(!next){b.life=0;break;}
         b.bounces=(b.bounces||0)+1;
         b.angle=Math.atan2(next.y-b.y,next.x-b.x);
         b.vx=Math.cos(b.angle)*(b.speed??ATTACK_DEFAULTS.arrowSpeed);b.vy=Math.sin(b.angle)*(b.speed??ATTACK_DEFAULTS.arrowSpeed);
-        b.life=Math.max(b.life,.25);
+        b.life=Math.max(b.life,b.ricochetMinimumLife??ARROW_RULES.ricochetMinimumLife);
         g._effect(b.x,b.y,'arrowRicochet',.22,14,'#ead59b',undefined,{x2:next.x,y2:next.y,branch:'ricochet'});
       }
       if(remaining<=1e-9)break;
@@ -194,9 +197,9 @@ export class CombatAttacks {
     if(advanceContacts)this._orbitNextContacts.clear();
     this._orbitTrailCount=stats.count;this._orbitTrailRadius=stats.radius;this._orbitTrailSpeed=stats.rotationSpeed;this._orbitTrailEvolved=g.evolutions.orbit;
     this._orbitTrailClock=g._clock;this._orbitTrailPlayerX=p.x;this._orbitTrailPlayerY=p.y;
-    const cycle=(g._clock-(g._orbitEvolutionStartedAt||0))%3;
-    const surge=g.evolutions.orbit&&cycle<.9?Math.sin(Math.PI*cycle/.9):0,radius=stats.radius+55*surge;
-    const radialSpeed=g.evolutions.orbit&&cycle<.9?55*Math.PI/.9*Math.cos(Math.PI*cycle/.9):0;
+    const cycle=(g._clock-(g._orbitEvolutionStartedAt||0))%stats.evolutionInterval;
+    const surge=g.evolutions.orbit&&cycle<stats.evolutionDuration?Math.sin(Math.PI*cycle/stats.evolutionDuration):0,radius=stats.radius+stats.evolutionRange*surge;
+    const radialSpeed=g.evolutions.orbit&&cycle<stats.evolutionDuration?stats.evolutionRange*Math.PI/stats.evolutionDuration*Math.cos(Math.PI*cycle/stats.evolutionDuration):0;
     // The blade points along its path around the hero, including the outward
     // and inward portions of the evolved orbit. No extra decorative spin.
     const tangentOffset=Math.atan2(radius*stats.rotationSpeed,radialSpeed);
@@ -239,21 +242,21 @@ export class CombatAttacks {
     const g=this.game,p=g.player,stats=skillStats(g,'pulse');
     for(const echo of g._pulseEchoes) {
       echo.life-=dt;
-      if(echo.life<=0)this.castPulse(echo.x,echo.y,echo.r,echo.damage,12,true);
+      if(echo.life<=0)this.castPulse(echo.x,echo.y,echo.r,echo.damage,stats.echoKnockback,true);
     }
     g._pulseEchoes=g._pulseEchoes.filter(e=>e.life>0);
     g._pulse-=dt;
     if(!stats.owned||g._pulse>0)return;
     // The extended echo is part of the same cast, so a reachable enemy in its
     // outer band is also a useful target. Never spend a full cooldown on air.
-    const reach=stats.radius*(stats.echo?1.2:1),origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};
+    const reach=stats.radius*(stats.echo?stats.echoRadiusMultiplier:1),origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};
     const hasEnemy=g.enemies.some(e=>dist2(e,p)<sq(reach+e.r)&&canTarget(g,e,origin,{requireView:true,source:'pulse',checkPath:true,canHitFlying:false}));
     const hasSupply=!hasEnemy&&(g.adventure?.props||[]).some(prop=>prop.hp>0&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
     const hasVine=!hasEnemy&&!hasSupply&&(g.environment?.mechanisms?.props||[]).some(prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active')&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
     if(!hasEnemy&&!hasSupply&&!hasVine){g._pulse=.06;return;}
     g._pulse=stats.cooldown;
     this.castPulse(p.x,p.y,stats.radius,stats.damage,stats.knockback,false,stats.control,stats.controlDuration);
-    if(stats.echo)g._pulseEchoes.push({x:p.x,y:p.y,r:stats.radius*1.2,damage:stats.damage*(stats.echoRetention??.6),life:stats.echoDelay??.35,maxLife:stats.echoDelay??.35});
+    if(stats.echo)g._pulseEchoes.push({x:p.x,y:p.y,r:stats.radius*stats.echoRadiusMultiplier,damage:stats.damage*stats.echoRetention,life:stats.echoDelay,maxLife:stats.echoDelay});
   }
 
   updateLightning(dt) {
@@ -278,20 +281,20 @@ export class CombatAttacks {
       hit=true;
       excluded.add(e.id);
       g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:stats.evolved,branch:stats.branch,chainIndex:i});
-      g._hitEnemy(e,stats.damage*(i>=3?(stats.chainRetention??.85):1),0,origin,'lightning');
+      g._hitEnemy(e,stats.damage*(i>=stats.fullDamageTargetCount?(stats.chainRetention??LIGHTNING_RULES.chainRetention):1),0,origin,'lightning');
       g.environment?.hitAt(e.x,e.y,e.r,'lightning',prop=>propPath(g,e,prop,'lightning'));origin=e;
     }
     g._lightning=hit?stats.cooldown:.06;
   }
 
-  castPulse(x,y,radius,damage,knockback,echo=false,control=false,controlDuration=1.1) {
+  castPulse(x,y,radius,damage,knockback,echo=false,control=false,controlDuration=PULSE_RULES.controlDuration) {
     const g=this.game,origin={x,y,groundY:y+groundOffset(g.player,true)};
     g._effect(x,y,'ring',control?.65:echo?.6:.48,radius,control?'#9fe5cf':echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:origin.groundY,evolved:g.evolutions.pulse,echo,control,branch:g.branches.pulse});
     const source=echo?'echo':'pulse';
     for(const e of g.enemies)if(dist2(origin,e)<sq(radius+e.r)&&canTarget(g,e,origin,{source,checkPath:true,canHitFlying:false})) {
       const dealt=g._hitEnemy(e,damage,knockback,origin,source);
       if(dealt>0&&e.hp>0&&e.type!=='boss') {
-        if(e.charge||e._chargeSegment){e.charge=null;e._chargeSegment=null;e.chargeCooldown=Math.max(e.chargeCooldown||0,1.2);}
+        if(e.charge||e._chargeSegment){e.charge=null;e._chargeSegment=null;e.chargeCooldown=Math.max(e.chargeCooldown||0,PULSE_RULES.interruptCooldown);}
         if(control)e.branchSlowUntil=g._clock+controlDuration;
       }
     }

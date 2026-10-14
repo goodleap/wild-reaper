@@ -1,0 +1,1523 @@
+{
+  "attributes": {
+    "power": {
+      "id": "power",
+      "name": "攻击",
+      "scope": "character"
+    },
+    "vitality": {
+      "id": "vitality",
+      "name": "生命",
+      "scope": "character"
+    },
+    "defense": {
+      "id": "defense",
+      "name": "防御",
+      "scope": "character",
+      "defaultValue": 0
+    },
+    "speed": {
+      "id": "speed",
+      "name": "移动",
+      "scope": "character"
+    },
+    "regen": {
+      "id": "regen",
+      "name": "恢复",
+      "scope": "character"
+    },
+    "magnet": {
+      "id": "magnet",
+      "name": "拾取",
+      "scope": "character"
+    }
+  },
+  "weapons": {
+    "sword": {
+      "id": "sword",
+      "name": "长剑",
+      "icon": "⚔",
+      "color": "#efdcad",
+      "category": "weapon",
+      "binding": "weapon",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "innate",
+      "initialRank": 1,
+      "maxBaseRank": 5,
+      "attackId": "sword"
+    },
+    "arrow": {
+      "id": "arrow",
+      "name": "翠羽飞矢",
+      "icon": "➶",
+      "color": "#a7dab7",
+      "category": "weapon",
+      "binding": "weapon",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "crystal",
+      "initialRank": 0,
+      "maxBaseRank": 1,
+      "attackId": "arrow"
+    },
+    "orbit": {
+      "id": "orbit",
+      "name": "环刃",
+      "icon": "◈",
+      "color": "#f0d28a",
+      "category": "weapon",
+      "binding": "weapon",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "crystal",
+      "initialRank": 0,
+      "maxBaseRank": 5,
+      "attackId": "orbit"
+    }
+  },
+  "initialWeaponIds": [
+    "sword",
+    "orbit",
+    "arrow"
+  ],
+  "superSkills": [
+    {
+      "id": "domain",
+      "name": "荒野领域",
+      "desc": "选择荆棘束缚或瘴雾侵蚀，形成持续作用的领域",
+      "icon": "♧",
+      "color": "#a9d888",
+      "source": "region",
+      "regionId": "forest",
+      "rewardTier": "区域超级技能",
+      "category": "skill",
+      "ownerId": "domain",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "super",
+      "automatic": true,
+      "initialRank": 0,
+      "maxBaseRank": 3,
+      "maxLevel": 3
+    },
+    {
+      "id": "meteor",
+      "name": "星陨",
+      "desc": "标记数处敌群位置，短暂蓄能后落下星陨，造成高额范围伤害",
+      "icon": "✦",
+      "color": "#f1bc79",
+      "source": "castle",
+      "regionId": null,
+      "rewardTier": "城堡超级技能",
+      "category": "skill",
+      "ownerId": "meteor",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "super",
+      "automatic": true,
+      "initialRank": 0,
+      "maxBaseRank": 3,
+      "maxLevel": 3
+    },
+    {
+      "id": "swords",
+      "name": "王庭剑阵",
+      "desc": "连续唤出追击灵剑，优先攻击附近首领和强敌",
+      "icon": "⚔",
+      "color": "#f0dda3",
+      "source": "castle",
+      "regionId": null,
+      "rewardTier": "城堡超级技能",
+      "category": "skill",
+      "ownerId": "swords",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "super",
+      "automatic": true,
+      "initialRank": 0,
+      "maxBaseRank": 3,
+      "maxLevel": 3
+    },
+    {
+      "id": "vortex",
+      "name": "虚空漩涡",
+      "desc": "生成持续漩涡，牵引普通敌人并反复造成伤害；首领不受牵引",
+      "icon": "◉",
+      "color": "#b7a3ed",
+      "source": "castle",
+      "regionId": null,
+      "rewardTier": "城堡超级技能",
+      "category": "skill",
+      "ownerId": "vortex",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "super",
+      "automatic": true,
+      "initialRank": 0,
+      "maxBaseRank": 3,
+      "maxLevel": 3
+    }
+  ],
+  "skills": {
+    "barrier": {
+      "id": "barrier",
+      "name": "守护屏障",
+      "icon": "⬡",
+      "color": "#b7e3e5",
+      "category": "skill",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "crystal",
+      "initialRank": 0,
+      "maxBaseRank": 3
+    },
+    "pulse": {
+      "id": "pulse",
+      "name": "大地回响",
+      "icon": "◎",
+      "color": "#80d5bd",
+      "category": "skill",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "crystal",
+      "initialRank": 0,
+      "maxBaseRank": 5
+    },
+    "lightning": {
+      "id": "lightning",
+      "name": "唤雷",
+      "icon": "ϟ",
+      "color": "#b6bafa",
+      "category": "skill",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "crystal",
+      "initialRank": 0,
+      "maxBaseRank": 5
+    },
+    "storm": {
+      "id": "storm",
+      "name": "天雷轰击",
+      "icon": "ϟ",
+      "color": "#d4e7ff",
+      "category": "skill",
+      "binding": "character",
+      "activation": "manual",
+      "tier": "super",
+      "source": "innate",
+      "initialRank": 1,
+      "maxBaseRank": 3
+    }
+  },
+  "upgrades": [
+    {
+      "requires": [],
+      "effects": [],
+      "id": "sword",
+      "name": "长剑",
+      "desc": "提高挥砍伤害、距离与攻击频率",
+      "kind": "武器强化",
+      "icon": "⚔",
+      "color": "#efdcad",
+      "category": "weapon",
+      "ownerId": "sword",
+      "upgradeKind": "rank",
+      "cap": 5,
+      "branchAtRank": 4
+    },
+    {
+      "requires": [],
+      "effects": [],
+      "id": "arrow",
+      "name": "翠羽飞矢",
+      "desc": "自动射出飞矢，提供远程持续攻击",
+      "kind": "获得武器",
+      "icon": "➶",
+      "color": "#a7dab7",
+      "category": "weapon",
+      "ownerId": "arrow",
+      "upgradeKind": "rank",
+      "cap": 1
+    },
+    {
+      "requires": [],
+      "effects": [],
+      "id": "barrier",
+      "name": "守护屏障",
+      "desc": "受击自动展开护盾，吸收首击与随后伤害；就绪时持续待命",
+      "kind": "学习技能",
+      "icon": "⬡",
+      "color": "#b7e3e5",
+      "category": "skill",
+      "ownerId": "barrier",
+      "upgradeKind": "rank",
+      "cap": 3
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "damageBonus",
+          "value": 0.25,
+          "operation": "add"
+        }
+      ],
+      "id": "power",
+      "name": "锋芒",
+      "desc": "角色通用伤害加成提高 25%，作用于武器和独立技能",
+      "kind": "属性强化",
+      "icon": "✦",
+      "color": "#e6be73",
+      "category": "attribute",
+      "ownerId": "power",
+      "upgradeKind": "rank",
+      "cap": 6
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "arrow"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "attackRateBonus",
+          "value": 0.15,
+          "operation": "add"
+        }
+      ],
+      "id": "rapid",
+      "name": "疾风连射",
+      "desc": "翠羽飞矢攻击速度提升 15%",
+      "kind": "武器强化",
+      "icon": "»",
+      "color": "#89d8ad",
+      "category": "weapon",
+      "ownerId": "arrow",
+      "upgradeKind": "modifier",
+      "cap": 5
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "arrow"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "projectileCount",
+          "value": 1,
+          "operation": "add"
+        }
+      ],
+      "id": "multishot",
+      "name": "分裂箭",
+      "desc": "每轮增加一支 45% 伤害副箭；同轮对单个目标累计至多 145% 主箭伤害",
+      "kind": "武器强化",
+      "icon": "⋔",
+      "color": "#a7dab7",
+      "category": "weapon",
+      "ownerId": "arrow",
+      "upgradeKind": "modifier",
+      "cap": 3
+    },
+    {
+      "requires": [],
+      "effects": [],
+      "id": "orbit",
+      "name": "环刃",
+      "desc": "环绕利刃附加流血，可由大地回响引爆",
+      "kind": "获得武器",
+      "icon": "◈",
+      "color": "#f0d28a",
+      "category": "weapon",
+      "ownerId": "orbit",
+      "upgradeKind": "rank",
+      "cap": 5
+    },
+    {
+      "requires": [],
+      "effects": [],
+      "id": "pulse",
+      "name": "大地回响",
+      "desc": "环形冲击波击退敌人；消耗流血时伤害增加 25%",
+      "kind": "学习技能",
+      "icon": "◎",
+      "color": "#80d5bd",
+      "category": "skill",
+      "ownerId": "pulse",
+      "upgradeKind": "rank",
+      "cap": 5,
+      "branchAtRank": 4
+    },
+    {
+      "requires": [],
+      "effects": [],
+      "id": "lightning",
+      "name": "唤雷",
+      "desc": "连锁闪电附加 2.5 秒感电，飞矢或环刃命中可向附近敌人传导",
+      "kind": "学习技能",
+      "icon": "ϟ",
+      "color": "#b6bafa",
+      "category": "skill",
+      "ownerId": "lightning",
+      "upgradeKind": "rank",
+      "cap": 5,
+      "branchAtRank": 4
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "moveSpeedBonus",
+          "value": 0.08,
+          "operation": "add"
+        }
+      ],
+      "id": "speed",
+      "name": "轻盈步伐",
+      "desc": "移动速度提升 8%，更轻松穿过兽群",
+      "kind": "属性强化",
+      "icon": "↗",
+      "color": "#9acbcc",
+      "category": "attribute",
+      "ownerId": "speed",
+      "upgradeKind": "rank",
+      "cap": 4
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "pickupRangeBonus",
+          "value": 0.35,
+          "operation": "add"
+        }
+      ],
+      "id": "magnet",
+      "name": "林间引力",
+      "desc": "灵晶和金币拾取范围增加 35%",
+      "kind": "属性强化",
+      "icon": "✧",
+      "color": "#a1cf98",
+      "category": "attribute",
+      "ownerId": "magnet",
+      "upgradeKind": "rank",
+      "cap": 4
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "maxHealth",
+          "value": 25,
+          "operation": "add"
+        },
+        {
+          "stat": "heal",
+          "value": 35,
+          "operation": "add"
+        }
+      ],
+      "id": "vitality",
+      "name": "古树之心",
+      "desc": "基础最大生命增加 25，并恢复 35 生命",
+      "kind": "属性强化",
+      "icon": "♥",
+      "color": "#e7a68b",
+      "category": "attribute",
+      "ownerId": "vitality",
+      "upgradeKind": "rank",
+      "cap": 5
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "defense",
+          "value": 20,
+          "operation": "add"
+        }
+      ],
+      "id": "toughness",
+      "name": "坚韧",
+      "desc": "防御增加 20，降低受到的伤害",
+      "kind": "属性强化",
+      "icon": "⬡",
+      "color": "#a7c8df",
+      "category": "attribute",
+      "ownerId": "defense",
+      "upgradeKind": "rank",
+      "cap": 5
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "healthRegen",
+          "value": 0.8,
+          "operation": "add"
+        }
+      ],
+      "id": "regen",
+      "name": "生生不息",
+      "desc": "每秒恢复 0.8 生命",
+      "kind": "属性强化",
+      "icon": "✚",
+      "color": "#a4dc9d",
+      "category": "attribute",
+      "ownerId": "regen",
+      "upgradeKind": "rank",
+      "cap": 3
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "arrow"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "baseDamageBonus",
+          "value": 0.15,
+          "operation": "add"
+        }
+      ],
+      "id": "arrowPower",
+      "name": "飞矢淬锋",
+      "desc": "仅翠羽飞矢基础伤害加成提高 15%",
+      "kind": "武器强化",
+      "icon": "➶",
+      "color": "#a7dab7",
+      "category": "weapon",
+      "ownerId": "arrow",
+      "upgradeKind": "modifier",
+      "cap": 3
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "arrow"
+        },
+        {
+          "kind": "branch",
+          "id": "arrow"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "damageRetention",
+          "value": 0.1,
+          "operation": "add"
+        }
+      ],
+      "id": "arrowRetention",
+      "name": "余势不衰",
+      "desc": "穿透或弹射后，每段伤害保留比例提高 10 个百分点",
+      "kind": "分支强化",
+      "icon": "⌁",
+      "color": "#d8d196",
+      "category": "weapon",
+      "ownerId": "arrow",
+      "upgradeKind": "modifier",
+      "cap": 2
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "arrow"
+        },
+        {
+          "kind": "branch",
+          "id": "arrow"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "maxTargets",
+          "value": 1,
+          "operation": "add"
+        }
+      ],
+      "id": "arrowReach",
+      "name": "贯流延伸",
+      "desc": "穿透最多命中目标或弹射次数增加 1",
+      "kind": "分支强化",
+      "icon": "⋔",
+      "color": "#abdca3",
+      "category": "weapon",
+      "ownerId": "arrow",
+      "upgradeKind": "modifier",
+      "cap": 1
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "orbit"
+        },
+        {
+          "kind": "rank",
+          "id": "orbit",
+          "min": 5
+        }
+      ],
+      "effects": [
+        {
+          "stat": "baseDamageBonus",
+          "value": 0.15,
+          "operation": "add"
+        }
+      ],
+      "id": "orbitPower",
+      "name": "裂刃淬锋",
+      "desc": "环刃直接伤害与流血伤害提高 15%，进化形态持续生效",
+      "kind": "进化后强化",
+      "icon": "◈",
+      "color": "#f0d28a",
+      "category": "weapon",
+      "ownerId": "orbit",
+      "upgradeKind": "modifier",
+      "cap": 2
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "orbit"
+        },
+        {
+          "kind": "rank",
+          "id": "orbit",
+          "min": 5
+        }
+      ],
+      "effects": [
+        {
+          "stat": "radius",
+          "value": 8,
+          "operation": "add"
+        }
+      ],
+      "id": "orbitRadius",
+      "name": "环域延展",
+      "desc": "环刃环绕半径增加 8，进化扩张同步生效",
+      "kind": "进化后强化",
+      "icon": "◎",
+      "color": "#f0d28a",
+      "category": "weapon",
+      "ownerId": "orbit",
+      "upgradeKind": "modifier",
+      "cap": 2
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "sword"
+        },
+        {
+          "kind": "rank",
+          "id": "sword",
+          "min": 3
+        }
+      ],
+      "effects": [],
+      "id": "swordEnergy",
+      "name": "剑气",
+      "desc": "挥剑释放多道短程剑气，轻微发散；同次挥砍对每个目标只命中一次",
+      "kind": "武器技能",
+      "icon": "⌁",
+      "color": "#a9e4dc",
+      "category": "weapon",
+      "ownerId": "sword",
+      "upgradeKind": "modifier",
+      "cap": 3,
+      "rankBonuses": [
+        {
+          "range": 60,
+          "damageBonus": 0.08,
+          "count": 2,
+          "spread": 0.12
+        },
+        {
+          "range": 80,
+          "damageBonus": 0.14,
+          "count": 3,
+          "spread": 0.2
+        },
+        {
+          "range": 100,
+          "damageBonus": 0.2,
+          "count": 3,
+          "spread": 0.24
+        }
+      ]
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "sword"
+        },
+        {
+          "kind": "rank",
+          "id": "sword",
+          "min": 5
+        },
+        {
+          "kind": "branch",
+          "id": "sword"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "baseDamageBonus",
+          "value": 0.12,
+          "operation": "add"
+        },
+        {
+          "stat": "intervalReduction",
+          "value": 0.05,
+          "operation": "add"
+        }
+      ],
+      "id": "swordMastery",
+      "name": "剑术精研",
+      "desc": "挥砍伤害增加 12%，攻击间隔缩短 0.05 秒",
+      "kind": "武器强化",
+      "icon": "⚔",
+      "color": "#efdcad",
+      "category": "weapon",
+      "ownerId": "sword",
+      "upgradeKind": "modifier",
+      "cap": 2
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "arrow"
+        },
+        {
+          "kind": "rank",
+          "id": "arrowRune",
+          "min": 1
+        },
+        {
+          "kind": "branch",
+          "id": "arrow",
+          "value": "pierce"
+        }
+      ],
+      "effects": [],
+      "id": "arrowRune",
+      "name": "符文穿击",
+      "desc": "提高符文贯穿伤害，并缩短触发间隔；仅穿透飞矢生效",
+      "kind": "武器技能强化",
+      "icon": "✧",
+      "color": "#89ddd8",
+      "category": "weapon",
+      "ownerId": "arrow",
+      "upgradeKind": "modifier",
+      "tier": "super",
+      "cap": 3
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "pulse"
+        },
+        {
+          "kind": "rank",
+          "id": "pulse",
+          "min": 5
+        },
+        {
+          "kind": "branch",
+          "id": "pulse"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "baseDamageBonus",
+          "value": 0.12,
+          "operation": "add"
+        },
+        {
+          "stat": "cooldownReduction",
+          "value": 0.18,
+          "operation": "add"
+        }
+      ],
+      "id": "pulseMastery",
+      "name": "地脉精研",
+      "desc": "震波伤害增加 12%，冷却缩短 0.18 秒",
+      "kind": "技能强化",
+      "icon": "◎",
+      "color": "#80d5bd",
+      "category": "skill",
+      "ownerId": "pulse",
+      "upgradeKind": "modifier",
+      "cap": 2
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "lightning"
+        },
+        {
+          "kind": "rank",
+          "id": "lightning",
+          "min": 5
+        },
+        {
+          "kind": "branch",
+          "id": "lightning"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "baseDamageBonus",
+          "value": 0.12,
+          "operation": "add"
+        },
+        {
+          "stat": "cooldownReduction",
+          "value": 0.15,
+          "operation": "add"
+        },
+        {
+          "stat": "chainTargets",
+          "value": 1,
+          "operation": "add"
+        }
+      ],
+      "id": "lightningMastery",
+      "name": "雷鸣精研",
+      "desc": "唤雷伤害增加 12%，冷却缩短 0.15 秒；连锁分支多追击一个目标",
+      "kind": "技能强化",
+      "icon": "ϟ",
+      "color": "#b6bafa",
+      "category": "skill",
+      "ownerId": "lightning",
+      "upgradeKind": "modifier",
+      "cap": 2
+    },
+    {
+      "requires": [
+        {
+          "kind": "owned",
+          "id": "storm"
+        }
+      ],
+      "effects": [
+        {
+          "stat": "baseDamageBonus",
+          "value": 0.15,
+          "operation": "add"
+        },
+        {
+          "stat": "cooldownReduction",
+          "value": 0.1,
+          "operation": "add"
+        }
+      ],
+      "id": "storm",
+      "name": "天雷轰击",
+      "desc": "天雷基础伤害加成提高 15%，基础冷却缩短 10%",
+      "kind": "超级技能强化",
+      "icon": "ϟ",
+      "color": "#d4e7ff",
+      "category": "skill",
+      "ownerId": "storm",
+      "upgradeKind": "rank",
+      "tier": "super",
+      "activation": "manual",
+      "cap": 2
+    }
+  ],
+  "endlessUpgrades": [
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "damageBonus",
+          "value": 0.08,
+          "operation": "add"
+        }
+      ],
+      "id": "endlessPower",
+      "name": "百炼锋芒",
+      "desc": "角色通用伤害加成提高 8%",
+      "kind": "无尽属性强化",
+      "icon": "✦",
+      "color": "#e6be73",
+      "category": "attribute",
+      "ownerId": "power",
+      "upgradeKind": "rank",
+      "cap": null
+    },
+    {
+      "requires": [
+        {
+          "kind": "rank",
+          "id": "toughness",
+          "min": 5
+        }
+      ],
+      "effects": [
+        {
+          "stat": "defense",
+          "value": 10,
+          "operation": "add"
+        }
+      ],
+      "id": "endlessToughness",
+      "name": "百炼坚韧",
+      "desc": "防御增加 10，降低受到的伤害",
+      "kind": "无尽属性强化",
+      "icon": "⬡",
+      "color": "#a7c8df",
+      "category": "attribute",
+      "ownerId": "defense",
+      "upgradeKind": "rank",
+      "cap": null
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "maxHealth",
+          "value": 12,
+          "operation": "add"
+        },
+        {
+          "stat": "heal",
+          "value": 24,
+          "operation": "add"
+        }
+      ],
+      "id": "endlessVitality",
+      "name": "深根之心",
+      "desc": "本局基础最大生命增加 12，并恢复 24 生命",
+      "kind": "无尽属性强化",
+      "icon": "♥",
+      "color": "#e7a68b",
+      "category": "attribute",
+      "ownerId": "vitality",
+      "upgradeKind": "rank",
+      "cap": null
+    },
+    {
+      "requires": [],
+      "effects": [
+        {
+          "stat": "healthRegen",
+          "value": 0.3,
+          "operation": "add"
+        }
+      ],
+      "id": "endlessRegen",
+      "name": "林泉赐福",
+      "desc": "本局每秒生命恢复量增加 0.3",
+      "kind": "无尽属性强化",
+      "icon": "✚",
+      "color": "#a4dc9d",
+      "category": "attribute",
+      "ownerId": "regen",
+      "upgradeKind": "rank",
+      "cap": null
+    }
+  ],
+  "evolutions": {
+    "sword": {
+      "name": "剑术精通",
+      "desc": "选择横扫或重斩，改变长剑挥砍方式",
+      "category": "weapon",
+      "ownerId": "sword",
+      "upgradeKind": "evolution"
+    },
+    "orbit": {
+      "name": "裂风环刃",
+      "desc": "每 3 秒向外扩张再收拢，扩大环刃的切割范围",
+      "category": "weapon",
+      "ownerId": "orbit",
+      "upgradeKind": "evolution",
+      "requires": [
+        {
+          "kind": "rank",
+          "id": "orbit",
+          "min": 5
+        }
+      ]
+    },
+    "pulse": {
+      "name": "双重回响",
+      "desc": "冲击波后在原位置追加一道范围更大的回波，造成 60% 伤害",
+      "category": "skill",
+      "ownerId": "pulse",
+      "upgradeKind": "evolution"
+    },
+    "lightning": {
+      "name": "雷暴链",
+      "desc": "最多追击 7 个目标，新增跳跃保留 85% 伤害",
+      "category": "skill",
+      "ownerId": "lightning",
+      "upgradeKind": "evolution"
+    }
+  },
+  "branches": {
+    "sword": [
+      {
+        "id": "branch:sword:sweep",
+        "weaponId": "sword",
+        "branch": "sweep",
+        "name": "横扫长剑",
+        "desc": "升至 5 级；扩大挥砍角度与距离，横扫正面敌群",
+        "icon": "⚔",
+        "color": "#efdcad",
+        "ownerId": "sword",
+        "category": "weapon",
+        "upgradeKind": "branch",
+        "kind": "武器分支",
+        "evolves": true,
+        "evolutionName": "横扫长剑"
+      },
+      {
+        "id": "branch:sword:heavy",
+        "weaponId": "sword",
+        "branch": "heavy",
+        "name": "重斩长剑",
+        "desc": "升至 5 级；挥砍更慢更集中，单次伤害提高 85%",
+        "icon": "⚔",
+        "color": "#e8b77f",
+        "ownerId": "sword",
+        "category": "weapon",
+        "upgradeKind": "branch",
+        "kind": "武器分支",
+        "evolves": true,
+        "evolutionName": "重斩长剑"
+      }
+    ],
+    "domain": [
+      {
+        "id": "branch:domain:binding",
+        "weaponId": "domain",
+        "branch": "binding",
+        "name": "荆棘领域",
+        "desc": "持续束缚普通地面敌人，反复造成伤害",
+        "icon": "♧",
+        "color": "#a9d888",
+        "ownerId": "domain",
+        "category": "skill",
+        "upgradeKind": "branch",
+        "kind": "技能分支",
+        "evolves": false
+      },
+      {
+        "id": "branch:domain:erosion",
+        "weaponId": "domain",
+        "branch": "erosion",
+        "name": "侵蚀领域",
+        "desc": "持续侵蚀领域内敌人，离开后短暂保留侵蚀",
+        "icon": "♨",
+        "color": "#cea1da",
+        "ownerId": "domain",
+        "category": "skill",
+        "upgradeKind": "branch",
+        "kind": "技能分支",
+        "evolves": false
+      }
+    ],
+    "arrow": [
+      {
+        "id": "branch:arrow:pierce",
+        "weaponId": "arrow",
+        "branch": "pierce",
+        "name": "穿林飞矢",
+        "desc": "飞矢穿透最多 3 个不同目标，每次穿透后的伤害保留 65%",
+        "icon": "➶",
+        "color": "#abdca3",
+        "ownerId": "arrow",
+        "category": "weapon",
+        "upgradeKind": "branch",
+        "kind": "武器分支",
+        "evolves": false
+      },
+      {
+        "id": "branch:arrow:ricochet",
+        "weaponId": "arrow",
+        "branch": "ricochet",
+        "name": "弹射飞矢",
+        "desc": "飞矢向 150 范围内的可见敌人弹射最多 2 次，每跳伤害保留 65%",
+        "icon": "⌁",
+        "color": "#e3d293",
+        "ownerId": "arrow",
+        "category": "weapon",
+        "upgradeKind": "branch",
+        "kind": "武器分支",
+        "evolves": false
+      }
+    ],
+    "pulse": [
+      {
+        "id": "branch:pulse:echoes",
+        "weaponId": "pulse",
+        "branch": "echoes",
+        "name": "连续震波",
+        "desc": "升至 5 级；0.35 秒后在原位置追加范围更大的回波，造成 60% 伤害",
+        "icon": "◎",
+        "color": "#a8dfbb",
+        "ownerId": "pulse",
+        "category": "skill",
+        "upgradeKind": "branch",
+        "kind": "技能分支",
+        "evolves": true,
+        "evolutionName": "连续震波"
+      },
+      {
+        "id": "branch:pulse:control",
+        "weaponId": "pulse",
+        "branch": "control",
+        "name": "撼地重震",
+        "desc": "升至 5 级；冲击范围扩大至 230，强力震退并使非 Boss 敌人减速 35%，持续 1.1 秒",
+        "icon": "◉",
+        "color": "#9fe5cf",
+        "ownerId": "pulse",
+        "category": "skill",
+        "upgradeKind": "branch",
+        "kind": "技能分支",
+        "evolves": true,
+        "evolutionName": "撼地重震"
+      }
+    ],
+    "lightning": [
+      {
+        "id": "branch:lightning:chain",
+        "weaponId": "lightning",
+        "branch": "chain",
+        "name": "雷暴链",
+        "desc": "升至 5 级；最多追击 7 个目标，新增跳跃保留 85% 伤害",
+        "icon": "ϟ",
+        "color": "#bfc4fb",
+        "ownerId": "lightning",
+        "category": "skill",
+        "upgradeKind": "branch",
+        "kind": "技能分支",
+        "evolves": true,
+        "evolutionName": "雷暴链"
+      },
+      {
+        "id": "branch:lightning:focus",
+        "weaponId": "lightning",
+        "branch": "focus",
+        "name": "聚雷轰击",
+        "desc": "升至 5 级；集中攻击一个目标，造成 250% 伤害，优先范围内 Boss 和高生命敌人",
+        "icon": "↯",
+        "color": "#cadfff",
+        "ownerId": "lightning",
+        "category": "skill",
+        "upgradeKind": "branch",
+        "kind": "技能分支",
+        "evolves": true,
+        "evolutionName": "聚雷轰击"
+      }
+    ]
+  },
+  "branchRules": {
+    "threshold": 4,
+    "arrowBase": 1,
+    "arrowInvestments": [
+      "rapid",
+      "multishot"
+    ],
+    "exclude": [
+      "domain"
+    ]
+  },
+  "stats": {
+    "referenceAttack": 32,
+    "defensePerLevel": 1,
+    "healthPerLevel": 2,
+    "attackPerLevel": 0.01,
+    "rescueDamageBonus": 0.08,
+    "defenseScale": 100,
+    "attackDefaults": {
+      "arrowDamage": 32,
+      "arrowInterval": 0.38,
+      "arrowRange": 420,
+      "arrowSpeed": 640,
+      "arrowLife": 0.82,
+      "arrowSideDamage": 0.45,
+      "arrowVolleyTarget": 1.45,
+      "magnet": 105,
+      "maxArrowTargets": 4,
+      "maxArrowProjectiles": 4
+    },
+    "orbitBleedRatio": 0.15,
+    "orbitDamage": [
+      30,
+      30,
+      32,
+      34,
+      36,
+      42
+    ],
+    "weaponRules": {
+      "sword": {
+        "maxRank": 5,
+        "energyAtRank": 3,
+        "energyMaxRank": 3,
+        "meleeRange": 88,
+        "rangePerRank": 4,
+        "baseDamage": 54,
+        "damagePerRank": 10,
+        "energySpeed": 440,
+        "energyDamageRatio": 0.8,
+        "interval": 0.72,
+        "intervalReductionPerRank": 0.025,
+        "arc": 1.95,
+        "windup": 0.065,
+        "hitTime": 0.115,
+        "duration": 0.28,
+        "sweep": {
+          "rangeBonus": 18,
+          "arc": 2.8
+        },
+        "heavy": {
+          "damageMultiplier": 1.85,
+          "intervalMultiplier": 1.38,
+          "arc": 1.5,
+          "knockback": 20
+        }
+      },
+      "arrow": {
+        "runicMaxRank": 3,
+        "runicDamage": 96,
+        "runicDamagePerRank": 30,
+        "runicInterval": 4.2,
+        "runicIntervalReductionPerRank": 0.3,
+        "branchTargets": 3,
+        "ricochetBounces": 2,
+        "retention": 0.65,
+        "ricochetRange": 150,
+        "ricochetMinimumLife": 0.25
+      },
+      "orbit": {
+        "maxRank": 5,
+        "baseCount": 1,
+        "minimumRankCount": 1,
+        "radius": 74,
+        "rotationSpeed": 2.9,
+        "propHitInterval": 0.42,
+        "evolutionInterval": 3,
+        "evolutionDuration": 0.9,
+        "evolutionRange": 55
+      }
+    },
+    "skillRules": {
+      "barrier": {
+        "maxRank": 3,
+        "healthFraction": 0.3,
+        "healthFractionPerRank": 0.075,
+        "cooldown": 15,
+        "cooldownReductionPerRank": 1.5,
+        "duration": 2,
+        "durationPerRank": 0.3
+      },
+      "storm": {
+        "maxUpgradeRank": 2,
+        "damage": 160
+      },
+      "pulse": {
+        "maxRank": 5,
+        "baseDamage": 40,
+        "damagePerRank": 10,
+        "cooldown": 2.6,
+        "radius": 132,
+        "radiusPerRank": 8,
+        "controlRadius": 230,
+        "knockback": 30,
+        "controlKnockback": 48,
+        "controlDuration": 1.1,
+        "echoRadiusMultiplier": 1.2,
+        "echoRetention": 0.6,
+        "echoDelay": 0.35,
+        "echoKnockback": 12,
+        "controlMoveMultiplier": 0.65,
+        "interruptCooldown": 1.2
+      },
+      "lightning": {
+        "maxRank": 5,
+        "baseDamage": 38,
+        "damagePerRank": 10,
+        "focusMultiplier": 2.5,
+        "cooldown": 2.8,
+        "range": 360,
+        "chainRange": 190,
+        "evolvedChainRange": 220,
+        "targetLimit": 3,
+        "evolvedTargetLimit": 7,
+        "chainRetention": 0.85,
+        "fullDamageTargetCount": 3
+      }
+    }
+  },
+  "super": {
+    "rules": {
+      "maxLevel": 3,
+      "maxFields": 12,
+      "maxTargets": 16,
+      "regionFallback": {
+        "gold": 60,
+        "crystals": 100
+      },
+      "castleFallback": {
+        "gold": 120,
+        "crystals": 180
+      }
+    },
+    "propagation": {
+      "domain": "ground",
+      "runeArrow": "projectile",
+      "meteor": "overhead",
+      "swords": "projectile",
+      "vortex": "projectile"
+    },
+    "domainBranches": {
+      "binding": {
+        "name": "荆棘领域",
+        "desc": "反复刺击领域内的地面敌人，短暂束缚普通怪并减缓首领",
+        "icon": "♧",
+        "color": "#a9d888"
+      },
+      "erosion": {
+        "name": "侵蚀领域",
+        "desc": "侵蚀领域持续减速并伤害地面敌人，离开后仍短暂受侵蚀",
+        "icon": "♨",
+        "color": "#cea1da"
+      }
+    },
+    "levelStats": {
+      "meteor": [
+        {
+          "level": 1,
+          "cooldown": 9,
+          "damage": 145,
+          "radius": 86,
+          "count": 2
+        },
+        {
+          "level": 2,
+          "cooldown": 8.5,
+          "damage": 185,
+          "radius": 95,
+          "count": 3
+        },
+        {
+          "level": 3,
+          "cooldown": 8,
+          "damage": 225,
+          "radius": 104,
+          "count": 3
+        }
+      ],
+      "swords": [
+        {
+          "level": 1,
+          "cooldown": 6.6,
+          "damage": 124,
+          "count": 4,
+          "interval": 0.22
+        },
+        {
+          "level": 2,
+          "cooldown": 6.199999999999999,
+          "damage": 156,
+          "count": 5,
+          "interval": 0.22
+        },
+        {
+          "level": 3,
+          "cooldown": 5.8,
+          "damage": 188,
+          "count": 6,
+          "interval": 0.22
+        }
+      ],
+      "vortex": [
+        {
+          "level": 1,
+          "cooldown": 9,
+          "damage": 27,
+          "radius": 125,
+          "duration": 3.2,
+          "interval": 0.4,
+          "pull": 82
+        },
+        {
+          "level": 2,
+          "cooldown": 8.5,
+          "damage": 37,
+          "radius": 140,
+          "duration": 3.2,
+          "interval": 0.4,
+          "pull": 96
+        },
+        {
+          "level": 3,
+          "cooldown": 8,
+          "damage": 47,
+          "radius": 155,
+          "duration": 3.2,
+          "interval": 0.4,
+          "pull": 110
+        }
+      ]
+    },
+    "domainStats": {
+      "binding": [
+        {
+          "level": 1,
+          "branch": "binding",
+          "cooldown": 7,
+          "damage": 28,
+          "impactDamage": 40,
+          "radius": 118,
+          "duration": 3,
+          "interval": 0.75,
+          "root": 0.45,
+          "slow": 0.15
+        },
+        {
+          "level": 2,
+          "branch": "binding",
+          "cooldown": 6.5,
+          "damage": 38,
+          "impactDamage": 55,
+          "radius": 132,
+          "duration": 3,
+          "interval": 0.75,
+          "root": 0.5,
+          "slow": 0.15
+        },
+        {
+          "level": 3,
+          "branch": "binding",
+          "cooldown": 6,
+          "damage": 48,
+          "impactDamage": 70,
+          "radius": 146,
+          "duration": 3,
+          "interval": 0.75,
+          "root": 0.55,
+          "slow": 0.15
+        }
+      ],
+      "erosion": [
+        {
+          "level": 1,
+          "branch": "erosion",
+          "cooldown": 7,
+          "damage": 24,
+          "impactDamage": 32,
+          "radius": 112,
+          "duration": 4,
+          "interval": 0.5,
+          "slow": 0.2,
+          "linger": 1.05
+        },
+        {
+          "level": 2,
+          "branch": "erosion",
+          "cooldown": 6.7,
+          "damage": 31,
+          "impactDamage": 40,
+          "radius": 124,
+          "duration": 4,
+          "interval": 0.5,
+          "slow": 0.2,
+          "linger": 1.05
+        },
+        {
+          "level": 3,
+          "branch": "erosion",
+          "cooldown": 6.4,
+          "damage": 38,
+          "impactDamage": 48,
+          "radius": 136,
+          "duration": 4,
+          "interval": 0.5,
+          "slow": 0.2,
+          "linger": 1.05
+        }
+      ]
+    },
+    "timing": {
+      "targetRange": 420,
+      "initialCooldown": 0.6,
+      "retryCooldown": 0.2,
+      "meteorSpacingRatio": 0.9,
+      "meteorDelay": 0.7,
+      "meteorStagger": 0.25,
+      "maxVolleys": 2,
+      "volleyDelay": 0.16,
+      "swordTargetRange": 430,
+      "rootChargeDelay": 0.6,
+      "slowRefresh": 0.65,
+      "bossMinimumMoveRatio": 0.85,
+      "erosionDamageRatio": 0.5,
+      "erosionInterval": 0.5,
+      "erosionSlowDuration": 0.5,
+      "erosionBossMoveRatio": 0.9,
+      "erosionMoveRatio": 0.8,
+      "runicRange": 450,
+      "runicDelay": 0.12,
+      "runicWidth": 11,
+      "runicWidthPerRank": 3,
+      "runicDamageFallbackMultiplier": 3,
+      "runicDamageFallbackPerRank": 0.9375,
+      "runicInterval": 4.2,
+      "runicIntervalReductionPerRank": 0.3
+    }
+  },
+  "status": {
+    "bleedDuration": 2,
+    "bleedInterval": 0.5,
+    "bleedRatio": 0.15,
+    "pulseBonus": 0.25,
+    "shockDuration": 2.5,
+    "conductionRange": 130,
+    "conductionDamage": 12,
+    "allyConductionRatio": 0.12
+  },
+  "knockback": {
+    "attack": {
+      "distance": 13,
+      "window": 1,
+      "minimumInterval": 0.25,
+      "secondMultiplier": 0.6,
+      "duration": 0.16
+    },
+    "boss": {
+      "minimumInterval": 2
+    },
+    "resistance": {
+      "referenceRadius": 20,
+      "brute": 0.45,
+      "boar": 0.6
+    }
+  }
+}

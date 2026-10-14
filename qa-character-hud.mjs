@@ -69,10 +69,12 @@ const root=new Element('root');parseInto(html,root);
 Object.assign(document,{body:root.querySelector('body'),getElementById:id=>root.querySelector(`#${id}`),createElement:tag=>new Element(tag),querySelectorAll:selector=>root.querySelectorAll(selector),addEventListener:(type,handler)=>{(documentListeners[type]??=[]).push(handler);}});
 globalThis.document=document;
 const $=id=>{const node=document.getElementById(id);assert(node,`missing #${id}`);return node;};
-const sandbox={...modules,document,performance,window:{location:{search:''},devicePixelRatio:1,addEventListener:(type,handler)=>{(windowListeners[type]??=[]).push(handler);}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:query=>({matches:query.includes('pointer: coarse')}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
+let taskId=0,taskNow=1000;const frameTasks=new Map(),timerTasks=new Map();
+const sandbox={...modules,document,performance,window:{location:{search:''},devicePixelRatio:1,addEventListener:(type,handler)=>{(windowListeners[type]??=[]).push(handler);}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:query=>({matches:query.includes('pointer: coarse')}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame:callback=>{const id=++taskId;frameTasks.set(id,callback);return id;},cancelAnimationFrame:id=>frameTasks.delete(id),setTimeout:(callback,delay=0)=>{const id=++taskId;timerTasks.set(id,{callback,at:taskNow+Number(delay)});return id;},clearTimeout:id=>timerTasks.delete(id),console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 const shippedRenderGame=sandbox.renderGame;
 const run=script=>vm.runInContext(script,sandbox);
+const flush=async()=>{for(let count=0;count<100;count++){await Promise.resolve();await Promise.resolve();if(!run('typeof startLoading!=="undefined"&&startLoading'))return;taskNow+=1000/60;const callbacks=[...frameTasks.values()];frameTasks.clear();for(const callback of callbacks)callback(taskNow);for(const [id,task] of [...timerTasks])if(task.at<=taskNow){timerTasks.delete(id);task.callback();}}assert.fail('startup did not settle');};
 function fire(node,type,extra={}){
   const event={target:node,currentTarget:node,pointerId:1,clientX:30,clientY:30,button:0,detail:type==='click'?1:undefined,preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.stopped=true;},...extra};
   for(const handler of node.listeners[type]||[])handler(event);node[`on${type}`]?.(event);return event;
@@ -84,11 +86,11 @@ const tap=id=>{
   const node=$(id),pointerId=touchPointerId++,event={pointerId,pointerType:'touch',isPrimary:true};
   fire(node,'pointerdown',event);fire(node,'pointerup',event);return fire(node,'click',{...event,detail:1});
 };
-const start=()=>{click('start-button');click('prepare-start-button');run('renderGame=()=>{};renderIntro=()=>{};game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;');};
+const start=async()=>{click('start-button');click('prepare-start-button');await flush();run('renderGame=()=>{};renderIntro=()=>{};game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;');};
 const model=()=>JSON.parse(run('JSON.stringify({time:game.runTime,clock,skill:game.player.skillCooldown,point:[game.player.x,game.player.y]})'));
 assert($('run-summary').classList.contains('hidden'),'the menu starts without run statistics');
 assert(!fire($('game-canvas'),'touchstart',{cancelable:true}).defaultPrevented,'the intro has no canvas touch fallback');
-start();
+await start();
 // Native menus need real WeChat devices. These checks verify the shipped guard
 // boundaries and the pointer controls that a touchstart fallback could disturb.
 for(const type of ['contextmenu','selectstart','dragstart']){
@@ -274,7 +276,7 @@ assertSharedSlots(6);
 assert.match($('loadout').textContent,/\+2/,'all three weapons stay inside the existing two-position budget');
 key('KeyC');click('character-tab-skills');assert.equal($('character-content').querySelectorAll('[data-capability-id]').length,owned,'details list every acquired skill');
 click('quit-button');assert.equal(run('game'),null);assert($('run-summary').classList.contains('hidden'),'returning home hides passive run statistics');assert.equal(run('characterOpen'),false);assert($('character-overlay').classList.contains('hidden'));assert.equal($('character-button').getAttribute('aria-expanded'),'false');
-start();assert.equal(run('characterOpen'),false);assert.equal(run('characterTab'),'attributes');
+await start();assert.equal(run('characterOpen'),false);assert.equal(run('characterTab'),'attributes');
 // A weapon-bound upgrade remains in the existing equipment strip. Details
 // can explain it without adding an automatic skill or a mobile HUD slot.
 const compactBefore={weapons:$('loadout').querySelectorAll('.combat-slot').length,skills:$('super-loadout').querySelectorAll('.combat-slot').length};

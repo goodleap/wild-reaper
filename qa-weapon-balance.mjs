@@ -29,7 +29,7 @@ function equip(g,id,purchases=[]) {
 // without knockback or AI changing the layout. Damage still uses Game.update.
 function target(g,x,y=0,r=12) {
   const e=g._spawnEnemy('boss');
-  Object.assign(e,{x,y,r,hp:HP,maxHp:HP,speed:0,bossKind:null,slamCooldown:Infinity,damage:0});
+  Object.assign(e,{x,y,r,hp:HP,maxHp:HP,speed:0,knockbackImmune:true,bossKind:null,slamCooldown:Infinity,damage:0});
   g._rebuildGrid();return e;
 }
 function advance(g,seconds) {for(let left=seconds;left>1e-8;left-=.025)g.update(Math.min(.025,left));}

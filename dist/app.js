@@ -1,3 +1,4 @@
+import { createLoadingView, waitForPaint } from './loading-ui.js';
 import { drawBossGround, bossPhaseLabel, bossWarning, bossWindingUp, bossSound } from './enemy-presentation.js';
 import { enemyVisual, enemyBob } from './enemy-visuals.js';
 import { bossDefinition } from './boss-definitions.js';
@@ -132,8 +133,10 @@ let clock=0,last=0,shake=0,toastTimer=0,toastPriority=0,toastUntil=0,upgradeLeve
 let keys=new Set(),skillRequested=false,touch=null,input={x:0,y:0,skill:false};
 let pendingEvolutions=[],relicChoiceKey='',lastRelics='';
 let portalRequested=false,superChoiceKey='',lastSupers='',shopKey='';
-let prepareOpen=false,prepareArtReady=false;
-let selectedDifficulty='normal',selectedMode='stage',selectedStageId='forest-trial',selectedHeroId='traveler',selectedWeaponId='sword';
+let prepareOpen=false,prepareArtReady=false,startLoading=false,activeStartPromise=null;
+const sceneLoadingView=createLoadingView(document,{setTimer:setTimeout,clearTimer:clearTimeout});
+const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer:setTimeout});
+let selectedDifficulty='normal',selectedMode='stage',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
 try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;selectedHeroId=getHero(saved?.heroId).id;if(initialWeaponIds.includes(saved?.weaponId))selectedWeaponId=saved.weaponId;}catch{}
 if(debugConfig.world)selectedMode='free';
 let soundOn=false,audio=null;
@@ -227,7 +230,7 @@ function drawHeroChoices(){
     const portrait=heroPortraits.get(hero.id),artContext=portrait.getContext('2d');
     artContext.clearRect(0,0,portrait.width,portrait.height);artContext.save();artContext.translate(128,152);artContext.scale(3.5,3.5);
     artContext.fillStyle='#0b1a1655';artContext.beginPath();artContext.ellipse(0,20,16,5,0,0,TAU);artContext.fill();
-    humanoidArt.draw(artContext,hero.id,{pose:{},entity:{id:0,heroId:hero.id,facing:0},time:2,reduced:true,pixelRatio:3.5});artContext.restore();
+    humanoidArt.draw(artContext,hero.appearanceId||hero.id,{pose:{},entity:{id:0,heroId:hero.id,facing:0},time:2,reduced:true,pixelRatio:3.5});artContext.restore();
   }
 }
 function revealHeroChoice(id=selectedHeroId){
@@ -266,7 +269,7 @@ for(const difficulty of ['normal','casual']){const radio=$(`difficulty-${difficu
 for(const mode of ['stage','free']){const radio=$(`mode-${mode}`);radio.checked=mode===selectedMode;radio.addEventListener('change',()=>{if(radio.checked){selectedMode=mode;saveSetup();refreshStageSetup();if(prepareOpen){revealSelectedStage();updateStageScroll();}}});}
 refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
 function openPrepare(){
-  if(game||helpOpen||archiveOpen||prepareOpen)return;
+  if(startLoading||game||helpOpen||archiveOpen||prepareOpen)return;
   prepareOpen=true;clearInput();show('intro',false);show('prepare-screen');arena.classList.add('preparing');
   refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
   // Reuse the static archive portraits once. No world simulation or animation
@@ -275,14 +278,60 @@ function openPrepare(){
   revealSelectedStage();revealHeroChoice();updateStageScroll();$('prepare-back-button').focus({preventScroll:true});
 }
 function closePrepare(){
-  if(!prepareOpen||helpOpen||archiveOpen)return;
+  if(startLoading||!prepareOpen||helpOpen||archiveOpen)return;
   prepareOpen=false;clearInput();show('prepare-screen',false);show('intro');arena.classList.remove('preparing');$('start-button').focus({preventScroll:true});
 }
 
 
 function clearInput(){keys.clear();skillRequested=false;portalRequested=false;touch=null;input={x:0,y:0,skill:false};show('joystick',false);$('joystick-thumb').style.transform='';}
-function startGame(){prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();game=new Game({hero:selectedHeroId,difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugFull:debugConfig.full,debugWorld:debugConfig.world});game.viewWidth=width;game.viewHeight=height;archive.begin(game);const archiveGame=game;game.onEnemyDefeated=enemy=>archive.recordDefeat(archiveGame,enemy);archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?(debugConfig.full?'完整调试 · 武器技能满级 · 3 倍移速':'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却'):game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');worldMap.discover(game,{viewportWidth:width,viewportHeight:height});updateHUD();canvas.focus({preventScroll:true});}
+function startGame(){
+  if(activeStartPromise)return activeStartPromise;
+  if(startLoading)return Promise.resolve(false);
+  startLoading=true;clearInput();diagnostics?.breakContinuity();renderSchedule.invalidate();
+  $('prepare-start-button').disabled=true;$('restart-button').disabled=true;
+  sceneLoadingView.start('scene',{stage:'正在创建冒险'});$('scene-loading-label').focus({preventScroll:true});
+  arena.setAttribute('aria-busy','true');
+  selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();
+  const options={hero:selectedHeroId,difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugFull:debugConfig.full,debugWorld:debugConfig.world};
+  // Unlock audio in the originating click, before yielding to the loading view.
+  initAudio();
+  let committed=false;
+  const releaseLoading=()=>{startLoading=false;activeStartPromise=null;clearInput();last=0;arena.setAttribute('aria-busy','false');$('prepare-start-button').disabled=false;$('restart-button').disabled=false;renderSchedule.invalidate();};
+  activeStartPromise=(async()=>{
+    try{
+      await paintLoading();
+      const preparedGame=new Game(options);preparedGame.viewWidth=width;preparedGame.viewHeight=height;
+      sceneLoadingView.update({completed:1,total:4,stage:'正在准备地图'});
+      await paintLoading();
+      worldMap.discover(preparedGame,{viewportWidth:width,viewportHeight:height});
+      sceneLoadingView.update({completed:2,total:4,stage:'正在准备角色与界面'});
+      await paintLoading();
+      committed=true;commitPreparedGame(preparedGame);
+      sceneLoadingView.update({completed:3,total:4,stage:'正在准备画面'});
+      await paintLoading();
+      // Warm the actual first scene without advancing simulation or accepting
+      // input. Cached terrain/art is ready when the loading layer disappears.
+      ctx.setTransform(scaleX,0,0,scaleY,0,0);renderGame();
+      sceneLoadingView.update({completed:4,total:4,stage:'准备完成'});
+      await paintLoading();
+      // Record a new run only after its scene is ready, so a failed load never
+      // counts as a played adventure or unlocks its starting equipment.
+      archive.begin(game);const archiveGame=game;game.onEnemyDefeated=enemy=>archive.recordDefeat(archiveGame,enemy);
+      sceneLoadingView.finish({fade:false});releaseLoading();canvas.focus({preventScroll:true});
+      return true;
+    }catch(error){
+      console.error('Adventure preparation failed',error);
+      activeStartPromise=null;
+      const leave=()=>{sceneLoadingView.hide();releaseLoading();if(committed)home();else $(prepareOpen?'prepare-start-button':'restart-button').focus({preventScroll:true});};
+      sceneLoadingView.fail('冒险准备未完成，请重试。',{onRetry:()=>{leave();return startGame();},onBack:leave});
+      return false;
+    }
+  })();
+  return activeStartPromise;
+}
+function commitPreparedGame(preparedGame){prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=preparedGame;game.viewWidth=width;game.viewHeight=height;archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?(debugConfig.full?'完整调试 · 武器技能满级 · 3 倍移速':'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却'):game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');updateHUD();}
 function restartGame(){
+  if(startLoading)return activeStartPromise;
   if(game){
     selectedDifficulty=game.difficulty;selectedMode=game.stage?'stage':'free';selectedHeroId=game.hero.id;selectedWeaponId=game.initialWeaponId;
     if(game.stage)selectedStageId=game.stage.id;
@@ -290,12 +339,12 @@ function restartGame(){
     for(const mode of ['stage','free'])$(`mode-${mode}`).checked=mode===selectedMode;
     refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
   }
-  startGame();
+  return startGame();
 }
-function home(){prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game)archive.finish(game,'quit');resetArchivePanel();cancelDiagnosticCapture();diagnostics?.setMode('default');sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);helpOpen=false;$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=null;paused=false;runEnded=false;clearInput();for(const id of ['hud','run-summary','game-bottom','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','touch-skill','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('intro');arena.classList.remove('playing');arena.classList.remove('has-encounter');arena.classList.remove('has-relics');arena.classList.remove('near-portal');arena.classList.remove('has-companion');arena.classList.remove('has-rescue-power');arena.classList.remove('has-supers');arena.classList.remove('in-dungeon');$('terrain-code').textContent='01 / THE WHISPERING WOODS';$('terrain-name').textContent='低语之森';$('toast').classList.remove('visible');refreshArchiveEntry();$('start-button').focus({preventScroll:true});}
-function pause(){if(!game||!['playing','relic','upgrade','super','shop'].includes(game.status)||runEnded)return;paused=true;checkpointArchive();diagnostics?.breakContinuity();clearInput();show('pause-overlay');refreshDiagnostics();$(archiveOpen?'close-archive':helpOpen?'close-help':characterOpen?'close-character':mapOpen?'close-map':'resume-button').focus({preventScroll:true});}
+function home(){if(startLoading)return;prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game)archive.finish(game,'quit');resetArchivePanel();cancelDiagnosticCapture();diagnostics?.setMode('default');sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);helpOpen=false;$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=null;paused=false;runEnded=false;clearInput();for(const id of ['hud','run-summary','game-bottom','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','touch-skill','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('intro');arena.classList.remove('playing');arena.classList.remove('has-encounter');arena.classList.remove('has-relics');arena.classList.remove('near-portal');arena.classList.remove('has-companion');arena.classList.remove('has-rescue-power');arena.classList.remove('has-supers');arena.classList.remove('in-dungeon');$('terrain-code').textContent='01 / THE WHISPERING WOODS';$('terrain-name').textContent='低语之森';$('toast').classList.remove('visible');refreshArchiveEntry();$('start-button').focus({preventScroll:true});}
+function pause(){if(startLoading||!game||!['playing','relic','upgrade','super','shop'].includes(game.status)||runEnded)return;paused=true;checkpointArchive();diagnostics?.breakContinuity();clearInput();show('pause-overlay');refreshDiagnostics();$(archiveOpen?'close-archive':helpOpen?'close-help':characterOpen?'close-character':mapOpen?'close-map':'resume-button').focus({preventScroll:true});}
 function focusGameDialog(){const id={relic:'relic-cards',upgrade:'upgrade-cards',super:'super-cards',shop:'shop-items'}[game?.status];if(id)$(id).querySelector('button:not(:disabled)')?.focus({preventScroll:true});else canvas.focus({preventScroll:true});}
-function resume(){if(mapOpen||characterOpen||helpOpen||archiveOpen)return;paused=false;clearInput();show('pause-overlay',false);initAudio();focusGameDialog();refreshDiagnosticIndicator();}
+function resume(){if(startLoading||mapOpen||characterOpen||helpOpen||archiveOpen)return;paused=false;clearInput();show('pause-overlay',false);initAudio();focusGameDialog();refreshDiagnosticIndicator();}
 
 function observeArchive(){
   if(!game)return;
@@ -310,7 +359,7 @@ function renderArchive(){
   drawArchiveArt(content);
 }
 function openArchive(){
-  if(archiveOpen||game?.sceneTransition?.active)return;
+  if(startLoading||archiveOpen||game?.sceneTransition?.active)return;
   checkpointArchive();archiveReturnFocus=document.activeElement;archiveOpen=true;clearInput();
   diagnostics?.breakContinuity();renderSchedule.invalidate();renderArchive();show('archive-overlay');
   $('close-archive').focus({preventScroll:true});
@@ -334,11 +383,12 @@ function renderArchiveSummary(report){
   if(!archive.storageOk&&parts.length)target.textContent+=' · 暂未保存';
 }
 
-function openHelp(){helpOpen=true;clearInput();show('help-overlay');$('close-help').focus({preventScroll:true});}
+function openHelp(){if(startLoading)return;helpOpen=true;clearInput();show('help-overlay');$('close-help').focus({preventScroll:true});}
 function closeHelp(){helpOpen=false;show('help-overlay',false);if(prepareOpen)$('prepare-help-button').focus({preventScroll:true});else if(!game)$('help-button').focus({preventScroll:true});else if(characterOpen)$('close-character').focus({preventScroll:true});else if(mapOpen)$('close-map').focus({preventScroll:true});else if(paused)$('resume-button').focus({preventScroll:true});else focusGameDialog();}
 // The map is an independent pause reason: closing it never consumes an upgrade,
 // unpauses an existing pause menu, or resumes a run behind the help dialog.
 function openMap(){
+  if(startLoading)return;
   if(!game||runEnded||helpOpen||archiveOpen||game.sceneTransition?.active||!['playing','relic','upgrade','super','shop'].includes(game.status))return;
   if(characterOpen)closeCharacter();
   mapReturnFocus=document.activeElement;mapOpen=true;clearInput();show('map-overlay');$('map-button').setAttribute('aria-expanded','true');renderExpandedMap();$('close-map').focus({preventScroll:true});
@@ -412,7 +462,7 @@ function openRelics(){
   cards.style.gridTemplateColumns=`repeat(${Math.min(3,Math.max(1,choices.length))}, minmax(0, 1fr))`;
   for(const relic of choices){
     const card=document.createElement('button');card.className='upgrade-card relic-card';
-    card.innerHTML=`<span class="upgrade-icon" style="color:${relic.color}">${relic.icon}</span><span class="upgrade-type">整局遗物</span><h3>${relic.name}</h3><p>${relic.desc}</p><span class="select-arrow"><span>唯一珍藏</span><span>选择并前往 ↗</span></span>`;
+    card.innerHTML=`<span class="upgrade-icon" style="color:${uiEscape(relic.color)}">${uiEscape(relic.icon)}</span><span class="upgrade-type">整局遗物</span><h3>${uiEscape(relic.name)}</h3><p>${uiEscape(relic.desc)}</p><span class="select-arrow"><span>唯一珍藏</span><span>选择并前往 ↗</span></span>`;
     card.onclick=()=>{if(game?.status!=='relic'||paused||helpOpen||mapOpen||characterOpen||archiveOpen)return;if(!game.chooseRelic(relic.id))return;relicChoiceKey='';show('relic-overlay',false);clearInput();tone(540,.25,'sine',.04,960);updateHUD();canvas.focus({preventScroll:true});};cards.append(card);
   }
   show('portal-action',false);show('relic-overlay');cards.querySelector('button')?.focus({preventScroll:true});
@@ -443,7 +493,7 @@ function openShop(force=false){
   if(!force&&key===shopKey&&!$('shop-overlay').classList.contains('hidden'))return;
   const entering=$('shop-overlay').classList.contains('hidden');shopKey=key;clearInput();show('portal-action',false);$('shop-title').textContent=site?.name||'荒野商人的货摊';$('shop-gold').textContent=game.gold;
   const cards=$('shop-items');cards.replaceChildren();for(const item of items){const button=document.createElement('button');button.className='shop-item';button.disabled=item.available===false||item.stock<=0||game.gold<item.price;
-    button.innerHTML=`<span class="shop-icon" style="color:${item.color}">${item.icon}</span><span class="shop-copy"><strong>${item.name}</strong><small>${item.desc}</small><em>${item.stock<=0?'已售罄':item.reason||`剩余 ${item.stock} 份`}</em></span><span class="shop-price">◉ ${item.price}</span>`;
+    button.innerHTML=`<span class="shop-icon" style="color:${uiEscape(item.color)}">${uiEscape(item.icon)}</span><span class="shop-copy"><strong>${uiEscape(item.name)}</strong><small>${uiEscape(item.desc)}</small><em>${uiEscape(item.stock<=0?'已售罄':item.reason||`剩余 ${item.stock} 份`)}</em></span><span class="shop-price">◉ ${item.price}</span>`;
     button.onclick=()=>{if(game?.status!=='shop'||paused||helpOpen||mapOpen||characterOpen||archiveOpen)return;if(game.buyShopItem(item.id)){tone(660,.13,'sine',.035,880);shopKey='';show('shop-overlay',false);clearInput();notify(`已购买${item.name} · 游商已离开`,2);canvas.focus({preventScroll:true});}else{$('shop-feedback').textContent='暂时无法购买，请检查金币或当前状态。';openShop(true);}updateHUD();};cards.append(button);
   }
   if(force)cards.querySelector('button:not(:disabled)')?.focus({preventScroll:true});
@@ -489,6 +539,7 @@ function renderCharacter(){
   $('character-content').innerHTML=characterTab==='army'?armyPanelHTML(game):characterPanelHTML(game,characterTab);
 }
 function openCharacter(tab='attributes'){
+  if(startLoading)return;
   if(!game||runEnded||helpOpen||archiveOpen||game.sceneTransition?.active||!['playing','relic','upgrade','super','shop'].includes(game.status))return;
   if(mapOpen)closeMap();
   characterReturnFocus=document.activeElement;characterTab=characterTabs.includes(tab)?tab:'attributes';characterOpen=true;characterPointer=null;
@@ -503,9 +554,9 @@ function closeCharacter(){
 function updateRelicHUD(){
   const owned=game.relics?.owned||[],key=owned.join(',');arena.classList.toggle('has-relics',owned.length>0);show('relic-loadout',owned.length>0);
   if(key===lastRelics)return;lastRelics=key;
-  $('relic-loadout').innerHTML=owned.map(id=>{const relic=RELICS.find(item=>item.id===id);return relic?`<span class="relic-badge" style="color:${relic.color}" title="${relic.name} · ${relic.desc}" aria-label="${relic.name}，${relic.desc}">${relic.icon}</span>`:'';}).join('');
+  $('relic-loadout').innerHTML=owned.map(id=>{const relic=RELICS.find(item=>item.id===id);return relic?`<span class="relic-badge" style="color:${uiEscape(relic.color)}" title="${uiEscape(relic.name)} · ${uiEscape(relic.desc)}" aria-label="${uiEscape(relic.name)}，${uiEscape(relic.desc)}">${uiEscape(relic.icon)}</span>`:'';}).join('');
 }
-function requestPortal(){const interaction=game?.getInteraction?.();if(game?.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen&&interaction&&interaction.enabled!==false){portalRequested=true;initAudio();}}
+function requestPortal(){const interaction=game?.getInteraction?.();if(!startLoading&&game?.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen&&interaction&&interaction.enabled!==false){portalRequested=true;initAudio();}}
 function combatPhaseLabel(){
   const phase=bossPhaseLabel(game.enemies,sceneVisible);
   if(phase)return phase;
@@ -666,7 +717,7 @@ function cancelDiagnosticCapture(){
   diagnosticSequence=null;refreshDiagnosticIndicator();
 }
 function diagnosticMetadata(){
-  return {version:$('game-version').textContent,viewport:`${width} × ${height}`,buffer:`${canvas.width} × ${canvas.height}`,nativeDpr,renderDpr:dpr,browser:globalThis.navigator?.userAgent||'unknown',scene:game.dungeon?.active?.name||game.stage?.currentIsland.name||game.region.name,position:`${Math.round(game.player.x)}, ${Math.round(game.player.y)}`,enemies:game.enemies.length};
+  return {version:$('game-version').textContent,contentVersion:game.configVersion,viewport:`${width} × ${height}`,buffer:`${canvas.width} × ${canvas.height}`,nativeDpr,renderDpr:dpr,browser:globalThis.navigator?.userAgent||'unknown',scene:game.dungeon?.active?.name||game.stage?.currentIsland.name||game.region.name,position:`${Math.round(game.player.x)}, ${Math.round(game.player.y)}`,enemies:game.enemies.length};
 }
 function beginDiagnosticStage(){
   const sequence=diagnosticSequence;
@@ -773,7 +824,7 @@ $('archive-content').addEventListener('click',e=>{
   }
 });
 window.addEventListener('pagehide',checkpointArchive);
-$('start-button').onclick=openPrepare;$('prepare-start-button').onclick=()=>{if(prepareOpen&&!helpOpen&&!archiveOpen)startGame();};$('prepare-back-button').onclick=closePrepare;$('prepare-help-button').onclick=openHelp;$('restart-button').onclick=restartGame;$('home-button').onclick=home;$('quit-button').onclick=home;$('pause-button').onclick=pause;$('resume-button').onclick=resume;$('close-pause').onclick=resume;$('close-shop').onclick=closeShop;$('help-button').onclick=openHelp;$('pause-help-button').onclick=openHelp;$('close-help').onclick=closeHelp;$('help-done').onclick=closeHelp;
+$('start-button').onclick=openPrepare;$('prepare-start-button').onclick=()=>{if(prepareOpen&&!helpOpen&&!archiveOpen)return startGame();};$('prepare-back-button').onclick=closePrepare;$('prepare-help-button').onclick=openHelp;$('restart-button').onclick=restartGame;$('home-button').onclick=home;$('quit-button').onclick=home;$('pause-button').onclick=pause;$('resume-button').onclick=resume;$('close-pause').onclick=resume;$('close-shop').onclick=closeShop;$('help-button').onclick=openHelp;$('pause-help-button').onclick=openHelp;$('close-help').onclick=closeHelp;$('help-done').onclick=closeHelp;
 $('sound-button').onclick=$('pause-sound-button').onclick=()=>{soundOn=!soundOn;syncSound();try{localStorage.setItem('wild-echoes-sound',soundOn?'on':'off');}catch{}initAudio();if(soundOn)tone(660,.1);};
 canvas.tabIndex=-1;
 // Cancel selection/callouts inside the game before child UI can stop bubbling.
@@ -786,10 +837,10 @@ function suppressGameCallout(e){
 for(const type of ['contextmenu','selectstart','dragstart']){
   arena.addEventListener(type,suppressGameCallout,{capture:true,passive:false});
 }
-window.addEventListener('keydown',e=>{if(prepareOpen&&e.code==='Escape'){e.preventDefault();if(e.repeat)return;if(archiveOpen)closeArchive();else if(helpOpen)closeHelp();else closePrepare();return;}if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;if(e.code==='Escape'||e.code==='KeyP'){if(e.repeat)return;if(archiveOpen){e.preventDefault();closeArchive();return;}if(helpOpen){e.preventDefault();closeHelp();return;}if(characterOpen){e.preventDefault();closeCharacter();return;}if(mapOpen){e.preventDefault();closeMap();return;}if(game&&['playing','relic','upgrade','super','shop'].includes(game.status)){e.preventDefault();paused?resume():pause();}return;}if(e.code==='KeyC'){if(!game||runEnded||helpOpen||archiveOpen)return;e.preventDefault();if(!e.repeat)characterOpen?closeCharacter():openCharacter();return;}if(e.code==='KeyM'){if(!game||runEnded||helpOpen||archiveOpen)return;e.preventDefault();if(!e.repeat)mapOpen?closeMap():openMap();return;}if(['BUTTON','SUMMARY'].includes(e.target.tagName)&&['Space','Enter'].includes(e.code))return;if(!game||game.status!=='playing'||paused||helpOpen||mapOpen||characterOpen||archiveOpen)return;if(game.sceneTransition.active||blockedTransitionKeys.has(e.code)){blockedTransitionKeys.add(e.code);e.preventDefault();return;}if(e.code==='KeyE'){e.preventDefault();if(!e.repeat)requestPortal();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code)){e.preventDefault();keys.add(e.code);if(e.code==='Space'&&!e.repeat)requestSkill();}});
+window.addEventListener('keydown',e=>{if(startLoading){if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();return;}if(prepareOpen&&e.code==='Escape'){e.preventDefault();if(e.repeat)return;if(archiveOpen)closeArchive();else if(helpOpen)closeHelp();else closePrepare();return;}if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;if(e.code==='Escape'||e.code==='KeyP'){if(e.repeat)return;if(archiveOpen){e.preventDefault();closeArchive();return;}if(helpOpen){e.preventDefault();closeHelp();return;}if(characterOpen){e.preventDefault();closeCharacter();return;}if(mapOpen){e.preventDefault();closeMap();return;}if(game&&['playing','relic','upgrade','super','shop'].includes(game.status)){e.preventDefault();paused?resume():pause();}return;}if(e.code==='KeyC'){if(!game||runEnded||helpOpen||archiveOpen)return;e.preventDefault();if(!e.repeat)characterOpen?closeCharacter():openCharacter();return;}if(e.code==='KeyM'){if(!game||runEnded||helpOpen||archiveOpen)return;e.preventDefault();if(!e.repeat)mapOpen?closeMap():openMap();return;}if(['BUTTON','SUMMARY'].includes(e.target.tagName)&&['Space','Enter'].includes(e.code))return;if(!game||game.status!=='playing'||paused||helpOpen||mapOpen||characterOpen||archiveOpen)return;if(game.sceneTransition.active||blockedTransitionKeys.has(e.code)){blockedTransitionKeys.add(e.code);e.preventDefault();return;}if(e.code==='KeyE'){e.preventDefault();if(!e.repeat)requestPortal();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code)){e.preventDefault();keys.add(e.code);if(e.code==='Space'&&!e.repeat)requestSkill();}});
 window.addEventListener('keyup',e=>{keys.delete(e.code);blockedTransitionKeys.delete(e.code);});
 window.addEventListener('blur',()=>{clearInput();if(game?.status==='playing')pause();});document.addEventListener('visibilitychange',()=>{diagnostics?.breakContinuity();last=0;clearInput();renderSchedule.invalidate();resetDebugFps();if(document.hidden){checkpointArchive();if(game?.status==='playing')pause();}});
-function gameSurfaceActive(){return game?.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen;}
+function gameSurfaceActive(){return !startLoading&&game?.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen;}
 // Some WebKit versions show a loupe after tap + hold despite user-select:none.
 // Only the live canvas gets this fallback: it uses pointer events, not synthetic
 // clicks. Never cancel touchstart on the arena, controls, dialogs or document.
@@ -798,13 +849,13 @@ canvas.addEventListener('pointerdown',e=>{if(!gameSurfaceActive()||touch)return;
 canvas.addEventListener('pointermove',e=>{if(!touch||touch.id!==e.pointerId)return;const r=canvas.getBoundingClientRect();let dx=e.clientX-r.left-touch.x,dy=e.clientY-r.top-touch.y;const d=Math.hypot(dx,dy),m=Math.min(d,40)/(d||1);touch.dx=dx*m/40;touch.dy=dy*m/40;$('joystick-thumb').style.transform=`translate(${dx*m}px,${dy*m}px)`;});
 function releaseTouch(e){if(touch?.id===e.pointerId){touch=null;show('joystick',false);}}
 canvas.addEventListener('pointerup',releaseTouch);canvas.addEventListener('pointercancel',releaseTouch);canvas.addEventListener('lostpointercapture',releaseTouch);
-function requestSkill(){if(game?.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen&&game.player.skillCooldown<=0){skillRequested=true;initAudio();}}
+function requestSkill(){if(!startLoading&&game?.status==='playing'&&!game.sceneTransition.active&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen&&game.player.skillCooldown<=0){skillRequested=true;initAudio();}}
 $('relic-pause').onclick=pause;
 $('skill-button').onclick=requestSkill;
 $('touch-skill').onclick=requestSkill;
 $('touch-skill').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();requestSkill();});
 // Keep keyboard focus inside whichever dialog is currently active.
-document.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const dialog=[...document.querySelectorAll('.modal-layer')].reverse().find(x=>!x.classList.contains('hidden'));if(!dialog)return;const focusable=[...dialog.querySelectorAll('button:not(:disabled),select,a[href],summary')];if(!focusable.length)return;const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first.focus();}});
+document.addEventListener('keydown',e=>{if(e.key!=='Tab')return;if(startLoading&&$('scene-loading-actions').classList.contains('hidden')){e.preventDefault();return;}const dialog=startLoading?$('scene-loading'):[...document.querySelectorAll('.modal-layer')].reverse().find(x=>!x.classList.contains('hidden'));if(!dialog)return;const focusable=[...dialog.querySelectorAll('button:not(:disabled),select,a[href],summary')];if(!focusable.length)return;const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first.focus();}});
 
 function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,TAU);ctx.fill();}
 function line(x1,y1,x2,y2,color,w=1){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
@@ -842,7 +893,7 @@ function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,
 const HERO_VISUALS={traveler:ACTOR_VISUALS.player,princess:ACTOR_VISUALS.player,elder:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:{...ACTOR_VISUALS.player,top:40,halfWidth:39}};
 function actorVisual(entity,isPlayer=false,scaleOverride){
   const companionShape=(entity.isCompanion||entity.isCaptive)&&COMPANION_VISUALS[entity.kind||entity.heroId];
-  const type=isPlayer?'player':entity.type,shape=companionShape||(isPlayer?(HERO_VISUALS[entity.heroId||'traveler']||HERO_VISUALS.traveler):actorShape(entity));
+  const type=isPlayer?'player':entity.type,shape=companionShape||(isPlayer?(HERO_VISUALS[getHero(entity.heroId).appearanceId||getHero(entity.heroId).id]||HERO_VISUALS.traveler):actorShape(entity));
   const scale=scaleOverride??(companionShape?(entity.r||shape.radius)/shape.radius:isPlayer?1.1:entity.r/shape.radius);
   return {x:entity.x,y:entity.y,type,scale,immersion:game?.environment?.getImmersion(entity,isPlayer)||null,footY:entity.y+shape.foot*scale,orderId:isPlayer?-1:(entity.id||0),entity,isPlayer,shape};
 }
@@ -1260,7 +1311,7 @@ function player(x,y,t,scale=1,facing=0,hurtFlash=0,entity={}){
   const time=game?._clock??t,pose=humanoidPose(entity,!game,time);
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
   if(hurtFlash>0&&Math.floor(time*18)%2===0)ctx.globalAlpha=.65;
-  humanoidArt.draw(ctx,getHero(entity.heroId).id,{pose,entity,time,reduced,pixelRatio:dpr});ctx.restore();
+  humanoidArt.draw(ctx,getHero(entity.heroId).appearanceId||getHero(entity.heroId).id,{pose,entity,time,reduced,pixelRatio:dpr});ctx.restore();
 }
 function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(actorShape(e).radius);ctx.scale(s,s);const bob=enemyBob(e,t,reduced);ctx.translate(0,bob);const hit=e.hit>0;
   // A brief foot-anchored compression and lean makes a landed hit tangible.
@@ -1517,7 +1568,7 @@ function syncSceneInput(){
   updatePortalHUD();
 }
 function bossFeedbackVisible(){return game.enemies.some(enemy=>enemy.type==='boss'&&enemy.hp>0&&sceneVisible(enemy));}
-function frameState(){return {game,scene:game?.dungeon?.active??game?.mapId??game?.regionIndex??null,status:game?.status??'intro',paused,prepareOpen,helpOpen,mapOpen,characterOpen,archiveOpen,runEnded,hidden:!!document.hidden};}
+function frameState(){return {game,scene:game?.dungeon?.active??game?.mapId??game?.regionIndex??null,status:game?.status??'intro',paused:paused||startLoading,prepareOpen,helpOpen,mapOpen,characterOpen,archiveOpen,runEnded,hidden:!!document.hidden};}
 const cpuNow=()=>globalThis.performance?.now?.()??Date.now();
 function updateGameFrame(dt){input.x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+(touch?.dx||0);input.y=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+(touch?.dy||0);input.skill=skillRequested;input.interact=portalRequested;skillRequested=false;portalRequested=false;game.update(dt,input);syncSceneInput();if((game.runTime??0)>=archiveObserveAt||game.status!=='playing'){observeArchive();archiveObserveAt=(game.runTime??0)+.25;}if(!game.sceneTransition.active)worldMap.discover(game,{viewportWidth:width,viewportHeight:height});let hitSound=false;for(const e of game.events){if(e.type==='superCast'||e.type==='superImpact')playSuperFeedback(e);if(e.type==='shoot')tone(700,.045,'triangle',.012,330);if(e.type==='swordSwing')tone(e.branch==='heavy'?240:430,.075,'triangle',.012,e.branch==='heavy'?80:140);if(e.type==='kill')hitSound=true;if(e.type==='hurt'){shake=8;tone(150,.1,'triangle',.055,70);}if(e.type==='skill'){updateHUD();shake=reduced?0:5;tone(85,.48,'triangle',.065,32);tone(720,.25,'sawtooth',.02,90);}if(e.type==='level')tone(650,.24,'sine',.05,1200);if(e.type==='evolution'){tone(620,.3,'sine',.045,1240);}if(e.type==='companionJoined'){archive.recordRecruit?.(game,e.kind);tone(540,.3,'sine',.035,1080);}if(e.type==='encounterComplete')tone(540,.22,'sine',.03,880);if(e.type==='mushroomArmed')tone(480,.08,'sine',.012,650);if(e.type==='mushroomBlast')tone(120,.14,'triangle',.025,55);if(bossSound(e.type)&&bossFeedbackVisible()){if(e.type==='bossSlam')shake=reduced?0:Math.max(shake,3);tone(...bossSound(e.type));}if(e.type==='bossKill'){shake=reduced?0:Math.max(shake,4);tone(95,.35,'triangle',.045,40);}if(e.type==='boss'&&bossFeedbackVisible())tone(130,.5,'triangle',.07,75);if(e.type==='heal')tone(600,.1,'sine',.015,900);}if(hitSound)tone(170,.04,'triangle',.018,95);announceCombatEvents(game.events);game.events.length=0;}
 function frame(now){
@@ -1532,10 +1583,12 @@ function frame(now){
     if(!game?.sceneTransition.active)clock+=dt;
     if(game){const began=debugMode?cpuNow():0;updateGameFrame(dt);if(debugMode)updateMs=cpuNow()-began;}
   }
-  if(game?.debugFull)settleDebugChoices();
+  if(!startLoading&&game?.debugFull)settleDebugChoices();
   state=frameState();
-  if(renderSchedule.shouldRender(state)){
-    if(game&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen&&!runEnded){
+  // The explicit loading task owns first-scene rendering and error handling.
+  // The normal loop keeps scheduling but must not race or duplicate that work.
+  if(!startLoading&&renderSchedule.shouldRender(state)){
+    if(game&&!startLoading&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen&&!runEnded){
       if(!game.debugFull){if(game.status==='upgrade')openUpgrades();if(game.status==='relic')openRelics();if(game.status==='super')openSuperChoices();}
       if(game.status==='shop')openShop();if(game.status==='dead'||(game.status==='victory'&&!game.sceneTransition.active))endGame();
     }

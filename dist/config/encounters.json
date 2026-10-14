@@ -1,0 +1,454 @@
+{
+  "sequences": {
+    "arena": {
+      "id": "arena",
+      "fallback": "slime",
+      "rules": [
+        {
+          "type": "brute",
+          "every": 8,
+          "remainder": 0
+        },
+        {
+          "type": "beetle",
+          "every": 3,
+          "remainder": 0
+        }
+      ]
+    },
+    "rescue": {
+      "id": "rescue",
+      "fallback": "slime",
+      "rules": [
+        {
+          "type": "beetle",
+          "every": 3,
+          "remainder": 0
+        }
+      ]
+    },
+    "relicRescue": {
+      "id": "relicRescue",
+      "fallback": "slime",
+      "rules": [
+        {
+          "type": "brute",
+          "every": 4,
+          "remainder": 0
+        },
+        {
+          "type": "beetle",
+          "every": 3,
+          "remainder": 0
+        }
+      ]
+    },
+    "settlement": {
+      "id": "settlement",
+      "fallback": "beetle",
+      "rules": [
+        {
+          "type": "brute",
+          "index": 0
+        }
+      ]
+    },
+    "treasureRunner": {
+      "id": "treasureRunner",
+      "fallback": "beetle",
+      "rules": []
+    },
+    "eliteSummon": {
+      "id": "eliteSummon",
+      "fallback": "slime",
+      "rules": []
+    },
+    "treasureGuardian": {
+      "id": "treasureGuardian",
+      "fallback": "brute",
+      "rules": [
+        {
+          "type": "boar",
+          "every": 2,
+          "remainder": 0,
+          "underCap": 5
+        }
+      ]
+    }
+  },
+  "wavePatterns": [
+    {
+      "id": "advance",
+      "fallback": "slime",
+      "rules": [
+        {
+          "type": "brute",
+          "every": 5,
+          "remainder": 4,
+          "minTime": 60
+        },
+        {
+          "type": "beetle",
+          "every": 3,
+          "remainder": 0
+        }
+      ],
+      "name": "兽群推进"
+    },
+    {
+      "id": "wings",
+      "fallback": "bat",
+      "rules": [
+        {
+          "type": "beetle",
+          "every": 3,
+          "remainder": 2
+        }
+      ],
+      "name": "疾翼掠袭"
+    },
+    {
+      "id": "pincer",
+      "fallback": "slime",
+      "rules": [
+        {
+          "type": "boar",
+          "every": 5,
+          "remainder": 0,
+          "minTime": 30
+        },
+        {
+          "type": "spore",
+          "every": 5,
+          "remainder": 4,
+          "minTime": 45
+        },
+        {
+          "type": "beetle",
+          "every": 3,
+          "remainder": 1
+        }
+      ],
+      "name": "冲锋夹击"
+    }
+  ],
+  "specialEnemyCaps": {
+    "boar": 5,
+    "spore": 4
+  },
+  "caps": {
+    "wave": {
+      "limits": [
+        "boar",
+        "spore"
+      ],
+      "fallback": "beetle"
+    },
+    "castle": {
+      "limits": [
+        "boar",
+        "spore"
+      ],
+      "fallback": "bat"
+    }
+  },
+  "hutGuardPacks": {
+    "default": [
+      "brute",
+      "beetle",
+      "beetle",
+      "beetle"
+    ],
+    "shipwreck": [
+      "brute",
+      "beetle",
+      "beetle",
+      "bat",
+      "beetle",
+      "slime"
+    ],
+    "mine": [
+      "brute",
+      "beetle",
+      "beetle",
+      "brute",
+      "beetle"
+    ]
+  },
+  "castleGuardPacks": [
+    [
+      "slime",
+      "slime",
+      "beetle",
+      "bat"
+    ],
+    [
+      "beetle",
+      "slime",
+      "beetle",
+      "slime",
+      "spore"
+    ],
+    [
+      "slime",
+      "beetle",
+      "slime",
+      "beetle",
+      "boar"
+    ],
+    [
+      "beetle",
+      "slime",
+      "beetle",
+      "brute",
+      "spore"
+    ],
+    [
+      "slime",
+      "beetle",
+      "beetle",
+      "slime",
+      "boar",
+      "spore"
+    ]
+  ],
+  "castleSidePacks": {
+    "early": [
+      "beetle",
+      "slime",
+      "beetle",
+      "bat"
+    ],
+    "late": [
+      "beetle",
+      "slime",
+      "beetle",
+      "boar"
+    ],
+    "lateAfter": 4
+  },
+  "eliteEligibleTypes": [
+    "slime",
+    "beetle",
+    "brute"
+  ],
+  "debugWaveTypes": [
+    "slime",
+    "beetle",
+    "slime",
+    "brute",
+    "beetle",
+    "slime"
+  ],
+  "ordinarySpawnRules": {
+    "fallback": "slime",
+    "baselineWorld": "forest",
+    "lateAfter": 150,
+    "latePeriod": 60,
+    "brute": {
+      "after": 60,
+      "max": 0.15,
+      "base": 0.07,
+      "growth": 0.006
+    },
+    "bat": {
+      "after": 23,
+      "max": 0.8,
+      "base": 0.35,
+      "growth": 0.033
+    },
+    "beetle": {
+      "after": 12,
+      "min": 0.65,
+      "offset": 0.1
+    },
+    "specials": [
+      {
+        "type": "boar",
+        "at": 30,
+        "weight": 0.06,
+        "rollAbove": 0.89,
+        "rollThrough": 0.95
+      },
+      {
+        "type": "spore",
+        "at": 45,
+        "weight": 0.05,
+        "rollAbove": 0.95,
+        "rollThrough": null
+      }
+    ]
+  },
+  "waveRules": {
+    "initialRest": 20,
+    "exploration": 12,
+    "warning": 3,
+    "attackLimit": 24,
+    "spawnWindow": 8,
+    "clearRest": 8,
+    "escapeRest": 6,
+    "firstWaveSize": 22,
+    "waveSizeStep": 4,
+    "maxWaveSize": 56,
+    "maxEnemies": 180,
+    "lootRadius": 500,
+    "bossWarningPadding": 1,
+    "blockedRetry": 3,
+    "tierSizeStep": 2,
+    "easySizeMultiplier": 0.8,
+    "batches": 6,
+    "batchInterval": 1.2,
+    "entrySlots": 11,
+    "entryStride": 5,
+    "entryAngleStep": 0.12,
+    "alternateAngles": [
+      0,
+      -0.35,
+      0.35,
+      -0.6,
+      0.6
+    ],
+    "probeAngles": [
+      -0.4,
+      0,
+      0.4
+    ],
+    "rewardCrystalsBase": 8,
+    "rewardCrystalsMax": 18,
+    "rewardWaveStep": 2,
+    "rewardCrystalsStep": 2
+  },
+  "waveDirections": [
+    {
+      "id": "east",
+      "label": "东侧",
+      "angle": 0
+    },
+    {
+      "id": "south",
+      "label": "南侧",
+      "angle": 1.5707963267948966
+    },
+    {
+      "id": "west",
+      "label": "西侧",
+      "angle": 3.141592653589793
+    },
+    {
+      "id": "north",
+      "label": "北侧",
+      "angle": -1.5707963267948966
+    }
+  ],
+  "objectiveRules": {
+    "bossWarning": 25,
+    "campEngage": 240,
+    "houseEngage": 480,
+    "treasureEngage": 420,
+    "encounterPadding": 80,
+    "treasureChestEngage": 600,
+    "trappedCampSpacing": 330,
+    "clearedCampSpacing": 100
+  },
+  "arenaRules": {
+    "warmup": 0.7,
+    "batchSize": 3,
+    "batchInterval": 1.25,
+    "warning": 0.45,
+    "spawnGrace": 0.3,
+    "spawnDistance": 150,
+    "enemyLimit": 180
+  },
+  "eventRules": {
+    "types": [
+      "treasure",
+      "hunt"
+    ],
+    "initialDelay": 70,
+    "retryDelay": 5,
+    "nextDelay": 95,
+    "abandonDistance": 1100,
+    "enemyLimit": 180,
+    "encounterRadius": 210,
+    "treasure": {
+      "life": 35,
+      "radius": 18,
+      "baseHp": 160,
+      "healthTimeCap": 600,
+      "healthTimeGrowth": 0.001,
+      "easySpeed": 106,
+      "speed": 118,
+      "damage": 0,
+      "xp": 16,
+      "fleeRange": 245,
+      "waitRange": 330,
+      "fleeDistance": 180,
+      "returnDistance": 280,
+      "returnSpeedMultiplier": 0.4,
+      "idleSpeedMultiplier": 0.18,
+      "idleDistance": 80,
+      "wobbleFrequency": 0.8,
+      "wobbleAmplitude": 0.4
+    },
+    "hunt": {
+      "life": 40,
+      "goal": 12,
+      "relicGoal": 24,
+      "healthMultiplier": 1.5,
+      "xp": 2,
+      "playerEngagePadding": 140,
+      "guardEngagePadding": 120
+    },
+    "rewards": {
+      "treasure": {
+        "gold": 24,
+        "crystals": 8,
+        "pickup": "magnet",
+        "source": "宝物精"
+      },
+      "hunt": {
+        "gold": 6,
+        "crystals": 40,
+        "pickup": "fury",
+        "source": "限时狩猎"
+      },
+      "relicHunt": {
+        "gold": 18,
+        "crystals": 72,
+        "pickup": "fury",
+        "source": "遗迹狩猎"
+      }
+    },
+    "placement": {
+      "huntClearance": 245,
+      "treasureClearance": 42,
+      "huntObjectiveRadius": 245,
+      "treasureObjectiveRadius": 210,
+      "huntSiteRadius": 245,
+      "treasureSiteRadius": 90,
+      "hazardClearance": 70,
+      "propClearance": 70,
+      "huntChestClearance": 290,
+      "treasureChestClearance": 180,
+      "huntAttempts": 144,
+      "treasureAttempts": 30,
+      "huntSlots": 24,
+      "treasureSlots": 30,
+      "huntStartRadius": 300,
+      "huntRadiusStep": 100,
+      "treasureStartRadius": 280,
+      "treasureRings": 3,
+      "treasureRadiusStep": 50,
+      "viewPadding": 45
+    },
+    "arenaPlacement": {
+      "radii": [
+        190,
+        205,
+        220
+      ],
+      "slots": 24,
+      "retryDelay": 0.2
+    }
+  }
+}

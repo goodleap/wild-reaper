@@ -1,17 +1,11 @@
+import { getConfigSection } from './content-config.js';
 import { ELITE_ELIGIBLE_TYPES, ENCOUNTER_SEQUENCES } from './encounter-definitions.js';
 import { enemyDefinition } from './enemy-definitions.js';
 import { groundOffset } from './terrain.js';
 
-export const ELITE_RULES=Object.freeze({
-  startAt:45,chance:.04,cap:3,health:1.5,scale:1.08,xp:1.5,shield:.4,
-  range:430,swiftWindup:.5,swiftDuration:1.1,swiftSpeed:1.65,swiftCooldown:4.5,
-  summonWindup:1.1,summonCooldown:6,summonCount:2,summonOwnerCap:2,summonGlobalCap:6,enemyCap:180
-});
-export const ELITE_AFFIXES=Object.freeze({
-  shield:Object.freeze({id:'shield',name:'护盾',color:'#9acbdf'}),
-  swift:Object.freeze({id:'swift',name:'迅捷',color:'#e6cf89'}),
-  summoner:Object.freeze({id:'summoner',name:'召唤',color:'#cbb0e2'})
-});
+const eliteContent=getConfigSection('enemies').elite;
+export const ELITE_RULES=eliteContent.rules;
+export const ELITE_AFFIXES=eliteContent.affixes;
 const ELIGIBLE=new Set(ELITE_ELIGIBLE_TYPES);
 const distanceSq=(ax,ay,bx,by)=>(ax-bx)**2+(ay-by)**2;
 
@@ -36,7 +30,7 @@ export class Elites {
     const foot=enemy.y+groundOffset(enemy);
     enemy.maxHp*=rules.health;enemy.hp*=rules.health;enemy.r*=rules.scale;
     enemy.y=foot-groundOffset(enemy);enemy.xp=Math.round(enemy.xp*rules.xp);
-    enemy.affix={...definition,phase:'idle',life:0,maxLife:0,cooldown:id==='swift'?2.2:2.8,hit:0,shield:0,maxShield:0,castX:enemy.x,castY:foot};
+    enemy.affix={...definition,phase:'idle',life:0,maxLife:0,cooldown:id==='swift'?rules.swiftInitialCooldown:rules.otherInitialCooldown,hit:0,shield:0,maxShield:0,castX:enemy.x,castY:foot};
     if(id==='shield')enemy.affix.shield=enemy.affix.maxShield=enemy.maxHp*rules.shield;
     game._moveEntity(enemy,0,0);
     return true;
@@ -79,7 +73,7 @@ export class Elites {
       return false;
     }
     if(affix.phase==='windup') {
-      if(!this._canAct(enemy)) { affix.phase='idle';affix.life=0;affix.cooldown=1;return false; }
+      if(!this._canAct(enemy)) { affix.phase='idle';affix.life=0;affix.cooldown=rules.cancelCooldown;return false; }
       affix.life=Math.max(0,affix.life-dt);
       if(affix.id==='swift'&&affix.life===0) {
         affix.phase='rush';affix.life=affix.maxLife=rules.swiftDuration;
@@ -100,12 +94,12 @@ export class Elites {
   }
 
   _summonPoint(enemy,slot) {
-    const game=this.game,p=game.player,r=enemyDefinition(ENCOUNTER_SEQUENCES.eliteSummon.fallback).r,px=p.x,py=p.y+groundOffset(p,true);
+    const game=this.game,rules=ELITE_RULES,p=game.player,r=enemyDefinition(ENCOUNTER_SEQUENCES.eliteSummon.fallback).r,px=p.x,py=p.y+groundOffset(p,true);
     const x=enemy.x,y=enemy.y+groundOffset(enemy),seed=enemy.id*2.399963+slot*Math.PI;
-    for(let i=0;i<18;i++) {
-      const angle=seed+i*Math.PI/3,distance=58+Math.floor(i/6)*28;
+    for(let i=0;i<rules.summonAttempts;i++) {
+      const angle=seed+i*Math.PI/3,distance=rules.summonStartRadius+Math.floor(i/rules.summonRingSlots)*rules.summonRingStep;
       const sx=x+Math.cos(angle)*distance,sy=y+Math.sin(angle)*distance;
-      if(distanceSq(sx,sy,px,py)<=(75+r)**2||!game.terrain.isFree(sx,sy,r+2)||game.terrain.island?.isDry(sx,sy,r+2)===false)continue;
+      if(distanceSq(sx,sy,px,py)<=(rules.summonPlayerClearance+r)**2||!game.terrain.isFree(sx,sy,r+2)||game.terrain.island?.isDry(sx,sy,r+2)===false)continue;
       if(!game._inView({x:sx,y:sy-14,r}))continue;
       if(game.enemies.some(e=>e.hp>0&&distanceSq(sx,sy,e.x,e.y+groundOffset(e))<(r+e.r+5)**2))continue;
       return {x:sx,y:sy};

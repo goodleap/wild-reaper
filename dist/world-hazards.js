@@ -1,3 +1,4 @@
+import { getConfigSection } from './content-config.js';
 import { worldForId } from './world-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
@@ -7,11 +8,7 @@ import { containsWater, waterIntersectsCircle, waterBounds } from './water-geome
 
 const CELL=520;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-export const WORLD_HAZARD_RULES=Object.freeze({maxProps:6,safeRadius:310,hitInterval:.9,
-  rockfall:Object.freeze({radius:60,warning:1.35,active:.5,rest:6,playerDamage:16,enemyDamage:65}),
-  vent:Object.freeze({radius:54,warning:1.6,active:1.35,rest:5.5,playerDamage:11,enemyDamage:38}),
-  tide:Object.freeze({warning:1.8,active:4,rest:7}),
-  lava:Object.freeze({playerDamage:7,enemyDamage:23})});
+export const WORLD_HAZARD_RULES=getConfigSection('geography').hazardRules;
 
 // Only nearby patches keep live timers. World snapshots own this object, so
 // leaving a world freezes its timers without retaining scene-global targets.

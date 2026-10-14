@@ -1,7 +1,8 @@
+import { getConfigSection } from '../content-config.js';
 import { groundOffset } from '../terrain.js';
 import { selectFriendlyTarget } from '../friendly-combat.js';
 
-export const SPORE_RULES=Object.freeze({range:360,holdRange:290,releaseRange:430,windup:.65,cooldown:3.8,bulletSpeed:140,bulletLife:4.5,bulletRadius:6,color:'#d4a4e5'});
+export const SPORE_RULES=getConfigSection('enemies').behaviorRules.spore;
 
 export function updateSpore(game,e,dt) {
   e.castCooldown=Math.max(0,(e.castCooldown||0)-dt);
