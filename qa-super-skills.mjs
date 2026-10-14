@@ -17,24 +17,24 @@ function acquire(g,id,branch='binding'){
  const choice=id==='domain'&&!g.superSkills.owned.domain?`domain:${branch}`:id;
  assert(g.superSkills.choose(choice));g.status='playing';return def;
 }
-assert.equal(SUPER_SKILLS.length,4);assert.equal(new Set(SUPER_SKILLS.map(s=>s.id)).size,4);assert(SUPER_SKILLS.every(s=>s.automatic&&s.maxLevel===3));
+assert.equal(SUPER_SKILLS.length,2);assert.equal(new Set(SUPER_SKILLS.map(s=>s.id)).size,2);assert(SUPER_SKILLS.every(s=>s.automatic&&s.maxLevel===3));
 assert.equal(getSuperSkillStats('missing'),null);assert.equal(getSuperSkillStats('meteor',0),null);assert.equal(getSuperSkillStats('meteor',4),null);
 assert(Object.isFrozen(getSuperSkillStats('meteor',1)),'choice-card stats cannot mutate combat tuning');
 const locked=arena();assert.deepEqual(locked.superSkills.getUpgradeChoices(),[]);assert.deepEqual(locked.getSuperChoices(),[]);
 for(let i=0;i<20;i++){locked._choices=null;assert(!locked.getUpgradeChoices().some(c=>c.id.startsWith('super:')),'ordinary upgrades cannot unlock an unearned super');}
 locked.status='upgrade';assert.equal(locked.superSkills.upgrade('super:meteor'),false);
 locked.status='playing';assert(locked.superSkills.offer('region','marsh'));const offer=locked.getSuperChoices(),ids=offer.map(s=>s.id);
-assert.deepEqual(ids,['domain:erosion','domain:binding','runeArrow']);assert(offer.every(s=>s.source==='region'));
+assert.deepEqual(ids,['meteor','swords','runeArrow']);assert(offer.every(s=>s.source==='region'));
 assert.equal(locked.superSkills.offer('castle'),false,'another reward cannot overwrite a pending offer');
 for(let i=0;i<5;i++)assert.deepEqual(locked.getSuperChoices().map(s=>s.id),ids);
-assert.equal(locked.superSkills.choose(ids[0]),false,'a reward cannot be claimed outside its modal');locked.status='super';assert.equal(locked.superSkills.choose('meteor'),false);assert.equal(locked.superSkills.choose('missing'),false);
-assert(locked.superSkills.choose('domain:erosion'));assert.equal(locked.superSkills.choose('domain:binding'),false);
-assert.equal(locked.superSkills.owned.domain,1);assert.equal(locked.build.getSkill('domain').branch,'erosion');assert.equal(locked.superSkills.getUpgradeChoices()[0].id,'super:domain');
-const oldCooldown=locked.superSkills.cooldowns.domain;locked.status='upgrade';assert(locked.superSkills.upgrade('super:domain'));
-assert.equal(locked.superSkills.owned.domain,2);assert.equal(locked.superSkills.cooldowns.domain,oldCooldown,'reinforcement cannot instantly recast a cooling skill');
-assert(locked.superSkills.upgrade('super:domain'));assert.equal(locked.superSkills.upgrade('super:domain'),false);assert(!locked.superSkills.getUpgradeChoices().some(c=>c.skillId==='domain'));
+assert.equal(locked.superSkills.choose(ids[0]),false,'a reward cannot be claimed outside its modal');locked.status='super';assert.equal(locked.superSkills.choose('domain:binding'),false);assert.equal(locked.superSkills.choose('missing'),false);
+assert(locked.superSkills.choose('meteor'));assert.equal(locked.superSkills.choose('swords'),false);
+assert.equal(locked.superSkills.owned.meteor,1);assert.equal(locked.superSkills.getUpgradeChoices()[0].id,'super:meteor');
+const oldCooldown=locked.superSkills.cooldowns.meteor;locked.status='upgrade';assert(locked.superSkills.upgrade('super:meteor'));
+assert.equal(locked.superSkills.owned.meteor,2);assert.equal(locked.superSkills.cooldowns.meteor,oldCooldown,'reinforcement cannot instantly recast a cooling skill');
+assert(locked.superSkills.upgrade('super:meteor'));assert.equal(locked.superSkills.upgrade('super:meteor'),false);assert(!locked.superSkills.getUpgradeChoices().some(c=>c.skillId==='meteor'));
 for(const source of ['region','castle']){
- const g=arena();for(const def of SUPER_SKILLS.filter(s=>s.source===source))for(let i=0;i<3;i++)acquire(g,def.id);
+ const g=arena();for(const def of SUPER_SKILLS.filter(s=>(s.rewardSources||[s.source]).includes(source)))for(let i=0;i<3;i++)acquire(g,def.id);
  if(source==='region')for(let i=0;i<3;i++)assert(g.build.awardRuneArrow());
  assert(g.superSkills.offer(source));assert.deepEqual(g.getSuperChoices().map(c=>c.id),['super:resource']);g.status='super';assert(g.superSkills.choose('super:resource'));
  const expected=source==='castle'?SUPER_RULES.castleFallback:SUPER_RULES.regionFallback;
@@ -76,7 +76,7 @@ for(const def of SUPER_SKILLS){
  const g=arena();assert(g.dungeon.enter({id:'super-castle',door:{x:0,y:19.8}}));g.terrain=barrier;g.dungeon.active.terrain=barrier;g.enemies=[];g.player.x=0;g.player.y=0;
  acquire(g,def.id);const hidden=enemy(g,200);hidden.dungeonId=g.dungeon.active.id;hidden.guardActive=true;g.superSkills.cooldowns[def.id]=0;advance(g,2);assert.equal(hidden.hp,10000,`${def.id} respects closed walls`);
 }
-const vortex=arena();acquire(vortex,'vortex');enemy(vortex,130);const dragged=enemy(vortex,200),heavy=enemy(vortex,175,0,'boss');vortex.superSkills.cooldowns.vortex=0;advance(vortex,.6);assert(dragged.x<200);assert.equal(heavy.x,175);assert(vortex.terrain.isFree(dragged.x,dragged.y+groundOffset(dragged),dragged.r));
+const restricted=arena();assert.equal(restricted.superSkills._cast('domain',1),false);assert.equal(restricted.superSkills._cast('vortex',1),false);
 const dense=arena();for(const def of SUPER_SKILLS)acquire(dense,def.id);for(let i=0;i<180;i++)enemy(dense,130+i%12*8,-80+Math.floor(i/12)*9,'slime',1e6);
 for(let i=0;i<400;i++){advance(dense,.025);dense.effects=dense.effects.filter(e=>{e.life-=.025;return e.life>0;});assert(dense.superSkills.fields.length<=SUPER_RULES.maxFields);assert(dense.superSkills._volleys.length<=2);assert(dense.effects.length<=201);assert(dense.enemies.every(e=>Number.isFinite(e.x)&&Number.isFinite(e.y)&&Number.isFinite(e.hp)));}
-console.log('Super skills: merged branch rewards, earned-only reinforcement, fresh snapshots, cap fallback, four automatic skills, full cast damage, wall separation, pauses and bounded effects passed.');
+console.log('Super skills: player-only Boss rewards, earned-only reinforcement, fresh snapshots, cap fallback, two automatic supers, full cast damage, wall separation, pauses and bounded effects passed.');

@@ -116,16 +116,16 @@ for(const id of ['arrow','barrier']){
   const actual=id==='arrow'?weaponStats(current,id).baseDamage:skillStats(current,id).capacity;
   assert.equal(after(model.rows[0]),actual,'acquisition previews the actual granted ability');
 }
-for(const branch of ['binding','erosion']){
+for(const skillId of ['meteor','swords']){
   const current=game();current.status='playing';current.superSkills.offer('region','forest');
-  const choice=current.superSkills.getChoices().find(c=>c.domainBranch===branch);assert(choice);
+  const choice=current.superSkills.getChoices().find(c=>c.id===skillId);assert(choice);
   const before=current.build.serialize(),model=presentUpgrade(choice,current);
-  assert.deepEqual(current.build.serialize(),before,'domain cards do not choose a branch while rendering');
+  assert.deepEqual(current.build.serialize(),before,'reward previews do not acquire skills');
   assert.equal(model.action,'新获得');assert.equal(model.category,'skill');
   current.status='super';assert(current.superSkills.choose(choice.id));
-  const actual=getSuperSkillStats('domain',1,branch);
-  assert.equal(after(model.rows[0]),actual.impactDamage);assert.equal(after(model.rows[1]),actual.damage);
-  assert.equal(current.build.getSkill('domain').branch,branch);
+  const actual=getSuperSkillStats(skillId,1);
+  assert.equal(after(model.rows[0]),actual.damage);
+  assert.equal(current.build.getSkill(skillId).baseRank,1);
   examplesForNew.push(model);
 }
 for(const existing of [false,true]){

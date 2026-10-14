@@ -1,3 +1,4 @@
+import { getHero } from './heroes.js';
 import { WEAPON_DEFS, SKILL_DEFS, SUPER_SKILL_DEFS, UPGRADE_DEFS, ENDLESS_UPGRADES, EVOLUTIONS, getUpgradeDefinition, canTakeUpgrade, meetsUpgradeRequirements, normalizeInitialWeaponId } from './combat-catalog.js';
 import { branchDefinition, isBranchReady } from './weapon-branches.js';
 
@@ -17,23 +18,24 @@ function record(def,initialRank=def.initialRank) {
 }
 
 export class CombatBuild {
-  constructor({initialWeaponId='sword'}={}) {
+  constructor({initialWeaponId='sword',heroId='traveler'}={}) {
+    this.heroId=getHero(heroId).id;
     this.progressionTier=1;this.rescuePower=0;
     this.attributes=Object.fromEntries(ALL_UPGRADES.filter(def=>def.category==='attribute').map(def=>[def.id,0]));
     this.attributes.defense=0;
     const startingWeapon=normalizeInitialWeaponId(initialWeaponId);
     this.weapons=Object.fromEntries(Object.values(WEAPON_DEFS).map(def=>[def.id,record(def,def.id===startingWeapon?1:0)]));
-    this.skills=Object.fromEntries(Object.values(SKILL_DEFS).map(def=>[def.id,record(def)]));
+    this.skills=Object.fromEntries(Object.values(SKILL_DEFS).filter(def=>!def.exclusiveOwnerIds?.length||def.exclusiveOwnerIds.includes(this.heroId)).map(def=>[def.id,record(def)]));
     this.levels={};this.branches={};this.evolutions={};this.superLevels={};
     for(const def of ALL_UPGRADES) {
-      if(def.upgradeKind==='modifier')this._owner(def).modifiers[def.id]=0;
+      if(def.upgradeKind==='modifier'&&this._owner(def))this._owner(def).modifiers[def.id]=0;
       view(this.levels,def.id,()=>this.getRank(def.id),value=>this._setRank(def,natural(value)));
     }
-    for(const id of ['sword','arrow','pulse','lightning','domain'])view(this.branches,id,()=>this._record(id).branch,value=>{
+    for(const id of ['sword','arrow','pulse','lightning'].filter(id=>this._record(id)))view(this.branches,id,()=>this._record(id).branch,value=>{
       if(value===null||branchDefinition(id,value))this._record(id).branch=value;
     });
     for(const id of Object.keys(EVOLUTIONS))view(this.evolutions,id,()=>this._record(id).evolved,value=>{this._record(id).evolved=!!value;});
-    for(const def of SUPER_SKILL_DEFS)view(this.superLevels,def.id,()=>this.skills[def.id].baseRank,value=>{
+    for(const def of SUPER_SKILL_DEFS.filter(def=>this.skills[def.id]))view(this.superLevels,def.id,()=>this.skills[def.id].baseRank,value=>{
       const skill=this.skills[def.id];skill.baseRank=Math.min(def.maxBaseRank,natural(value));skill.equipped=skill.baseRank>0;
     });
   }
@@ -46,14 +48,14 @@ export class CombatBuild {
     if(id.startsWith('super:'))return this.skills[id.slice(6)]?.baseRank||0;
     const def=getUpgradeDefinition(id);if(!def)return 0;
     if(def.category==='attribute')return this.attributes[id]||0;
-    const owner=this._owner(def);
+    const owner=this._owner(def);if(!owner)return 0;
     if(def.upgradeKind==='modifier')return owner.modifiers[id]||0;
     return Math.max(0,owner.baseRank-(id==='storm'?1:0));
   }
   _setRank(def,value) {
     value=Math.min(def.cap,value);
     if(def.category==='attribute'){this.attributes[def.id]=value;return;}
-    const owner=this._owner(def);
+    const owner=this._owner(def);if(!owner)return;
     if(def.upgradeKind==='modifier'){owner.modifiers[def.id]=value;return;}
     const wasOwned=owner.baseRank>0;owner.baseRank=value+(def.id==='storm'?1:0);
     if(!owner.baseRank)owner.equipped=false;
@@ -71,13 +73,8 @@ export class CombatBuild {
     if(id!=='arrow')this._record(id).baseRank=5;
     return true;
   }
-  awardDomain(branch) {
-    if(!branchDefinition('domain',branch))return false;
-    const item=this.skills.domain;
-    if(item.baseRank>=3||(item.baseRank>0&&item.branch&&item.branch!==branch))return false;
-    item.branch=branch;item.baseRank++;item.equipped=true;
-    return true;
-  }
+  // Retired player reward. Kept as a harmless compatibility entry point.
+  awardDomain(){return false;}
   awardRuneArrow() {
     const item=this.weapons.arrow;
     if(item.branch==='ricochet'||item.modifiers.arrowRune>=3)return false;
@@ -114,7 +111,7 @@ export class CombatBuild {
     }else if(parts[0]==='branch') {
       if(!next.selectBranch(choice.ownerId||choice.weaponId||parts[1],choice.branch||parts[2]))return null;
     }else if(SUPER_SKILL_DEFS.some(def=>def.id===choice.id)) {
-      if(next.superLevels[choice.id]>=SKILL_DEFS[choice.id].maxBaseRank)return null;
+      if(!next.getSkill(choice.id)||next.superLevels[choice.id]>=SKILL_DEFS[choice.id].maxBaseRank)return null;
       next.superLevels[choice.id]++;
     }else if(!next.increment(choice.id))return null;
     for(const id of Object.keys(EVOLUTIONS))next.evolutions[id]=next._canEvolve(id);
@@ -126,10 +123,10 @@ export class CombatBuild {
   // HP and world events belong to their respective future persistence layer.
   serialize() {
     const save=records=>Object.fromEntries(Object.values(records).map(item=>[item.id,{baseRank:item.baseRank,modifiers:{...item.modifiers},branch:item.branch,evolved:item.evolved,equipped:item.equipped}]));
-    return {version:2,progressionTier:this.progressionTier,rescuePower:this.rescuePower,attributes:{...this.attributes},weapons:save(this.weapons),skills:save(this.skills)};
+    return {version:3,heroId:this.heroId,progressionTier:this.progressionTier,rescuePower:this.rescuePower,attributes:{...this.attributes},weapons:save(this.weapons),skills:save(this.skills)};
   }
   static fromSnapshot(snapshot) {
-    if(!snapshot||![1,2].includes(snapshot.version))throw new TypeError('Unsupported combat build snapshot');
+    if(!snapshot||![1,2,3].includes(snapshot.version))throw new TypeError('Unsupported combat build snapshot');
     if(snapshot.version===1){
       snapshot=structuredClone(snapshot);
       const oldBinding=snapshot.skills?.thorns,oldErosion=snapshot.skills?.miasma;
@@ -141,7 +138,19 @@ export class CombatBuild {
         else {arrow.baseRank=1;arrow.branch='pierce';arrow.modifiers.arrowRune=Math.min(3,runic);}
       }
     }
-    const build=new CombatBuild();
+    if(snapshot.version<3) {
+      snapshot=structuredClone(snapshot);
+      // Old build snapshots preserve investment in replacement player skills;
+      // historical archive observations remain under their original IDs.
+      for(const [retired,replacement] of [['domain','frostbolt'],['vortex','fireball']]) {
+        const prior=snapshot.skills?.[retired],current=snapshot.skills?.[replacement];
+        if(Number.isSafeInteger(prior?.baseRank)&&prior.baseRank>0&&prior.baseRank<=3) {
+          const baseRank=Math.min(5,prior.baseRank+2);
+          if(!(current?.baseRank>=baseRank))snapshot.skills[replacement]={baseRank,modifiers:{},branch:null,evolved:false,equipped:true};
+        }
+      }
+    }
+    const build=new CombatBuild({heroId:snapshot.heroId});
     const readNumber=(value,label,min=0,max=Number.MAX_SAFE_INTEGER)=>{
       if(!Number.isSafeInteger(value)||value<min||value>max)throw new RangeError(`Invalid combat build ${label}`);
       return value;

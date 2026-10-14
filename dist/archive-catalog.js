@@ -1,7 +1,7 @@
 import { getConfigSection } from './content-config.js';
 import { ENEMY_DEFS, ENEMY_CODEX_IDS } from './enemy-definitions.js';
 import { BOSS_DEFS } from './boss-definitions.js';
-import { WEAPON_DEFS, SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS, INITIAL_WEAPON_IDS } from './combat-catalog.js';
+import { WEAPON_DEFS, SKILL_DEFS, ALL_SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS, INITIAL_WEAPON_IDS } from './combat-catalog.js';
 import { WEAPON_BRANCHES } from './weapon-branches.js';
 import { companionDefinition } from './companion-catalog.js';
 
@@ -14,8 +14,8 @@ const bosses=[
   codex.castleBoss
 ].map(def=>({...def,category:'bosses'}));
 const copy=codex.equipment;
-const sourceLabel=def=>def.category==='weapon'&&INITIAL_WEAPON_IDS.includes(def.id)?'冒险准备中选择，或消耗灵晶成长时获得':def.source==='innate'?'出场自带':def.source==='castle'?'击败城堡首领后，从王城宝藏获得':def.source==='region'?'击败区域首领后，从奖励中获得':'消耗灵晶成长时获得';
-const equipment=(def,category)=>({id:`${category==='weapons'?'weapon':'skill'}:${def.id}`,ownerId:def.id,category,name:def.name,color:def.color,icon:def.icon,tier:def.tier,activation:def.activation,source:sourceLabel(def),...copy[def.id],branches:(WEAPON_BRANCHES[def.id]||[]).map(branch=>({id:branch.branch,name:branch.name,description:branch.desc})),evolution:EVOLUTIONS[def.id]||null});
+const sourceLabel=def=>def.category==='weapon'&&INITIAL_WEAPON_IDS.includes(def.id)?'冒险准备中选择，或消耗灵晶成长时获得':def.source==='innate'?'出场自带':def.rewardSources?.includes('region')&&def.rewardSources?.includes('castle')?'击败区域或城堡首领后，从宝藏获得':def.source==='castle'?'击败城堡首领后，从王城宝藏获得':def.source==='region'?'击败区域首领后，从奖励中获得':'消耗灵晶成长时获得';
+const equipment=(def,category)=>({id:`${category==='weapons'?'weapon':'skill'}:${def.id}`,ownerId:def.id,category,name:def.name,color:def.color,icon:def.icon,tier:def.tier,family:def.family,activation:def.activation,source:sourceLabel(def),...copy[def.id],branches:(WEAPON_BRANCHES[def.id]||[]).map(branch=>({id:branch.branch,name:branch.name,description:branch.desc})),evolution:EVOLUTIONS[def.id]||null});
 const weaponSkills=codex.weaponSkills;
 const companionCopy=codex.companions;
 const companions=Object.entries(companionCopy).map(([kind,copy])=>{
@@ -24,8 +24,10 @@ const companions=Object.entries(companionCopy).map(([kind,copy])=>{
 });
 const freezeEntry=entry=>Object.freeze({...entry,branches:Object.freeze((entry.branches||[]).map(Object.freeze))});
 export const ARCHIVE_ENTRIES=Object.freeze([...enemies,...bosses,...Object.values(WEAPON_DEFS).map(def=>equipment(def,'weapons')),...Object.values(SKILL_DEFS).map(def=>equipment(def,'skills')),...weaponSkills,...companions].map(freezeEntry));
+export const ARCHIVE_LEGACY_ENTRIES=Object.freeze(['domain','vortex'].map(id=>freezeEntry({...equipment(ALL_SKILL_DEFS[id],'skills'),legacy:true,source:'历史记录 · 现为 Boss 专用'})));
+export const ARCHIVE_PERSISTED_IDS=Object.freeze([...ARCHIVE_ENTRIES,...ARCHIVE_LEGACY_ENTRIES].map(entry=>entry.id));
 export const ARCHIVE_IDS=Object.freeze(ARCHIVE_ENTRIES.map(entry=>entry.id));
-export const ARCHIVE_ENTRY_BY_ID=new Map(ARCHIVE_ENTRIES.map(entry=>[entry.id,entry]));
+export const ARCHIVE_ENTRY_BY_ID=new Map([...ARCHIVE_ENTRIES,...ARCHIVE_LEGACY_ENTRIES].map(entry=>[entry.id,entry]));
 
 export function companionArchiveId(companion){
   const kind=typeof companion==='string'?companion:companion?.kind||companion?.heroId;

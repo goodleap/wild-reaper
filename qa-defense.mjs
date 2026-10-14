@@ -69,7 +69,7 @@ const normal=arena();normal.player.hp=53;
 fund(normal);
 const opening=normal.getUpgradeChoices();
 assert.equal(opening.length,3);assert(opening.some(choice=>choice.id==='arrow'));assert(opening.some(choice=>choice.id==='barrier'));
-const openingAttack=opening.find(choice=>['orbit','pulse','lightning'].includes(choice.id));assert(openingAttack);
+const openingAttack=opening.find(choice=>['orbit','pulse','lightning','fireball','frostbolt'].includes(choice.id));assert(openingAttack);
 assert.equal(normal.chooseUpgrade('toughness'),false,'defense cannot bypass the opening acquisition offer');
 assert(normal.chooseUpgrade(openingAttack.id));
 const loadoutBefore={weapons:normal.build.getWeaponLoadout(),skills:normal.build.getSkillLoadout()};

@@ -1,11 +1,11 @@
-import { ARCHIVE_ENTRIES, enemyArchiveId, companionArchiveId, ownedArchiveEntries } from './archive-catalog.js';
+import { ARCHIVE_PERSISTED_IDS, enemyArchiveId, companionArchiveId, ownedArchiveEntries } from './archive-catalog.js';
 import { UPGRADE_DEFS } from './combat-catalog.js';
 import { HEROES } from './heroes.js';
 
 export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive-v2';
 const PREVIOUS_ARCHIVE_KEY='wild-echoes-adventure-archive';
 const LEGACY_KEY='wild-echoes-endless-record';
-const ENTRY_IDS=new Set(ARCHIVE_ENTRIES.map(entry=>entry.id));
+const ENTRY_IDS=new Set(ARCHIVE_PERSISTED_IDS);
 const HERO_IDS=new Set(HEROES.map(hero=>hero.id));
 const MODIFIER_CAPS=new Map(UPGRADE_DEFS.filter(def=>def.upgradeKind==='modifier').map(def=>[def.id,def.cap]));
 const COUNTER_LIMIT=1e12;

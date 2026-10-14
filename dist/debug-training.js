@@ -3,7 +3,7 @@ import { isBranchReady } from './weapon-branches.js';
 import { groundOffset } from './terrain.js';
 import { enemyDefinition } from './enemy-definitions.js';
 
-export const DEBUG_FULL_BRANCHES=Object.freeze({sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain',domain:'binding'});
+export const DEBUG_FULL_BRANCHES=Object.freeze({sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain'});
 export const TRAINING_DUMMY_RULES=Object.freeze({radius:16,foot:18,defense:100,health:1e9,minDistance:110,maxDistance:230});
 export const DEBUG_BOSS_RULES=Object.freeze({health:1e9,minDistance:180,maxDistance:450});
 
@@ -19,13 +19,12 @@ export function applyFullDebugBuild(game) {
     let changed=false;
     for(const def of upgrades)while(build.increment(def.id))changed=true;
     for(const [id,branch] of Object.entries(DEBUG_FULL_BRANCHES)) {
-      if(id!=='domain'&&isBranchReady(build,id)&&build.selectBranch(id,branch))changed=true;
+      if(isBranchReady(build,id)&&build.selectBranch(id,branch))changed=true;
     }
     if(!changed)break;
   }
   while(build.awardRuneArrow()){}
-  while(build.awardDomain(DEBUG_FULL_BRANCHES.domain)){}
-  for(const def of SUPER_SKILL_DEFS)if(def.id!=='domain')build.superLevels[def.id]=def.maxBaseRank;
+  for(const def of SUPER_SKILL_DEFS)if(build.getSkill(def.id))build.superLevels[def.id]=def.maxBaseRank;
   for(const weapon of Object.values(build.weapons))if(weapon.acquired)build.setEquipped(weapon.id,true);
   game._syncEvolutions(false);game._refreshStats();game._refreshWeapons();
   game._debugFullApplied=true;

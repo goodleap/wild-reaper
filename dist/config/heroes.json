@@ -47,15 +47,15 @@
       "id": "princess",
       "name": "美丽公主",
       "role": "灵巧游走",
-      "summary": "走位与收集更轻松，生命和伤害略低，擅长灵活周旋。",
+      "summary": "走位与收集更轻松，擅长灵活周旋与探索。",
       "color": "#e9b3c8",
       "statModifiers": {
         "maxHealth": {
-          "multiplier": 0.9,
+          "multiplier": 1,
           "fixed": 0
         },
         "attack": {
-          "multiplier": 0.92,
+          "multiplier": 1,
           "fixed": 0
         },
         "defense": {

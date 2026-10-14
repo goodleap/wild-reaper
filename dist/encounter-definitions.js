@@ -11,6 +11,7 @@ export const CASTLE_GUARD_PACKS=content.castleGuardPacks;
 export const CASTLE_SIDE_PACKS=content.castleSidePacks;
 export const ELITE_ELIGIBLE_TYPES=content.eliteEligibleTypes;
 export const DEBUG_WAVE_TYPES=content.debugWaveTypes;
+export const SPECIALIST_SPAWN_RULES=content.specialistSpawnRules;
 
 function matches(rule,index,{time=0,enemies=[],counts=null}={}) {
   if(rule.index!=null&&index!==rule.index)return false;
@@ -44,6 +45,9 @@ export const ORDINARY_SPAWN_RULES=Object.freeze({...content.ordinarySpawnRules,s
 // Preserve the baseline world's cumulative intervals and their historical
 // overlap. Other worlds use the same unlocked bands with regional weights.
 export function ordinaryEnemyType(game,roll) {
+  const specialist=specialistEnemyRoll(game,roll);
+  if(specialist.type)return specialist.type;
+  roll=specialist.roll;
   const rules=ORDINARY_SPAWN_RULES,t=game._difficultyTime?.()??game.time,late=Math.max(0,t-rules.lateAfter)/rules.latePeriod;
   const brute=t>rules.brute.after?Math.min(rules.brute.max,rules.brute.base+late*rules.brute.growth):0;
   const batCurve=Math.min(rules.bat.max,rules.bat.base+late*rules.bat.growth);
@@ -65,12 +69,29 @@ export function ordinaryEnemyType(game,roll) {
   return rules.fallback;
 }
 
+export function specialistEnemyRoll(game,roll){
+  const rules=SPECIALIST_SPAWN_RULES,time=game._difficultyTime?.()??game.time;
+  let total=0,alive=0;const counts={};
+  for(const enemy of game.enemies)if(enemy.hp>0&&enemyDefinition(enemy.type).behavior==='specialist'){alive++;counts[enemy.type]=(counts[enemy.type]||0)+1;}
+  if(alive>=rules.globalCap)return {roll};
+  const choices=[];
+  for(const entry of rules.entries){
+    if(time<entry.at||(counts[entry.type]||0)>=SPECIAL_ENEMY_CAPS[entry.type])continue;
+    const weight=entry.weight*(game.region.enemyWeights[entry.type]||0);
+    if(weight>0){choices.push([entry.type,weight]);total+=weight;}
+  }
+  const chance=Math.min(rules.maxChance,total);
+  if(chance>0&&roll<chance){let cursor=roll/chance*total;for(const[type,weight]of choices){cursor-=weight;if(cursor<0)return {type};}}
+  return {roll:chance>0?(roll-chance)/(1-chance):roll};
+}
+
 export function validateSpawnCatalog(regions=[]) {
   const checkSequence=definition=>{enemyDefinition(definition.fallback);for(const rule of definition.rules)enemyDefinition(rule.type);};
   for(const definition of [...Object.values(ENCOUNTER_SEQUENCES),...WAVE_PATTERNS])checkSequence(definition);
   for(const list of [...Object.values(HUT_GUARD_PACKS),...CASTLE_GUARD_PACKS,CASTLE_SIDE_PACKS.early,CASTLE_SIDE_PACKS.late,ELITE_ELIGIBLE_TYPES,DEBUG_WAVE_TYPES])for(const type of list)enemyDefinition(type);
   for(const profile of Object.values(ENCOUNTER_CAPS)){enemyDefinition(profile.fallback);for(const type of Object.keys(profile.limits))enemyDefinition(type);}
   for(const special of ORDINARY_SPAWN_RULES.specials)enemyDefinition(special.type);
+  for(const special of SPECIALIST_SPAWN_RULES.entries)enemyDefinition(special.type);
   const ordinaryTypes=['brute','bat','beetle','slime',...ORDINARY_SPAWN_RULES.specials.map(item=>item.type)];
   for(const region of regions) {
     const weights=region.enemyWeights;

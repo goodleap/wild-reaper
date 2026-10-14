@@ -4,6 +4,7 @@ import { clearBossAttacks } from './bosses.js';
 import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } from './combat-stats.js';
 import { queueAttackKnockback } from './weapon-knockback.js';
 import { emitDamageNumber } from './damage-numbers.js';
+import { specialistDamageMultiplier } from './enemies/specialists.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const feedbackSeed=(x,y,time,id=0)=>(Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
@@ -19,6 +20,9 @@ export const ATTACK_SOURCES=Object.freeze({
   pulse:Object.freeze({owner:'player',skillId:'pulse',consumeBleed:true}),
   echo:Object.freeze({owner:'player',skillId:'pulse',consumeBleed:true}),
   lightning:Object.freeze({owner:'player',skillId:'lightning',shock:true}),
+  fireball:Object.freeze({owner:'player',skillId:'fireball'}),
+  frostbolt:Object.freeze({owner:'player',skillId:'frostbolt'}),
+  burn:Object.freeze({owner:'reaction',kind:'secondary'}),
   storm:Object.freeze({owner:'player',skillId:'storm',shock:true}),
   companionLightning:Object.freeze({owner:'ally',skillId:'lightning',shock:true}),
   companionPulse:Object.freeze({owner:'ally',skillId:'pulse',consumeBleed:true}),
@@ -98,7 +102,9 @@ export class CombatResolution {
     // and origin checks above remain pure and reject blocked strikes first.
     if(enemy.dungeonId)g.dungeon.awaken?.(enemy);
     amount*=defenseDamageMultiplier(Number.isFinite(enemy.defense)?enemy.defense:0);
+    amount*=specialistDamageMultiplier(enemy,origin,source);
     amount=g.elites?.beforeDamage(enemy,amount)??amount;
+    amount=g.abilities?.absorbDamage(enemy,amount)??amount;
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
     const angle=Math.atan2(enemy.y-(Number.isFinite(origin?.y)?origin.y:enemy.y),enemy.x-(Number.isFinite(origin?.x)?origin.x:enemy.x));
@@ -154,6 +160,7 @@ export class CombatResolution {
     amount*=g.companions?.protectionMultiplier?.(p)??1;
     amount=g.relics?.modifyIncomingDamage(amount)??amount;
     amount=g.barrier?.absorbDamage(amount)??amount;
+    amount=g.abilities?.absorbDamage(p,amount)??amount;
     const previousHp=p.hp;
     p.hp=Math.max(0,p.hp-amount);p.invuln=.8;
     if(p.hp<previousHp){p.hurtFlash=.8;p.hurtFace=.24;g._emit('hurt');g._effect(p.x,p.y,'ring',.3,42,'#e48d78');}

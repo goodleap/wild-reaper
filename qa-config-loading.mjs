@@ -30,7 +30,7 @@ const badCases=[
   ['network',()=>{throw Error('offline');}],
   ['http',()=>({ok:false,status:503,text:async()=>''})],
   ['malformed',()=>({ok:true,text:async()=>'{broken'})],
-  ['schema',()=>{const pack=changed();pack.schemaVersion=2;return response(pack);}],
+  ['schema',()=>{const pack=changed();pack.schemaVersion=3;return response(pack);}],
   ['missing-section',()=>{const pack=changed();delete pack.sections.economy;return response(pack);}],
   ['world-reference',()=>{const pack=changed();pack.sections.stages.definitions[0].themeId='missing-world';return response(pack);}],
   ['behavior-reference',()=>{const pack=changed();pack.sections.enemies.definitions.slime.behavior='unknown-behavior';return response(pack);}],
@@ -40,7 +40,7 @@ const badCases=[
   ['milestone-target',()=>{const pack=changed();pack.sections.codex.milestones[0].target=0;return response(pack);}],
   ['milestone-duplicate',()=>{const pack=changed();pack.sections.codex.milestones[1].id=pack.sections.codex.milestones[0].id;return response(pack);}],
   ['large-response',()=>({ok:true,headers:{get:()=>String(3*1024*1024)},text:async()=>{throw Error('body must not be read');}})],
-  ['prototype-key',()=>({ok:true,text:async()=>JSON.stringify(changed()).replace('"schemaVersion":1','"__proto__":{},"schemaVersion":1')})]
+  ['prototype-key',()=>({ok:true,text:async()=>JSON.stringify(changed()).replace('"schemaVersion":2','"__proto__":{},"schemaVersion":2')})]
 ];
 for(const [label,fetchImpl] of badCases){
   const api=await fresh(),loaded=await api.loadContentConfig({url:'https://configuration.invalid/content',fetchImpl});

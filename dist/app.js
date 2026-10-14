@@ -7,6 +7,7 @@ import { Game, RELICS } from './engine.js';
 import { SceneryArt } from './scenery-art.js';
 import { CombatArt } from './combat-art.js';
 import { CombatVfx } from './combat-vfx.js';
+import { drawAbilityGround, drawAbilityProjectiles } from './ability-art.js';
 import { drawWeaponTrail } from './weapon-trails.js';
 import { drawSwordSlash, swordSlashPose } from './sword-art.js';
 import { drawSwordEnergy } from './sword-energy-art.js';
@@ -1313,7 +1314,7 @@ function player(x,y,t,scale=1,facing=0,hurtFlash=0,entity={}){
   if(hurtFlash>0&&Math.floor(time*18)%2===0)ctx.globalAlpha=.65;
   humanoidArt.draw(ctx,getHero(entity.heroId).appearanceId||getHero(entity.heroId).id,{pose,entity,time,reduced,pixelRatio:dpr});ctx.restore();
 }
-function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(actorShape(e).radius);ctx.scale(s,s);const bob=enemyBob(e,t,reduced);ctx.translate(0,bob);const hit=e.hit>0;
+function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(actorShape(e).radius);ctx.scale(s,s);const bob=enemyBob(e,t,reduced);ctx.translate(0,bob);if(Number.isFinite(e.specialLift))ctx.translate(0,-clamp(e.specialLift,0,60)/s);const hit=e.hit>0;
   // A brief foot-anchored compression and lean makes a landed hit tangible.
   // It is presentation only: collision, damage and movement remain unchanged.
   if(hit&&!reduced){const recoil=Math.sin(Math.PI*clamp(e.hit/.12,0,1))*(enemyVisual(e)?.hitRecoil??.11)*(.65+(e.hitStrength||0)*.35),foot=actorShape(e).foot;ctx.translate(0,foot);ctx.transform(1,0,-Math.cos(e.hitAngle||0)*recoil*.55,1,0,0);ctx.scale(1+recoil,1-recoil*.7);ctx.translate(0,-foot);}
@@ -1506,7 +1507,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   ctx.save();ctx.translate(offsetX,offsetY);drawEncounterGround();drawRelicGround();drawMudGround();drawDungeonGround();ctx.restore();
   drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active?null:(target,view)=>drawMapLights(view.camX,view.camY,target,view.width,view.height));ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(!sceneVisible(gem))continue;if(Math.abs(gem.x-p.x)>width/2+20||Math.abs(gem.y-p.y)>height/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
-  drawCoins();drawSuperFields();
+  drawCoins();drawSuperFields();drawAbilityGround(ctx,game,{...combatOptions,visible:sceneVisible});
   combatArt.drawStormGround(ctx,game.storm,combatOptions);
   for(const e of game.effects)if(sceneVisible(e)&&effectInView(e))combatVfx.drawBurst(ctx,e,combatOptions,'ground');
   // Waiting swords sit behind the hero; launched swords use the air pass below.
@@ -1516,7 +1517,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   ctx.restore();ctx.restore();
   ctx.save();ctx.translate(offsetX,offsetY);drawScene(actors,terrain,p,adventureProps);ctx.restore();
   ctx.save();if(vision)vision.clipVisible(ctx,offsetX,offsetY);ctx.save();ctx.translate(offsetX,offsetY);
-  drawSuperFields(true);drawEnemyBullets();
+  drawSuperFields(true);drawEnemyBullets();drawAbilityProjectiles(ctx,game,{...combatOptions,visible:sceneVisible});
   drawGuardianBarrier(ctx,game,p,combatOptions);
   for(const b of game.bullets)if(sceneVisible(b)&&Math.abs(b.x-p.x)<width/2+100&&Math.abs(b.y-p.y)<height/2+100){drawWeaponTrail(ctx,b,combatOptions);combatArt.drawArrow(ctx,b,combatOptions);}
   drawSwordEnergyWaves();

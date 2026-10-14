@@ -117,7 +117,8 @@
         "advice": "横向移动躲开孢子，利用高大树石挡住弹道，寻找机会近身。",
         "color": "#d7aed8",
         "source": "在荒野、事件与遗迹中遭遇"
-      }
+      },
+      "ranged": true
     },
     "boss": {
       "id": "boss",
@@ -134,6 +135,212 @@
         "frequency": 0.85,
         "amplitude": 1.15
       }
+    },
+    "rootbinder": {
+      "id": "rootbinder",
+      "r": 18,
+      "baseHp": 76,
+      "baseSpeed": 48,
+      "damage": 11,
+      "xp": 10,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "rootbinder",
+      "specialist": "rootbinder",
+      "codex": {
+        "name": "根缚者",
+        "role": "地面 · 藤阵",
+        "description": "蓄力在目标位置长出短暂藤阵，限制走位。",
+        "advice": "看见藤阵芽点后提前离开；施法后有短暂停顿。",
+        "color": "#92bd71",
+        "source": "对应主题世界中的特色敌人"
+      },
+      "ranged": true
+    },
+    "boglurker": {
+      "id": "boglurker",
+      "r": 20,
+      "baseHp": 90,
+      "baseSpeed": 70,
+      "damage": 14,
+      "xp": 11,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "boglurker",
+      "specialist": "boglurker",
+      "codex": {
+        "name": "潜沼兽",
+        "role": "地面 · 潜伏突袭",
+        "description": "压低身体潜伏，锁定落点后沿直线扑袭。",
+        "advice": "在预警后横向移动，让它扑空；落地恢复时反击。",
+        "color": "#79aa94",
+        "source": "对应主题世界中的特色敌人"
+      }
+    },
+    "prismguard": {
+      "id": "prismguard",
+      "r": 19,
+      "baseHp": 92,
+      "baseSpeed": 48,
+      "damage": 14,
+      "xp": 12,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "prismguard",
+      "specialist": "prismguard",
+      "codex": {
+        "name": "棱光守卫",
+        "role": "地面 · 充能射线",
+        "description": "蓄力锁定方向发出直线射线，射击后冷却。",
+        "advice": "看清射线方向向侧面躲开，高大障碍可以提供掩护。",
+        "color": "#acbce1",
+        "source": "对应主题世界中的特色敌人"
+      },
+      "ranged": true
+    },
+    "tidepriest": {
+      "id": "tidepriest",
+      "r": 18,
+      "baseHp": 72,
+      "baseSpeed": 56,
+      "damage": 12,
+      "xp": 10,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "tidepriest",
+      "specialist": "tidepriest",
+      "codex": {
+        "name": "潮汐祭司",
+        "role": "地面 · 水弹",
+        "description": "在中距离蓄力发射水弹，命中推开目标。",
+        "advice": "横向躲开水弹，避免站在怪群前方被推回包围。",
+        "color": "#85d4dc",
+        "source": "对应主题世界中的特色敌人"
+      },
+      "ranged": true
+    },
+    "shieldguard": {
+      "id": "shieldguard",
+      "r": 21,
+      "baseHp": 150,
+      "baseSpeed": 54,
+      "damage": 16,
+      "xp": 14,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "shieldguard",
+      "specialist": "shieldguard",
+      "codex": {
+        "name": "架盾卫士",
+        "role": "地面 · 正面架盾",
+        "description": "架盾时正面减伤并缓慢推进，之后必须收盾恢复。",
+        "advice": "绕向侧后方，或抓住收盾窗口输出；盾牌不能免疫伤害。",
+        "color": "#c6b796",
+        "source": "对应主题世界中的特色敌人"
+      }
+    },
+    "stoneape": {
+      "id": "stoneape",
+      "r": 22,
+      "baseHp": 110,
+      "baseSpeed": 57,
+      "damage": 15,
+      "xp": 13,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "stoneape",
+      "specialist": "stoneape",
+      "codex": {
+        "name": "投石猿",
+        "role": "地面 · 抛石",
+        "description": "向预判位置抛出石块，落点提前标记。",
+        "advice": "及时离开落点，在它重新准备投石时接近。",
+        "color": "#baa28c",
+        "source": "对应主题世界中的特色敌人"
+      },
+      "ranged": true
+    },
+    "windhunter": {
+      "id": "windhunter",
+      "r": 17,
+      "baseHp": 60,
+      "baseSpeed": 108,
+      "damage": 11,
+      "xp": 10,
+      "movement": "air",
+      "behavior": "specialist",
+      "visual": "windhunter",
+      "specialist": "windhunter",
+      "codex": {
+        "name": "风翼猎手",
+        "role": "飞行 · 侧掠",
+        "description": "侧向掠过并释放风刃，结束后短暂停留。",
+        "advice": "留意侧面攻击，利用停留窗口反击；高障碍仍能挡住它。",
+        "color": "#b9dbc2",
+        "source": "对应主题世界中的特色敌人"
+      },
+      "ranged": true
+    },
+    "frostmage": {
+      "id": "frostmage",
+      "r": 18,
+      "baseHp": 72,
+      "baseSpeed": 52,
+      "damage": 10,
+      "xp": 11,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "frostmage",
+      "specialist": "frostmage",
+      "codex": {
+        "name": "冰霜术士",
+        "role": "地面 · 冰棱散射",
+        "description": "蓄力后发射有间隙的扇形冰棱，命中短暂减速。",
+        "advice": "穿过冰棱间隙，避免减速后被近战怪追上。",
+        "color": "#b4def5",
+        "source": "对应主题世界中的特色敌人"
+      },
+      "ranged": true
+    },
+    "flamelizard": {
+      "id": "flamelizard",
+      "r": 21,
+      "baseHp": 105,
+      "baseSpeed": 66,
+      "damage": 12,
+      "xp": 12,
+      "movement": "ground",
+      "behavior": "specialist",
+      "visual": "flamelizard",
+      "specialist": "flamelizard",
+      "codex": {
+        "name": "喷焰蜥",
+        "role": "地面 · 持续喷火",
+        "description": "锁定方向持续喷出短焰，结束后喘息。",
+        "advice": "绕到侧后方，利用喷火方向固定和喘息时间反击。",
+        "color": "#e4a36c",
+        "source": "对应主题世界中的特色敌人"
+      },
+      "ranged": true
+    },
+    "spiderling": {
+      "id": "spiderling",
+      "r": 11,
+      "baseHp": 24,
+      "baseSpeed": 120,
+      "damage": 6,
+      "xp": 0,
+      "movement": "ground",
+      "behavior": "chase",
+      "visual": "spiderling",
+      "codex": {
+        "name": "幼蛛",
+        "role": "召唤 · 追击",
+        "description": "织巢蛛后召来的小型幼蛛，数量有限。",
+        "advice": "及时清理幼蛛，避免它们在蛛网附近堵住退路。",
+        "color": "#b49cce",
+        "source": "织巢蛛后的召唤"
+      }
     }
   },
   "codexIds": [
@@ -142,7 +349,17 @@
     "beetle",
     "brute",
     "boar",
-    "spore"
+    "spore",
+    "rootbinder",
+    "boglurker",
+    "prismguard",
+    "tidepriest",
+    "shieldguard",
+    "stoneape",
+    "windhunter",
+    "frostmage",
+    "flamelizard",
+    "spiderling"
   ],
   "bosses": {
     "ancient": {
@@ -164,7 +381,8 @@
         "advice": "离开震地预警区，在攻击后的停顿中反击；击败后领取奖励并激活传送门。",
         "color": "#e7bc8a",
         "source": "区域传送门的守卫"
-      }
+      },
+      "canTargetAir": false
     },
     "bloom": {
       "id": "bloom",
@@ -206,7 +424,160 @@
         "advice": "绕向扇射侧面，离开地面孢爆预警；高大障碍可以遮挡飞行孢子。",
         "color": "#d7aada",
         "source": "区域传送门的守卫"
-      }
+      },
+      "canTargetAir": true
+    },
+    "broodmother": {
+      "id": "broodmother",
+      "name": "织巢蛛后",
+      "visual": "broodmother",
+      "behavior": "broodmother",
+      "parameters": {
+        "range": 470,
+        "preferredRange": 235,
+        "initialCooldown": 2,
+        "cooldown": 1.2,
+        "recovery": 1.1,
+        "cycleRecovery": 2.5,
+        "windup": 1,
+        "domainRadius": 95,
+        "domainDuration": 3.2,
+        "domainDamage": 0.18,
+        "summonCount": 3,
+        "summonCap": 5,
+        "summonGlobalCap": 12,
+        "summonAttempts": 18,
+        "summonRadius": 110,
+        "summonClearance": 100,
+        "enemyCap": 180,
+        "leapRadius": 66,
+        "leapDuration": 0.5,
+        "leapDamage": 1.1,
+        "moveMultiplier": 0.8,
+        "summonType": "spiderling"
+      },
+      "codex": {
+        "role": "森林首领 · 织网与召唤",
+        "description": "织网限制路线，召集少量幼蛛，再向锁定落点跃袭。",
+        "advice": "先绕开蛛网与跃袭落点，清理幼蛛后在落地停顿时反击。",
+        "color": "#c2a1df",
+        "source": "森林核心岛"
+      },
+      "canTargetAir": false
+    },
+    "deepcaller": {
+      "id": "deepcaller",
+      "name": "深潮巨章",
+      "visual": "deepcaller",
+      "behavior": "deepcaller",
+      "parameters": {
+        "range": 520,
+        "preferredRange": 270,
+        "initialCooldown": 2,
+        "cooldown": 1.1,
+        "recovery": 1.2,
+        "cycleRecovery": 3.2,
+        "windup": 1.1,
+        "strikeRadius": 52,
+        "strikeSpacing": 125,
+        "strikeInterval": 0.4,
+        "strikeDamage": 0.9,
+        "vortexRadius": 100,
+        "vortexDuration": 2.8,
+        "vortexDamage": 0.14,
+        "waveGap": 110,
+        "waveWidth": 75,
+        "waveSpeed": 175,
+        "waveDuration": 2.8,
+        "waveDamage": 0.8,
+        "moveMultiplier": 0.65
+      },
+      "codex": {
+        "role": "海岸首领 · 潮浪与触腕",
+        "description": "触腕按顺序拍击地面，以漩涡与留有缺口的双列潮浪改变安全区域。",
+        "advice": "观察拍击顺序，从水浪中间的缺口通过，趁收腕休息时集中攻击。",
+        "color": "#8bcdd7",
+        "source": "海岸核心岛"
+      },
+      "canTargetAir": false
+    },
+    "frostcrown": {
+      "id": "frostcrown",
+      "name": "霜冠巨鹿",
+      "visual": "frostcrown",
+      "behavior": "frostcrown",
+      "parameters": {
+        "range": 510,
+        "preferredRange": 255,
+        "initialCooldown": 2,
+        "cooldown": 1.1,
+        "recovery": 1.15,
+        "cycleRecovery": 2.8,
+        "windup": 1,
+        "fanCount": 5,
+        "fanSpread": 1.05,
+        "fanDamage": 0.6,
+        "fanSpeed": 185,
+        "chargeSpeed": 290,
+        "chargeDuration": 1.05,
+        "chargeDamage": 1,
+        "markRadius": 37,
+        "markSpacing": 56,
+        "markCap": 6,
+        "markLife": 8,
+        "markDamage": 0.75,
+        "shatterDelay": 1,
+        "shatterInterval": 0.28,
+        "frostRadius": 155,
+        "frostDamage": 0.55,
+        "moveMultiplier": 0.8
+      },
+      "codex": {
+        "role": "雪原首领 · 冰径冲锋",
+        "description": "发射冰棱后沿锁定方向冲锋，留下会依次碎裂的冰带，并释放周身寒霜。",
+        "advice": "横向躲开冲锋，记住冰带位置，不要在冰带上等待下一轮攻击。",
+        "color": "#b2e7ed",
+        "source": "雪原核心岛"
+      },
+      "canTargetAir": true
+    },
+    "furnace": {
+      "id": "furnace",
+      "name": "熔炉巨像",
+      "visual": "furnace",
+      "behavior": "furnace",
+      "parameters": {
+        "range": 500,
+        "preferredRange": 190,
+        "initialCooldown": 2.1,
+        "cooldown": 1.2,
+        "recovery": 1.3,
+        "cycleRecovery": 3.4,
+        "windup": 1.1,
+        "marchDuration": 2.2,
+        "marchSpeedMultiplier": 1.5,
+        "markRadius": 48,
+        "markSpacing": 65,
+        "markCap": 5,
+        "markLife": 9,
+        "markDamage": 0.9,
+        "eruptionDelay": 1.1,
+        "eruptionInterval": 0.38,
+        "fireballDamage": 0.8,
+        "flameDamage": 0.18,
+        "flameRange": 250,
+        "flameDuration": 1.8,
+        "flameSpread": 0.7,
+        "moveMultiplier": 0.75
+      },
+      "codex": {
+        "role": "火山首领 · 蓄热与喷发",
+        "description": "迈步留下有限的炽热脚印，再按顺序引爆，释放火焰后进入明显的散热停顿。",
+        "advice": "将脚印引向场地一侧，避开喷焰正面，利用散热窗口反击。",
+        "color": "#f2a078",
+        "source": "火山核心岛"
+      },
+      "canTargetAir": true
     }
   },
   "bossRotation": [
@@ -282,6 +653,137 @@
         "name": "召唤",
         "color": "#cbb0e2"
       }
+    }
+  },
+  "specialistRules": {
+    "rootbinder": {
+      "mode": "cast",
+      "range": 330,
+      "holdRange": 240,
+      "cooldown": 6.8,
+      "windup": 0.8,
+      "recovery": 0.6,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "abilityId": "vineTrap",
+      "radius": 48,
+      "duration": 2.4,
+      "slowMultiplier": 0.65,
+      "slowDuration": 0.55
+    },
+    "boglurker": {
+      "mode": "pounce",
+      "range": 310,
+      "holdRange": 0,
+      "cooldown": 5.8,
+      "windup": 0.85,
+      "recovery": 1.05,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1.15,
+      "minRange": 85,
+      "duration": 0.7,
+      "speed": 340
+    },
+    "prismguard": {
+      "mode": "cast",
+      "range": 390,
+      "holdRange": 290,
+      "cooldown": 5.4,
+      "windup": 0.95,
+      "recovery": 0.85,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "abilityId": "beam",
+      "radius": 10,
+      "duration": 0.18
+    },
+    "tidepriest": {
+      "mode": "cast",
+      "range": 350,
+      "holdRange": 235,
+      "cooldown": 4.3,
+      "windup": 0.65,
+      "recovery": 0.6,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "abilityId": "waterBolt",
+      "radius": 10,
+      "speed": 190
+    },
+    "shieldguard": {
+      "mode": "shield",
+      "range": 300,
+      "holdRange": 0,
+      "cooldown": 6.5,
+      "windup": 0.65,
+      "recovery": 1.45,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "duration": 2.8,
+      "speedMultiplier": 0.55,
+      "turnSpeed": 0.38,
+      "frontHalfAngle": 1.15,
+      "frontDamageMultiplier": 0.45
+    },
+    "stoneape": {
+      "mode": "cast",
+      "range": 420,
+      "holdRange": 270,
+      "cooldown": 5.6,
+      "windup": 0.8,
+      "recovery": 0.95,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "abilityId": "stoneLob",
+      "radius": 48,
+      "duration": 0.5,
+      "predictTime": 0.3
+    },
+    "windhunter": {
+      "mode": "strafe",
+      "range": 330,
+      "holdRange": 220,
+      "cooldown": 5.5,
+      "windup": 0.55,
+      "recovery": 0.9,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "abilityId": "windSlash",
+      "duration": 0.6,
+      "speed": 210,
+      "radius": 12,
+      "projectileSpeed": 240
+    },
+    "frostmage": {
+      "mode": "fan",
+      "range": 340,
+      "holdRange": 245,
+      "cooldown": 5.2,
+      "windup": 0.75,
+      "recovery": 0.75,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "abilityId": "frostbolt",
+      "radius": 7,
+      "speed": 170,
+      "count": 3,
+      "spread": 0.64,
+      "slowMultiplier": 0.76,
+      "slowDuration": 1.3
+    },
+    "flamelizard": {
+      "mode": "cast",
+      "range": 205,
+      "holdRange": 155,
+      "cooldown": 6.3,
+      "windup": 0.85,
+      "recovery": 1.25,
+      "initialCooldown": 2.4,
+      "damageMultiplier": 1,
+      "abilityId": "shortFlame",
+      "radius": 85,
+      "duration": 1.35,
+      "tickInterval": 0.45
     }
   }
 }

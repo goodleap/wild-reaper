@@ -24,7 +24,7 @@
         "name": "森林核心岛",
         "seed": 913,
         "boss": {
-          "kind": "bloom",
+          "kind": "broodmother",
           "index": 2,
           "hp": 5200,
           "easyHp": 3800,
@@ -207,7 +207,7 @@
           }
         },
         "boss": {
-          "kind": "ancient",
+          "kind": "deepcaller",
           "index": 2,
           "hp": 5400,
           "easyHp": 3950,
@@ -390,7 +390,7 @@
           }
         },
         "boss": {
-          "kind": "ancient",
+          "kind": "frostcrown",
           "index": 2,
           "hp": 5800,
           "easyHp": 4200,
@@ -451,7 +451,7 @@
           }
         },
         "boss": {
-          "kind": "ancient",
+          "kind": "furnace",
           "index": 2,
           "hp": 6800,
           "easyHp": 4900,

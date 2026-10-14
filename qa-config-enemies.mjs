@@ -12,7 +12,7 @@ import {WAVE_RULES} from './dist/wave-director.js';
 import {ARENA_ACTIVATION_RULES} from './dist/encounters.js';
 import {OBJECTIVE_RULES} from './dist/event-scheduling.js';
 
-const sections=Object.fromEntries(await Promise.all(['enemies','encounters','difficulty'].map(async id=>[id,JSON.parse(await readFile(new URL(`./dist/config/${id}.json`,import.meta.url),'utf8'))])));
+const sections=Object.fromEntries(await Promise.all(['enemies','encounters','difficulty','worlds'].map(async id=>[id,JSON.parse(await readFile(new URL(`./dist/config/${id}.json`,import.meta.url),'utf8'))])));
 assert.equal(validateEnemies(sections),true);
 const invalid=(mutate,pattern)=>{const data=structuredClone(sections);mutate(data);assert.throws(()=>validateEnemies(data),pattern);};
 invalid(c=>c.enemies.definitions.slime.behavior='remoteScript',/unknown reference/);
@@ -48,7 +48,7 @@ assert.equal(ORDINARY_SPAWN_RULES.specials.find(r=>r.rollThrough===Infinity).typ
 // original exact-roll behavior even at 1. Enemy caps include only living units.
 const originalRandom=Math.random;Math.random=()=>{throw new Error('configuration changed RNG ordering');};
 try{
- const game={time:60,region:{id:'forest'},enemies:[]};
+ const game={time:60,region:getConfigSection('worlds').definitions.find(world=>world.id==='forest'),enemies:[]};
  assert.equal(ordinaryEnemyType(game,1),'spore');
  game.enemies=Array.from({length:SPECIAL_ENEMY_CAPS.spore},()=>({type:'spore',hp:1}));
  assert.notEqual(ordinaryEnemyType(game,1),'spore');game.enemies[0].hp=0;assert.equal(ordinaryEnemyType(game,1),'spore');

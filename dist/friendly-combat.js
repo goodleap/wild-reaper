@@ -1,5 +1,7 @@
 import { groundOffset } from './terrain.js';
 import { isGrounded } from './height-rules.js';
+import { enemyDefinition } from './enemy-definitions.js';
+import { bossDefinition } from './boss-definitions.js';
 
 export const FRIENDLY_COMBAT_RULES=Object.freeze({retargetInterval:.2,allyLeash:420,acquireRange:460});
 export function friendlyFoot(entity){
@@ -27,7 +29,7 @@ export function clearFriendlyPath(game,origin,target,profile='sight',radius=0){
 }
 
 function canPursue(enemy,target){
-  return isGrounded(target)||!isGrounded(enemy)||enemy.type==='spore'||enemy.bossKind==='bloom';
+  return isGrounded(target)||!isGrounded(enemy)||enemyDefinition(enemy.type).ranged===true||(enemy.type==='boss'&&bossDefinition(enemy.bossKind).canTargetAir===true);
 }
 
 // Ordinary enemies continue pursuing the hero around cover. Optional ally

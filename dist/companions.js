@@ -145,7 +145,9 @@ export class Companions {
   takeDamage(member,amount,source='enemy') {
     const g=this.game;
     if(g.status!=='playing'||!this.members.includes(member)||member.state!=='active'||member.invuln>0||!Number.isFinite(amount)||amount<=0)return false;
-    member.hp=Math.max(0,member.hp-amount*defenseDamageMultiplier(member.defense||0)*this.protectionMultiplier(member));
+    amount*=defenseDamageMultiplier(member.defense||0)*this.protectionMultiplier(member);
+    amount=g.abilities?.absorbDamage(member,amount)??amount;
+    member.hp=Math.max(0,member.hp-amount);
     member.invuln=COMPANION_RULES.hitImmunity;member.hurtFace=.25;member.hurtFlash=.2;
     g._effect(member.x,member.y,'hit',.2,member.r*.7,'#eaa486',undefined,{source,angle:0,strength:.4,seed:member.id});
     if(member.hp<=0){g._friendlySnapshot=null;member.state='recovering';member.recovery=COMPANION_RULES.recoveryDuration;member._recoveryBlocked=false;member._echoes=[];member._attack=.8;member.workTarget=null;member._meleeTarget=null;member.scoutTarget=null;member.treasureTarget=null;g._emit('companionRecovering',{name:member.name,kind:member.kind,cost:definition(member.kind).recoveryCost});}
@@ -410,7 +412,7 @@ export class Companions {
     for(const active of this.combatants()){
       const ready=active._echoes.filter(e=>e.life<=0);active._echoes=active._echoes.filter(e=>e.life>0);
       for(const echo of ready)if(echo.regionIndex===g.regionIndex)this._quake(echo.x,echo.y,echo.r,echo.damage,true,active.id);
-      if(active._attack<=0){
+      if(active._attack<=0&&!g.abilities?.isFrozen(active)){
         const cast=active.kind==='stormcaller'?this._castLightning(active):active.kind==='warden'?this._castQuake(active):active.kind==='golem'?this._castGolem(active):false;
         if(!cast)active._attack=COMPANION_RULES.retryAttackDelay;
       }

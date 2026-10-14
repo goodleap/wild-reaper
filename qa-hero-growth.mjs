@@ -33,7 +33,7 @@ function capRegular(g) {
   Object.assign(g.branches,{sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain'});
   Object.assign(g.levels,LEVEL_CAPS);g._syncEvolutions(false);g._refreshStats();
 }
-const expectedHealth={traveler:1.1,princess:.9,elder:.85};
+const expectedHealth={traveler:1.1,princess:1,elder:.85};
 for(const hero of HEROES)for(const difficulty of ['normal','casual']) {
   const commonBase=difficulty==='casual'?140:100,multiplier=expectedHealth[hero.id];
   for(const [level,vitality,endless] of [[1,0,0],[2,0,0],[11,1,0],[51,5,20],[201,5,200]]) {

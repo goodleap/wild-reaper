@@ -110,6 +110,8 @@
 .buff-status,.companion-status{margin-left:var(--safe-left)}
 /* Anchor every modal to its safe-area top; content growth must not recenter the header. */
 #arena .modal-layer{--modal-padding:25px;padding:calc(var(--modal-padding) + var(--safe-top)) calc(var(--modal-padding) + var(--safe-right)) calc(var(--modal-padding) + var(--safe-bottom)) calc(var(--modal-padding) + var(--safe-left));overscroll-behavior:contain;touch-action:pan-y}
+/* Desktop dialogs leave more of the scene visible above their outer edge. */
+@media(min-width:761px) and (pointer:fine){#arena .modal-layer{padding-top:calc(clamp(42px,7vh,76px) + var(--safe-top))}}
 .dialog-panel{overscroll-behavior:contain;touch-action:pan-y;min-height:0}
 .intro{overscroll-behavior:contain}
 @media(max-width:760px){#arena .modal-layer{--modal-padding:15px}#arena #upgrade-overlay,#arena #super-overlay{--modal-padding:10px}.terrain-label{display:none}}

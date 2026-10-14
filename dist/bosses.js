@@ -1,6 +1,7 @@
 import { bossDefinition, bossKindFor } from './boss-definitions.js';
 import { updateAncientBoss, resolveAncientBoss } from './bosses/ancient.js';
 import { initBloomBoss, clearBloomBossAttacks, updateBloomBoss, resolveBloomBoss } from './bosses/bloom.js';
+import { initSpecialistBoss, clearSpecialistBoss, updateSpecialistBoss, resolveSpecialistBoss } from './bosses/specialists.js';
 
 export { ANCIENT_BOSS, BLOOM_BOSS, BOSS_DEFS, BOSS_ROTATION, bossDefinition, bossKindFor } from './boss-definitions.js';
 export { updateBloomBoss, resolveBloomBoss } from './bosses/bloom.js';
@@ -9,7 +10,8 @@ export { updateBloomBoss, resolveBloomBoss } from './bosses/bloom.js';
 // loop or another boss's implementation.
 export const BOSS_BEHAVIORS=Object.freeze({
   ancient:Object.freeze({update:updateAncientBoss,resolve:resolveAncientBoss,phase:'slam'}),
-  bloom:Object.freeze({initialize:initBloomBoss,update:updateBloomBoss,resolve:resolveBloomBoss,clear:clearBloomBossAttacks,phase:'ranged'})
+  bloom:Object.freeze({initialize:initBloomBoss,update:updateBloomBoss,resolve:resolveBloomBoss,clear:clearBloomBossAttacks,phase:'ranged'}),
+  ...Object.fromEntries(['broodmother','deepcaller','frostcrown','furnace'].map(id=>[id,Object.freeze({initialize:initSpecialistBoss,update:updateSpecialistBoss,resolve:resolveSpecialistBoss,clear:clearSpecialistBoss,phase:'ranged'})]))
 });
 export function bossBehavior(kind){
   const id=bossDefinition(kind).behavior;
@@ -27,6 +29,7 @@ export function updateBoss(game,enemy,dt){
 }
 export function resolveBossPhase(game,phase){
   for(const enemy of game.enemies)if(enemy.type==='boss'){
+    if(game.abilities?.isFrozen(enemy))continue;
     const behavior=bossBehavior(enemy.bossKind||'ancient');
     if(behavior.phase===phase)behavior.resolve?.(game,enemy);
   }
@@ -35,6 +38,7 @@ export function resolveBossPhase(game,phase){
 // of the selected pattern, exactly as before, including direct QA fixtures.
 export function resolveBossSlams(game){
   for(const enemy of game.enemies)if(enemy.type==='boss'){
+    if(game.abilities?.isFrozen(enemy))continue;
     const behavior=bossBehavior(enemy.bossKind||'ancient');
     if(behavior.phase==='slam')behavior.resolve?.(game,enemy);
     else if(enemy.slam)resolveAncientBoss(game,enemy);

@@ -119,6 +119,13 @@ export function weaponStats(game,id) {
 
 export function skillStats(game,id) {
   const record=game.build?.getSkill?.(id),branch=record?.branch??game.branches?.[id]??null;
+  if(id==='fireball'||id==='frostbolt') {
+    const rules=SKILL_RULES[id],level=boundedRank(game,id,rules.maxRank);
+    const values=rules.levels[Math.max(0,level-1)];
+    const {damage:baseDamage,burnDamage:baseBurnDamage,...parameters}=values;
+    return {id,level,owned:level>0,automatic:true,...parameters,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),
+      ...(baseBurnDamage===undefined?{}:{baseBurnDamage,burnDamage:scalePlayerDamage(game,baseBurnDamage,{skillId:id})})};
+  }
   if(id==='barrier') {
     const rules=SKILL_RULES.barrier;
     const level=boundedRank(game,id,rules.maxRank),bonus=game.relics?.has?.('leafWard')===true;

@@ -17,7 +17,7 @@ const choose=(h,group,id)=>{
   h.fire(node(h,`${group}-${id}`),'change');
 };
 const near=(value,expected,message)=>assert(Math.abs(value-expected)<1e-9,`${message}: ${value} != ${expected}`);
-const expected={traveler:{hp:110,attack:32,speed:220,defense:8,magnet:105},princess:{hp:90,attack:29.44,speed:246.4,defense:0,magnet:126},elder:{hp:85,attack:28.16,speed:202.4,defense:0,magnet:105}};
+const expected={traveler:{hp:110,attack:32,speed:220,defense:8,magnet:105},princess:{hp:100,attack:32,speed:246.4,defense:0,magnet:126},elder:{hp:85,attack:28.16,speed:202.4,defense:0,magnet:105}};
 const value=(html,id)=>html.match(new RegExp(`data-stat="${id}"><dt>[^<]*</dt><dd>([^<]*)</dd>`))?.[1];
 const place=(game,point)=>{game.player.x=point.x;game.player.y=point.y-groundOffset(game.player,true);};
 
@@ -31,8 +31,11 @@ for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   assert.equal(node(h,'hero-selection-name').textContent,hero.name);
   assert.match(node(h,'prepare-summary').textContent,new RegExp(hero.name));
   assert.equal(node(h,'hero-attributes').children.length,hero.details.length);
-  assert.match(node(h,'hero-attributes').children[0].textContent,/持续特性.*成长后的属性/);
-  assert.match(node(h,'hero-attributes').children[1].textContent,/固定加值/);
+  assert.match(node(h,'hero-attributes').children[0].textContent,/^角色特性：/);
+  assert.match(node(h,'hero-attributes').children[1].textContent,/^初始生命：/);
+  const traitCopy=[...node(h,'hero-attributes').children,...node(h,'hero-traits').children].map(item=>item.textContent).join(' ');
+  assert.doesNotMatch(traitCopy,/持续特性|固定加值|固定值/);
+  if(hero.id!=='elder')assert.doesNotMatch(traitCopy,/-\d/,'standard heroes advertise positive bonuses only');
   assert.equal(node(h,'hero-attributes').closest('details')?.tagName,'DETAILS','full numerical traits stay in expandable details');
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0);
   click(h,'prepare-back-button');assert.equal(h.run('game'),null);

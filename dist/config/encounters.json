@@ -134,20 +134,47 @@
   ],
   "specialEnemyCaps": {
     "boar": 5,
-    "spore": 4
+    "spore": 4,
+    "rootbinder": 2,
+    "boglurker": 2,
+    "prismguard": 2,
+    "tidepriest": 2,
+    "shieldguard": 2,
+    "stoneape": 2,
+    "windhunter": 2,
+    "frostmage": 2,
+    "flamelizard": 2
   },
   "caps": {
     "wave": {
       "limits": [
         "boar",
-        "spore"
+        "spore",
+        "rootbinder",
+        "boglurker",
+        "prismguard",
+        "tidepriest",
+        "shieldguard",
+        "stoneape",
+        "windhunter",
+        "frostmage",
+        "flamelizard"
       ],
       "fallback": "beetle"
     },
     "castle": {
       "limits": [
         "boar",
-        "spore"
+        "spore",
+        "rootbinder",
+        "boglurker",
+        "prismguard",
+        "tidepriest",
+        "shieldguard",
+        "stoneape",
+        "windhunter",
+        "frostmage",
+        "flamelizard"
       ],
       "fallback": "bat"
     }
@@ -450,5 +477,56 @@
       "slots": 24,
       "retryDelay": 0.2
     }
+  },
+  "specialistSpawnRules": {
+    "globalCap": 6,
+    "maxChance": 0.18,
+    "entries": [
+      {
+        "type": "rootbinder",
+        "at": 40,
+        "weight": 0.08
+      },
+      {
+        "type": "boglurker",
+        "at": 35,
+        "weight": 0.1
+      },
+      {
+        "type": "prismguard",
+        "at": 45,
+        "weight": 0.08
+      },
+      {
+        "type": "tidepriest",
+        "at": 30,
+        "weight": 0.09
+      },
+      {
+        "type": "shieldguard",
+        "at": 45,
+        "weight": 0.08
+      },
+      {
+        "type": "stoneape",
+        "at": 40,
+        "weight": 0.08
+      },
+      {
+        "type": "windhunter",
+        "at": 55,
+        "weight": 0.065
+      },
+      {
+        "type": "frostmage",
+        "at": 35,
+        "weight": 0.09
+      },
+      {
+        "type": "flamelizard",
+        "at": 40,
+        "weight": 0.1
+      }
+    ]
   }
 }

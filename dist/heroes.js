@@ -19,20 +19,16 @@ export function applyHeroStat(hero,key,base) {
 
 function hero({id,name,role,summary,color,appearanceId=id,statModifiers={}}) {
   const modifiers=normalizeModifiers(statModifiers),identity={statModifiers:modifiers};
-  const persistent=[],fixed=[];
+  const effects=[];
   for(const [key,label] of Object.entries(STAT_LABELS)) {
     const modifier=modifiers[key];
-    if(modifier.multiplier!==1)persistent.push(`${label} ${percent(modifier.multiplier-1)}`);
-    if(modifier.fixed!==0)fixed.push(`${label} ${signed(modifier.fixed)}`);
+    if(modifier.multiplier!==1)effects.push(`${label} ${percent(modifier.multiplier-1)}`);
+    if(modifier.fixed!==0)effects.push(`${label} ${signed(modifier.fixed)}`);
   }
-  const traits=[];
-  for(let index=0;index<persistent.length;index+=2)traits.push(`持续特性：${persistent.slice(index,index+2).join(' · ')}`);
-  if(fixed.length)traits.push(`固定加值：${fixed.join(' · ')}`);
+  const traits=effects.map((effect,index)=>`${index===0?'角色特性：':''}${effect}`);
   const details=[
-    `持续特性：${persistent.join(' · ')||'无'}（对成长后的属性持续生效）`,
-    `固定加值：${fixed.join(' · ')||'无'}（在持续特性计算后加入）`,
-    `初始生命：标准 ${Math.round(applyHeroStat(identity,'maxHealth',HERO_CONFIG.defaults.baseHealth))} / 轻松 ${Math.round(applyHeroStat(identity,'maxHealth',HERO_CONFIG.defaults.easyBaseHealth))}`,
-    '自身伤害影响武器与技能；固定加值保持原数值，不随成长同比增加。'
+    `角色特性：${effects.join(' · ')||'无'}`,
+    `初始生命：标准 ${Math.round(applyHeroStat(identity,'maxHealth',HERO_CONFIG.defaults.baseHealth))} / 轻松 ${Math.round(applyHeroStat(identity,'maxHealth',HERO_CONFIG.defaults.easyBaseHealth))}`
   ];
   return Object.freeze({id,name,role,summary,appearanceId,tagline:role,passive:summary,color,statModifiers:modifiers,
     hpMultiplier:modifiers.maxHealth.multiplier,baseSpeed:Math.round(applyHeroStat(identity,'moveSpeed',HERO_CONFIG.defaults.baseMoveSpeed)*100)/100,

@@ -18,7 +18,7 @@ function target(g,x=100){const e=g._spawnEnemy('slime');Object.assign(e,{x,y:0,h
 const advance=(g,t,input={})=>{for(let left=t;left>1e-9;left-=.025)g.update(Math.min(left,.025),input);};
 assert.deepEqual(HEROES.map(h=>h.id),['traveler','princess','elder']);
 for(const invalid of [undefined,null,'','warden','stormcaller','ranger','unknown','__proto__',{},['princess']])assert.equal(getHero(invalid).id,'traveler');
-const expected={traveler:{hp:110,speed:220,damage:1,defense:8,magnet:105},princess:{hp:90,speed:246.4,damage:.92,defense:0,magnet:126},elder:{hp:85,speed:202.4,damage:.88,defense:0,magnet:105}};
+const expected={traveler:{hp:110,speed:220,damage:1,defense:8,magnet:105},princess:{hp:100,speed:246.4,damage:1,defense:0,magnet:126},elder:{hp:85,speed:202.4,damage:.88,defense:0,magnet:105}};
 for(const hero of HEROES) {
   const baseline=expected[hero.id];
   for(const difficulty of ['normal','casual'])for(const initialWeaponId of ['sword','arrow','orbit']) {

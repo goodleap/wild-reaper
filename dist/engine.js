@@ -3,7 +3,8 @@ import { CombatAttacks, circleImpact, obstacleImpact } from './combat-attacks.js
 import { CombatResolution } from './combat-resolution.js';
 import { CombatProgression } from './combat-progression.js';
 import { GuardianBarrier } from './guardian-barrier.js';
-import { resolveCharacterStats, resolveMaxHealth, maxHealthGrowth } from './combat-stats.js';
+import { AbilityRuntime } from './ability-runtime.js';
+import { resolveCharacterStats, resolveMaxHealth, maxHealthGrowth, skillStats } from './combat-stats.js';
 import { EVOLUTIONS, normalizeInitialWeaponId } from './combat-catalog.js';
 export { EVOLUTIONS } from './combat-catalog.js';
 import { Terrain, groundOffset } from './terrain.js';
@@ -83,7 +84,7 @@ export class Game {
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
     this.initialWeaponId=normalizeInitialWeaponId(initialWeaponId);
-    this.build=new CombatBuild({initialWeaponId:this.initialWeaponId});
+    this.build=new CombatBuild({initialWeaponId:this.initialWeaponId,heroId:this.hero.id});
     this.levels=this.build.levels;this.branches=this.build.branches;this.evolutions=this.build.evolutions;
     for(const [name,key] of [['progressionTier','progressionTier'],['skillLevel','progressionTier'],['rescuePower','rescuePower']])Object.defineProperty(this,name,{enumerable:true,get:()=>this.build[key],set:value=>{this.build[key]=value;}});
     // Store the common base, so role multipliers apply once to later growth too.
@@ -121,6 +122,7 @@ export class Game {
     this.relics=new Relics(this);this.barrier=new GuardianBarrier(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
     this.companions=new Companions(this,{generation:companions});
     this.superSkills=new SuperSkills(this);this.progression=new CombatProgression(this,{costForTier:crystalCost});this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
+    this.abilities=new AbilityRuntime(this);this._abilityCooldowns={fireball:.4,frostbolt:.7};
     this.settlements??=new Settlements(this,{generation:settlements});
     this.waveDirector=new WaveDirector(this);
     this.discoveredMap=new Set();this.regions.initialize();
@@ -316,7 +318,7 @@ export class Game {
   _resolveEnemyAttacks(dt) {
     const p=this.player,px=p.x,py=p.y+groundOffset(p,true),targets=friendlyTargets(this);
     const context={targets,px,py,maxEnemyBullets:BALANCE.maxEnemyBullets};
-    for(const e of this.enemies)if(e.hp>0&&e.guardActive!==false)resolveEnemyBehavior(this,e,context);
+    for(const e of this.enemies)if(e.hp>0&&e.guardActive!==false&&!this.abilities.isFrozen(e))resolveEnemyBehavior(this,e,context);
     for(const b of this.enemyBullets) {
       if(b.life<=0)continue;
       const dx=b.vx*dt,dy=b.vy*dt;
@@ -336,7 +338,7 @@ export class Game {
     this.enemyBullets=this.enemyBullets.filter(b=>b.life>0);
   }
 
-  _initializeRegionalBoss(boss,kind=null){initBoss(boss,kind);}
+  _initializeRegionalBoss(boss,kind=null){const footY=boss.y+groundOffset(boss);initBoss(boss,kind);boss.y=footY-groundOffset(boss);}
   _clearRegionalBossAttacks(boss){boss.slam=null;boss.charge=null;boss.cast=null;boss._chargeSegment=null;clearBossAttacks(boss);}
   canEnterPortal(id) { return !this.dungeon.active&&this.regions.canEnter(id); }
   getInteraction() {
@@ -406,7 +408,7 @@ export class Game {
     // Clear only transient attacks. Persistent sites and surviving objective
     // guards remain in a suspended per-region snapshot for return journeys.
     for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
-    this.superSkills.clearScene();this.barrier.clearScene();this.regions.saveWorld();
+    this.superSkills.clearScene();this.barrier.clearScene();this.abilities.clearScene();this.regions.saveWorld();
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];
     if(this.stage)this.stage.currentMapId=nextIsland.id;
     this.mapId=nextIsland?.id??this.regionIndex;
@@ -476,7 +478,7 @@ export class Game {
     let ix=Number.isFinite(input.x)?input.x:0,iy=Number.isFinite(input.y)?input.y:0;
     const length=Math.hypot(ix,iy); if(length>1) { ix/=length; iy/=length; }
     if(length>.01) p.facing=Math.atan2(iy,ix);
-    const movement=this.environment?.movementMultiplier(p,true)||1;
+    const movement=(this.environment?.movementMultiplier(p,true)||1)*this.abilities.movementMultiplier(p);
     const oldX=p.x,oldY=p.y;
     this._moveEntity(p,ix*p.speed*movement*dt,iy*p.speed*movement*dt,true);
     updateLocomotion(p,oldX,oldY,dt);
@@ -508,14 +510,14 @@ export class Game {
       if(!e.trainingDummy&&enemyDefinition(e.type).locomotion){e._walkStartX=e.x;e._walkStartY=e.y;}
       e.hit=Math.max(0,e.hit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
       e._weaponPushTime=updateWeaponKnockback(this,e,dt);
-      if(e.trainingDummy)continue;
+      if(e.trainingDummy||this.abilities.isFrozen(e))continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
       if(this.companions.updateEnemy(e,dt))continue;
       if(this.elites.updateEnemy(e,dt))continue;
       if(this.encounters?.updateEnemy(e,dt))continue;
       if(e.guardActive===false) {
-        e.charge=null;e.cast=null;e._chargeSegment=null;
+        e.charge=null;e.cast=null;e._chargeSegment=null;e.specialist=null;
         if(e.guardReturnTarget)this._moveEnemy(e,dt,e.guardReturnTarget);
         continue;
       }
@@ -532,8 +534,8 @@ export class Game {
         const dx=e.x-n.x,dy=e.y-n.y,d=Math.hypot(dx,dy),overlap=(e.r+n.r)*.76-d;
         if(overlap>0 && d>.1) {
           const force=Math.min(overlap,30*dt)*.5;
-          if(e.type!=='boss'&&!e.trainingDummy&&!e.charge&&e.guardActive!==false)this._moveEntity(e,dx/d*force,dy/d*force);
-          if(n.type!=='boss'&&!n.trainingDummy&&!n.charge&&n.guardActive!==false)this._moveEntity(n,-dx/d*force,-dy/d*force);
+          if(e.type!=='boss'&&!e.trainingDummy&&!e.charge&&e.guardActive!==false&&!this.abilities.isFrozen(e))this._moveEntity(e,dx/d*force,dy/d*force);
+          if(n.type!=='boss'&&!n.trainingDummy&&!n.charge&&n.guardActive!==false&&!this.abilities.isFrozen(n))this._moveEntity(n,-dx/d*force,-dy/d*force);
         }
       }
     }
@@ -544,12 +546,12 @@ export class Game {
       updateLocomotion(e,oldX,oldY,dt);
       if(e.moving)e.visualFacing=Math.atan2(e.y-oldY,e.x-oldX);
     }
-    if(input.skill && p.skillCooldown<=0) this._castStorm();
+    if(input.skill && p.skillCooldown<=0&&!this.abilities.isFrozen(p)) this._castStorm();
     for(const target of friendlyTargets(this)){
       if(!isFriendlyActive(this,target)||target.invuln>0)continue;
       const foot=friendlyFoot(target);
       for(const e of this._nearby(target.x,target.y,85)) {
-        if(e.hp<=0||e.trainingDummy||e.eventRole==='treasure'||e.guardActive===false||e.charge||e._chargeSegment||e.slam||e.slamRecovery>0||e.bloomAttack||e.bloomRecovery>0)continue;
+        if(e.hp<=0||e.trainingDummy||e.eventRole==='treasure'||e.guardActive===false||e.charge||e._chargeSegment||e.slam||e.slamRecovery>0||e.bloomAttack||e.bloomRecovery>0||e.specialist?.noContact||e.specialAttack||e.specialRecovery>0||this.abilities.isFrozen(e))continue;
         if(!isGrounded(target)&&isGrounded(e))continue;
         const enemyFoot=friendlyFoot(e);
         if((foot.x-enemyFoot.x)**2+(foot.y-enemyFoot.y)**2<sq(target.r+e.r-3)&&clearFriendlyPath(this,e,target,movementProfile(e))){
@@ -561,8 +563,11 @@ export class Game {
     }
     this.attacks.updateBasic(dt);
     this._updateWeapons(dt);
+    this._updateGeneralSkills(dt);
     this.superSkills.update(dt);
     this.combatStatus.update(dt);
+    this.abilities.update(dt);
+    if(this.status==='dead')return;
     this.companions.resolve();
     this.elites.resolve();
     // Every weapon can interrupt a windup with a killing blow on this frame.
@@ -581,7 +586,20 @@ export class Game {
 
   _updateArrow(b,dt) {return this.attacks.updateArrow(b,dt);}
   _branchMovementMultiplier(enemy) {
-    return (enemy.type!=='boss'&&!enemy.isCompanion&&(enemy.branchSlowUntil||0)>this._clock ? COMBAT_RULES.skillRules.pulse.controlMoveMultiplier : 1)*(this.superSkills?.movementMultiplier(enemy)??1);
+    return (enemy.type!=='boss'&&!enemy.isCompanion&&(enemy.branchSlowUntil||0)>this._clock ? COMBAT_RULES.skillRules.pulse.controlMoveMultiplier : 1)*(this.superSkills?.movementMultiplier(enemy)??1)*(this.abilities?.movementMultiplier(enemy)??1);
+  }
+
+  _updateGeneralSkills(dt) {
+    if(this.abilities.isFrozen(this.player))return;
+    for(const id of ['fireball','frostbolt']) {
+      if(!(this.levels[id]>0))continue;
+      this._abilityCooldowns[id]-=dt;
+      if(this._abilityCooldowns[id]>0)continue;
+      const stats=skillStats(this,id),p=this.player;
+      const target=this._nearest(p.x,p.y,stats.range,undefined,p,{source:id});
+      if(target&&this.abilities.cast(id,p,{...stats,target,rank:stats.level}))this._abilityCooldowns[id]=stats.cooldown;
+      else this._abilityCooldowns[id]=.12;
+    }
   }
 
   _updateWeapons(dt) {return this.attacks.updateAbilities(dt);}

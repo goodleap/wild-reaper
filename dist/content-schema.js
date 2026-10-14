@@ -2,9 +2,10 @@ import { validateCombat } from './config-validation/combat.js';
 import { validateWorlds } from './config-validation/worlds.js';
 import { validateContent } from './config-validation/content.js';
 import { validateEnemies } from './config-validation/enemies.js';
+import { validateAbilities } from './config-validation/abilities.js';
 
-export const CONTENT_SCHEMA_VERSION=1;
-export const CONTENT_SECTION_IDS=Object.freeze(['heroes','combat','enemies','encounters','difficulty','worlds','stages','geography','sites','companions','economy','codex']);
+export const CONTENT_SCHEMA_VERSION=2;
+export const CONTENT_SECTION_IDS=Object.freeze(['heroes','combat','enemies','encounters','difficulty','worlds','stages','geography','sites','companions','economy','codex','abilities']);
 const forbidden=new Set(['__proto__','prototype','constructor']);
 const rgbTuple=value=>/^\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}$/.test(value)&&value.split(',').every(n=>Number(n)<=255);
 function validColor(value){
@@ -41,7 +42,7 @@ export function validateContentPack(pack) {
   if(typeof pack.contentVersion!=='string'||!/^[-a-zA-Z0-9._]{1,80}$/.test(pack.contentVersion))throw new Error('Invalid content version');
   const sections=pack.sections;
   if(!sections||Array.isArray(sections)||Object.keys(sections).length!==CONTENT_SECTION_IDS.length||CONTENT_SECTION_IDS.some(id=>!sections[id]||typeof sections[id]!=='object'||Array.isArray(sections[id])))throw new Error('Incomplete content pack');
-  validateCombat(sections);validateEnemies(sections);validateWorlds(sections);validateContent(sections);
+  validateCombat(sections);validateAbilities(sections);validateEnemies(sections);validateWorlds(sections);validateContent(sections);
   return pack;
 }
 export function freezeContent(value) {

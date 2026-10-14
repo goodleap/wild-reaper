@@ -40,7 +40,7 @@ export function presentUpgrade(choice,game) {
   const id=choice.id,definition=getUpgradeDefinition(id),superId=choice.skillId||(id.startsWith('super:')?id.slice(6):SUPER_RARITY[id]?id:null);
   const ownerId=definition?.ownerId||choice.ownerId||choice.weaponId||superId||id,owner=WEAPON_DEFS[ownerId]||SKILL_DEFS[ownerId];
   const category=definition?.category||choice.category||(WEAPON_DEFS[ownerId]?'weapon':'skill');
-  const model={name:choice.name,icon:choice.icon,color:choice.color,category,ownerId,ownerName:owner?.name||'',tier:owner?.tier||'regular',activation:owner?.activation||null,action:'升级',scope:'',description:choice.desc,rows:[],levelLabel:'',note:'',rarity:'common',summary:''};
+  const model={name:choice.name,icon:choice.icon,color:choice.color,category,ownerId,ownerName:owner?.name||'',tier:owner?.tier||'regular',family:definition?.family||owner?.family||null,activation:owner?.activation||null,action:'升级',scope:'',description:choice.desc,rows:[],levelLabel:'',note:'',rarity:'common',summary:''};
   const finish=rarity=>{model.rarity=rarity;model.quality=RARITIES[rarity];return model;};
   if(id==='super:resource') {
     Object.assign(model,{category:'resource',action:'领取',scope:'满阶奖励',levelLabel:'资源宝藏',note:'该类超级技能已全部满阶',summary:choice.desc.replace('该类超级技能已全部满阶，','')});
@@ -62,7 +62,7 @@ export function presentUpgrade(choice,game) {
     Object.assign(model,{action:'加强',scope:'角色属性 · 武器与技能共享',levelLabel:`累计强化 ${next} 次`,note:endless?'无尽成长 · 无次数上限':'对角色持续生效'});
     if(id==='power'||id==='endlessPower'){
       model.rows=[change('角色攻击力',before.attack,after.attack)];
-      model.summary=`角色攻击力 ${pair(before.attack,after.attack)}，同时增强武器与独立技能。`;
+      model.summary=`角色攻击力 ${pair(before.attack,after.attack)}，同时增强武器与通用技能。`;
     } else if(id==='speed') {
       model.rows=[change('移动速度',before.moveSpeed,after.moveSpeed)];model.summary=`移动速度 ${pair(before.moveSpeed,after.moveSpeed)}。`;
     } else if(id==='magnet') {
@@ -81,7 +81,7 @@ export function presentUpgrade(choice,game) {
     return finish(id==='regen'?'uncommon':'common');
   }
   const beforeOwner=getOwner(game.build,ownerId),afterOwner=getOwner(nextGame.build,ownerId),owned=beforeOwner?.level>0;
-  Object.assign(model,{action:choice.branch?'分支':choice.evolves?'进化':owned?'升级':'新获得',scope:`${owner.name} · ${model.activation==='manual'?'手动施放':category==='weapon'?'自动攻击':'独立自动技能'}`,levelLabel:owned?`Lv.${beforeOwner.level} → ${afterOwner.level}`:'获得 Lv.1',note:choice.branch?'选择后本局固定，仍可继续强化':definition?.upgradeKind==='modifier'?`本项强化 ${next} / ${definition.cap} 次`:''});
+  Object.assign(model,{action:choice.branch?'分支':choice.evolves?'进化':owned?'升级':'新获得',scope:`${owner.name} · ${model.activation==='manual'?'手动施放':category==='weapon'?'自动攻击':owner.family==='exclusive'?'专有技能 · 自动':'通用技能 · 自动'}`,levelLabel:owned?`Lv.${beforeOwner.level} → ${afterOwner.level}`:'获得 Lv.1',note:choice.branch?'选择后本局固定，仍可继续强化':definition?.upgradeKind==='modifier'?`本项强化 ${next} / ${definition.cap} 次`:''});
   if(choice.evolves&&ownerId==='orbit')model.name='裂风环刃';
   const stats=category==='weapon'?weaponStats:skillStats,before=stats(game,ownerId),after=stats(nextGame,ownerId);
   const base=stats=>stats.primaryBaseDamage??stats.baseDamage;
@@ -140,6 +140,14 @@ export function presentUpgrade(choice,game) {
     model.rows=[change('护盾容量',owned?before.capacity:null,after.capacity),change('恢复间隔',owned?before.cooldown:null,after.cooldown,'秒'),fixed('最长持续',`${num(after.duration)} 秒`)];
     model.summary=owned?`护盾 ${pair(before.capacity,after.capacity)}，冷却 ${pair(before.cooldown,after.cooldown)} 秒；受击自动展开。`:`受击自动展开 ${num(after.capacity)} 护盾，持续至多 ${num(after.duration)} 秒；冷却 ${num(after.cooldown)} 秒。`;
     model.scope='守护屏障 · 自动防护';model.note='触发的一击也受保护 · 最高 3 级';
+  }else if(id==='fireball'){
+    model.rows=[change('命中伤害',owned?before.baseDamage:null,after.baseDamage),change('每跳燃烧',owned?before.baseBurnDamage:null,after.baseBurnDamage),change('施放间隔',owned?before.cooldown:null,after.cooldown,'秒')];
+    model.summary=owned?`命中伤害 ${pair(before.baseDamage,after.baseDamage)}，燃烧 ${pair(before.baseBurnDamage,after.baseBurnDamage)}/${num(after.burnInterval)} 秒；间隔 ${pair(before.cooldown,after.cooldown)} 秒。`:`自动发射火球，命中 ${num(after.baseDamage)} 伤害；每 ${num(after.burnInterval)} 秒燃烧 ${num(after.baseBurnDamage)}，持续 ${num(after.burnDuration)} 秒。`;
+    model.note='通用技能 · 燃烧刷新，保留较强效果';
+  }else if(id==='frostbolt'){
+    model.rows=[change('命中伤害',owned?before.baseDamage:null,after.baseDamage),change('减速',owned?(1-before.slowMultiplier)*100:null,(1-after.slowMultiplier)*100,'%'),change('冻结概率',owned?before.freezeChance*100:null,after.freezeChance*100,'%')];
+    model.summary=`${owned?`伤害 ${pair(before.baseDamage,after.baseDamage)}`:`命中 ${num(after.baseDamage)} 伤害`}，减速 ${num((1-after.slowMultiplier)*100)}%${after.freezeChance?`；${num(after.freezeChance*100)}% 概率冻结`:'；3 级解锁概率冻结'}。`;
+    model.note='通用技能 · 目标有再次冻结保护间隔';
   }else if(id==='storm'){
     model.rows=[change('基础伤害',base(before),base(after)),change('冷却',before.cooldown,after.cooldown,'秒')];model.summary=`天雷伤害 ${pair(base(before),base(after))}，冷却 ${pair(before.cooldown,after.cooldown)} 秒。`;model.note='手动超级技能 · 最高 3 级';
   }else if(id==='orbit'){
@@ -155,13 +163,13 @@ export function presentUpgrade(choice,game) {
   }else if(id==='lightning'){
     model.rows=[change('单段基础伤害',owned?base(before):null,base(after)),fixed('连锁目标',`最多 ${after.targetLimit} 个`),fixed('施放间隔',`${after.cooldown} 秒`)];model.summary=owned?`连锁每段伤害 ${pair(base(before),base(after))}，保持最多 ${after.targetLimit} 个目标。`:`每 ${after.cooldown} 秒连锁最多 ${after.targetLimit} 个目标，每段 ${num(base(after))} 伤害并附加感电。`;
   }else model.summary=choice.desc;
-  return finish(id==='storm'?'epic':ownerId==='lightning'||choice.evolves?'rare':id==='rapid'||id==='arrowPower'?'common':'uncommon');
+  return finish(id==='storm'?'epic':['fireball','frostbolt'].includes(id)?'rare':ownerId==='lightning'||choice.evolves?'rare':id==='rapid'||id==='arrowPower'?'common':'uncommon');
 }
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const TYPE_ICONS={weapon:'<path d="m5 19 3-6 8-9 4-1-1 4-9 8-5 4Zm1-8 7 7m-9 3 3-3"/>',skill:'<path d="m13 2-8 10h6l-1 8 9-12h-6l2-6Z"/>',attribute:'<path d="M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6"/>',resource:'<path d="m12 3 9 9-9 9-9-9 9-9Z"/>'};
 export function upgradeCardHTML(model) {
-  const type={attribute:'属性',weapon:'武器',skill:'技能',resource:'宝藏'}[model.category];
+  const type=model.category==='skill'?({general:'通用技能',exclusive:'专有技能',weapon:'武器技能'}[model.family]||'技能'):model.category==='weapon'&&(model.weaponAbility||model.tier==='super')?'武器技能':{attribute:'属性',weapon:'武器',resource:'宝藏'}[model.category];
   const level=model.category==='skill'||model.category==='weapon'?model.levelLabel:'';
   const context=model.category==='attribute'?(model.note.includes('无尽')?'无尽成长':'角色通用'):model.category==='resource'?'资源补给':model.category==='weapon'&&(model.tier==='super'||model.weaponAbility)?'武器专属能力':model.tier==='super'?(model.activation==='manual'?'手动施放':'自动施放'):model.ownerName;
   const summary=String(model.summary??'').split(/(\d+(?:\.\d+)?(?:→\d+(?:\.\d+)?)?%?)/g).map((part,index)=>index%2?`<b>${escape(part)}</b>`:escape(part)).join('');

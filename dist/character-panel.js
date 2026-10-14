@@ -31,8 +31,8 @@ function attributes(game) {
   const roleSources=(values,keys)=>{
     for(const [key,label] of keys) {
       const {multiplier=1,fixed=0}=game.hero.statModifiers?.[key]??{};
-      if(multiplier!==1)values.push(`${game.hero.name}：持续特性 · ${label} ${bonus(multiplier-1)}（成长后生效）`);
-      if(fixed!==0)values.push(`${game.hero.name}：固定加值 · ${label} ${fixed>0?'+':''}${number(fixed)}（倍率计算后加入）`);
+      if(multiplier!==1)values.push(`${game.hero.name}：角色特性 · ${label} ${bonus(multiplier-1)}`);
+      if(fixed!==0)values.push(`${game.hero.name}：角色特性 · ${label} ${fixed>0?'+':''}${number(fixed)}`);
     }
   };
   const attackSources=[`通用基础攻击 ${number(COMBAT_REFERENCE_ATTACK)} · 角色初始攻击 ${number(applyHeroStat(game.hero,'attack',COMBAT_REFERENCE_ATTACK))}`];
@@ -58,7 +58,7 @@ function attributes(game) {
   if(game.debug)otherSources.push('调试模式：移动速度 ×3，天雷无冷却');
   if(move.modifier!==1)otherSources.push(`当前位置地形：移动速度 ×${number(move.modifier)}`);
   if(game.adventure?.magnetTime>0)otherSources.push(`磁力涌动：当前拾取范围 ${number(magnet)}`);
-  return summary('展示当前生效属性；基础成长合计后应用角色持续特性，再加入固定加值。武器和技能页展示各自的攻击数值。')+
+  return summary('展示当前生效属性，已计入角色特性与成长。武器和技能页展示各自的攻击数值。')+
     grid([
       ['角色等级',`Lv.${p.level}`,'level'],['生命',`${number(s.currentHp)} / ${number(s.maxHp)}`,'health'],
       ['角色攻击',number(s.attack),'attack'],['额外伤害增益',bonus(s.externalDamageMultiplier-1),'damageBonus'],
@@ -130,6 +130,13 @@ function skills(game) {
       notes.push(`有可攻击地面敌人靠近时施放；消耗流血时伤害增加 ${percent(STATUS_RULES.pulseBonus)}`);
       if(s.echo)rows.push(['追加回波伤害',number(s.damage*s.echoRetention),'echoDamage'],['回波半径',number(s.radius*s.echoRadiusMultiplier),'echoRange']);
       if(s.control)notes.push(`普通敌人减速 ${percent(1-STAT_RULES.skillRules.pulse.controlMoveMultiplier)}，持续 ${seconds(s.controlDuration)}`);
+    }else if(item.id==='fireball') {
+      rows.push(['索敌范围',number(s.range),'range'],['每跳燃烧',number(s.burnDamage),'burnDamage'],['燃烧间隔',seconds(s.burnInterval),'burnInterval'],['燃烧持续',seconds(s.burnDuration),'burnDuration']);
+      notes.push('命中后附加燃烧；重复命中刷新燃烧并保留较强效果，不无限叠加');
+    }else if(item.id==='frostbolt') {
+      rows.push(['索敌范围',number(s.range),'range'],['减速',percent(1-s.slowMultiplier),'slow'],['减速持续',seconds(s.slowDuration),'slowDuration'],['冻结概率',percent(s.freezeChance),'freezeChance']);
+      if(s.freezeChance)rows.push(['冻结持续',seconds(s.freezeDuration),'freezeDuration']);
+      notes.push(s.freezeChance?`冻结结束后 ${seconds(s.freezeImmunity)} 内不能再次冻结；Boss 冻结更短，保护期更长`:'升至 3 级解锁概率冻结');
     }else if(item.id==='lightning') {
       rows.push(['索敌范围',number(s.range),'range'],['最多目标',number(s.focus?1:s.targetLimit),'targetLimit']);
       if(!s.focus)rows.push(['跳跃范围',number(s.chainRange),'chainRange']);
@@ -148,7 +155,7 @@ function skills(game) {
       if(s.pull)notes.push('持续牵引普通敌人，Boss 不受牵引');
     }
     if(item.id==='storm'||item.id==='lightning')notes.push(`感电传导伤害 ${number(scalePlayerDamage(game,STATUS_RULES.conductionDamage,{skillId:item.id}))}，范围 ${STATUS_RULES.conductionRange}`);
-    const kind=`${item.activation==='manual'?'手动':'自动'}${item.tier==='super'?' · 超级技能':'技能'}`;
+    const kind=`${item.family==='exclusive'?'专有技能':'通用技能'} · ${item.activation==='manual'?'手动':'自动'}${item.tier==='super'?' · 超级':''}`;
     groups[item.activation==='manual'?'manual':item.tier==='super'?'super':'automatic'].push(card(`${item.icon} ${item.name}`,tags(item.baseName!==item.name?[item.baseName]:[])+grid(rows)+enhancements(item)+sources('附加效果',notes),{id:item.id,meta:ownership(item,kind)}));
   }
   return summary('伤害已计入角色攻击与当前增益；防护自动触发，不增加操作。')+(items.length?Object.entries(groups).filter(([,cards])=>cards.length).map(([id,cards])=>section({manual:'手动技能',automatic:'自动技能',super:'自动超级技能'}[id],cards.join(''))).join(''):empty('尚未掌握技能。'));

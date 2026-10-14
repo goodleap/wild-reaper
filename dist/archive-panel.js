@@ -38,6 +38,8 @@ export function archiveMilestones(data={}){
 function vectorArt(entry){
   const id=entry.modifierId||entry.ownerId||'',sword='<path d="M24 43 46 10 52 6 51 14 29 47Z" fill="currentColor" opacity=".72"/><path d="m25 43 25-35M20 41l13 9M25 47l-8 11"/>',arrow='<path d="m12 52 39-39m-11 0h11v11M12 43v9h9M17 38v9h9"/>';
   const paths={
+    fireball:'<path d="M14 47C4 30 25 30 27 9c12 8 8 15 13 19 2-5 7-9 11-10-3 9 7 17 4 27-5 17-31 20-41 2Z" fill="currentColor" opacity=".28"/><path d="M14 47C4 30 25 30 27 9c12 8 8 15 13 19 2-5 7-9 11-10-3 9 7 17 4 27-5 17-31 20-41 2Z"/><path d="M25 49c-6-9 9-12 10-22 9 9 11 15 6 22-4 6-11 6-16 0Z" fill="currentColor" opacity=".65"/>',
+    frostbolt:'<path d="m32 6 10 17 14 9-14 9-10 17-10-17-14-9 14-9Z" fill="currentColor" opacity=".16"/><path d="M32 7v50M10 19l44 26M10 45l44-26m-28-5 6 6 6-6m-12 36 6-6 6 6M12 25l8-1-2-8m28 32-2-8 8-1M18 48l2-8-8-1m40-14-8-1 2-8"/><path d="m32 24 7 8-7 8-7-8Z" fill="currentColor" opacity=".6"/>',
     barrier:'<path d="m32 7 21 8v17c0 12-12 22-21 26-9-4-21-14-21-26V15Z" fill="currentColor" opacity=".13"/><path d="m32 7 21 8v17c0 12-12 22-21 26-9-4-21-14-21-26V15Zm0 8v33m-13-28 13-5 13 5"/>',
     pulse:'<ellipse cx="32" cy="40" rx="26" ry="13" opacity=".38"/><ellipse cx="32" cy="37" rx="17" ry="9"/><path d="m22 28 10-16 10 16m-10-16v27M12 31l-4-5m48 0-4 5"/>',
     lightning:'<path d="m38 6-20 28h13l-5 24 22-32H34Z" fill="currentColor" opacity=".72"/><path d="m15 16-8 8 7 5m35 13 8-8-7-5" opacity=".6"/>',
@@ -128,8 +130,9 @@ export function drawArchiveArt(container){
     ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.scale(canvas.width/128,canvas.height/112);
     if(entry.category==='weapons'){drawWeaponPortrait(ctx,entry);ctx.restore();continue;}
     if(entry.category==='companions'){drawCompanionPortrait(ctx,entry);ctx.restore();continue;}
-    monsterArt ||= new MonsterArt();ctx.translate(64,65);
-    const visual=enemyVisual(entry),scale=visual?.portraitScale??1.38;ctx.scale(scale,scale);
+    monsterArt ||= new MonsterArt();
+    const visual=enemyVisual(entry),scale=Math.min(visual?.portraitScale??1.38,112/(2*(visual?.halfWidth||30)),96/((visual?.top||35)+(visual?.foot||20)));
+    ctx.translate(64,56+((visual?.top||35)-(visual?.foot||20))*scale/2);ctx.scale(scale,scale);
     monsterArt.draw(ctx,{type:entry.type,bossKind:entry.bossKind,id:0,x:0,y:0,r:visual?.portraitRadius??18,hp:1,hit:0,walkPhase:0,visualFacing:0},{time:0,reduced:true,playerX:1});ctx.restore();
   }
 }

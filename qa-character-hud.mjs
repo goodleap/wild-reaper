@@ -240,7 +240,7 @@ run("game.status='playing';");
 // Long builds share one bounded equipment strip; weapon and skill slots use one
 // budget, including overflow counters. Exercise resize breakpoints and actual
 // catalog items, then remove a weapon through the real equipment control.
-run("game.build.increment('pulse');game.build.increment('lightning');game.build.increment('barrier');game.build.awardDomain('binding');for(const id of ['meteor','swords','vortex'])game.superSkills.owned[id]=1;updateHUD();");
+run("game.build.increment('pulse');game.build.increment('lightning');game.build.increment('barrier');game.build.increment('fireball');game.build.increment('frostbolt');for(const id of ['meteor','swords'])game.superSkills.owned[id]=1;updateHUD();");
 const owned=run('game.build.getSkillLoadout().length');
 assert($('super-loadout').querySelector('.barrier-ready'),'automatic protection has a ready indicator');
 assert.equal($('super-loadout').querySelectorAll('button').length,0,'barrier adds no manual control');

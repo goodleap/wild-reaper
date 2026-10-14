@@ -1,6 +1,6 @@
 import { getConfigSection } from './content-config.js';
 import { groundOffset } from './terrain.js';
-import { SUPER_SKILL_DEFS } from './combat-catalog.js';
+import { SUPER_SKILL_DEFS, ALL_SUPER_SKILL_DEFS } from './combat-catalog.js';
 import { scalePlayerDamage } from './combat-stats.js';
 import { isGrounded } from './height-rules.js';
 import { SWORD_FLIGHT_RULES, swordFormationAnchor, createSwordFlight, advanceSwordFlight } from './sword-flight.js';
@@ -9,7 +9,8 @@ const freeze=Object.freeze;
 export const SUPER_SKILLS=SUPER_SKILL_DEFS;
 const CONFIG=getConfigSection('combat').super,TIMING=CONFIG.timing;
 export const SUPER_RULES=CONFIG.rules;
-const DEFINITIONS=new Map(SUPER_SKILLS.map(skill=>[skill.id,skill]));
+const DEFINITIONS=new Map(ALL_SUPER_SKILL_DEFS.map(skill=>[skill.id,skill]));
+const availableFrom=(skill,source)=>skill.allowedActors?.includes('player')&&(skill.rewardSources||[skill.source]).includes(source);
 const PROPAGATION=CONFIG.propagation;
 const DOMAIN_BRANCHES=CONFIG.domainBranches;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -52,18 +53,13 @@ export class SuperSkills {
   _branch(){return this.game.build.getSkill('domain')?.branch||'binding';}
   _cooldown(id,level){return getSuperSkillStats(id,level,this._branch()).cooldown;}
   _poolSignature(source) {
-    const signature=SUPER_SKILLS.filter(skill=>skill.source===source).map(skill=>`${skill.id}:${this.owned[skill.id]||0}`).join('|');
+    const signature=SUPER_SKILLS.filter(skill=>this.game.build.getSkill(skill.id)&&availableFrom(skill,source)).map(skill=>`${skill.id}:${this.owned[skill.id]||0}`).join('|');
     if(source!=='region')return signature;
     const arrow=this.game.build.getWeapon('arrow');
     return `${signature}|${this._branch()}|${arrow?.baseRank||0}:${arrow?.branch||''}:${this.game.build.getRank('arrowRune')}`;
   }
   _regionChoices(regionId) {
-    const choices=[],level=this.owned.domain||0,definition=DEFINITIONS.get('domain');
-    if(level<SUPER_RULES.maxLevel) {
-      if(level)choices.push(this._choice(definition));
-      else for(const domainBranch of regionId==='marsh'?['erosion','binding']:['binding','erosion'])
-        choices.push(freeze({...this._choice(definition,domainBranch),id:`domain:${domainBranch}`}));
-    }
+    const choices=SUPER_SKILLS.filter(skill=>this.game.build.getSkill(skill.id)&&availableFrom(skill,'region')&&(this.owned[skill.id]||0)<SUPER_RULES.maxLevel).map(skill=>this._choice(skill));
     const arrow=this.game.build.getWeapon('arrow'),currentLevel=this.game.build.getRank('arrowRune');
     if(arrow?.branch!=='ricochet'&&currentLevel<SUPER_RULES.maxLevel) {
       const rune=freeze({id:'runeArrow',name:'符文穿击',desc:currentLevel?'强化贯穿符文的伤害并缩短充能间隔':`${arrow?.baseRank?'':'获得翠羽飞矢；'}飞矢转为穿透路线，射击时周期性释放强力符文重箭`,icon:'✧',color:'#89ddd8',category:'weapon',ownerId:'arrow',tier:'super',abilityTier:'super',source:'region',rewardTier:'区域武器宝藏',kind:currentLevel?'武器专属强化':'武器专属能力',upgradeKind:currentLevel?'modifier':'acquisition',level:currentLevel+1,currentLevel,acquired:currentLevel>0,automatic:true,runic:true});
@@ -72,8 +68,8 @@ export class SuperSkills {
     return choices;
   }
   _rewardSnapshot(source,regionId) {
-    const pool=source==='region'?this._regionChoices(regionId):SUPER_SKILLS.filter(skill=>skill.source===source&&(this.owned[skill.id]||0)<SUPER_RULES.maxLevel).map(skill=>this._choice(skill));
-    let choices=freeze(pool);
+    const pool=source==='region'?this._regionChoices(regionId):SUPER_SKILLS.filter(skill=>this.game.build.getSkill(skill.id)&&availableFrom(skill,source)&&(this.owned[skill.id]||0)<SUPER_RULES.maxLevel).map(skill=>this._choice(skill));
+    let choices=freeze(pool.map(choice=>freeze({...choice,source,rewardTier:source==='castle'?'城堡超级宝藏':'区域超级宝藏'})));
     if(!choices.length) {
       const reward=source==='castle'?SUPER_RULES.castleFallback:SUPER_RULES.regionFallback;
       choices=freeze([freeze({id:'super:resource',name:'满阶宝藏',desc:`可获得的该类能力已全部满阶，获得 ${reward.gold} 金币与 ${reward.crystals} 灵晶`,icon:'◆',color:'#edcf8a',kind:'资源宝藏',source,tier:source==='castle'?'城堡宝藏':'区域宝藏',level:0,automatic:false})]);
@@ -116,10 +112,8 @@ export class SuperSkills {
       return true;
     }
     const skillId=choice.skillId||id,skill=DEFINITIONS.get(skillId),current=this.owned[skillId]||0;
-    if(!skill||skill.source!==source||current>=SUPER_RULES.maxLevel)return false;
-    if(skillId==='domain') {
-      if(!g.build.awardDomain(choice.domainBranch))return false;
-    }else this.owned[skillId]=current+1;
+    if(!skill||!g.build.getSkill(skillId)||!availableFrom(skill,source)||current>=SUPER_RULES.maxLevel)return false;
+    this.owned[skillId]=current+1;
     this.cooldowns[skillId]=current?Math.min(this.cooldowns[skillId]??0,this._cooldown(skillId,current+1)):TIMING.initialCooldown;
     this.pending=null;
     g._emit('superChosen',{skillId,name:choice.name,level:this.owned[skillId],source});
@@ -133,7 +127,7 @@ export class SuperSkills {
   upgrade(id) {
     if(this.game.status!=='upgrade'||typeof id!=='string'||!id.startsWith('super:'))return false;
     const skillId=id.slice(6),level=this.owned[skillId];
-    if(!DEFINITIONS.has(skillId)||!level||level>=SUPER_RULES.maxLevel)return false;
+    if(!SUPER_SKILLS.some(skill=>skill.id===skillId)||!level||level>=SUPER_RULES.maxLevel)return false;
     if(!this.game.build.increment(id))return false;
     this.cooldowns[skillId]=Math.min(this.cooldowns[skillId]??0,this._cooldown(skillId,level+1));
     return true;
@@ -202,6 +196,7 @@ export class SuperSkills {
   }
 
   _cast(id,level) {
+    if(!SUPER_SKILLS.some(skill=>skill.id===id)||this.game.abilities?.isFrozen(this.game.player))return false;
     const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,TIMING.targetRange,{strongest:true,skillId:id});
     if(!targets.length)return false;
     const stats=getSuperSkillStats(id,level,this._branch());
@@ -272,7 +267,7 @@ export class SuperSkills {
 
   castRunicVolley(stats,target) {
     const g=this.game;
-    if(g.status!=='playing'||!stats?.equipped||!g.build.isEquipped('arrow')||!(stats.runic>0)||this._runicCooldown>1e-9||this._runicShots.length)return false;
+    if(g.status!=='playing'||g.abilities?.isFrozen(g.player)||!stats?.equipped||!g.build.isEquipped('arrow')||!(stats.runic>0)||this._runicCooldown>1e-9||this._runicShots.length)return false;
     target=target||this._targets(this._foot(),TIMING.runicRange,{skillId:'runeArrow'})[0];
     if(!target||!Number.isFinite(target.x)||!Number.isFinite(target.y))return false;
     const origin=this._foot(),visual={x:g.player.x,y:g.player.y},angle=Math.atan2((target.aimY??target.y)-visual.y,target.x-visual.x);
@@ -391,7 +386,7 @@ export class SuperSkills {
     for(const skill of SUPER_SKILLS) {
       const level=this.owned[skill.id];if(!level)continue;
       this.cooldowns[skill.id]=Math.max(0,(this.cooldowns[skill.id]||0)-dt);
-      if(this.cooldowns[skill.id]<=1e-9)this.cooldowns[skill.id]=this._cast(skill.id,level)?this._cooldown(skill.id,level):TIMING.retryCooldown;
+      if(this.cooldowns[skill.id]<=1e-9&&!this.game.abilities?.isFrozen(this.game.player))this.cooldowns[skill.id]=this._cast(skill.id,level)?this._cooldown(skill.id,level):TIMING.retryCooldown;
     }
   }
 }

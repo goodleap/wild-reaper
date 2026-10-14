@@ -12,9 +12,9 @@ const numericRecord=(value,path)=>{if(!value||typeof value!=='object')fail(path,
 const requireKeys=(value,names,path)=>{record(value,path);for(const name of names)if(!(name in value))fail(path,`missing ${name}`);};
 const statKeys=['maxHealth','attack','defense','moveSpeed','pickupRange'];
 const weaponIds=new Set(['sword','arrow','orbit']);
-const basicSkillIds=new Set(['barrier','pulse','lightning','storm']);
+const basicSkillIds=new Set(['barrier','pulse','lightning','storm','fireball','frostbolt']);
 const superSkillIds=new Set(['domain','meteor','swords','vortex']);
-const requiredUpgradeIds=["sword","arrow","barrier","power","rapid","multishot","orbit","pulse","lightning","speed","magnet","vitality","toughness","regen","arrowPower","arrowRetention","arrowReach","orbitPower","orbitRadius","swordEnergy","swordMastery","arrowRune","pulseMastery","lightningMastery","storm"];
+const requiredUpgradeIds=["sword","arrow","barrier","power","rapid","multishot","orbit","pulse","lightning","speed","magnet","vitality","toughness","regen","arrowPower","arrowRetention","arrowReach","orbitPower","orbitRadius","swordEnergy","swordMastery","arrowRune","pulseMastery","lightningMastery","storm","fireball","frostbolt"];
 const requiredEndlessIds=["endlessPower","endlessToughness","endlessVitality","endlessRegen"];
 const effectKeys=new Set(['damageBonus','attackRateBonus','projectileCount','moveSpeedBonus','pickupRangeBonus','maxHealth','heal','defense','healthRegen','baseDamageBonus','damageRetention','maxTargets','radius','intervalReduction','cooldownReduction','chainTargets']);
 const branchIds={sword:new Set(['sweep','heavy']),arrow:new Set(['pierce','ricochet']),pulse:new Set(['echoes','control']),lightning:new Set(['chain','focus']),domain:new Set(['binding','erosion'])};
@@ -32,7 +32,7 @@ export function validateCombat(sections){
   const heroIds=ids(heroes.definitions,'heroes.definitions');if(!heroIds.has('traveler'))fail('heroes.definitions','legacy traveler identity is required');
   for(const hero of heroes.definitions){ref(hero.appearanceId??hero.id,new Set(['traveler','princess','elder']),`heroes.${hero.id}.appearanceId`);for(const field of ['name','role','summary','color'])string(hero[field],`heroes.${hero.id}.${field}`);record(hero.statModifiers,`heroes.${hero.id}.statModifiers`);for(const [stat,value] of Object.entries(hero.statModifiers)){ref(stat,new Set(statKeys),`heroes.${hero.id}.statModifiers`);record(value,`heroes.${hero.id}.${stat}`);for(const field of Object.keys(value))if(!['multiplier','fixed'].includes(field))fail(`heroes.${hero.id}.${stat}`,`unknown modifier ${field}`);if(value.multiplier!==undefined)number(value.multiplier,`heroes.${hero.id}.${stat}.multiplier`,0,100);if(value.fixed!==undefined)number(value.fixed,`heroes.${hero.id}.${stat}.fixed`,-1e6,1e6);}}
   definitions(combat.weapons,weaponIds,'combat.weapons');definitions(combat.skills,basicSkillIds,'combat.skills');
-  const superIds=ids(combat.superSkills,'combat.superSkills');for(const id of superSkillIds)ref(id,superIds,'combat.superSkills');for(const def of combat.superSkills){ref(def.id,superSkillIds,'combat.superSkills');string(def.name,`combat.superSkills.${def.id}.name`);integer(def.maxLevel,`combat.superSkills.${def.id}.maxLevel`,1,100);}
+  const superIds=ids(combat.superSkills,'combat.superSkills');for(const id of superSkillIds)ref(id,superIds,'combat.superSkills');for(const def of combat.superSkills){ref(def.id,superSkillIds,'combat.superSkills');string(def.name,`combat.superSkills.${def.id}.name`);integer(def.maxLevel,`combat.superSkills.${def.id}.maxLevel`,1,100);if(def.rewardSources){list(def.rewardSources,`combat.superSkills.${def.id}.rewardSources`,2);for(const source of def.rewardSources)ref(source,new Set(['region','castle']),`combat.superSkills.${def.id}.rewardSources`);}}
   const initial=list(combat.initialWeaponIds,'combat.initialWeaponIds');if(!initial.length||new Set(initial).size!==initial.length)fail('combat.initialWeaponIds','must contain unique initial weapons');for(const id of initial)ref(id,weaponIds,'combat.initialWeaponIds');
   record(combat.attributes,'combat.attributes');const attributes=new Set(Object.keys(combat.attributes));for(const id of ['power','vitality','defense','speed','regen','magnet'])ref(id,attributes,'combat.attributes');for(const [id,def] of Object.entries(combat.attributes)){if(def.id!==id)fail(`combat.attributes.${id}`,'key and id must match');string(def.name,`combat.attributes.${id}.name`);}
   const upgrades=ids(combat.upgrades,'combat.upgrades'),endless=ids(combat.endlessUpgrades,'combat.endlessUpgrades');for(const id of endless)if(upgrades.has(id))fail('combat.endlessUpgrades',`duplicate upgrade ${id}`);
@@ -44,6 +44,23 @@ export function validateCombat(sections){
   for(const [owner,evolution] of Object.entries(record(combat.evolutions,'combat.evolutions'))){ref(owner,owners,'combat.evolutions');if(evolution.ownerId!==owner)fail(`combat.evolutions.${owner}`,'owner mismatch');}
   requireKeys(combat.stats,['referenceAttack','defensePerLevel','healthPerLevel','attackPerLevel','rescueDamageBonus','defenseScale','attackDefaults','orbitBleedRatio','orbitDamage','weaponRules','skillRules'],'combat.stats');numericRecord(combat.stats,'combat.stats');number(combat.stats.referenceAttack,'combat.stats.referenceAttack',.001);number(combat.stats.defenseScale,'combat.stats.defenseScale',.001);
   for(const [id,rules] of Object.entries(combat.stats.weaponRules))if(rules.maxRank!==undefined)integer(rules.maxRank,`combat.stats.weaponRules.${id}.maxRank`,1,100);
+  for(const id of ['fireball','frostbolt']) {
+    const rules=combat.stats.skillRules[id],path=`combat.stats.skillRules.${id}`;
+    requireKeys(rules,['maxRank','levels'],path);integer(rules.maxRank,`${path}.maxRank`,1,20);
+    if(rules.maxRank!==combat.skills[id].maxBaseRank||rules.maxRank!==combat.upgrades.find(def=>def.id===id)?.cap)fail(path,'rank caps must agree');
+    list(rules.levels,`${path}.levels`,20);if(rules.levels.length!==rules.maxRank)fail(path,'one row per skill rank required');
+    for(const [index,row] of rules.levels.entries()) {
+      const at=`${path}.levels[${index}]`;
+      requireKeys(row,['damage','cooldown','range','speed','radius',...(id==='fireball'?['burnDamage','burnDuration','burnInterval']:['slowMultiplier','slowDuration','freezeChance','freezeDuration','freezeImmunity','bossFreezeMultiplier','bossFreezeImmunity'])],at);
+      for(const field of ['cooldown','range','speed','radius'])number(row[field],`${at}.${field}`,.01,2000);
+      if(id==='fireball'){number(row.burnInterval,`${at}.burnInterval`,.1,10);number(row.burnDuration,`${at}.burnDuration`,.1,30);}
+      else {
+        for(const field of ['slowMultiplier','freezeChance','bossFreezeMultiplier'])number(row[field],`${at}.${field}`,0,1);
+        number(row.slowDuration,`${at}.slowDuration`,.01,10);number(row.freezeDuration,`${at}.freezeDuration`,.01,3);
+        for(const field of ['freezeImmunity','bossFreezeImmunity'])number(row[field],`${at}.${field}`,1,30);
+      }
+    }
+  }
   const sword=combat.stats.weaponRules.sword,barrier=combat.stats.skillRules.barrier;
   if((sword.interval-(sword.maxRank-1)*sword.intervalReductionPerRank)*Math.min(1,sword.heavy.intervalMultiplier)<=0)fail('combat.stats.weaponRules.sword','ranked attack interval must stay positive');
   if(barrier.cooldown-(barrier.maxRank-1)*barrier.cooldownReductionPerRank<=0)fail('combat.stats.skillRules.barrier','ranked cooldown must stay positive');

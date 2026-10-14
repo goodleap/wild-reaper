@@ -1,0 +1,459 @@
+{
+  "rules": {
+    "maxEffects": 100,
+    "maxHostileEffects": 40,
+    "maxFields": 12,
+    "maxFieldsPerCaster": 3,
+    "maxStatuses": 260,
+    "minimumEnemyWindup": 0.22,
+    "maxFreeze": 1.2,
+    "maxFriendlyFreeze": 0.28,
+    "friendlyFreezeImmunity": 4,
+    "minSlowMultiplier": 0.38,
+    "maxPullSpeed": 40,
+    "maxPushDistance": 20
+  },
+  "definitions": {
+    "fireball": {
+      "id": "fireball",
+      "name": "火球术",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "projectile",
+      "profile": "projectile",
+      "parameters": {
+        "speed": 370,
+        "range": 460,
+        "radius": 8,
+        "duration": 1.7,
+        "damage": 24,
+        "windup": 0.32,
+        "burnDamage": 4,
+        "burnDuration": 2.4,
+        "burnInterval": 0.6
+      }
+    },
+    "frostbolt": {
+      "id": "frostbolt",
+      "name": "冰霜术",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "projectile",
+      "profile": "projectile",
+      "parameters": {
+        "speed": 340,
+        "range": 440,
+        "radius": 7,
+        "duration": 1.7,
+        "damage": 20,
+        "windup": 0.35,
+        "slowMultiplier": 0.78,
+        "slowDuration": 1.5,
+        "freezeChance": 0,
+        "freezeDuration": 0.7,
+        "freezeImmunity": 3,
+        "bossFreezeMultiplier": 0.35,
+        "bossFreezeImmunity": 6
+      }
+    },
+    "barrier": {
+      "id": "barrier",
+      "name": "守护屏障",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "shield",
+      "profile": "projectile",
+      "parameters": {
+        "duration": 4,
+        "damage": 0,
+        "shield": 40,
+        "windup": 0
+      }
+    },
+    "pulse": {
+      "id": "pulse",
+      "name": "大地回响",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "ring",
+      "profile": "ground",
+      "parameters": {
+        "radius": 130,
+        "duration": 0.6,
+        "damage": 22,
+        "windup": 0.7,
+        "knockback": 9
+      }
+    },
+    "lightning": {
+      "id": "lightning",
+      "name": "唤雷",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "zone",
+      "profile": "projectile",
+      "parameters": {
+        "radius": 40,
+        "duration": 0.2,
+        "damage": 24,
+        "windup": 0.8
+      }
+    },
+    "storm": {
+      "id": "storm",
+      "name": "天雷轰击",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "zone",
+      "profile": "projectile",
+      "parameters": {
+        "radius": 68,
+        "duration": 0.2,
+        "damage": 36,
+        "windup": 1
+      }
+    },
+    "meteor": {
+      "id": "meteor",
+      "name": "星陨",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "zone",
+      "profile": "projectile",
+      "parameters": {
+        "radius": 90,
+        "duration": 0.25,
+        "damage": 38,
+        "windup": 1.1
+      }
+    },
+    "swords": {
+      "id": "swords",
+      "name": "王庭剑阵",
+      "family": "general",
+      "allowedActors": [
+        "player",
+        "companion",
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "projectile",
+      "profile": "projectile",
+      "parameters": {
+        "speed": 370,
+        "range": 500,
+        "radius": 6,
+        "duration": 1.7,
+        "damage": 25,
+        "windup": 0.6
+      }
+    },
+    "frostRing": {
+      "id": "frostRing",
+      "name": "寒霜环",
+      "family": "exclusive",
+      "allowedActors": [
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "ring",
+      "profile": "ground",
+      "parameters": {
+        "radius": 195,
+        "duration": 1.05,
+        "damage": 24,
+        "windup": 0.85,
+        "slowMultiplier": 0.62,
+        "slowDuration": 1.5
+      }
+    },
+    "flameStream": {
+      "id": "flameStream",
+      "name": "焰流",
+      "family": "exclusive",
+      "allowedActors": [
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "cone",
+      "profile": "projectile",
+      "parameters": {
+        "range": 260,
+        "radius": 14,
+        "duration": 2,
+        "damage": 13,
+        "windup": 0.9,
+        "tickInterval": 0.5,
+        "spread": 0.52,
+        "burnDamage": 3,
+        "burnDuration": 1.2,
+        "burnInterval": 0.6
+      }
+    },
+    "tidalWave": {
+      "id": "tidalWave",
+      "name": "潮汐波",
+      "family": "exclusive",
+      "allowedActors": [
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "wave",
+      "profile": "ground",
+      "parameters": {
+        "speed": 180,
+        "range": 650,
+        "radius": 105,
+        "duration": 3.6,
+        "damage": 26,
+        "windup": 0.85,
+        "knockback": 14
+      }
+    },
+    "domain": {
+      "id": "domain",
+      "name": "荒野领域",
+      "family": "exclusive",
+      "allowedActors": [
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "field",
+      "profile": "ground",
+      "parameters": {
+        "radius": 100,
+        "duration": 3.3,
+        "damage": 11,
+        "windup": 0.95,
+        "tickInterval": 0.8,
+        "slowMultiplier": 0.62,
+        "slowDuration": 0.65
+      }
+    },
+    "vortex": {
+      "id": "vortex",
+      "name": "虚空漩涡",
+      "family": "exclusive",
+      "allowedActors": [
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "field",
+      "profile": "ground",
+      "parameters": {
+        "radius": 115,
+        "duration": 3,
+        "damage": 9,
+        "windup": 1,
+        "tickInterval": 0.8,
+        "pullSpeed": 28
+      }
+    },
+    "vineTrap": {
+      "id": "vineTrap",
+      "name": "生长藤阵",
+      "family": "exclusive",
+      "allowedActors": [
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "field",
+      "profile": "ground",
+      "parameters": {
+        "radius": 65,
+        "duration": 2.7,
+        "damage": 9,
+        "windup": 0.9,
+        "tickInterval": 0.8,
+        "slowMultiplier": 0.5,
+        "slowDuration": 0.7
+      }
+    },
+    "beam": {
+      "id": "beam",
+      "name": "充能射线",
+      "family": "exclusive",
+      "allowedActors": [
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "beam",
+      "profile": "projectile",
+      "parameters": {
+        "range": 390,
+        "radius": 12,
+        "duration": 0.24,
+        "damage": 24,
+        "windup": 0.85
+      }
+    },
+    "stoneLob": {
+      "id": "stoneLob",
+      "name": "抛石",
+      "family": "exclusive",
+      "allowedActors": [
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "zone",
+      "profile": "projectile",
+      "parameters": {
+        "radius": 58,
+        "duration": 0.22,
+        "damage": 23,
+        "windup": 0.95
+      }
+    },
+    "windSlash": {
+      "id": "windSlash",
+      "name": "掠风刃",
+      "family": "exclusive",
+      "allowedActors": [
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "projectile",
+      "profile": "projectile",
+      "parameters": {
+        "speed": 340,
+        "range": 420,
+        "radius": 11,
+        "duration": 1.5,
+        "damage": 18,
+        "windup": 0.3
+      }
+    },
+    "waterBolt": {
+      "id": "waterBolt",
+      "name": "潮水弹",
+      "family": "exclusive",
+      "allowedActors": [
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "projectile",
+      "profile": "projectile",
+      "parameters": {
+        "speed": 260,
+        "range": 400,
+        "radius": 12,
+        "duration": 1.8,
+        "damage": 18,
+        "windup": 0.45,
+        "knockback": 7
+      }
+    },
+    "shortFlame": {
+      "id": "shortFlame",
+      "name": "短焰喷吐",
+      "family": "exclusive",
+      "allowedActors": [
+        "enemy",
+        "boss"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "cone",
+      "profile": "projectile",
+      "parameters": {
+        "range": 165,
+        "radius": 10,
+        "duration": 1.35,
+        "damage": 12,
+        "windup": 0.8,
+        "tickInterval": 0.6,
+        "spread": 0.46,
+        "burnDamage": 2,
+        "burnDuration": 1.2,
+        "burnInterval": 0.6
+      }
+    },
+    "swordEnergy": {
+      "id": "swordEnergy",
+      "name": "剑气",
+      "family": "weapon",
+      "allowedActors": [
+        "player",
+        "companion"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "projectile",
+      "profile": "projectile",
+      "parameters": {
+        "speed": 420,
+        "range": 280,
+        "radius": 12,
+        "duration": 0.7,
+        "damage": 18,
+        "windup": 0
+      }
+    },
+    "runeArrow": {
+      "id": "runeArrow",
+      "name": "符文穿击",
+      "family": "weapon",
+      "allowedActors": [
+        "player",
+        "companion"
+      ],
+      "exclusiveOwnerIds": [],
+      "shape": "projectile",
+      "profile": "projectile",
+      "parameters": {
+        "speed": 510,
+        "range": 520,
+        "radius": 8,
+        "duration": 1.2,
+        "damage": 30,
+        "windup": 0
+      }
+    }
+  }
+}

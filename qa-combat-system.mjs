@@ -116,9 +116,9 @@ for(const actorScope of ['ally','player'])for(const source of ['lightning','orbi
 const rewarded=arena();
 for(let level=1;level<=2;level++) {
   rewarded.regions.rewardPortal={rewardClaimed:false};assert(rewarded.superSkills.offer('region',rewarded.region.id));rewarded.status='super';
-  const domainChoice=rewarded.getSuperChoices().find(c=>(c.skillId==='domain'||c.id==='domain')&&c.domainBranch==='binding');assert(domainChoice);
-  assert(rewarded.chooseSuper(domainChoice.id));assert.equal(rewarded.build.getSkill('domain').level,level);
-  assert.equal(rewarded.skills.find(skill=>skill.id==='domain')?.level,level);assert(!rewarded.weapons.some(weapon=>weapon.id==='domain'));
+  const superChoice=rewarded.getSuperChoices().find(c=>c.id==='swords');assert(superChoice);
+  assert(rewarded.chooseSuper(superChoice.id));assert.equal(rewarded.build.getSkill('swords').level,level);
+  assert.equal(rewarded.skills.find(skill=>skill.id==='swords')?.level,level);assert(!rewarded.weapons.some(weapon=>weapon.id==='swords'));
 }
 
 // Branch investments change the real finite projectile path, preserving both

@@ -118,7 +118,11 @@
       "automatic": true,
       "initialRank": 0,
       "maxBaseRank": 3,
-      "maxLevel": 3
+      "maxLevel": 3,
+      "rewardSources": [
+        "region",
+        "castle"
+      ]
     },
     {
       "id": "swords",
@@ -137,7 +141,11 @@
       "automatic": true,
       "initialRank": 0,
       "maxBaseRank": 3,
-      "maxLevel": 3
+      "maxLevel": 3,
+      "rewardSources": [
+        "region",
+        "castle"
+      ]
     },
     {
       "id": "vortex",
@@ -211,6 +219,32 @@
       "source": "innate",
       "initialRank": 1,
       "maxBaseRank": 3
+    },
+    "fireball": {
+      "id": "fireball",
+      "name": "火球术",
+      "icon": "✹",
+      "color": "#ffad6d",
+      "category": "skill",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "crystal",
+      "initialRank": 0,
+      "maxBaseRank": 5
+    },
+    "frostbolt": {
+      "id": "frostbolt",
+      "name": "冰霜术",
+      "icon": "❄",
+      "color": "#a9e5f3",
+      "category": "skill",
+      "binding": "character",
+      "activation": "automatic",
+      "tier": "regular",
+      "source": "crystal",
+      "initialRank": 0,
+      "maxBaseRank": 5
     }
   },
   "upgrades": [
@@ -846,6 +880,34 @@
       "tier": "super",
       "activation": "manual",
       "cap": 2
+    },
+    {
+      "requires": [],
+      "effects": [],
+      "id": "fireball",
+      "name": "火球术",
+      "desc": "自动发射火球，命中造成伤害并附加持续燃烧",
+      "kind": "学习技能",
+      "icon": "✹",
+      "color": "#ffad6d",
+      "category": "skill",
+      "ownerId": "fireball",
+      "upgradeKind": "rank",
+      "cap": 5
+    },
+    {
+      "requires": [],
+      "effects": [],
+      "id": "frostbolt",
+      "name": "冰霜术",
+      "desc": "自动发射冰霜弹，造成伤害并减速；高等级可概率冻结",
+      "kind": "学习技能",
+      "icon": "❄",
+      "color": "#a9e5f3",
+      "category": "skill",
+      "ownerId": "frostbolt",
+      "upgradeKind": "rank",
+      "cap": 5
     }
   ],
   "endlessUpgrades": [
@@ -1272,6 +1334,136 @@
         "evolvedTargetLimit": 7,
         "chainRetention": 0.85,
         "fullDamageTargetCount": 3
+      },
+      "fireball": {
+        "maxRank": 5,
+        "levels": [
+          {
+            "damage": 40,
+            "cooldown": 2.4,
+            "range": 410,
+            "speed": 430,
+            "radius": 9,
+            "burnDamage": 6,
+            "burnDuration": 2.4,
+            "burnInterval": 0.6
+          },
+          {
+            "damage": 50,
+            "cooldown": 2.3,
+            "range": 410,
+            "speed": 430,
+            "radius": 9,
+            "burnDamage": 8,
+            "burnDuration": 2.4,
+            "burnInterval": 0.6
+          },
+          {
+            "damage": 62,
+            "cooldown": 2.2,
+            "range": 410,
+            "speed": 430,
+            "radius": 9,
+            "burnDamage": 10,
+            "burnDuration": 3,
+            "burnInterval": 0.6
+          },
+          {
+            "damage": 76,
+            "cooldown": 2.05,
+            "range": 410,
+            "speed": 430,
+            "radius": 9,
+            "burnDamage": 12,
+            "burnDuration": 3,
+            "burnInterval": 0.6
+          },
+          {
+            "damage": 92,
+            "cooldown": 1.9,
+            "range": 410,
+            "speed": 430,
+            "radius": 9,
+            "burnDamage": 15,
+            "burnDuration": 3,
+            "burnInterval": 0.6
+          }
+        ]
+      },
+      "frostbolt": {
+        "maxRank": 5,
+        "levels": [
+          {
+            "damage": 30,
+            "cooldown": 2.2,
+            "range": 390,
+            "speed": 470,
+            "radius": 7,
+            "slowMultiplier": 0.78,
+            "slowDuration": 2,
+            "freezeChance": 0,
+            "freezeDuration": 0.7,
+            "freezeImmunity": 3,
+            "bossFreezeMultiplier": 0.35,
+            "bossFreezeImmunity": 6
+          },
+          {
+            "damage": 39,
+            "cooldown": 2.1,
+            "range": 390,
+            "speed": 470,
+            "radius": 7,
+            "slowMultiplier": 0.74,
+            "slowDuration": 2,
+            "freezeChance": 0,
+            "freezeDuration": 0.7,
+            "freezeImmunity": 3,
+            "bossFreezeMultiplier": 0.35,
+            "bossFreezeImmunity": 6
+          },
+          {
+            "damage": 49,
+            "cooldown": 2,
+            "range": 390,
+            "speed": 470,
+            "radius": 7,
+            "slowMultiplier": 0.7,
+            "slowDuration": 2,
+            "freezeChance": 0.12,
+            "freezeDuration": 0.7,
+            "freezeImmunity": 3,
+            "bossFreezeMultiplier": 0.35,
+            "bossFreezeImmunity": 6
+          },
+          {
+            "damage": 61,
+            "cooldown": 1.9,
+            "range": 390,
+            "speed": 470,
+            "radius": 7,
+            "slowMultiplier": 0.66,
+            "slowDuration": 2,
+            "freezeChance": 0.2,
+            "freezeDuration": 0.7,
+            "freezeImmunity": 3,
+            "bossFreezeMultiplier": 0.35,
+            "bossFreezeImmunity": 6
+          },
+          {
+            "damage": 75,
+            "cooldown": 1.8,
+            "range": 390,
+            "speed": 470,
+            "radius": 7,
+            "slowMultiplier": 0.62,
+            "slowDuration": 2,
+            "freezeChance": 0.28,
+            "freezeDuration": 0.7,
+            "freezeImmunity": 3,
+            "bossFreezeMultiplier": 0.35,
+            "bossFreezeImmunity": 6
+          }
+        ]
       }
     }
   },

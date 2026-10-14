@@ -40,7 +40,7 @@ export class Dungeon {
   }
   _clearScene(){
     const g=this.game;g.attacks?.clearTrails();g.bullets=[];g.enemyBullets=[];g.effects=[];g.orbitals=[];g.storm=null;g._pulseEchoes=[];g._grid.clear();
-    g.superSkills?.clearScene();g.barrier?.clearScene();
+    g.superSkills?.clearScene();g.barrier?.clearScene();g.abilities?.clearScene();
     for(const member of g.companions?.members||[])member._echoes=[];
     // No old warning may resolve at an unrelated position after a boundary.
     for(const enemy of g.enemies){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;clearBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}

@@ -8,13 +8,14 @@ import { Game } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
 
-// Fixed pre-extraction fingerprints verify this refactor changes neither tuning
-// nor generated terrain. Deliberate content changes must update these fixtures.
+// Fixed fingerprints preserve authored content and deterministic terrain.
+// v86 updates world enemy weights for nine specialist types and core bosses
+// for forest/beach/snow/volcano; all terrain fingerprints remain unchanged.
 const expected={
   "exports": {
     "environment": "5a2e7540eee34a6d3ef9ea0b5029222765e9f6bd5b0b869552f15993a5f164c3",
-    "world-definitions": "a58eb61487656558e384372f39684da14c8efcbe94e2cfca15e66227501d34ad",
-    "stage-definitions": "4aa1774f262712a9010ee0bd1d639e0618a076a63ffd5466a8292150a65097b4",
+    "world-definitions": "e5a5a8de90d78cf790a62b418b020eb8b9ff51b47872b7f1f61434f917ae2d69",
+    "stage-definitions": "db9a79f08bbbb15d4659f34dae6c9aa87bfe658c8c31d8870dcf025035665af7",
     "world-sites": "31546e1f1db7a911f55177cd5395ee8bc3d508b7f6c6254f978018f2b9bb0a3a",
     "world-hazards": "1bda6969e34de2b9e50c502f2c9359998fb901561f39acf1daab0b4a2cfcc222",
     "regional-mechanisms": "b538127784763cf62edb39e73602c627e4238224678f7e1a1323ee64fd169aad",
@@ -72,4 +73,4 @@ for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
   assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
 }
-console.log('World configuration checked: 8 world identities, 8 stages, 10 routes, pre-extraction values and all deterministic terrain placement traces; invalid cross-references rejected.');
+console.log('World configuration checked: 8 world identities, 8 stages, 10 routes, authored values and unchanged deterministic terrain placement traces; invalid cross-references rejected.');

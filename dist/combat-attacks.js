@@ -71,6 +71,7 @@ export class CombatAttacks {
 
   castStorm() {
     const g=this.game,p=g.player,stats=skillStats(g,'storm');
+    if(g.abilities?.isFrozen(p))return false;
     const targets=g.enemies.filter(e=>canTarget(g,e,p,{requireView:true,source:'storm',checkPath:true}));
     p.skillCooldownMax=stats.cooldown;p.skillCooldown=stats.cooldown;p.castFace=.25;
     g.storm={x:p.x,y:p.y,viewWidth:g.viewWidth,viewHeight:g.viewHeight,life:STORM_DURATION,maxLife:STORM_DURATION,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
@@ -88,7 +89,7 @@ export class CombatAttacks {
       return;
     }
     g._shot-=dt;
-    if(g._shot<=0) {
+    if(g._shot<=0&&!g.abilities?.isFrozen(p)) {
       const enemy=g._nearest(p.x,p.y,stats.range,undefined,p,{source:'arrow',pathRadius:4}),
         supply=nearestProp(g,g.adventure?.props,g.adventure?.nearestSupply(280),280,prop=>prop.hp>0),
         vine=nearestProp(g,g.environment?.mechanisms?.props,g.environment?.nearestDestructible?.(280),280,prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active'));
@@ -246,7 +247,7 @@ export class CombatAttacks {
     }
     g._pulseEchoes=g._pulseEchoes.filter(e=>e.life>0);
     g._pulse-=dt;
-    if(!stats.owned||g._pulse>0)return;
+    if(!stats.owned||g._pulse>0||g.abilities?.isFrozen(p))return;
     // The extended echo is part of the same cast, so a reachable enemy in its
     // outer band is also a useful target. Never spend a full cooldown on air.
     const reach=stats.radius*(stats.echo?stats.echoRadiusMultiplier:1),origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};
@@ -262,7 +263,7 @@ export class CombatAttacks {
   updateLightning(dt) {
     const g=this.game,p=g.player,stats=skillStats(g,'lightning');
     g._lightning-=dt;
-    if(!stats.owned||g._lightning>0)return;
+    if(!stats.owned||g._lightning>0||g.abilities?.isFrozen(p))return;
     let origin=p;const excluded=new Set();
     let hit=false;
     if(stats.focus) {

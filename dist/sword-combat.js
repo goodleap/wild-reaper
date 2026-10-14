@@ -84,8 +84,13 @@ export class SwordCombat {
     if(!stats.equipped){if(this.pending||this._visual||this.energyWaves.length)this.clearScene();return;}
     if(g.status!=='playing')return;
     this._updateEnergy(dt);
-    this._followVisual(dt);
     this.cooldown-=dt;
+    // A freeze interrupts the body-driven windup, while already released
+    // sword energy keeps travelling independently of its caster.
+    if(g.abilities?.isFrozen(p)){
+      this.pending=null;if(this._visual)this._visual.life=0;this._visual=null;return;
+    }
+    this._followVisual(dt);
     if(this.pending) {
       this.pending.remaining-=dt;
       if(this.pending.remaining<=0){const swing=this.pending;this.pending=null;this._strike(swing);}

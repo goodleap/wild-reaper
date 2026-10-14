@@ -11,9 +11,10 @@ const numeric=(value,keys,path,min=0)=>{requireKeys(value,keys.split(' '),path);
 const positive=(value,keys,path)=>numeric(value,keys,path,.000001);
 const refs=(values,keys,path,min=0)=>{for(const item of array(values,path,min))reference(item,keys,path);};
 const unique=(values,path)=>{if(new Set(values).size!==values.length)fail(path,'duplicate ID');};
-const enemyBehaviors=new Set(['chase','boar','spore','boss']);
-const enemyVisuals=new Set(['slime','bat','beetle','brute','boar','spore','boss','ancient','bloom']);
-const bossBehaviors=new Set(['ancient','bloom']);
+const specialistIds=['rootbinder','boglurker','prismguard','tidepriest','shieldguard','stoneape','windhunter','frostmage','flamelizard'];
+const enemyBehaviors=new Set(['chase','boar','spore','boss','specialist']);
+const enemyVisuals=new Set(['slime','bat','beetle','brute','boar','spore','boss','ancient','bloom','spiderling',...specialistIds,'broodmother','deepcaller','frostcrown','furnace']);
+const bossBehaviors=new Set(['ancient','bloom','broodmother','deepcaller','frostcrown','furnace']);
 const affixBehaviors=new Set(['shield','swift','summoner']);
 const codex=(value,path)=>{object(value,path);for(const key of ['role','description','advice','color','source'])string(value[key],`${path}.${key}`);};
 
@@ -26,7 +27,9 @@ export function validateEnemies(sections){
     positive(def,'r baseHp baseSpeed',path);numeric(def,'damage xp',path);
     if(def.easyHp!==undefined)number(def.easyHp,`${path}.easyHp`,.000001);
     reference(def.movement,new Set(['ground','air']),`${path}.movement`);reference(def.behavior,enemyBehaviors,`${path}.behavior`);reference(def.visual,enemyVisuals,`${path}.visual`);
+    if(def.behavior==='specialist'&&(!specialistIds.includes(def.specialist)||def.specialist!==id))fail(path,'invalid specialist profile');
     if(def.locomotion!==undefined&&typeof def.locomotion!=='boolean')fail(path,'locomotion must be boolean');
+    if(def.ranged!==undefined&&typeof def.ranged!=='boolean')fail(path,'ranged must be boolean');
     for(const key of ['wobble','surge'])if(def[key])numeric(def[key],'frequency amplitude',`${path}.${key}`);
     if(def.codex){codex(def.codex,`${path}.codex`);string(def.codex.name,`${path}.codex.name`);}
   }
@@ -35,23 +38,62 @@ export function validateEnemies(sections){
   for(const id of bossBehaviors)reference(id,bossIds,'enemies.bosses');
   for(const [id,def] of Object.entries(bosses)){
     const path=`enemies.bosses.${id}`;object(def,path);if(def.id!==id)fail(path,'key and ID must match');string(def.name,`${path}.name`);
+    if(def.canTargetAir!==undefined&&typeof def.canTargetAir!=='boolean')fail(path,'canTargetAir must be boolean');
     reference(def.behavior,bossBehaviors,`${path}.behavior`);reference(def.visual,enemyVisuals,`${path}.visual`);codex(def.codex,`${path}.codex`);object(def.parameters,`${path}.parameters`);
-    for(const [key,value] of Object.entries(def.parameters))if(!['name','bulletColor'].includes(key))number(value,`${path}.parameters.${key}`);
+    for(const [key,value] of Object.entries(def.parameters))if(!['name','bulletColor','summonType'].includes(key))number(value,`${path}.parameters.${key}`);
+    if(def.parameters.summonType!==undefined)reference(def.parameters.summonType,enemyIds,`${path}.parameters.summonType`);
   }
   positive(bosses.ancient.parameters,'range radius windup cooldown recovery damageMultiplier','enemies.bosses.ancient.parameters');
   const bloom=bosses.bloom.parameters;positive(bloom,'range preferredMin preferredMax cooldown enragedCooldown recovery fanWindup fanSpread bulletSpeed bulletLife burstWindup burstRadius burstSpacing initialCooldown retreatRange retreatDuration retreatCooldown retreatDistance bulletRadius','enemies.bosses.bloom.parameters');
+  validateSpecialistBosses(bosses);
   numeric(bloom,'enragedHealthRatio advanceSpeedMultiplier retreatSpeedMultiplier bulletDamageMultiplier burstDamageMultiplier','enemies.bosses.bloom.parameters');
   number(bloom.enragedHealthRatio,'enemies.bosses.bloom.parameters.enragedHealthRatio',0,1);integer(bloom.fanCount,'enemies.bosses.bloom.parameters.fanCount',3,31);if(bloom.fanCount%2!==1)fail('enemies.bosses.bloom.parameters.fanCount','must be odd');integer(bloom.maxEnemyBullets,'enemies.bosses.bloom.parameters.maxEnemyBullets',1,1000);string(bloom.bulletColor,'enemies.bosses.bloom.parameters.bulletColor');if(bloom.preferredMin>bloom.preferredMax)fail('enemies.bosses.bloom.parameters','invalid preferred range');
   refs(enemies.bossRotation,bossIds,'enemies.bossRotation',1);
   const behavior=object(enemies.behaviorRules,'enemies.behaviorRules');
   positive(behavior.boar,'speed rushLife stunLife minRange maxRange windup chargeLength cooldown damageMultiplier','enemies.behaviorRules.boar');if(behavior.boar.minRange>behavior.boar.maxRange)fail('enemies.behaviorRules.boar','invalid charge range');
   positive(behavior.spore,'range holdRange releaseRange windup cooldown bulletSpeed bulletLife bulletRadius','enemies.behaviorRules.spore');string(behavior.spore.color,'enemies.behaviorRules.spore.color');
+  validateSpecialists(enemies,sections);
   const elite=object(enemies.elite,'enemies.elite');numeric(elite.rules,'startAt chance cap health scale xp shield range swiftWindup swiftDuration swiftSpeed swiftCooldown summonWindup summonCooldown summonCount summonOwnerCap summonGlobalCap enemyCap swiftInitialCooldown otherInitialCooldown cancelCooldown summonAttempts summonStartRadius summonRingStep summonRingSlots summonPlayerClearance','enemies.elite.rules');
   number(elite.rules.chance,'enemies.elite.rules.chance',0,1);positive(elite.rules,'health scale swiftDuration swiftCooldown summonCooldown summonRingSlots','enemies.elite.rules');for(const key of ['cap','summonCount','summonOwnerCap','summonGlobalCap','enemyCap','summonAttempts','summonRingSlots'])integer(elite.rules[key],`enemies.elite.rules.${key}`,1,1000);
   requireKeys(elite.affixes,[...affixBehaviors],'enemies.elite.affixes');for(const [id,affix] of Object.entries(elite.affixes)){reference(id,affixBehaviors,'enemies.elite.affixes');object(affix,`enemies.elite.affixes.${id}`);if(affix.id!==id)fail('enemies.elite.affixes','key and ID must match');string(affix.name,'enemies.elite.affixes.name');string(affix.color,'enemies.elite.affixes.color');}
   validateEncounters(encounters,enemyIds);
   validateDifficulty(difficulty,encounters,enemyIds);
   return true;
+}
+function validateSpecialistBosses(bosses){
+  const required={
+    broodmother:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup domainRadius domainDuration domainDamage summonCount summonCap summonGlobalCap summonAttempts summonRadius summonClearance enemyCap leapRadius leapDuration leapDamage moveMultiplier',
+    deepcaller:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup strikeRadius strikeSpacing strikeInterval strikeDamage vortexRadius vortexDuration vortexDamage waveGap waveWidth waveSpeed waveDuration waveDamage moveMultiplier',
+    frostcrown:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup fanCount fanSpread fanDamage fanSpeed chargeSpeed chargeDuration chargeDamage markRadius markSpacing markCap markLife markDamage shatterDelay shatterInterval frostRadius frostDamage moveMultiplier',
+    furnace:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup marchDuration marchSpeedMultiplier markRadius markSpacing markCap markLife markDamage eruptionDelay eruptionInterval fireballDamage flameDamage flameRange flameDuration flameSpread moveMultiplier'
+  };
+  for(const[id,keys]of Object.entries(required)){
+    const p=bosses[id].parameters,path=`enemies.bosses.${id}.parameters`;positive(p,keys,path);
+    if(p.preferredRange>p.range)fail(path,'preferred range exceeds acquisition range');
+    for(const key of ['summonCount','summonCap','summonGlobalCap','summonAttempts','enemyCap','fanCount','markCap'])if(p[key]!==undefined)integer(p[key],`${path}.${key}`,1,500);
+    if(p.fanCount>9||p.markCap>12)fail(path,'excessive simultaneous attacks');
+  }
+  string(bosses.broodmother.parameters.summonType,'enemies.bosses.broodmother.parameters.summonType');
+}
+function validateSpecialists(enemies,sections){
+  const rules=object(enemies.specialistRules,'enemies.specialistRules');
+  requireKeys(rules,specialistIds,'enemies.specialistRules');
+  const abilities=new Set(['vineTrap','beam','waterBolt','stoneLob','windSlash','frostbolt','shortFlame']);
+  for(const [id,rule]of Object.entries(rules)){
+    const path=`enemies.specialistRules.${id}`;reference(id,new Set(specialistIds),path);reference(id,new Set(Object.keys(enemies.definitions)),path);
+    reference(rule.mode,new Set(['cast','fan','pounce','strafe','shield']),`${path}.mode`);
+    positive(rule,'range cooldown windup recovery initialCooldown damageMultiplier',path);number(rule.holdRange,`${path}.holdRange`,0,rule.range);
+    if(['cast','fan','strafe'].includes(rule.mode))reference(rule.abilityId,abilities,`${path}.abilityId`);
+    for(const[key,value]of Object.entries(rule))if(!['mode','abilityId'].includes(key))number(value,`${path}.${key}`);
+    if(rule.mode==='fan'){integer(rule.count,`${path}.count`,2,7);number(rule.spread,`${path}.spread`,.1,Math.PI);}
+    if(rule.mode==='pounce')positive(rule,'minRange duration speed',path);
+    if(rule.mode==='strafe')positive(rule,'duration speed projectileSpeed',path);
+    if(rule.mode==='shield'){positive(rule,'duration speedMultiplier turnSpeed frontHalfAngle frontDamageMultiplier',path);number(rule.frontDamageMultiplier,`${path}.frontDamageMultiplier`,.1,1);number(rule.frontHalfAngle,`${path}.frontHalfAngle`,.1,Math.PI*.75);}
+  }
+  for(const world of sections.worlds.definitions){
+    let types=0;for(const id of specialistIds){number(world.enemyWeights[id],`world ${world.id}.enemyWeights.${id}`,0,5);if(world.enemyWeights[id]>0)types++;}
+    if(types>2)fail(`world ${world.id}.enemyWeights`,'at most two specialist types per theme');
+  }
 }
 function validateEncounters(c,enemyIds){
   const sequence=(s,path)=>{
@@ -76,6 +118,9 @@ function validateEncounters(c,enemyIds){
   const spawn=object(c.ordinarySpawnRules,'encounters.ordinarySpawnRules');reference(spawn.fallback,enemyIds,'encounters.ordinarySpawnRules.fallback');string(spawn.baselineWorld,'encounters.ordinarySpawnRules.baselineWorld');numeric(spawn,'lateAfter','encounters.ordinarySpawnRules');positive(spawn,'latePeriod','encounters.ordinarySpawnRules');
   numeric(spawn.brute,'after max base growth','encounters.ordinarySpawnRules.brute');numeric(spawn.bat,'after max base growth','encounters.ordinarySpawnRules.bat');numeric(spawn.beetle,'after min offset','encounters.ordinarySpawnRules.beetle');
   for(const rule of array(spawn.specials,'encounters.ordinarySpawnRules.specials',1,30)){reference(rule.type,enemyIds,'encounters.ordinarySpawnRules.specials.type');number(rule.at,'encounters.ordinarySpawnRules.specials.at');reference(rule.type,new Set(Object.keys(c.specialEnemyCaps)),'encounters.ordinarySpawnRules.specials.type');number(rule.weight,'encounters.ordinarySpawnRules.specials.weight',0,1);number(rule.rollAbove,'encounters.ordinarySpawnRules.specials.rollAbove',0,1);if(rule.rollThrough!==null)number(rule.rollThrough,'encounters.ordinarySpawnRules.specials.rollThrough',rule.rollAbove,1);if(rule.rollThrough===undefined)fail('encounters.ordinarySpawnRules.specials','rollThrough is required; null means unbounded');}
+  const specialists=object(c.specialistSpawnRules,'encounters.specialistSpawnRules');integer(specialists.globalCap,'encounters.specialistSpawnRules.globalCap',1,16);number(specialists.maxChance,'encounters.specialistSpawnRules.maxChance',0,.35);
+  unique(array(specialists.entries,'encounters.specialistSpawnRules.entries',1,30).map(x=>x.type),'encounters.specialistSpawnRules.entries');
+  for(const entry of specialists.entries){reference(entry.type,new Set(specialistIds),'specialist type');reference(entry.type,new Set(Object.keys(c.specialEnemyCaps)),'specialist cap');number(entry.at,'specialist unlock time',1);number(entry.weight,'specialist spawn weight',0,.2);}
   const wave=c.waveRules;numeric(wave,'initialRest exploration warning attackLimit spawnWindow clearRest escapeRest firstWaveSize waveSizeStep maxWaveSize maxEnemies lootRadius bossWarningPadding blockedRetry tierSizeStep easySizeMultiplier batches batchInterval entrySlots entryStride entryAngleStep rewardCrystalsBase rewardCrystalsMax rewardWaveStep rewardCrystalsStep','encounters.waveRules');positive(wave,'batches batchInterval entrySlots rewardWaveStep warning attackLimit spawnWindow','encounters.waveRules');for(const key of ['firstWaveSize','maxWaveSize','maxEnemies','batches','entrySlots','entryStride'])integer(wave[key],`encounters.waveRules.${key}`,1);for(const key of ['alternateAngles','probeAngles'])for(const angle of array(wave[key],`encounters.waveRules.${key}`,1,100))number(angle,`encounters.waveRules.${key}`,-Math.PI*2,Math.PI*2);if(wave.maxWaveSize<wave.firstWaveSize)fail('encounters.waveRules','maximum wave size is below first wave size');
   for(const direction of array(c.waveDirections,'encounters.waveDirections',1,32)){string(direction.id,'encounters.waveDirections.id');string(direction.label,'encounters.waveDirections.label');number(direction.angle,'encounters.waveDirections.angle',-Math.PI*2,Math.PI*2);}unique(c.waveDirections.map(d=>d.id),'encounters.waveDirections');
   numeric(c.objectiveRules,'bossWarning campEngage houseEngage treasureEngage encounterPadding treasureChestEngage trappedCampSpacing clearedCampSpacing','encounters.objectiveRules');positive(c.arenaRules,'warmup batchSize batchInterval warning spawnDistance enemyLimit','encounters.arenaRules');number(c.arenaRules.spawnGrace,'encounters.arenaRules.spawnGrace');integer(c.arenaRules.batchSize,'encounters.arenaRules.batchSize',1);integer(c.arenaRules.enemyLimit,'encounters.arenaRules.enemyLimit',1);

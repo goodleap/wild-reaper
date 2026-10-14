@@ -1,7 +1,7 @@
 import { UPGRADE_DEFS, ENDLESS_UPGRADES, EVOLUTIONS, getUpgradeDefinition, canTakeUpgrade } from './combat-catalog.js';
 import { WEAPON_BRANCHES, BRANCH_WEAPONS, branchDefinition, isBranchReady } from './weapon-branches.js';
 
-const ACQUISITIONS=Object.freeze(['arrow','orbit','pulse','lightning','barrier']);
+const ACQUISITIONS=Object.freeze(['arrow','orbit','pulse','lightning','barrier','fireball','frostbolt']);
 const randomEntry=items=>items[Math.min(items.length-1,Math.floor(Math.random()*items.length))];
 const frozenChoices=choices=>Object.freeze(choices.map(choice=>Object.freeze(choice)));
 
@@ -61,7 +61,9 @@ export class CombatProgression {
     if(id==='sword') {
       desc=rank?'提升伤害、挥砍距离和频率；5 级选择横扫或重斩':'自动朝近身敌人挥剑，扇形斩击身前敌群';kind=rank?'武器强化':'获得武器';
     }else if(id==='barrier') {
-      desc=rank?'提高护盾容量与持续时间，缩短冷却':'受击自动展开，吸收首击与随后伤害；无受击时持续待命';kind=rank?'技能强化':'独立技能';
+      desc=rank?'提高护盾容量与持续时间，缩短冷却':'受击自动展开，吸收首击与随后伤害；无受击时持续待命';kind=rank?'技能强化':'通用技能';
+    }else if(id==='fireball'||id==='frostbolt') {
+      desc=id==='fireball'?'命中造成伤害并持续燃烧；升级增强伤害、缩短间隔':'命中伤害并减速；3级起概率冻结，高等级提升冻结概率';kind=rank?'技能强化':'通用技能';
     }else if(id==='orbit') {
       if(rank) {
         desc='增加一枚环刃，并提高切割伤害';
@@ -73,7 +75,7 @@ export class CombatProgression {
       if(rank) {
         desc=id==='pulse'?'扩大解围范围并提高伤害；无敌人时待命':'提升每道闪电伤害；无目标时待命';
         kind='技能强化';
-      }else kind='独立技能';
+      }else kind='通用技能';
       desc+='；升至 5 级时选择一条分支';
     }
     const owner=g.build.getWeapon(definition.ownerId)||g.build.getSkill(definition.ownerId);
@@ -96,7 +98,7 @@ export class CombatProgression {
       if(isBranchReady(g,owner)){g._branchOfferWeapon=owner;break;}
     }
     const opening=g.progressionTier===1&&!g._branchOfferWeapon&&ACQUISITIONS.every(id=>!g.build.getRank(id));
-    const ordinary=opening?['arrow','barrier',randomEntry(['orbit','pulse','lightning'])].map(id=>pool.find(choice=>choice.id===id)).filter(Boolean):this._ordinary(pool,g._branchOfferWeapon?1:3);
+    const ordinary=opening?['arrow','barrier',randomEntry(['orbit','pulse','lightning','fireball','frostbolt'])].map(id=>pool.find(choice=>choice.id===id)).filter(Boolean):this._ordinary(pool,g._branchOfferWeapon?1:3);
     let choices=ordinary.map(choice=>this._choice(choice));
     if(g._branchOfferWeapon) {
       const owner=g._branchOfferWeapon;

@@ -13,7 +13,8 @@ import { ENEMY_ART } from './dist/enemy-art/registry.js';
 for(const id of ENEMY_IDS){
   const def=enemyDefinition(id);
   assert.equal(def.id,id);assert(Object.isFrozen(def));
-  for(const key of ['r','baseHp','baseSpeed','damage','xp'])assert(def[key]>0,`${id}.${key}`);
+  for(const key of ['r','baseHp','baseSpeed','damage'])assert(def[key]>0,`${id}.${key}`);
+  assert(def.xp>=0,`${id}.xp`);
   assert(['ground','air'].includes(def.movement));
   assert.equal(enemyBehavior(id),ENEMY_BEHAVIORS[def.behavior]);
   const entity={type:id};
