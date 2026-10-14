@@ -21,7 +21,7 @@ for(const [index,region] of REGIONS.entries()){
  for(const s of g.settlements.sites){
   assert(g.terrain.isFree(s.door.x,s.door.y,20));assert(!g.settlements.isSafePoint(s.x,s.y,30));
   if(s.type==='supply'||s.type==='occupied'){
-   assert(s.width>=50&&s.width<=(s.featureId?80:60)&&s.depth>=24&&s.depth<=(s.featureId?40:32),'huts and one-room landmarks use compact footprints beside the traveler');
+   assert(s.width>=50&&s.width<=(s.featureId?80:70)&&s.depth>=24&&s.depth<=(s.featureId?40:32),'huts and one-room landmarks use compact footprints beside the traveler');
    assert(!g.terrain.isFree(s.x,s.y-s.depth/2,15),'small house foundations still block feet');
    for(const wall of g.terrain.query(s.x-100,s.y-100,s.x+100,s.y+100).filter(o=>o.structureId===s.id)){
     assert([wall.x,wall.y,wall.r,wall.halfLength,...Object.values(wall.bounds)].every(Number.isFinite),'shallow foundations never divide by zero');

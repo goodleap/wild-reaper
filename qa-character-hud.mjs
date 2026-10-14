@@ -211,10 +211,14 @@ key('KeyC');click('help-button');assert(run('helpOpen&&characterOpen'));key('Esc
 
 // Never spend a crystal/reward or change equipment behind the details modal.
 run("game.crystals=game.crystalsNext;game.status='upgrade';upgradeLevel=0;openUpgrades();");
+click('upgrade-pause');click('close-pause');assert.equal(run('paused'),false);assert.equal(run('game.status'),'upgrade','closing pause returns to the required reward choice');assert(!$('upgrade-overlay').classList.contains('hidden'));
 let upgrade=$('upgrade-cards').children[0];assert(upgrade.onclick);const upgradeBefore=run('game.skillLevel');key('KeyC');upgrade.onclick();assert.equal(run('game.skillLevel'),upgradeBefore);key('Escape');assert.equal(run('game.status'),'upgrade');upgrade.onclick();assert.equal(run('game.skillLevel'),upgradeBefore+1);
 run("game.regions.rewardPortal={rewardClaimed:false};game.superSkills.offer('region',game.region.id);game.status='super';openSuperChoices();");
 const superChoice=$('super-cards').children[0],superBefore=run('Object.values(game.superSkills.owned).filter(level=>level>0).length');key('KeyC');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),superBefore);key('Escape');assert.equal(run('game.status'),'super');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),superBefore+1);
 run("game.status='playing';game.build.increment('arrow');game.build.increment('arrowPower');game._refreshWeapons();");
+run("const merchant=game.settlements.sites.find(site=>site.type==='merchant');const shopBefore=JSON.stringify({gold:game.gold,state:merchant.state,stock:merchant.stock});game.settlements.activeShop=merchant;game.status='shop';openShop();");
+click('shop-pause');click('close-pause');assert.equal(run('game.status'),'shop');assert(!$('shop-overlay').classList.contains('hidden'));
+click('close-shop');assert.equal(run('game.status'),'playing');assert.equal(run('JSON.stringify({gold:game.gold,state:merchant.state,stock:merchant.stock})'),run('shopBefore'),'closing the merchant neither spends coins nor dismisses the merchant');
 key('KeyC');click('character-tab-weapons');
 let equip=$('character-equip-arrow');assert.equal(equip.disabled,false);
 const weaponBefore=run('JSON.stringify({rank:game.build.getWeapon("arrow").baseRank,modifiers:game.build.getWeapon("arrow").modifiers,branch:game.build.getWeapon("arrow").branch})');

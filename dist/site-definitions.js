@@ -6,8 +6,8 @@ export const SETTLEMENT_RULES=freeze({maxSites:7,interactRadius:82,ward:18,guard
 export const ANGEL_RULES=freeze({guardRadius:150,auraRadius:150,attackRange:150,healingPerSecond:.03,strikeRadius:60,attackInterval:.1,damage:115});
 export const SETTLEMENT_DEFINITIONS=freeze([
   {type:'merchant',name:'荒野游商',width:42,depth:24,radius:410,angle:.12},
-  {type:'supply',name:'林间小屋',width:54,depth:28,radius:610,angle:2.2},
-  {type:'occupied',name:'被占据的小屋',width:58,depth:30,radius:970,angle:3.1},
+  {type:'supply',name:'林间小屋',width:64,depth:28,radius:610,angle:2.2},
+  {type:'occupied',name:'被占据的小屋',width:68,depth:30,radius:970,angle:3.1},
   {type:'castle',name:'古堡入口',width:240,depth:90,radius:1180,angle:5.65}
 ]);
 export const SETTLEMENT_TYPES=freeze({merchant:{foundation:false,bodyOffset:false,doorOffset:0,interaction:'shop'},angel:{foundation:false,bodyOffset:true,doorOffset:0,interaction:null},supply:{foundation:true,bodyOffset:true,doorOffset:30,interaction:'interior',interior:'hut'},occupied:{foundation:true,bodyOffset:true,doorOffset:30,interaction:'interior',interior:'hut'},castle:{foundation:true,bodyOffset:true,doorOffset:30,interaction:'interior',interior:'castle'}});

@@ -41,10 +41,25 @@ export const WORLD_ARCHIVE_LOCATIONS=Object.freeze([
   {id:'furnace',group:'relics',name:'熔炉神殿',tag:'熔火',summary:'挑战强化首领，获取高额宝藏',trigger:'从神殿正门进入。',feature:`守卫与最终首领更坚韧。完成后获得超级技能、${WORLD_SITE_FEATURES.furnace.reward.gold} 金币与 ${WORLD_SITE_FEATURES.furnace.reward.crystals} 灵晶，领奖与探索状态永久保留至本局结束。`}
 ].map(item=>Object.freeze(item)));
 
-function locationHTML(item){
-  return `<details class="world-archive-location" data-world-location="${escape(item.id)}"><summary><span class="world-archive-location-title"><strong>${escape(item.name)}</strong><small>${escape(item.summary)}</small></span><span class="world-archive-tag">${escape(item.tag)}</span><span class="world-archive-chevron" aria-hidden="true">›</span></summary><div class="world-archive-location-body"><p><span>触发</span>${escape(item.trigger)}</p><p><span>特色</span>${escape(item.feature)}</p></div></details>`;
-}
+export const WORLD_ARCHIVE_CATEGORIES=Object.freeze([
+  Object.freeze({id:'worlds',name:'世界',count:WORLD_ARCHIVE_WORLDS.length}),
+  Object.freeze({id:'relics',name:'遗迹与挑战',count:WORLD_ARCHIVE_LOCATIONS.filter(item=>item.group==='relics').length}),
+  Object.freeze({id:'waypoints',name:'旅途据点',count:WORLD_ARCHIVE_LOCATIONS.filter(item=>item.group==='waypoints').length})
+]);
 
-export function worldArchiveHTML(){
-  return `<section class="world-archive" aria-label="世界与地点指南"><div class="world-archive-heading"><h3>八座岛屿，各有天地</h3><span>世界指南</span></div><p class="world-archive-intro">了解世界与地点的特色，具体位置留待每局冒险中探索。</p><div class="world-archive-worlds">${WORLD_ARCHIVE_WORLDS.map((world,index)=>`<article class="world-archive-world" data-world-id="${escape(world.id)}" style="--world-accent:${escape(world.color)}"><div class="world-archive-world-heading"><span aria-hidden="true">0${index+1}</span><h4>${escape(world.name)}</h4></div><p class="world-archive-theme">${escape(world.theme)}</p><p>${escape(world.risk)}</p><p class="world-archive-tip">${escape(world.tip)}</p></article>`).join('')}</div><div class="world-archive-travel"><strong>传送门 · 世界之间的通路</strong><p>击败驻门首领后，立即获得超级技能奖励并激活双向通道。从正面入口穿越，可在本局反复往返，已完成地点与已领取宝藏保持原状。</p></div>${[['relics','遗迹与挑战'],['waypoints','补给与伙伴']].map(([id,name])=>`<section class="world-archive-section" aria-label="${name}"><h3>${name}<small>${WORLD_ARCHIVE_LOCATIONS.filter(item=>item.group===id).length} 类地点</small></h3><div class="world-archive-locations">${WORLD_ARCHIVE_LOCATIONS.filter(item=>item.group===id).map(locationHTML).join('')}</div></section>`).join('')}<p class="archive-small-note">触碰入口可自动进入或激活；条件未满足时会先提示。遗迹建筑会保留，完成奖励不会因往返刷新。</p></section>`;
+export function worldArchiveSelection(options={}){
+  const category=WORLD_ARCHIVE_CATEGORIES.some(item=>item.id===options.category)?options.category:'worlds';
+  const entries=category==='worlds'?WORLD_ARCHIVE_WORLDS:WORLD_ARCHIVE_LOCATIONS.filter(item=>item.group===category);
+  return {category,entries,selected:entries.find(item=>item.id===options.selectedId)||entries[0]};
+}
+function portrait(item,world,large=false){
+  const key=`${world?'world':'location'}:${item.id}`;
+  return `<span class="world-archive-art${large?' world-archive-art-large':''}"><canvas width="480" height="300" data-world-archive-art="${escape(key)}" aria-hidden="true"></canvas></span>`;
+}
+function detailHTML(item,world){
+  return `<section class="archive-detail world-archive-detail" data-world-archive-detail tabindex="-1">${portrait(item,world,true)}<span class="archive-kicker">${escape(world?'世界 · '+item.theme:item.tag)}</span><h3>${escape(item.name)}</h3>${world?`<div class="archive-detail-section"><h4>环境与挑战</h4><p>${escape(item.risk)}</p></div><div class="archive-detail-section"><h4>探索提示</h4><p>${escape(item.tip)}</p></div>`:`<p class="archive-description">${escape(item.summary)}</p><div class="archive-detail-section"><h4>如何进入</h4><p>${escape(item.trigger)}</p></div><div class="archive-detail-section"><h4>地点特色</h4><p>${escape(item.feature)}</p></div>`}<p class="archive-small-note">${world?'击败驻门首领，立即获得超级技能并开启双向通道；本局可反复往返。':'触碰入口可自动进入或激活；条件未满足时会先提示。遗迹建筑会保留，奖励不会因往返刷新。'}</p></section>`;
+}
+export function worldArchiveHTML(options={}){
+  const {category,entries,selected}=worldArchiveSelection(options),world=category==='worlds';
+  return `<section class="world-archive" aria-label="世界与地点图鉴"><div class="archive-categories world-archive-categories" aria-label="世界图鉴分类">${WORLD_ARCHIVE_CATEGORIES.map(item=>`<button type="button" data-archive-world-category="${item.id}" aria-pressed="${item.id===category}">${item.name}<small>${item.count}</small></button>`).join('')}</div><p class="world-archive-intro">了解世界与地点的特色，具体位置留待每局冒险中探索。</p><div class="archive-codex-layout world-archive-layout"><div class="archive-index"><div class="archive-grid world-archive-grid" aria-label="${WORLD_ARCHIVE_CATEGORIES.find(item=>item.id===category).name}条目">${entries.map(item=>`<button type="button" class="archive-card world-archive-card${item===selected?' is-selected':''}" data-archive-world-entry="${escape(item.id)}" aria-pressed="${item===selected}" aria-label="${escape(item.name)}">${portrait(item,world)}<strong>${escape(item.name)}</strong><small>${escape(world?'世界':item.tag)}</small></button>`).join('')}</div></div>${detailHTML(selected,world)}</div></section>`;
 }

@@ -34,6 +34,7 @@ import { characterPanelHTML } from './character-panel.js';
 import { AdventureArchive } from './adventure-archive.js';
 import { ARCHIVE_ENTRIES, ARCHIVE_CATEGORIES, ARCHIVE_TABS } from './archive-catalog.js';
 import { archivePanelHTML, drawArchiveArt, archiveMilestones } from './archive-panel.js';
+import { WORLD_ARCHIVE_CATEGORIES } from './world-archive.js';
 import { groundOffset, rockShadowParts } from './terrain.js';
 import { isGrounded, obstacleHeight } from './height-rules.js';
 import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-map.js';
@@ -118,7 +119,7 @@ let width=1100,height=700,dpr=1,scaleX=1,scaleY=1,nativeDpr=0,game=null,paused=f
 let mapReturnFocus=null,characterReturnFocus=null,characterTab='attributes',characterPointer=null;
 const characterTabs=['attributes','weapons','skills','army','status'];
 let archiveReturnFocus=null,archiveObserveAt=0,archiveMilestonesBefore=new Set();
-let archiveView={tab:'codex',category:'enemies',difficulty:'normal',selectedId:null};
+let archiveView={tab:'codex',category:'enemies',difficulty:'normal',selectedId:null,worldCategory:'worlds',worldSelectedId:null};
 let archiveStorage=null;try{archiveStorage=localStorage;}catch{}
 const archive=new AdventureArchive({storage:archiveStorage});
 let sceneInputRevision=0;const blockedTransitionKeys=new Set();
@@ -248,6 +249,20 @@ function renderExpandedMap(){
   if(!result.markers.length)add(game.terrain?.island&&!indoor?'尚未发现岛上地标':'附近尚无已发现地标',indoor?'沿门口继续探索，迷雾会随视野展开。':'靠近建筑后会记录位置；已完成的建筑仍会保留。');
   $('map-legend').textContent=indoor?'箭头：你与朝向　门：出口　箱子：宝箱　菱形：已发现首领。墙体缺口为通路，暗处保留探索记忆。':'箭头：你　拱门：传送门　双翼：天使　屋顶：小屋　城垛：城堡　菱形：遗迹。灰雾尚未探索；绿门可往返，红门有首领。';
   if(game.debug&&indoor)$('map-legend').textContent='箭头：你与朝向　门：出口　箱子：宝箱　菱形：首领。地标预览不解锁房间视野；墙体随探索显示。';
+}
+function settleDebugChoices(){
+  if(!game?.debugFull||paused||helpOpen||mapOpen||characterOpen||archiveOpen||runEnded||game.sceneTransition.active)return;
+  let settled=0;
+  // Use the same reward transactions as manual cards. Bound each frame so a
+  // large crystal grant cannot monopolize input; any remainder resumes next RAF.
+  for(;settled<16;settled++){
+    const methods={upgrade:['getUpgradeChoices','chooseUpgrade'],relic:['getRelicChoices','chooseRelic'],super:['getSuperChoices','chooseSuper']}[game.status];
+    if(!methods||!game[methods[0]]().some(choice=>game[methods[1]](choice.id)))break;
+  }
+  if(!settled)return;
+  upgradeLevel=0;relicChoiceKey='';superChoiceKey='';
+  for(const id of ['upgrade-overlay','relic-overlay','super-overlay'])show(id,false);
+  updateHUD();renderSchedule.invalidate();
 }
 function openUpgrades(){
   if(upgradeLevel===game.progressionTier)return;
@@ -608,6 +623,17 @@ $('close-archive').onclick=closeArchive;
 $('archive-overlay').addEventListener('pointerdown',e=>e.stopPropagation());
 $('archive-content').addEventListener('click',e=>{
   const button=e.target.closest?.('button');if(!button||!archiveOpen)return;
+  const worldCategory=button.getAttribute('data-archive-world-category'),worldEntry=button.getAttribute('data-archive-world-entry');
+  if(worldCategory!=null||worldEntry!=null){
+    if(worldCategory!=null){
+      if(!WORLD_ARCHIVE_CATEGORIES.some(category=>category.id===worldCategory))return;
+      archiveView.worldCategory=worldCategory;archiveView.worldSelectedId=null;
+    }else archiveView.worldSelectedId=worldEntry;
+    renderArchive();
+    if(worldEntry&&width<=650)$('archive-content').querySelector('[data-world-archive-detail]')?.focus({preventScroll:false});
+    else $('archive-content').querySelector(worldEntry?`[data-archive-world-entry="${worldEntry}"]`:`[data-archive-world-category="${worldCategory}"]`)?.focus({preventScroll:true});
+    return;
+  }
   for(const [attribute,key,allowed] of [['tab','tab',ARCHIVE_TABS.map(item=>item.id)],['category','category',ARCHIVE_CATEGORIES.map(item=>item.id)],['difficulty','difficulty',['normal','casual']],['entry','selectedId',null]]){
     const value=button.getAttribute(`data-archive-${attribute}`);if(value===null||value===undefined||allowed&&!allowed.includes(value))continue;
     archiveView[key]=value;if(key==='category')archiveView.selectedId=null;
@@ -618,7 +644,7 @@ $('archive-content').addEventListener('click',e=>{
   }
 });
 window.addEventListener('pagehide',checkpointArchive);
-$('start-button').onclick=startGame;$('restart-button').onclick=startGame;$('home-button').onclick=home;$('quit-button').onclick=home;$('pause-button').onclick=pause;$('resume-button').onclick=resume;$('help-button').onclick=openHelp;$('pause-help-button').onclick=openHelp;$('close-help').onclick=closeHelp;$('help-done').onclick=closeHelp;
+$('start-button').onclick=startGame;$('restart-button').onclick=startGame;$('home-button').onclick=home;$('quit-button').onclick=home;$('pause-button').onclick=pause;$('resume-button').onclick=resume;$('close-pause').onclick=resume;$('close-shop').onclick=closeShop;$('help-button').onclick=openHelp;$('pause-help-button').onclick=openHelp;$('close-help').onclick=closeHelp;$('help-done').onclick=closeHelp;
 $('sound-button').onclick=$('pause-sound-button').onclick=()=>{soundOn=!soundOn;syncSound();try{localStorage.setItem('wild-echoes-sound',soundOn?'on':'off');}catch{}initAudio();if(soundOn)tone(660,.1);};
 canvas.tabIndex=-1;
 // Cancel selection/callouts inside the game before child UI can stop bubbling.
@@ -1377,10 +1403,12 @@ function frame(now){
     if(!game?.sceneTransition.active)clock+=dt;
     if(game){const began=debugMode?cpuNow():0;updateGameFrame(dt);if(debugMode)updateMs=cpuNow()-began;}
   }
+  if(game?.debugFull)settleDebugChoices();
   state=frameState();
   if(renderSchedule.shouldRender(state)){
     if(game&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen&&!runEnded){
-      if(game.status==='upgrade')openUpgrades();if(game.status==='relic')openRelics();if(game.status==='super')openSuperChoices();if(game.status==='shop')openShop();if(game.status==='dead')endGame();
+      if(!game.debugFull){if(game.status==='upgrade')openUpgrades();if(game.status==='relic')openRelics();if(game.status==='super')openSuperChoices();}
+      if(game.status==='shop')openShop();if(game.status==='dead')endGame();
     }
     const began=debugMode?cpuNow():0;
     ctx.setTransform(scaleX,0,0,scaleY,0,0);

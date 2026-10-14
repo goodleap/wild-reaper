@@ -45,7 +45,8 @@ const archiveControl=(h,attribute,value)=>{
   assert.match(nodes['archive-content'].innerHTML,/data-archive-entry="companion:golem"/,'companions category renders its actual entries');
   assert.deepEqual(ARCHIVE_TABS.map(tab=>tab.id),['codex','world','records','milestones']);
   const orderedTabs=[...nodes['archive-content'].innerHTML.matchAll(/data-archive-tab="([^"]+)"/g)].map(match=>match[1]);assert.deepEqual(orderedTabs,ARCHIVE_TABS.map(tab=>tab.id));
-  const archiveBefore=run('JSON.stringify(archive.data)');archiveControl(h,'tab','world');assert.equal(run('archiveView.tab'),'world');assert.match(nodes['archive-content'].innerHTML,/低语之森/);assert.match(nodes['archive-content'].innerHTML,/封石宝库/);assert.equal(run('JSON.stringify(archive.data)'),archiveBefore,'world reference does not unlock codex or change statistics');
+  const archiveBefore=run('JSON.stringify(archive.data)');archiveControl(h,'tab','world');assert.equal(run('archiveView.tab'),'world');assert.match(nodes['archive-content'].innerHTML,/低语之森/);
+  archiveControl(h,'world-category','relics');archiveControl(h,'world-entry','stonevault');assert.equal(run('archiveView.worldSelectedId'),'stonevault');assert.match(nodes['archive-content'].innerHTML,/封石宝库/);assert.equal(run('JSON.stringify(archive.data)'),archiveBefore,'world reference does not unlock codex or change statistics');
   archiveControl(h,'tab','codex');assert.equal(run('archiveView.category'),'companions','returning from the world retains chosen codex category');
   archiveControl(h,'tab','records');assert.match(nodes['archive-content'].innerHTML,/一路走来/);
   archiveControl(h,'difficulty','casual');assert.equal(run('archiveView.difficulty'),'casual');

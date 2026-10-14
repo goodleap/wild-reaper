@@ -1,0 +1,104 @@
+/* Shared dialog shell: fixed header/actions, one main content scroller. */
+#arena .modal-layer{overflow:hidden}
+#arena .panel-shell{
+  --panel-gutter:24px;
+  position:relative;display:flex;flex-direction:column;flex:0 1 auto;
+  min-width:0;min-height:0;max-height:100%;margin:0;padding:0;overflow:hidden;
+  border:1px solid #a6c48b40;border-radius:16px;
+  background:linear-gradient(145deg,#25382b,#14271e);
+  box-shadow:0 20px 80px #0006;
+}
+.panel-header{position:relative;flex:0 0 auto;padding:21px var(--panel-gutter) 14px;text-align:left}
+.panel-header-centered{text-align:center}
+.panel-header-closable{padding-right:calc(var(--panel-gutter) + 35px)}
+.panel-header-closable.panel-header-centered{padding-left:calc(var(--panel-gutter) + 35px)}
+#arena .panel-header>.eyebrow{font-size:9px;letter-spacing:2px}
+#arena .panel-header>h2{font-size:24px;line-height:1.3;letter-spacing:1px;margin:8px 0 5px}
+#arena .panel-header>p{font-size:11px;line-height:1.6;color:#a1b99a;margin:0}
+#arena .panel-header .close-button{
+  top:7px;right:7px;width:44px;height:44px;margin:0;padding:0;
+  display:grid;place-items:center;border-radius:8px;font-size:26px;
+  touch-action:manipulation;cursor:pointer;
+}
+.panel-header .close-button:hover{background:#c6ed9112}
+.panel-body{
+  flex:1 1 auto;min-height:0;min-width:0;overflow:auto;
+  padding:3px var(--panel-gutter) 8px;
+  overscroll-behavior:contain;touch-action:pan-y;
+  scrollbar-width:thin;scrollbar-color:#668263 #12291e;
+}
+.panel-footer{flex:0 0 auto;padding:12px var(--panel-gutter) 18px}
+#arena .panel-footer .secondary-button{margin-top:0;min-height:44px}
+.panel-footer .modal-footnote{display:block;font-size:10px;line-height:1.6;letter-spacing:.3px}
+.panel-footer #map-done,.panel-footer #character-done{display:flex;align-items:center;justify-content:space-between;gap:18px;min-width:116px;padding:10px 14px}
+.panel-footer .shop-actions{margin-top:10px}
+.panel-header .shop-wallet{display:inline-block;margin:0 0 0 12px;white-space:nowrap}
+.panel-header .shop-wallet b{font-size:17px}
+#arena .panel-shell .shop-items{margin:0}
+.choice-footer{display:flex;align-items:center;justify-content:center;gap:12px}
+.choice-footer>.modal-footnote{flex:1;min-width:0;text-align:left}
+#arena .choice-footer .relic-pause{flex:0 0 auto;display:block;margin:0;padding:9px 13px;font-size:11px}
+#arena .choice-panel .upgrade-cards{margin:4px 0 0}
+#arena .super-panel .panel-header>.eyebrow{color:#d8c0ed}
+.pause-content{padding-bottom:20px}
+#arena .pause-content .pause-tools{margin:0 0 12px}
+#arena .pause-content #pause-character-button{margin:0 0 12px}
+#arena .pause-content #pause-archive-button{margin:0 0 16px;min-height:48px}
+.pause-content #resume-button{margin:0}
+.pause-content .warning-button{color:#f0c1bb;background:#b56b6433;border-color:#d391874f}
+.pause-content .warning-button:hover{background:#bd746747;border-color:#d9988d7a}
+.pause-content .debug-diagnostics{margin-bottom:0;padding-top:18px}
+.panel-body .help-list{margin:0}
+.panel-body .help-list>div:last-child{margin-bottom:4px}
+#arena .panel-shell .map-landmarks{max-height:none;overflow:visible}
+.panel-body .end-stats{margin-bottom:18px}
+.panel-body #end-archive-button{margin:0}
+.end-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.end-actions>button{min-width:0;min-height:44px;padding:12px}
+#arena .panel-header .character-tabs{margin:12px calc(-35px) 0 0}
+.panel-sectioned-content{flex:1 1 auto;min-height:0;padding:0 var(--panel-gutter) 12px}
+
+/* One persistent version label sits below the combat controls and ignores input. */
+#arena>#game-version{
+  position:absolute;z-index:7;right:calc(12px + var(--safe-right));bottom:calc(5px + var(--safe-bottom));
+  display:block;margin:0;pointer-events:none;font:10px/1.3 ui-monospace,monospace;
+  color:#bdcbb0;letter-spacing:.2px;text-shadow:0 1px 3px #0a1912,0 0 4px #0a1912;
+}
+
+@media(max-width:760px){
+  #arena .panel-shell{--panel-gutter:15px;border-radius:13px}
+  .panel-header{padding-top:15px;padding-bottom:11px}
+  #arena .panel-header>h2{font-size:21px;margin:5px 0}
+  #arena .panel-header>p{font-size:10px;line-height:1.5}
+  .panel-header-closable{padding-right:calc(var(--panel-gutter) + 32px)}
+  .panel-header-closable.panel-header-centered{padding-left:var(--panel-gutter);text-align:left}
+  .panel-header-closable.panel-header-centered>.centered{justify-content:flex-start}
+  .panel-footer{padding-top:10px;padding-bottom:12px}
+  .panel-footer .modal-footnote{font-size:9px;line-height:1.5}
+  #arena .choice-panel .panel-header{padding-top:12px;padding-bottom:7px}
+  #arena .choice-panel .panel-header>.eyebrow{display:none}
+  #arena .choice-panel .panel-header>h2{margin:0 0 4px}
+  #arena .choice-panel .panel-header>p{font-size:11px;line-height:16px}
+  .choice-footer{gap:8px}
+  #arena .choice-footer .relic-pause{padding:6px 10px}
+  #arena .panel-header .character-tabs{margin-top:10px;margin-right:-32px}
+  #arena>#game-version{right:calc(10px + var(--safe-right));font-size:9px}
+}
+@media(max-height:520px){
+  #arena .modal-layer{--modal-padding:10px}
+  #arena .panel-shell{--panel-gutter:18px}
+  .panel-header{padding-top:10px;padding-bottom:8px}
+  #arena .panel-header>.eyebrow{display:none}
+  #arena .panel-header>h2{font-size:19px;margin:0 0 3px}
+  #arena .panel-header>p{font-size:10px;line-height:1.4}
+  #arena .panel-header .close-button{top:2px;right:3px}
+  .panel-footer{padding-top:7px;padding-bottom:9px}
+  .panel-footer .shop-actions{margin-top:6px}
+  .panel-body .end-emblem{display:none}
+  .panel-body .end-stats{padding:12px 0;margin-bottom:12px}
+  #arena .panel-header .character-tabs{margin-top:7px}
+  .panel-sectioned-content{padding-bottom:8px}
+  #arena .choice-panel .panel-header{padding-top:9px;padding-bottom:5px}
+  #arena .choice-panel .panel-header>h2{font-size:19px}
+  #arena #game-bottom{bottom:22px}
+}

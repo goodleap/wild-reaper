@@ -1,3 +1,4 @@
+import { drawWorldArchiveArt } from './world-archive-art.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { worldArchiveHTML, WORLD_ARCHIVE_WORLDS, WORLD_ARCHIVE_LOCATIONS } from './world-archive.js';
 import { ARCHIVE_CATEGORIES, ARCHIVE_ENTRIES, ARCHIVE_ENTRY_BY_ID, ARCHIVE_TABS } from './archive-catalog.js';
@@ -82,7 +83,7 @@ function milestonesHTML(data){
 export function archivePanelHTML(data={},options={}){
   const tab=safeChoice(options.tab,ARCHIVE_TABS.map(item=>item.id),'codex'),category=safeChoice(options.category,ARCHIVE_CATEGORIES.map(item=>item.id),'enemies'),difficulty=safeChoice(options.difficulty,['normal','casual'],'normal');
   const progress=`${knownCount(data)} / ${ARCHIVE_ENTRIES.length}`;
-  return `<div class="archive-overview"><span>${tab==='world'?'岛屿、遗迹与冒险据点':'每次冒险，都留下新的发现'}</span><strong>${tab==='world'?`${WORLD_ARCHIVE_WORLDS.length} 个世界 · ${WORLD_ARCHIVE_LOCATIONS.length} 类地点`:`已发现 ${progress}`}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${ARCHIVE_TABS.map(({id,name:label})=>`<button type="button" data-archive-tab="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='world'?worldArchiveHTML():tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
+  return `<div class="archive-overview"><span>${tab==='world'?'岛屿、遗迹与冒险据点':'每次冒险，都留下新的发现'}</span><strong>${tab==='world'?`${WORLD_ARCHIVE_WORLDS.length} 个世界 · ${WORLD_ARCHIVE_LOCATIONS.length} 类地点`:`已发现 ${progress}`}</strong></div><nav class="archive-tabs" aria-label="档案栏目">${ARCHIVE_TABS.map(({id,name:label})=>`<button type="button" data-archive-tab="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav>${options.storageOk===false?'<p class="archive-notice archive-warning" role="status">浏览器暂时无法保存，当前记录仅在本次页面中保留。</p>':''}<div class="archive-body">${tab==='codex'?codexHTML(data,category,options.selectedId):tab==='world'?worldArchiveHTML({category:options.worldCategory,selectedId:options.worldSelectedId}):tab==='records'?recordsHTML(data,difficulty):milestonesHTML(data)}</div><p class="archive-storage-note">记录保存在当前浏览器与本站点，尚不跨设备或站点同步。</p>`;
 }
 
 let monsterArt=null,combatArt=null,humanoidArt=null,companionArt=null;
@@ -113,6 +114,7 @@ function drawCompanionPortrait(ctx,entry){
 }
 // Paint on panel changes only. The archive has no RAF or gameplay-frame work.
 export function drawArchiveArt(container){
+  drawWorldArchiveArt(container);
   const canvases=container?.querySelectorAll?.('canvas[data-archive-art]')||[];
   for(const canvas of canvases){
     const entry=ARCHIVE_ENTRY_BY_ID.get(canvas.dataset?.archiveArt),ctx=canvas.getContext?.('2d');

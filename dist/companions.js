@@ -179,6 +179,29 @@ export class Companions {
     }
     return false;
   }
+  _placeAtDoor(active,arrival,placed){
+    const g=this.game,p=this._foot(),door=arrival.doorway,d=arrival.direction,length=Math.hypot(d?.x,d?.y);
+    if(!door||!Number.isFinite(door.x)||!Number.isFinite(door.y)||!length)return false;
+    const dx=d.x/length,dy=d.y/length,depth=(p.x-door.x)*dx+(p.y-door.y)*dy,profile=movementProfile(active);
+    // One scene-arrival placement only. Once visible, everyone keeps these
+    // positions until their existing following/task rules require movement.
+    const back=Math.max(0,depth-72),front=Math.max(0,depth-30);
+    const candidates=[[back,0],[back,-44],[back,44],[front,-22],[front,22],[front,-72],[front,72]];
+    for(const along of [back,front,0])for(const side of [0,-44,44,-80,80,-120,120])candidates.push([along,side]);
+    for(const [along,side] of candidates){
+      const point={x:door.x+dx*along-dy*side,y:door.y+dy*along+dx*side};
+      if(along>depth-18||distance(point,p)<g.player.r+active.r+6||distance(point,p)>active.followDistance+50)continue;
+      if(!g.terrain.isFree(point.x,point.y,active.r+3,profile)||g.environment?.isHazardFree?.(point.x,point.y,active.r)===false)continue;
+      if(g.environment?.props?.some(prop=>prop.state!=='spent'&&distance(prop,point)<(prop.blastRadius||82)+active.r+8))continue;
+      if(!g.dungeon?.active&&g.settlements?.sites.some(site=>['angel','merchant'].includes(site.type)&&site.state!=='spent'&&distance(site,point)<active.r+(site.r||18)+8))continue;
+      if(!placementAllowed(g,{surface:'coastal',water:profile==='air'?'allow':'avoid'},{...point,r:active.r+3},{checkTerrain:false}))continue;
+      if(g.terrain.firstBlocker(p.x,p.y,point.x,point.y,active.r+2,profile))continue;
+      if(g.enemies.some(enemy=>enemy.hp>0&&distance(this._foot(enemy),point)<enemy.r+active.r+12))continue;
+      if(placed.some(other=>distance(this._foot(other),point)<other.r+active.r+8))continue;
+      active.x=point.x;active.y=point.y-groundOffset(active,true);active.facing=Math.atan2(dy,dx);return true;
+    }
+    return false;
+  }
   _follow(active,dt) {
     const g=this.game,p=this._foot(),def=definition(active.kind),rules=COMPANION_FOLLOW_RULES;
     let target=p,mode='leader';
@@ -391,9 +414,11 @@ export class Companions {
       }
     }
   }
-  onSceneChange() {
+  onSceneChange(arrival=null) {
     this.game._friendlySnapshot=null;const p=this._foot();
-    for(const active of this.members){active._echoes=[];active.workTarget=null;active._meleeTarget=null;active.scoutTarget=null;active.treasureTarget=null;active.scoutCount=0;active.cue='';active._scan=0;active.x=p.x;active.y=p.y-active.groundOffset;this._resetFollowing(active);this._safeReturn(active);}
+    for(const active of this.members){active._echoes=[];active.workTarget=null;active._meleeTarget=null;active.scoutTarget=null;active.treasureTarget=null;active.scoutCount=0;active.cue='';active._scan=0;active.x=p.x;active.y=p.y-active.groundOffset;this._resetFollowing(active);}
+    const placed=[],members=arrival?[...this.members].sort((a,b)=>b.r-a.r):this.members;
+    for(const active of members){if(!arrival||!this._placeAtDoor(active,arrival,placed))this._safeReturn(active);placed.push(active);}
   }
   onRegionChange() {
     this._clearCamp();this.nextAt=Math.max(this.nextAt,this.game.time+RESCUE_RULES.firstAt);this.onSceneChange();

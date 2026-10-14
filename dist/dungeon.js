@@ -10,7 +10,6 @@ import { createCastleState, populateCastle } from './sites/castle-interior.js';
 import { settlementType } from './site-definitions.js';
 export { DUNGEON_RULES } from './interior-profiles.js';
 
-const TAU=Math.PI*2;
 const DIRS=Object.freeze([{dx:0,dy:-1,opposite:2},{dx:1,dy:0,opposite:3},{dx:0,dy:1,opposite:0},{dx:-1,dy:0,opposite:1}]);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 // Actors expose body coordinates, while plain spell/field points are already
@@ -46,9 +45,9 @@ export class Dungeon {
     // No old warning may resolve at an unrelated position after a boundary.
     for(const enemy of g.enemies){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;clearBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
   }
-  _placePlayer(point){
+  _placePlayer(point,arrival=null){
     const g=this.game,p=g.player;p.x=point.x;p.y=point.y-groundOffset(p,true);g._moveEntity(p,0,0,true);p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;resetLocomotion(p);
-    g.companions?.onSceneChange?.();
+    if(arrival){p.facing=Math.atan2(arrival.direction.y,arrival.direction.x);g.companions?.onSceneChange?.(arrival);}
   }
   _populate(state){return populateCastle(this,state);}
   enter(site){
@@ -69,16 +68,24 @@ export class Dungeon {
     if(!state.adventure)state.adventure=new Adventure(g,{generation:false});
     g.adventure=state.adventure;g.adventure.furyTime=furyTime;g.adventure.magnetTime=magnetTime;
     if(g.companions){g.companions.camps=[];g.companions.generation=false;}
-    this._placePlayer(state.landing||state.entrance);
+    this._placePlayer(state.landing||state.entrance,{doorway:state.entrance,direction:{x:0,y:-1}});
     if(!state.populated){state.populated=true;interiorSceneFor(state).populate(this,state);}
     this._clearScene();g._refreshStats();g._refreshWeapons();this.update(0);
     g._emit('dungeonEnter',{name:state.name,revisit:state.visited.size>1});return true;
   }
   _saveScene(){const state=this.active,g=this.game;if(!state)return;state.enemies=g.enemies;state.gems=g.gems;state.coins=g.coins;state.adventure=g.adventure;}
   _returnPoint(world){
-    const g=this.game,p=g.player,safe=q=>g.terrain.isFree(q.x,q.y,p.r+4)&&g.environment?.isHazardFree?.(q.x,q.y,p.r)!==false;
-    for(const point of [world.returnPoint,world.door])if(safe(point))return point;
-    for(const radius of [35,60,95,135,180])for(let i=0;i<16;i++){const a=i*TAU/16,q={x:world.door.x+Math.cos(a)*radius,y:world.door.y+Math.sin(a)*radius};if(safe(q))return q;}
+    const g=this.game,p=g.player,door=world.door,clearance=p.r+4;
+    const safe=q=>g.terrain.isFree(q.x,q.y,clearance)&&!g.terrain.firstBlocker(door.x,door.y,q.x,q.y,clearance)&&
+      g.environment?.isHazardFree?.(q.x,q.y,clearance)!==false&&
+      !g.environment?.props?.some(prop=>prop.state!=='spent'&&distance(prop,q)<(prop.blastRadius||82)+clearance);
+    // Return on the open front apron, independent of where an earlier manual
+    // interaction happened. The reserved doorway remains the close fallback.
+    for(const forward of [52,72,32,96,120])for(const side of [0,-28,28,-56,56]){
+      const point={x:door.x+side,y:door.y+forward};if(safe(point))return point;
+    }
+    if(safe(door))return door;
+    for(const radius of [135,180])for(let i=0;i<=8;i++){const a=i*Math.PI/8,q={x:door.x+Math.cos(a)*radius,y:door.y+Math.sin(a)*radius};if(safe(q))return q;}
     return world.returnPoint;
   }
   exit(){
@@ -94,7 +101,7 @@ export class Dungeon {
     if(g.superSkills)g.superSkills.pending=world.superPending??null;
     if(g.companions){g.companions.camps=world.companionCamps||(world.companionCamp?[world.companionCamp]:[]);g.companions.generation=world.companionGeneration;g.companions.nextAt=Math.max(world.companionNextAt??0,g.companions.nextAt??0);}
     this.active=null;this._world=null;g.regionGrace=Math.max(2,world.regionGrace||0);g.regionTransition={life:.7,maxLife:.7,name:g.region.name,from:state.kind,to:g.region.id};
-    this._clearScene();this._placePlayer(this._returnPoint(world));g._refreshStats();g._refreshWeapons();g._emit('dungeonExit',{name:state.name,cleared:state.rewardClaimed});return true;
+    this._clearScene();this._placePlayer(this._returnPoint(world),{doorway:world.door,direction:{x:0,y:1}});g._refreshStats();g._refreshWeapons();g._emit('dungeonExit',{name:state.name,cleared:state.rewardClaimed});return true;
   }
   getInteraction(){
     const g=this.game,state=this.active;if(!state||g.status!=='playing')return null;

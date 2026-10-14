@@ -31,6 +31,7 @@ import { Settlements } from './settlements.js';
 import { WaveDirector } from './wave-director.js';
 import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
+import { portalDoor } from './portal-geometry.js';
 import { SceneTransition } from './scene-transition.js';
 import { spawnDebugWave } from './debug-wave.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBoss } from './debug-training.js';
@@ -424,7 +425,7 @@ export class Game {
     if(this.environment?.mechanisms.generation)this.environment.mechanisms._refresh(true);
     if(this.environment?.worldHazards?.generation)this.environment.worldHazards._refresh(true);
     if(this.adventure?.generation)this.adventure._refreshSupplies(true);
-    this.companions.onSceneChange?.();
+    this.companions.onSceneChange?.(arrival?{doorway:portalDoor(arrival),direction:{x:0,y:1}}:null);
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
     this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});return true;
   }
