@@ -142,11 +142,11 @@ export class Companions {
     if(!defender||!target||distance(this._foot(defender),this._foot(target))>COMPANION_RULES.guardRadius)return 1;
     return this.game.combat.clearPath(defender,target,{profile:'sight'})?COMPANION_RULES.guardMultiplier:1;
   }
-  takeDamage(member,amount,source='enemy') {
+  takeDamage(member,amount,source='enemy',origin=null) {
     const g=this.game;
     if(g.status!=='playing'||!this.members.includes(member)||member.state!=='active'||member.invuln>0||!Number.isFinite(amount)||amount<=0)return false;
     amount*=defenseDamageMultiplier(member.defense||0)*this.protectionMultiplier(member);
-    amount=g.abilities?.absorbDamage(member,amount)??amount;
+    amount=g.abilities?.absorbDamage(member,amount,origin)??amount;
     member.hp=Math.max(0,member.hp-amount);
     member.invuln=COMPANION_RULES.hitImmunity;member.hurtFace=.25;member.hurtFlash=.2;
     g._effect(member.x,member.y,'hit',.2,member.r*.7,'#eaa486',undefined,{source,angle:0,strength:.4,seed:member.id});

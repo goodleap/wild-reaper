@@ -104,7 +104,7 @@ export class CombatResolution {
     amount*=defenseDamageMultiplier(Number.isFinite(enemy.defense)?enemy.defense:0);
     amount*=specialistDamageMultiplier(enemy,origin,source);
     amount=g.elites?.beforeDamage(enemy,amount)??amount;
-    amount=g.abilities?.absorbDamage(enemy,amount)??amount;
+    amount=g.abilities?.absorbDamage(enemy,amount,origin)??amount;
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
     const angle=Math.atan2(enemy.y-(Number.isFinite(origin?.y)?origin.y:enemy.y),enemy.x-(Number.isFinite(origin?.x)?origin.x:enemy.x));
@@ -153,14 +153,14 @@ export class CombatResolution {
     return actual;
   }
 
-  damagePlayer(amount) {
+  damagePlayer(amount,origin=null) {
     const g=this.game;
     const p=g.player;if(p.invuln>0||g.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
     amount*=defenseDamageMultiplier(resolveCharacterStats(g).defense);
     amount*=g.companions?.protectionMultiplier?.(p)??1;
     amount=g.relics?.modifyIncomingDamage(amount)??amount;
     amount=g.barrier?.absorbDamage(amount)??amount;
-    amount=g.abilities?.absorbDamage(p,amount)??amount;
+    amount=g.abilities?.absorbDamage(p,amount,origin)??amount;
     const previousHp=p.hp;
     p.hp=Math.max(0,p.hp-amount);p.invuln=.8;
     if(p.hp<previousHp){p.hurtFlash=.8;p.hurtFace=.24;g._emit('hurt');g._effect(p.x,p.y,'ring',.3,42,'#e48d78');}

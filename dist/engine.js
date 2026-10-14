@@ -26,6 +26,7 @@ import { Relics, RELICS } from './relics.js';
 import { Companions, COMPANIONS } from './companions.js';
 import { WEAPON_BRANCHES, branchDefinition } from './weapon-branches.js';
 import { resetLocomotion, updateLocomotion } from './locomotion.js';
+import { usesEnemyLocomotion, updateEnemyLocomotion } from './enemy-animation.js';
 import { SuperSkills, SUPER_SKILLS } from './super-skills.js';
 import { Dungeon } from './dungeon.js';
 import { Settlements } from './settlements.js';
@@ -311,7 +312,7 @@ export class Game {
     }
   }
   _updatePressure(dt=0) { this.waveDirector.update(dt); }
-  _hurtPlayer(amount) {return this.combat.damagePlayer(amount);}
+  _hurtPlayer(amount,origin=null) {return this.combat.damagePlayer(amount,origin);}
   _updateBoss(e,dt) {return updateBoss(this,e,dt);}
   _resolveBossSlams() {resolveBossSlams(this);}
   _updateBoar(e,dt) {return updateBoar(this,e,dt);}
@@ -508,9 +509,9 @@ export class Game {
     }
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
-      if(!e.trainingDummy&&enemyDefinition(e.type).locomotion){e._walkStartX=e.x;e._walkStartY=e.y;}
       e.hit=Math.max(0,e.hit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
       e._weaponPushTime=updateWeaponKnockback(this,e,dt);
+      if(!e.trainingDummy&&usesEnemyLocomotion(e)){e._walkStartX=e.x;e._walkStartY=e.y;}
       if(e.trainingDummy||this.abilities.isFrozen(e))continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
@@ -540,12 +541,11 @@ export class Game {
         }
       }
     }
-    // Beetle feet and heading follow resolved movement, including detours and
-    // separation. Paused, blocked and dormant beetles never crawl in place.
-    for(const e of this.enemies)if(e.hp>0&&!e.trainingDummy&&enemyDefinition(e.type).locomotion){
+    // Sample resolved movement after collisions. Knockback displacement was
+    // excluded at the start; airborne attacks and frozen bodies never step.
+    for(const e of this.enemies)if(e.hp>0&&!e.trainingDummy&&usesEnemyLocomotion(e)){
       const oldX=e._walkStartX??e.x,oldY=e._walkStartY??e.y;
-      updateLocomotion(e,oldX,oldY,dt);
-      if(e.moving)e.visualFacing=Math.atan2(e.y-oldY,e.x-oldX);
+      updateEnemyLocomotion(e,oldX,oldY,dt,this.abilities.isFrozen(e));
     }
     if(input.skill && p.skillCooldown<=0&&!this.abilities.isFrozen(p)) this._castStorm();
     for(const target of friendlyTargets(this)){

@@ -15,22 +15,25 @@ function targetState(game,e){
 
 export function initSpecialistBoss(e){
   e.specialStep=0;e.specialCooldown=rules(e).initialCooldown;e.specialRecovery=0;
-  e.specialAttack=null;e.specialMarks=[];e.specialSummons=[];e.specialPose=null;e.specialLift=0;
+  e.specialAttack=null;e.specialMarks=[];e.specialSummons=[];e.specialPose=null;e.specialLift=0;e.specialRecoveryMax=0;e.specialVisualStrikes=null;e.specialVisualTime=0;
 }
 export function clearSpecialistBoss(e){
-  e.specialAttack=null;e.specialMarks=[];e.specialRecovery=0;e.specialPose=null;e.specialLift=0;
+  e.specialAttack=null;e.specialMarks=[];e.specialRecovery=0;e.specialPose=null;e.specialLift=0;e.specialRecoveryMax=0;e.specialVisualStrikes=null;
   // Summons belong to this encounter: death, dormancy and scene changes must
   // never leave an orphaned group behind or create extra kill rewards.
   for(const child of e.specialSummons||[])if(child.hp>0){child.hp=0;child.xp=0;}
   e.specialSummons=[];
 }
-function recover(e,duration){e.specialAttack=null;e.specialLift=0;e.specialRecovery=duration;}
+function recover(e,duration){
+  if(e.specialAttack?.kind==='tentacles')e.specialVisualStrikes={circles:e.specialAttack.circles,life:.35,maxLife:.35};
+  e.specialAttack=null;e.specialLift=0;e.specialRecovery=duration;e.specialRecoveryMax=duration;
+}
 function begin(e,kind,duration,state,extra={}){
   e.specialPose=kind;e.specialAttack={kind,phase:'windup',life:duration,maxLife:duration,x:state.a.x,y:state.a.y,angle:state.angle,...extra};
 }
 function cast(game,e,id,state,options={},hold=0){
   const p=rules(e),ok=game.abilities?.cast(id,e,{target:state.target,point:{x:state.target.x,y:state.target.y},angle:state.angle,...options});
-  if(ok){e.specialPose=id;e.specialRecovery=Math.max(p.recovery,hold);}
+  if(ok){e.specialPose=id;e.specialRecovery=Math.max(p.recovery,hold);e.specialRecoveryMax=e.specialRecovery;}
   return ok;
 }
 function mark(e,kind,x,y,p){
@@ -39,6 +42,7 @@ function mark(e,kind,x,y,p){
 }
 function impact(game,e,circle,multiplier,color){
   game._effect(circle.x,circle.y,'bossSlam',.4,circle.r,color);
+  if(circle.kind==='ice'||circle.kind==='heat')game.abilities?.visualBurst?.({abilityId:circle.kind==='ice'?'iceShatter':'heatEruption',parameters:{radius:circle.r},angle:0,hostile:true,groundOffset:0},circle,'landing');
   for(const target of friendlyTargets(game)){
     if(!isFriendlyActive(game,target)||!isGrounded(target))continue;
     const at=friendlyFoot(target);
@@ -59,7 +63,7 @@ function startDeep(game,e,s,p){
   if(step===0){
     const nx=-Math.sin(s.angle),ny=Math.cos(s.angle),circles=[];
     for(const offset of [0,-p.strikeSpacing,p.strikeSpacing]){
-      const point={x:s.b.x+nx*offset,y:s.b.y+ny*offset,r:p.strikeRadius,delay:circles.length*p.strikeInterval};
+      const point={x:s.b.x+nx*offset,y:s.b.y+ny*offset,r:p.strikeRadius,delay:circles.length*p.strikeInterval,maxDelay:circles.length*p.strikeInterval,visualAge:0};
       if(game.terrain.isFree(point.x,point.y,8)&&clearLine(game,s.a,point))circles.push(point);
     }
     if(!circles.length)return false;
@@ -122,6 +126,12 @@ export function updateSpecialistBoss(game,e,dt){
   if(!active(game,e)){if(e.hp<=0||e.guardActive===false)clearSpecialistBoss(e);return true;}
   if(game.abilities?.isFrozen(e))return true;
   if(!(dt>0))return true;
+  e.specialVisualTime=(e.specialVisualTime||0)+dt;
+  if(e.specialVisualStrikes){
+    e.specialVisualStrikes.life=Math.max(0,e.specialVisualStrikes.life-dt);
+    for(const circle of e.specialVisualStrikes.circles)circle.visualAge=(circle.visualAge||0)+dt;
+    if(e.specialVisualStrikes.life<=0)e.specialVisualStrikes=null;
+  }
   const p=rules(e),s=targetState(game,e);
   if(!game._inView(e)||s.distance>p.range*1.4){
     clearSpecialistBoss(e);game._moveEnemy(e,dt*p.moveMultiplier);return true;
@@ -132,7 +142,7 @@ export function updateSpecialistBoss(game,e,dt){
   const attack=e.specialAttack;
   if(attack){
     if(attack.phase==='rush')updateMovingAttack(game,e,attack,p,dt);
-    else if(attack.phase==='strikes')for(const c of attack.circles)c.delay=Math.max(0,c.delay-dt);
+    else if(attack.phase==='strikes')for(const c of attack.circles){c.delay=Math.max(0,c.delay-dt);if(c.done)c.visualAge=(c.visualAge||0)+dt;}
     else attack.life=Math.max(0,attack.life-dt);
     return true;
   }
@@ -158,6 +168,7 @@ function summon(game,e,p){
     if(game.enemies.some(t=>t.hp>0&&Math.hypot(point.x-t.x,point.y-foot(t).y)<r+t.r+4))continue;
     const child=game._spawnEnemy(type,1);if(!child)continue;
     child.x=point.x;child.y=point.y-groundOffset(child);child.summoned=true;child.summonerId=e.id;child.xp=0;child._navTimer=0;
+    game.abilities?.visualBurst?.({abilityId:'spiderHatch',visualVariant:'web',parameters:{radius:r*1.3},angle:0,hostile:true,groundOffset:groundOffset(child)},child,'landing');
     e.specialSummons.push(child);count++;
   }
 }
@@ -186,7 +197,7 @@ export function resolveSpecialistBoss(game,e){
     recover(e,a.kind==='leap'?p.cycleRecovery:p.recovery);return;
   }
   if(a.phase==='strikes'){
-    for(const c of a.circles)if(!c.done&&c.delay<=0){impact(game,e,c,p.strikeDamage,'#9bd9df');c.done=true;}
+    for(const c of a.circles)if(!c.done&&c.delay<=0){impact(game,e,c,p.strikeDamage,'#9bd9df');c.done=true;c.visualAge=0;}
     if(a.circles.every(c=>c.done))recover(e,p.recovery);
     return;
   }

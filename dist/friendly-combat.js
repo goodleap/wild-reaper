@@ -58,6 +58,6 @@ export function selectFriendlyTarget(game,enemy){
 
 export function damageFriendly(game,target,amount,source){
   if(!isFriendlyActive(game,target)||game.status!=='playing')return false;
-  if(target===game.player)return game._hurtPlayer(amount);
-  return !!game.companions?.takeDamage(target,amount,typeof source==='string'?source:source?.type||'enemy');
+  if(target===game.player)return game._hurtPlayer(amount,source);
+  return !!game.companions?.takeDamage(target,amount,typeof source==='string'?source:source?.type||'enemy',source);
 }

@@ -14,23 +14,30 @@ function segmentHit(a,b,p,r){
   const t=(-bb-Math.sqrt(disc))/(2*aa);return t>=0&&t<=1?t:Infinity;
 }
 const angleDifference=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
+const MAX_VISUAL_BURSTS=96;
+const BURST_LIFE=Object.freeze({fireball:.32,frostbolt:.32,waterBolt:.3,windSlash:.22,swords:.22,meteor:.55,stoneLob:.45,lightning:.22,storm:.22,iceShatter:.45,heatEruption:.45,spiderHatch:.3});
 
 // Effects own only transient execution state. Build ranks, AI cadence and
 // character scaling are supplied by callers; every hit uses the normal resolver.
 export class AbilityRuntime {
-  constructor(game){this.game=game;this.effects=[];this.statuses=new Map();this.clock=0;this.nextId=1;}
-  clearScene(){this.effects.length=0;this.statuses.clear();}
+  constructor(game){this.game=game;this.effects=[];this.statuses=new Map();this.clock=0;this.nextId=1;this.visualBursts=[];this.visualCasts=new Map();this.nextVisualId=1;}
+  clearScene(){
+    for(const [caster,entry] of this.visualCasts)if(caster._visualCast===entry.pose)delete caster._visualCast;
+    this.effects.length=0;this.statuses.clear();this.visualBursts.length=0;this.visualCasts.clear();
+  }
   casterActive(caster,hostile){return alive(caster)&&(!hostile||caster.guardActive!==false&&this.game.enemies.includes(caster));}
   isFrozen(entity){return (this.statuses.get(entity)?.frozenUntil||0)>this.clock;}
   movementMultiplier(entity){const status=this.statuses.get(entity);if(!status)return 1;if(status.frozenUntil>this.clock)return 0;return status.slowUntil>this.clock?status.slowMultiplier:1;}
-  absorbDamage(entity,amount){
+  absorbDamage(entity,amount,origin=null){
     const s=this.statuses.get(entity);if(!s||s.shieldUntil<=this.clock||s.shield<=0)return amount;
-    const absorbed=Math.min(s.shield,amount);s.shield-=absorbed;return amount-absorbed;
+    const absorbed=Math.min(s.shield,amount);s.shield-=absorbed;
+    if(absorbed>0){s.shieldHitAt=this.clock;s.shieldHitAngle=origin&&Number.isFinite(origin.x)&&Number.isFinite(origin.y)?Math.atan2(origin.y-entity.y,origin.x-entity.x):0;}
+    return amount-absorbed;
   }
   statusFor(entity){
     let s=this.statuses.get(entity);if(s)return s;
     if(this.statuses.size>=RULES.maxStatuses)return null;
-    s={slowUntil:0,slowMultiplier:1,frozenUntil:0,freezeProtectedUntil:0,shieldUntil:0,shield:0,burn:null};this.statuses.set(entity,s);return s;
+    s={slowUntil:0,slowMultiplier:1,frozenUntil:0,freezeProtectedUntil:0,shieldUntil:0,shield:0,shieldHitAt:-Infinity,shieldHitAngle:0,burn:null};this.statuses.set(entity,s);return s;
   }
   cast(id,caster,options={}){
     const g=this.game,def=getAbilityDefinition(id);
@@ -59,8 +66,51 @@ export class AbilityRuntime {
     if(distance(origin,aim)>p.range&&['field','zone'].includes(def.shape))return false;
     const center=['field','zone'].includes(def.shape)?aim:origin;
     const reference=['field','zone'].includes(def.shape)&&target?target:caster,groundOffset=friendlyFoot(reference).y-reference.y;
-    const effect={id:this.nextId++,abilityId:id,caster,hostile,shape:def.shape,profile:def.profile,parameters:p,x:center.x,y:center.y,origin:{...point(origin),groundY:origin.y+friendlyFoot(caster).y-caster.y},groundOffset,angle,age:0,windup,remaining:p.duration,hit:new Set(),lastHit:new Map(),distance:0};
-    this.effects.push(effect);return true;
+    const effect={id:this.nextId++,abilityId:id,caster,hostile,shape:def.shape,profile:def.profile,parameters:p,x:center.x,y:center.y,origin:{...point(origin),groundY:origin.y+friendlyFoot(caster).y-caster.y},groundOffset,angle,age:0,windup,remaining:p.duration,hit:new Set(),lastHit:new Map(),distance:0,
+      sourceX:caster.x,sourceY:caster.y,sourceGroundOffset:friendlyFoot(caster).y-caster.y,casterKind:caster.bossKind||caster.type||caster.companionKind||caster.heroId||abilityActorKind(caster,g),visualVariant:id==='domain'&&caster.bossKind==='broodmother'?'web':undefined};
+    this.effects.push(effect);this.beginVisualCast(effect);return true;
+  }
+  beginVisualCast(effect){
+    const caster=effect.caster,previous=this.visualCasts.get(caster);
+    // A projectile fan is one body action. Its center direction remains stable
+    // even though each projectile owns a separate execution effect.
+    if(previous&&previous.startedAt===this.clock&&previous.pose.abilityId===effect.abilityId){
+      previous.aimX+=Math.cos(effect.angle);previous.aimY+=Math.sin(effect.angle);
+      previous.pose.angle=Math.atan2(previous.aimY,previous.aimX);return;
+    }
+    if(!previous&&this.visualCasts.size>=RULES.maxEffects){
+      const [oldCaster,entry]=this.visualCasts.entries().next().value;
+      if(oldCaster._visualCast===entry.pose)delete oldCaster._visualCast;
+      this.visualCasts.delete(oldCaster);
+    }
+    const sustained=['beam','cone'].includes(effect.shape)||effect.abilityId==='vortex'&&caster.bossKind==='deepcaller';
+    const activeDuration=sustained?effect.parameters.duration:Math.min(effect.parameters.duration,effect.shape==='field'?.34:.2);
+    const pose={id:effect.id,abilityId:effect.abilityId,phase:effect.windup>0?'windup':'active',progress:0,angle:effect.angle,age:0,windup:effect.windup,duration:effect.parameters.duration,activeDuration,recoveryDuration:.24,
+      visualVariant:effect.visualVariant,sourceX:effect.sourceX,sourceY:effect.sourceY,sourceGroundOffset:effect.sourceGroundOffset,casterKind:effect.casterKind};
+    caster._visualCast=pose;this.visualCasts.set(caster,{pose,effect,startedAt:this.clock,aimX:Math.cos(effect.angle),aimY:Math.sin(effect.angle)});
+  }
+  updateVisualCasts(dt){
+    for(const [caster,entry] of this.visualCasts){
+      const {pose,effect}=entry;
+      if(!this.casterActive(caster,effect.hostile)){
+        if(caster._visualCast===pose)delete caster._visualCast;this.visualCasts.delete(caster);continue;
+      }
+      // Freeze pauses unlaunched casts, matching execution. Once released,
+      // effects keep running; the renderer holds the frozen body separately.
+      if(pose.age<pose.windup&&this.isFrozen(caster))continue;
+      // Execution owns windup timing, including its existing freeze pause.
+      pose.age=pose.age<pose.windup?effect.age:pose.age+dt;
+      const activeAge=pose.age-pose.windup;
+      if(activeAge<0){pose.phase='windup';pose.progress=clamp(pose.age/pose.windup,0,1);}
+      else if(activeAge<pose.activeDuration){pose.phase='active';pose.progress=clamp(activeAge/pose.activeDuration,0,1);}
+      else if(activeAge<pose.activeDuration+pose.recoveryDuration){pose.phase='recovery';pose.progress=clamp((activeAge-pose.activeDuration)/pose.recoveryDuration,0,1);}
+      else{if(caster._visualCast===pose)delete caster._visualCast;this.visualCasts.delete(caster);}
+    }
+  }
+  visualBurst(effect,target,kind='hit'){
+    if(this.visualBursts.length>=MAX_VISUAL_BURSTS)this.visualBursts.splice(0,this.visualBursts.length-MAX_VISUAL_BURSTS+1);
+    this.visualBursts.push({id:this.nextVisualId++,abilityId:effect.abilityId,x:target.x,y:target.y,radius:kind==='landing'?effect.parameters.radius:Math.min(30,Math.max(8,target.r||effect.parameters.radius)),age:0,life:BURST_LIFE[effect.abilityId]||.28,
+      hostile:effect.hostile,angle:effect.angle,groundOffset:kind==='landing'?effect.groundOffset:friendlyFoot(target).y-target.y,visualVariant:effect.visualVariant,kind});
   }
   clearPath(origin,target,profile='projectile',radius=0){
     if(this.game.combat?.clearPath)return this.game.combat.clearPath(origin,target,{source:'ability',profile,radius});
@@ -78,6 +128,7 @@ export class AbilityRuntime {
     const g=this.game,p=effect.parameters,before=target.hp;
     const amount=effect.hostile?damageFriendly(g,target,p.damage,effect.caster):g._hitEnemy(target,p.damage,p.knockback||0,effect.caster,effect.abilityId);
     if(!amount||target.hp>=before)return false;
+    this.visualBurst(effect,target);
     this.applyStatus(target,p,effect);
     if(effect.hostile&&p.knockback>0){
       const length=distance(target,effect)||1,push=Math.min(RULES.maxPushDistance,p.knockback);g._moveEntity?.(target,(target.x-effect.x)/length*push,(target.y-effect.y)/length*push);
@@ -102,20 +153,27 @@ export class AbilityRuntime {
       const boss=target.type==='boss',friendly=effect.hostile;
       const duration=Math.min(friendly?RULES.maxFriendlyFreeze:RULES.maxFreeze,(p.freezeDuration||.7)*(boss?(p.bossFreezeMultiplier??.35):1));
       s.frozenUntil=this.clock+duration;s.freezeProtectedUntil=s.frozenUntil+(friendly?RULES.friendlyFreezeImmunity:boss?(p.bossFreezeImmunity??6):(p.freezeImmunity??3));
+      s.visualFrozen=true;
     }
   }
   updateStatuses(){
     const g=this.game;
     for(const [entity,s] of this.statuses){
       if(!alive(entity)){this.statuses.delete(entity);continue;}
+      if(s.visualFrozen&&s.frozenUntil<=this.clock){
+        s.visualFrozen=false;
+        this.visualBurst({abilityId:'iceThaw',parameters:{radius:entity.r||14},angle:0,hostile:entity!==g.player&&!entity.isCompanion},entity);
+      }
       if(s.burn){const b=s.burn;if(!this.casterActive(b.caster,b.hostile)||b.until<this.clock)s.burn=null;
         else if(b.nextAt<=this.clock){b.nextAt=this.clock+b.interval;if(b.hostile)damageFriendly(g,entity,b.damage,b.caster);else if(g.combat?.canTarget?.(entity,b.caster,{source:'burn'})!==false)g._hitEnemy(entity,b.damage,0,b.caster,'burn');}}
-      if(!s.burn&&s.slowUntil<=this.clock&&s.frozenUntil<=this.clock&&s.freezeProtectedUntil<=this.clock&&s.shieldUntil<=this.clock)this.statuses.delete(entity);
+      if(!s.burn&&s.slowUntil<=this.clock&&s.frozenUntil<=this.clock&&s.freezeProtectedUntil<=this.clock&&s.shieldUntil<=this.clock&&this.clock-(s.shieldHitAt??-Infinity)>.22)this.statuses.delete(entity);
     }
   }
   update(dt){
     if(this.game.status!=='playing'||!Number.isFinite(dt)||dt<=0)return;
     this.clock+=dt;this.updateStatuses();
+    for(const burst of this.visualBursts)burst.age+=dt;
+    this.visualBursts=this.visualBursts.filter(burst=>burst.age<burst.life);
     for(const effect of this.effects){
       if(!this.casterActive(effect.caster,effect.hostile)){effect.remaining=0;continue;}
       if(effect.age<effect.windup&&this.isFrozen(effect.caster))continue;
@@ -128,6 +186,7 @@ export class AbilityRuntime {
       effect.remaining-=elapsed;
     }
     this.effects=this.effects.filter(e=>e.remaining>0);
+    this.updateVisualCasts(dt);
   }
   updateMoving(effect,dt){
     const p=effect.parameters,start={x:effect.x,y:effect.y},step=Math.min(p.speed*dt,p.range-effect.distance),end={x:start.x+Math.cos(effect.angle)*step,y:start.y+Math.sin(effect.angle)*step};
@@ -158,6 +217,10 @@ export class AbilityRuntime {
   }
   updateArea(effect,dt,activated){
     const p=effect.parameters,center={x:effect.x,y:effect.y},activeAge=effect.age-effect.windup;
+    // The first active step can follow a frame that ended exactly at windup.
+    // Track presentation delivery explicitly so that boundary cannot lose or
+    // repeat the landing burst.
+    if(effect.shape==='zone'&&!effect.visualLanded){effect.visualLanded=true;this.visualBurst(effect,effect,'landing');}
     const radius=effect.shape==='ring'?p.radius*clamp(activeAge/p.duration,0,1):p.radius;
     for(const target of this.targets(effect)){
       if(!this.eligible(effect,target))continue;
