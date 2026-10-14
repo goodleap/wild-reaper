@@ -36,9 +36,9 @@ import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
 import { SceneTransition } from './scene-transition.js';
-import { spawnDebugWave } from './debug-wave.js';
+import { spawnDebugWave, updateDebugMonsterStream } from './debug-wave.js';
 import { normalizeDebugOptions } from './debug-mode.js';
-import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBoss } from './debug-training.js';
+import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBosses } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, selectFriendlyTarget, damageFriendly, clearFriendlyPath } from './friendly-combat.js';
 import { getConfigSection, getConfigSnapshot } from './content-config.js';
@@ -135,7 +135,7 @@ export class Game {
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
     if(this.debugOptions.extraGold)this.grantResources({gold:500},'debugStart');
-    applyFullDebugBuild(this);spawnDebugTrainingDummy(this);spawnDebugBoss(this);
+    applyFullDebugBuild(this);spawnDebugTrainingDummy(this);spawnDebugBosses(this);
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -311,7 +311,10 @@ export class Game {
       e._navProgressX=e.x;e._navProgressY=e.y;e._navProgressTimer=0;
     }
   }
-  _updatePressure(dt=0) { this.waveDirector.update(dt); }
+  _updatePressure(dt=0) {
+    if(this.debugOptions.allMonsters){this.pressurePhase='steady';this.phaseEndsAt=this.time;return;}
+    this.waveDirector.update(dt);
+  }
   _hurtPlayer(amount,origin=null) {return this.combat.damagePlayer(amount,origin);}
   _updateBoss(e,dt) {return updateBoss(this,e,dt);}
   _resolveBossSlams() {resolveBossSlams(this);}
@@ -491,7 +494,8 @@ export class Game {
     else this.dungeon.update(dt);
     const regen=resolveCharacterStats(this).regen;if(regen)p.hp=Math.min(p.maxHp,p.hp+regen*dt);
     if(!inDungeon)this._spawn-=dt;
-    if(!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
+    updateDebugMonsterStream(this,dt);
+    if(!this.debugOptions.allMonsters&&!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
       const bossActive=this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false);

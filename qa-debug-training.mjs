@@ -51,7 +51,7 @@ for(const def of DEBUG_OPTION_DEFS) {
   assert.equal(g.player.skillCooldownMax===0,def.id==='zeroStormCooldown',`${def.id}: zero cooldown is independent`);
   if(!['zeroStormCooldown','fullLoadout'].includes(def.id))assert.equal(g.player.skillCooldownMax,g.hero.skillCooldown);
   assert.equal(g.enemies.some(enemy=>enemy.trainingDummy),def.id==='testFacilities',`${def.id}: dummy is independent`);
-  assert.equal(g.enemies.some(enemy=>enemy.debugBoss),def.id==='testFacilities',`${def.id}: boss is independent`);
+  assert.equal(g.enemies.some(enemy=>enemy.debugBoss),def.id==='allBosses',`${def.id}: boss roster is independent`);
   assert.equal(g.enemies.some(enemy=>enemy.debugWave),def.id==='enemyWave',`${def.id}: wave is independent`);
   assert.equal(g.build.getWeapon('arrow').acquired,def.id==='fullLoadout',`${def.id}: full loadout is independent`);
   assert.equal(g.companions.members.length,0);

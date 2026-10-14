@@ -5,7 +5,9 @@ export const DEBUG_OPTION_DEFS=Object.freeze([
   {id:'extraGold',label:'充足金币',description:'开局获得 500 金币',defaultValue:true},
   {id:'fastMovement',label:'高速移动',description:'移动速度 ×3',defaultValue:true},
   {id:'zeroStormCooldown',label:'天雷无冷却',description:'天雷轰击可连续释放',defaultValue:true},
-  {id:'testFacilities',label:'出生点附近测试设施',description:'木桩、调试首领和城堡入口',defaultValue:true},
+  {id:'testFacilities',label:'出生点附近测试设施',description:'木桩和城堡入口',defaultValue:true},
+  {id:'allBosses',label:'出生点全部 Boss',description:'含全部城堡首领及其变体，各一只，每只 10 万生命',defaultValue:false},
+  {id:'allMonsters',label:'全部怪物',description:'所有非 Boss 怪物从屏幕外四周密集涌入，开局 64 只，持续快速补充',defaultValue:false},
   {id:'enemyWave',label:'开局包围怪群',description:'测试守护与范围攻击',defaultValue:false}
 ].map(Object.freeze));
 

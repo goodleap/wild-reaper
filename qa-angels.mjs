@@ -3,7 +3,8 @@ import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Settlements, ANGEL_RULES } from './dist/settlements.js';
 
-function arena(){const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,encounters:false,elites:false,companions:false,settlements:false});g.enemies=[];g.events=[];g.effects=[];g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;}
+// Healing fixtures use 100 max HP independently of the selected hero's stats.
+function arena(){const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,encounters:false,elites:false,companions:false,settlements:false});g.enemies=[];g.events=[];g.effects=[];g.nextBossAt=Infinity;g.player.hp=g.player.maxHp=100;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;}
 function angel(g,x=0,y=0,id='angel:fixture'){const site={id,type:'angel',name:'守望天使',x,y,door:{x,y},width:40,depth:20,r:15,interactRadius:0,state:'ready',flying:true,guardRadius:ANGEL_RULES.guardRadius,auraRadius:ANGEL_RULES.guardRadius,attackRange:ANGEL_RULES.guardRadius,_attack:0};g.settlements.sites.push(site);return site;}
 function feet(g,x,y){g.player.x=x;g.player.y=y-groundOffset(g.player,true);}
 function enemy(g,x,y,hp=300){const e=g._spawnEnemy('slime',1);e.x=x;e.y=y-groundOffset(e);e.hp=e.maxHp=hp;e.speed=0;return e;}
@@ -59,8 +60,22 @@ const inCastle=enemy(wall,0,45);inCastle.dungeonId='castle';wall.settlements.upd
 const generation=arena();generation.regions={portals:[]};generation.portal=null;generation.settlements=new Settlements(generation);
 const spawnAngel=generation.settlements.sites.find(s=>s.id==='angel:spawn:0');assert(spawnAngel);assert(Math.hypot(spawnAngel.x,spawnAngel.y-19.8)<=145.01);assert(spawnAngel.flying);assert.equal(spawnAngel.guardRadius,ANGEL_RULES.guardRadius);assert.equal(spawnAngel.auraRadius,spawnAngel.guardRadius);assert.equal(spawnAngel.attackRange,spawnAngel.guardRadius);
 const locked={id:'portal:one',x:800,y:300,state:'locked'};generation.regions.portals=[locked];generation.portal=locked;generation.settlements.ensureAngels();assert.equal(generation.settlements.sites.filter(s=>s.type==='angel').length,1);
-locked.state='active';generation.settlements.ensureAngels();const doorAngel=generation.settlements.sites.find(s=>s.id==='angel:portal:one');assert(doorAngel);assert(Math.hypot(doorAngel.x-locked.x,doorAngel.y-locked.y)<=145.01);
-const retained=generation.settlements.sites.slice();for(let i=0;i<5;i++)generation.settlements.ensureAngels();assert.deepEqual(generation.settlements.sites,retained,'active portals never clone their angels on revisits');
-generation.regionIndex=1;generation.regions.portals=[{id:'portal:back',x:0,y:19.8,state:'active'}];generation.portal=null;generation.settlements.resetRegion();assert(!generation.settlements.sites.some(s=>s.id==='angel:spawn:0'));assert(generation.settlements.sites.some(s=>s.id==='angel:portal:back'),'the activated return portal also has a persistent guardian');
+locked.state='active';generation.settlements.ensureAngels();assert.deepEqual(generation.settlements.sites.filter(s=>s.type==='angel'),[spawnAngel],'activating a portal creates no guardian');
+generation.portal={id:'portal:fallback',x:900,y:-300,state:'active'};
+const retained=generation.settlements.sites.slice();for(let i=0;i<5;i++)generation.settlements.ensureAngels();assert.deepEqual(generation.settlements.sites,retained,'neither portal lists nor the fallback gate create angels on revisits');
+generation.regionIndex=1;generation.regions.portals=[{id:'portal:back',x:0,y:19.8,state:'active'}];generation.portal=null;generation.settlements.resetRegion();assert(!generation.settlements.sites.some(s=>s.type==='angel'),'return portals do not receive a replacement spawn or guardian');
+feet(generation,0,19.8);generation.player.hp=40;const unguarded=enemy(generation,35,19.8);generation.settlements.update(1);
+assert.equal(generation.player.hp,40,'an unguarded return gate does not heal');assert.equal(unguarded.hp,300,'an unguarded return gate does not attack');
 
-console.log('Angels: persistent spawn/active-portal guardians, deduplication, flying state, continuous capped nonstacking aura, pause/castle/wall isolation, shared 150-unit guard boundary, offscreen-guardian phone protection, local splash lightning, 0.1-second cooldowns and ordinary kill rewards passed.');
+// Cached world restoration also drops old portal guardians without relocating
+// them or deleting an independently placed/spawn guardian.
+const restored=arena(),originalSpawn=angel(restored,0,0,'angel:spawn:0'),independent=angel(restored,900,900,'angel:fixture:independent');
+originalSpawn.anchorId='spawn:0';
+const byAnchor=angel(restored,800,300,'angel:legacy');byAnchor.anchorId='portal:legacy';
+angel(restored,800,300,'angel:portal:legacy-id');
+restored.regions.saveWorld();restored.settlements=new Settlements(restored,{generation:false});
+assert(restored.regions.restoreWorld(0));
+assert.deepEqual(restored.settlements.sites.filter(s=>s.type==='angel'),[originalSpawn,independent],'restoration removes gate IDs and anchors while retaining other angels');
+restored.settlements.ensureAngels();assert.equal(restored.settlements.sites.length,2,'cleanup is stable when generation is disabled');
+
+console.log('Angels: persistent spawn guardian, no portal guardians or gate aura, restored-world cleanup, deduplication, flying state, continuous capped nonstacking aura, pause/castle/wall isolation, shared 150-unit guard boundary, offscreen-guardian phone protection, local splash lightning, 0.1-second cooldowns and ordinary kill rewards passed.');

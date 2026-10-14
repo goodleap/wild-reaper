@@ -23,8 +23,7 @@ assert.notEqual(g.terrain,outerTerrain);assert.equal(g.terrain.island.explored,u
 map.discover(g);assert.notEqual(g.terrain.island.explored,outerExplored);
 assert(!map.getMarkers(g,{range:10000}).some(m=>m.id===gate.id),'outer landmarks do not leak across islands');
 const angels=g.settlements.sites.filter(s=>s.type==='angel');
-assert.equal(angels.length,1);assert(angels[0].anchorId.startsWith('portal:'),'core sanctuary belongs to the return gate');
-assert(!angels.some(s=>Math.hypot(s.x,s.y)<450),'no spawn sanctuary occupies the boss arena');
+assert.equal(angels.length,0,'the core arena and its return gate have no guardian angel');
 
 // Small islands still use the same shallow-water immersion and movement rules.
 const edge=g.terrain.island.contour(28)[0];place(edge);

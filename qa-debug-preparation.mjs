@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { harness } from './qa-app-harness.mjs';
 
 const storageKey='wild-echoes-debug-options';
-const defaults={fullLoadout:false,extraGold:true,fastMovement:true,zeroStormCooldown:true,testFacilities:true,enemyWave:false};
+const defaults={fullLoadout:false,extraGold:true,fastMovement:true,zeroStormCooldown:true,testFacilities:true,enemyWave:false,allBosses:false,allMonsters:false};
 const disabled=Object.fromEntries(Object.keys(defaults).map(id=>[id,false]));
 const node=(h,id)=>h.document.getElementById(id);
 const click=(h,id)=>h.fire(node(h,id),'click');
@@ -15,8 +15,10 @@ const start=async h=>{click(h,'prepare-start-button');await h.flush();assert(h.r
 for(const search of ['?debug','?debug=full']){
   const h=harness(search);click(h,'start-button');
   assert(!node(h,'debug-prepare-settings').classList.contains('hidden'));
-  assert.equal(node(h,'debug-prepare-options').children.length,6);
-  assert.match(node(h,'debug-prepare-details').textContent,/自动选首项.*木桩、首领和城堡/);
+  assert.equal(node(h,'debug-prepare-options').children.length,8);
+  assert.match(node(h,'debug-prepare-details').textContent,/自动选首项.*木桩.*城堡/);
+  assert(!/设施[^；。]*首领/.test(node(h,'debug-prepare-details').textContent),'nearby fixtures no longer promise a bundled boss');
+  assert.match(node(h,'debug-option-allBosses-description').textContent,/10 万|100000|100,000/);
   assert.match(node(h,'game-version').textContent,/ · DEBUG$/);
   assert(!node(h,'game-version').textContent.includes('FULL'));
   for(const [id,checked] of Object.entries(defaults)){
@@ -31,7 +33,7 @@ for(const search of ['?debug','?debug=full']){
 }
 
 // Choices are independent, survive a new page, and become a per-run snapshot.
-const storage=new Map(),chosen={...disabled,fullLoadout:true,enemyWave:true};
+const storage=new Map(),chosen={...disabled,fullLoadout:true,enemyWave:true,allBosses:true,allMonsters:true};
 {
   const h=harness('?debug',{storage});click(h,'start-button');
   for(const [id,checked] of Object.entries(chosen))change(h,id,checked);
@@ -61,6 +63,12 @@ const storage=new Map(),chosen={...disabled,fullLoadout:true,enemyWave:true};
 }
 
 // Corrupt/unavailable browser storage must leave a usable preparation screen.
+{
+  const {allBosses,allMonsters,...oldChoices}=defaults;
+  const h=harness('?debug',{storage:new Map([[storageKey,JSON.stringify({...oldChoices,enemyWave:true})]])});click(h,'start-button');
+  assert.equal(node(h,'debug-option-enemyWave').checked,true,'existing choices survive the added settings');
+  assert.equal(node(h,'debug-option-allBosses').checked,false);assert.equal(node(h,'debug-option-allMonsters').checked,false,'older saved preferences do not opt into continuous spawning');
+}
 for(const storage of [new Map([[storageKey,'{invalid']]),{get(){throw Error('storage denied');},set(){throw Error('storage denied');}}]){
   const h=harness('?debug',{storage});click(h,'start-button');
   assert.deepEqual(state(h,'selectedDebugOptions'),defaults);

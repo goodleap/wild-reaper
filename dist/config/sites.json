@@ -276,8 +276,8 @@
         "normal": 25
       },
       "speed": {
-        "easy": 44,
-        "normal": 49
+        "easy": 62,
+        "normal": 70
       },
       "damageGrowthPeriod": 600,
       "xp": 180,

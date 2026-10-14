@@ -336,7 +336,7 @@
       "tag": "守护",
       "summary": "固定驻守，治疗友方并攻击怪物",
       "trigger": "进入天使的守护光环，无需交互。",
-      "feature": "天使出现在出生地与已激活传送门附近。守护半径 {ANGEL_RULES.guardRadius}，范围内持续恢复友方生命，并以高频雷击攻击附近怪物。"
+      "feature": "天使固定驻守在冒险出生地附近。守护半径 {ANGEL_RULES.guardRadius}，范围内持续恢复友方生命，并以高频雷击攻击附近怪物。"
     },
     {
       "id": "dogcamp",
