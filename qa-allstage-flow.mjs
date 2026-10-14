@@ -1,0 +1,79 @@
+import assert from 'node:assert/strict';
+import { Game } from './dist/engine.js';
+import { STAGES } from './dist/stage-definitions.js';
+import { WORLD_IDS } from './dist/world-definitions.js';
+import { groundOffset } from './dist/terrain.js';
+import { portalDoor } from './dist/portal-geometry.js';
+import { AdventureArchive } from './dist/adventure-archive.js';
+
+let randomSeed=819381;
+Math.random=()=>((randomSeed=(Math.imul(randomSeed,1664525)+1013904223)>>>0)/4294967296);
+assert.deepEqual(new Set(STAGES.map(s=>s.themeId)),new Set(WORLD_IDS));
+const archive=new AdventureArchive({storage:null});
+const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
+function travel(g,target){
+  const gate=g.regions.portals.find(p=>p.nextMapId===target);assert(gate);
+  place(g,portalDoor(gate));assert(g.requestInteraction(gate.id));
+  for(let frame=0;frame<32&&g.sceneTransition.active;frame++)g.update(.025);
+  assert(!g.sceneTransition.active);assert.equal(g.mapId,target);
+  assert(g.terrain.isFree(g.player.x,g.player.y+groundOffset(g.player,true),g.player.r));
+  for(let i=0;i<3;i++)g.touchInteractions.update();
+  assert(!g.sceneTransition.active,'arrival does not bounce back through the paired gate');
+}
+for(const stage of STAGES)for(const difficulty of ['normal','casual']){
+  const g=new Game({stageId:stage.id,difficulty});
+  g.player.xpNext=g.crystalsNext=Infinity;g.gold=1000;
+  archive.begin(g);
+  assert.equal(g.stage.id,stage.id);assert.equal(g.region.id,stage.themeId);
+  assert.equal(g.environment.region,stage.themeId);assert.equal(g.adventure.region,stage.themeId);
+  assert(g.settlements.sites.some(s=>s.type==='angel'&&s.anchorId.startsWith('spawn:')),'each stage starts with a sanctuary');
+  const outer=g.stage.currentIsland,terrain=g.terrain,sites=g.settlements.sites;
+  const optional=g.enemies.find(e=>e.stageBossRole==='optional');assert(optional);
+  optional.hp-=17;const optionalHp=optional.hp;
+  const supply=sites.find(s=>s.type==='supply');assert(supply);supply.state='spent';
+  g.terrain.island.explored=new Set(['0,0']);const fog=g.terrain.island.explored;
+  assert(g.companions.recruit('dog'));const companion=g.companions.members[0];
+  companion._scan=companion._attack=Infinity;
+  const gold=g.gold;
+  travel(g,stage.coreMapId);
+  assert.equal(g.region.id,stage.themeId);assert.equal(g.terrain.region,stage.themeId);
+  assert.equal(g.companions.members[0],companion);assert.notEqual(g.terrain,terrain);
+  assert.equal(g.terrain.island.explored,undefined);
+  assert.equal(g.environment.generation,false);assert.equal(g.adventure.generation,false);
+  assert.equal(g.regions.portals.filter(p=>p.kind==='victory').length,0);
+  const core=g.enemies.find(e=>e.stageBossRole==='core');assert(core);
+  const coreDefinition=g.stage.currentIsland.boss;
+  assert.equal(core.bossKind,coreDefinition.kind);
+  assert.equal(core.maxHp,difficulty==='casual'?coreDefinition.easyHp:coreDefinition.hp);
+  assert.equal(g.enemies.filter(e=>e.type==='boss').length,1);
+  const arena=g.terrain;
+  place(g,{x:core.stageHome.x,y:core.stageHome.y+140});g.regionGrace=0;
+  assert(g._hurtEnemy(core,core.hp+1)>0);g.regions.flushReward();
+  assert.equal(g.status,'super');assert(g.stage.coreDefeated);assert(!g.stage.completed);
+  const rewardGold=g.gold-gold;assert(rewardGold>=60,'core rewards never fall below the original stage reward');
+  const exit=g.regions.portals.find(p=>p.kind==='victory');assert(exit);
+  place(g,portalDoor(exit));assert(!g.canEnterPortal(exit.id),'resolve reward before exit');
+  assert(g.chooseSuper(g.getSuperChoices()[0].id));
+  const rewards={gold:g.gold,kills:g.kills,crystals:g.crystals};
+  travel(g,stage.startMapId);
+  assert.equal(g.terrain,terrain);assert.equal(g.settlements.sites,sites);
+  assert.equal(g.terrain.island.explored,fog);assert.equal(supply.state,'spent');
+  assert.equal(optional.hp,optionalHp);assert.equal(g.stage.objectives.get(outer.id).defeated,false);
+  travel(g,stage.coreMapId);
+  assert.equal(g.terrain,arena);assert(!g.enemies.some(e=>e.stageBoss));
+  assert.deepEqual({gold:g.gold,kills:g.kills,crystals:g.crystals},rewards,'return trips never duplicate boss rewards');
+  place(g,portalDoor(exit));assert(g.touchInteractions.update());
+  assert.equal(g.status,'victory');assert(g.stage.completed);
+  const report=archive.finish(g,'victory');assert.equal(report.stageCompletion.id,stage.id);
+  archive.finish(g,'quit');assert.equal(archive.data.stages[stage.id][difficulty].clears,1);
+  const elapsed=g.runTime;g.update(.05);assert.equal(g.runTime,elapsed);
+}
+assert.equal(Object.keys(archive.data.stages).length,WORLD_IDS.length);
+for(const stage of STAGES){
+  const debug=new Game({stageId:stage.id,debug:true,debugFull:true});
+  assert(debug.enemies.some(e=>e.trainingDummy),`${stage.id}: debug training dummy`);
+  assert(debug.enemies.some(e=>e.debugWave),`${stage.id}: debug starting cohort`);
+  assert(debug.settlements.sites.some(s=>s.type==='castle'&&Math.hypot(s.x,s.y)<500),`${stage.id}: nearby debug castle`);
+  assert.equal(debug.mapId,stage.startMapId);assert(!debug.stage.completed);
+}
+console.log('All stage flow: eight themes × two difficulties, themed worlds, optional bosses alive, safe portals, persistent objectives, one-shot rewards, victory records and full debug starts passed.');

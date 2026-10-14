@@ -163,7 +163,7 @@ export class Game {
     return best;
   }
   _difficultyTime() {
-    if(this.stage)return Math.min(this.time,600)*.18;
+    if(this.stage)return Math.max(0,(this.stage.definition.dangerFactor??1)-1)*600+Math.min(this.time,600)*.18;
     // Pressure follows cleared connections and elapsed time, not the world
     // array index. The first three cleared routes start the endless clock.
     if(!this._features.adventure||!this._islandWorlds)return this.time;
@@ -171,7 +171,7 @@ export class Game {
     return base+(this.regions?.endlessUnlocked?Math.max(0,this.time-this.regions.endlessStartedAt):0);
   }
   _waveTier() {
-    if(this.stage)return Math.min(3,Math.floor(this.time/180));
+    if(this.stage)return Math.round(Math.max(0,(this.stage.definition.dangerFactor??1)-1)*20)+Math.min(3,Math.floor(this.time/180));
     if(!this._features.adventure||!this._islandWorlds)return null;
     const exploration=Math.round(Math.max(0,(this.region.danger||1)-1)*20)+Math.min(3,this.regions?.defeatedConnectionsCount||0)*2+Math.min(3,Math.floor(this.time/180));
     return exploration+(this.regions?.endlessUnlocked?Math.floor(Math.max(0,this.time-this.regions.endlessStartedAt)/50):0);
@@ -327,7 +327,7 @@ export class Game {
     this.enemyBullets=this.enemyBullets.filter(b=>b.life>0);
   }
 
-  _initializeRegionalBoss(boss){initBoss(boss);}
+  _initializeRegionalBoss(boss,kind=null){initBoss(boss,kind);}
   _clearRegionalBossAttacks(boss){boss.slam=null;boss.charge=null;boss.cast=null;boss._chargeSegment=null;clearBossAttacks(boss);}
   canEnterPortal(id) { return !this.dungeon.active&&this.regions.canEnter(id); }
   getInteraction() {

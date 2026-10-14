@@ -20,6 +20,7 @@ import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
 import { WorldArt } from './world-art.js';
 import { mapSeed } from './map-context.js';
+import { STAGES, getStageDefinition } from './stage-definitions.js';
 import { WorldSiteArt } from './world-site-art.js';
 import { WorldHazardArt } from './world-hazard-art.js';
 import { WaterArt } from './water-art.js';
@@ -129,8 +130,8 @@ let clock=0,last=0,shake=0,toastTimer=0,toastPriority=0,toastUntil=0,upgradeLeve
 let keys=new Set(),skillRequested=false,touch=null,input={x:0,y:0,skill:false};
 let pendingEvolutions=[],relicChoiceKey='',lastRelics='';
 let portalRequested=false,superChoiceKey='',lastSupers='',shopKey='';
-let selectedDifficulty='normal',selectedMode='stage';
-try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';}catch{}
+let selectedDifficulty='normal',selectedMode='stage',selectedStageId='forest-trial';
+try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;}catch{}
 if(debugConfig.world)selectedMode='free';
 let soundOn=false,audio=null;
 try{soundOn=localStorage.getItem('wild-echoes-sound')==='on';}catch{}
@@ -177,15 +178,39 @@ function refreshArchiveEntry(){
   $('archive-entry-note').textContent='图鉴 · 记录 · 里程碑';
 }
 syncSound();refreshArchiveEntry();
-function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty,mode:selectedMode}));}catch{}}
+function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty,mode:selectedMode,stageId:selectedStageId}));}catch{}}
 for(const difficulty of ['normal','casual']){const radio=$(`difficulty-${difficulty}`);radio.checked=difficulty===selectedDifficulty;radio.addEventListener('change',()=>{if(radio.checked){selectedDifficulty=difficulty;saveSetup();refreshArchiveEntry();}});}
-function refreshStageSetup(){$('stage-mode-note').textContent=selectedMode==='stage'?'外岛成长 · 核心岛决战':'八种主题 · 无尽探索';}
+const stageRadios=new Map();
+for(const stage of STAGES){
+  const label=document.createElement('label'),radio=document.createElement('input'),caption=document.createElement('span');
+  label.classList.add('stage-option');label.style.setProperty('--stage-color',stage.color);
+  radio.id=`stage-${stage.id}`;radio.type='radio';radio.name='stage';radio.value=stage.id;radio.setAttribute('aria-label',stage.name);
+  caption.textContent=stage.shortName;label.append(radio,caption);$('stage-options').append(label);stageRadios.set(stage.id,radio);
+  radio.addEventListener('change',()=>{if(radio.checked){selectedStageId=stage.id;saveSetup();refreshStageSetup();}});
+}
+function refreshStageSetup(){
+  const stage=getStageDefinition(selectedStageId)||STAGES[0];selectedStageId=stage.id;
+  $('stage-mode-note').textContent=selectedMode==='stage'?'外岛成长 · 核心岛决战':'八种主题 · 无尽探索';show('stage-picker',selectedMode==='stage');
+  for(const [id,radio] of stageRadios)radio.checked=id===selectedStageId;
+  $('stage-title').textContent=stage.name;$('stage-difficulty').textContent=`主题强度 · ${stage.difficultyLabel}`;$('stage-description').textContent=stage.summary;
+  $('stage-picker').style.setProperty('--stage-color',stage.color);
+}
 for(const mode of ['stage','free']){const radio=$(`mode-${mode}`);radio.checked=mode===selectedMode;radio.addEventListener('change',()=>{if(radio.checked){selectedMode=mode;saveSetup();refreshStageSetup();}});}
 refreshStageSetup();
 
 
 function clearInput(){keys.clear();skillRequested=false;portalRequested=false;touch=null;input={x:0,y:0,skill:false};show('joystick',false);$('joystick-thumb').style.transform='';}
-function startGame(){if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();game=new Game({difficulty:selectedDifficulty,stageId:selectedMode==='stage'?'forest-trial':null,debug:debugMode,debugFull:debugConfig.full,debugWorld:debugConfig.world});game.viewWidth=width;game.viewHeight=height;archive.begin(game);const archiveGame=game;game.onEnemyDefeated=enemy=>archive.recordDefeat(archiveGame,enemy);archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?(debugConfig.full?'完整调试 · 武器技能满级 · 3 倍移速':'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却'):game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');worldMap.discover(game,{viewportWidth:width,viewportHeight:height});updateHUD();canvas.focus({preventScroll:true});}
+function startGame(){if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();game=new Game({difficulty:selectedDifficulty,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugFull:debugConfig.full,debugWorld:debugConfig.world});game.viewWidth=width;game.viewHeight=height;archive.begin(game);const archiveGame=game;game.onEnemyDefeated=enemy=>archive.recordDefeat(archiveGame,enemy);archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?(debugConfig.full?'完整调试 · 武器技能满级 · 3 倍移速':'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却'):game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');worldMap.discover(game,{viewportWidth:width,viewportHeight:height});updateHUD();canvas.focus({preventScroll:true});}
+function restartGame(){
+  if(game){
+    selectedDifficulty=game.difficulty;selectedMode=game.stage?'stage':'free';
+    if(game.stage)selectedStageId=game.stage.id;
+    for(const difficulty of ['normal','casual'])$(`difficulty-${difficulty}`).checked=difficulty===selectedDifficulty;
+    for(const mode of ['stage','free'])$(`mode-${mode}`).checked=mode===selectedMode;
+    refreshStageSetup();
+  }
+  startGame();
+}
 function home(){if(game)archive.finish(game,'quit');resetArchivePanel();cancelDiagnosticCapture();diagnostics?.setMode('default');sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);helpOpen=false;$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=null;paused=false;runEnded=false;clearInput();for(const id of ['hud','run-summary','game-bottom','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','touch-skill','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('intro');arena.classList.remove('playing');arena.classList.remove('has-encounter');arena.classList.remove('has-relics');arena.classList.remove('near-portal');arena.classList.remove('has-companion');arena.classList.remove('has-rescue-power');arena.classList.remove('has-supers');arena.classList.remove('in-dungeon');$('terrain-code').textContent='01 / THE WHISPERING WOODS';$('terrain-name').textContent='低语之森';$('toast').classList.remove('visible');refreshArchiveEntry();$('start-button').focus({preventScroll:true});}
 function pause(){if(!game||!['playing','relic','upgrade','super','shop'].includes(game.status)||runEnded)return;paused=true;checkpointArchive();diagnostics?.breakContinuity();clearInput();show('pause-overlay');refreshDiagnostics();$(archiveOpen?'close-archive':helpOpen?'close-help':characterOpen?'close-character':mapOpen?'close-map':'resume-button').focus({preventScroll:true});}
 function focusGameDialog(){const id={relic:'relic-cards',upgrade:'upgrade-cards',super:'super-cards',shop:'shop-items'}[game?.status];if(id)$(id).querySelector('button:not(:disabled)')?.focus({preventScroll:true});else canvas.focus({preventScroll:true});}
@@ -667,7 +692,7 @@ $('archive-content').addEventListener('click',e=>{
   }
 });
 window.addEventListener('pagehide',checkpointArchive);
-$('start-button').onclick=startGame;$('restart-button').onclick=startGame;$('home-button').onclick=home;$('quit-button').onclick=home;$('pause-button').onclick=pause;$('resume-button').onclick=resume;$('close-pause').onclick=resume;$('close-shop').onclick=closeShop;$('help-button').onclick=openHelp;$('pause-help-button').onclick=openHelp;$('close-help').onclick=closeHelp;$('help-done').onclick=closeHelp;
+$('start-button').onclick=startGame;$('restart-button').onclick=restartGame;$('home-button').onclick=home;$('quit-button').onclick=home;$('pause-button').onclick=pause;$('resume-button').onclick=resume;$('close-pause').onclick=resume;$('close-shop').onclick=closeShop;$('help-button').onclick=openHelp;$('pause-help-button').onclick=openHelp;$('close-help').onclick=closeHelp;$('help-done').onclick=closeHelp;
 $('sound-button').onclick=$('pause-sound-button').onclick=()=>{soundOn=!soundOn;syncSound();try{localStorage.setItem('wild-echoes-sound',soundOn?'on':'off');}catch{}initAudio();if(soundOn)tone(660,.1);};
 canvas.tabIndex=-1;
 // Cancel selection/callouts inside the game before child UI can stop bubbling.

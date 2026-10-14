@@ -74,10 +74,10 @@ function codexHTML(data,category,selectedId){
 }
 function stat(label,value,unit=''){return `<div class="archive-stat"><span>${label}</span><strong>${value}${unit?`<small>${unit}</small>`:''}</strong></div>`;}
 function stageRecordsHTML(data,difficulty){
-  return `<section class="archive-stage-records"><h3>关卡通关</h3>${STAGES.map(stage=>{
+  return `<section class="archive-stage-records"><h3>关卡通关</h3><div class="archive-stage-grid">${STAGES.map(stage=>{
     const record=data.stages?.[stage.id]?.[difficulty]||{},clears=record.clears||0;
-    return `<div class="archive-stage-record"><strong>${escape(stage.name)}</strong><span>通关 <b>${number(clears)}</b> 次</span><span>最快 <b>${clears?duration(record.bestTime):'尚未通关'}</b></span></div>`;
-  }).join('')}<p class="archive-small-note">进入通关门才记录胜利；结束本局或倒下不计入通关。</p></section>`;
+    return `<div class="archive-stage-record" data-stage-record="${escape(stage.id)}" style="--stage-color:${escape(stage.color)}"><strong>${escape(stage.name)}</strong><span>通关 <b>${number(clears)}</b> 次</span><span>最快 <b>${clears?duration(record.bestTime):'尚未通关'}</b></span></div>`;
+  }).join('')}</div><p class="archive-small-note">各关卡、难度分别记录；进入通关门才计为胜利。</p></section>`;
 }
 function recordsHTML(data,difficulty){
   const totals=data.totals||{},best=data.best?.[difficulty]||{},legacy=data.legacy;

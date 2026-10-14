@@ -16,9 +16,9 @@ export function bossBehavior(kind){
   if(!Object.hasOwn(BOSS_BEHAVIORS,id))throw new RangeError(`Unknown boss behavior: ${String(id)}`);
   return BOSS_BEHAVIORS[id];
 }
-export function initBoss(enemy) {
+export function initBoss(enemy,kind=null) {
   if(enemy.type!=='boss')return enemy;
-  enemy.bossKind=bossKindFor(enemy.bossIndex);
+  enemy.bossKind=kind==null?bossKindFor(enemy.bossIndex):bossDefinition(kind).id;
   bossBehavior(enemy.bossKind).initialize?.(enemy);
   return enemy;
 }

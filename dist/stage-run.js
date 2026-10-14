@@ -40,7 +40,7 @@ export class StageRun {
     boss.hp=boss.maxHp=g.easy?definition.easyHp:definition.hp;
     boss.damage=definition.damage*(g.easy?.72:1);boss.speed=enemyDefinition('boss').baseSpeed*definition.speed*(g.easy?.9:1);boss.xp=definition.xp;
     boss.stageHome={x:home.x,y:home.y};boss.x=home.x;boss.y=home.y-groundOffset(boss);boss.guardActive=false;boss._stageAnnounced=false;
-    g._initializeRegionalBoss(boss);g._moveEntity(boss,0,0);return boss;
+    g._initializeRegionalBoss(boss,definition.kind);g._moveEntity(boss,0,0);return boss;
   }
   update(){
     const g=this.game,p=foot(g);
@@ -75,7 +75,7 @@ export class StageRun {
     const reward={id:`stage-reward:${boss.stageBoss}`,stageReward:boss.stageBoss,rewardClaimed:false};
     this.game.regions._rewardQueue.push(reward);this.game.regions._offerReward();
     if(boss.stageBossRole==='core'){
-      this.game.grantResources({gold:30,crystals:45},'stageCoreBoss');
+      this.game.grantResources(this.definition.coreReward,'stageCoreBoss');
       this.openExit();this.game._emit('stageCoreDefeated',{stageId:this.id});
     }else this.game._emit('stageOptionalDefeated',{stageId:this.id});
     return reward;

@@ -1,5 +1,15 @@
-const outer=Object.freeze({id:'forest-outer',name:'林间外岛',themeId:'forest',themeIndex:0,role:'outer',seed:0,connections:Object.freeze([{id:'forest-route',targetMapId:'forest-heart'}]),boss:Object.freeze({role:'optional',index:1,hp:2300,easyHp:1700,damage:22,speed:1,xp:180})});
-const heart=Object.freeze({id:'forest-heart',name:'森林核心岛',themeId:'forest',themeIndex:0,role:'boss',seed:913,connections:Object.freeze([{id:'forest-route',targetMapId:'forest-outer'}]),boss:Object.freeze({role:'core',index:2,hp:5200,easyHp:3800,damage:30,speed:1.08,xp:300})});
+import forest from './stages/forest.js';
+import marsh from './stages/marsh.js';
+import ruins from './stages/ruins.js';
+import beach from './stages/beach.js';
+import city from './stages/city.js';
+import mountain from './stages/mountain.js';
+import snow from './stages/snow.js';
+import volcano from './stages/volcano.js';
 
-export const STAGES=Object.freeze([Object.freeze({id:'forest-trial',name:'森林试炼',themeId:'forest',startMapId:outer.id,coreMapId:heart.id,islands:Object.freeze([outer,heart])})]);
-export const getStageDefinition=id=>STAGES.find(stage=>stage.id===id)||null;
+export const STAGES=Object.freeze([forest,marsh,ruins,beach,city,mountain,snow,volcano]);
+const BY_ID=new Map(STAGES.map(stage=>[stage.id,stage]));
+if(BY_ID.size!==STAGES.length)throw new Error('Duplicate stage identity');
+const mapIds=STAGES.flatMap(stage=>stage.islands.map(map=>map.id));
+if(new Set(mapIds).size!==mapIds.length)throw new Error('Duplicate stage map identity');
+export const getStageDefinition=id=>BY_ID.get(id)||null;

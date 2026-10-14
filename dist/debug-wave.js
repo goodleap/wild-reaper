@@ -14,7 +14,7 @@ function segmentDistance(point,a,b) {
 // An explicit debug-only cohort, created once per run after structures and the
 // spawn angel exist. Reentering a world or rebuilding its sites never refills it.
 export function spawnDebugWave(game) {
-  if(game.debug!==true||game._debugWaveSpawned||game.regionIndex!==0||game.dungeon?.active)return [];
+  if(game.debug!==true||game._debugWaveSpawned||(game.regionIndex!==0&&!game.stage)||game.dungeon?.active)return [];
   game._debugWaveSpawned=true;
   const origin={x:game.player.x,y:game.player.y+groundOffset(game.player,true)};
   const castle=game.settlements?.sites.find(site=>site.type==='castle');

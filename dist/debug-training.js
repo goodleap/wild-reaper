@@ -59,7 +59,7 @@ function debugSpawnPoint(game,{radius:r,minDistance,maxDistance}) {
 }
 
 export function spawnDebugTrainingDummy(game) {
-  if(game.debug!==true||game._debugTrainingSpawned||game.regionIndex!==0||game.dungeon?.active)return null;
+  if(game.debug!==true||game._debugTrainingSpawned||(game.regionIndex!==0&&!game.stage)||game.dungeon?.active)return null;
   const {radius:r,foot,defense,health}=TRAINING_DUMMY_RULES;
   const point=debugSpawnPoint(game,TRAINING_DUMMY_RULES);
   if(!point)return null;
