@@ -4,7 +4,7 @@ import { Game } from './dist/engine.js';
 import { WORLD_IDS } from './dist/world-definitions.js';
 import { debugConfigFromSearch } from './dist/debug-mode.js';
 
-assert.deepEqual(debugConfigFromSearch('?world=volcano'),{enabled:false,full:false});
+assert.deepEqual(debugConfigFromSearch('?world=volcano'),{enabled:false});
 assert.equal(new Game({debugWorld:'volcano'}).region.id,'forest');
 assert.equal(new Game({debug:true,debugWorld:'unknown'}).region.id,'forest');
 const h=harness('?debug&world=beach');h.nodes['start-button'].onclick();h.nodes['prepare-start-button'].onclick();await h.flush();

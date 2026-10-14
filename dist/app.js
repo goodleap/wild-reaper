@@ -48,7 +48,7 @@ import { backingResolution, RenderSchedule, FrameMetrics } from './render-perfor
 import { FrameDiagnostics } from './frame-diagnostics.js';
 import { MapLightCache, MAP_SUN_ANGLE, MAP_SUN_DIRECTION } from './map-light-cache.js';
 import { ShadowRenderer, ShadowGeometryCache, shadowFrameBounds } from './shadow-renderer.js';
-import { debugConfigFromSearch } from './debug-mode.js';
+import { debugConfigFromSearch, DEBUG_OPTION_DEFS, normalizeDebugOptions } from './debug-mode.js';
 import { drawTrainingDummy } from './training-art.js';
 import { ACTOR_VISUALS, actorShape } from './actor-visuals.js';
 import { drawDamageOverlay } from './damage-numbers.js';
@@ -120,7 +120,7 @@ D${sample.renderMs.toFixed(1)}ms
 ${dpr.toFixed(2)}×${(canvas.width*canvas.height/1e6).toFixed(1)}M`;
   debugPerformanceNode.title=`RAF 回调间隔 ${sample.rafMs.toFixed(2)} ms；逻辑 CPU ${sample.updateMs.toFixed(2)} ms；绘制提交 CPU ${sample.renderMs.toFixed(2)} ms（不含 GPU）；画布 ${canvas.width} × ${canvas.height}`;
 }
-if(debugMode){$('game-version').textContent+=debugConfig.full?' · DEBUG FULL':' · DEBUG';$('game-version').setAttribute('aria-label','游戏版本，调试模式');}
+if(debugMode){$('game-version').textContent+=' · DEBUG';$('game-version').setAttribute('aria-label','游戏版本，调试模式');}
 let width=1100,height=700,dpr=1,scaleX=1,scaleY=1,nativeDpr=0,game=null,paused=false,helpOpen=false,mapOpen=false,characterOpen=false,archiveOpen=false,runEnded=false;
 let mapReturnFocus=null,characterReturnFocus=null,characterTab='attributes',characterPointer=null;
 const characterTabs=['attributes','weapons','skills','army','status'];
@@ -139,6 +139,9 @@ const sceneLoadingView=createLoadingView(document,{setTimer:setTimeout,clearTime
 const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer:setTimeout});
 let selectedDifficulty='normal',selectedMode='stage',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
 try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;selectedHeroId=getHero(saved?.heroId).id;if(initialWeaponIds.includes(saved?.weaponId))selectedWeaponId=saved.weaponId;}catch{}
+const debugOptionsStorageKey='wild-echoes-debug-options';
+let selectedDebugOptions=normalizeDebugOptions(null,debugMode);
+if(debugMode){try{selectedDebugOptions=normalizeDebugOptions(JSON.parse(localStorage.getItem(debugOptionsStorageKey)));}catch{}}
 if(debugConfig.world)selectedMode='free';
 let soundOn=false,audio=null;
 try{soundOn=localStorage.getItem('wild-echoes-sound')==='on';}catch{}
@@ -186,6 +189,20 @@ function refreshArchiveEntry(){
 }
 syncSound();refreshArchiveEntry();
 function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty,mode:selectedMode,stageId:selectedStageId,heroId:selectedHeroId,weaponId:selectedWeaponId}));}catch{}}
+if(debugMode){
+  show('debug-prepare-settings');
+  for(const option of DEBUG_OPTION_DEFS){
+    const row=document.createElement('label'),copy=document.createElement('span'),input=document.createElement('input'),track=document.createElement('span'),description=document.createElement('span');
+    row.className='debug-option-row';row.title=option.description;copy.className='debug-option-label';copy.textContent=option.label;
+    input.id=`debug-option-${option.id}`;input.type='checkbox';input.className='debug-option-control';input.checked=selectedDebugOptions[option.id];input.setAttribute('role','switch');input.setAttribute('aria-describedby',`${input.id}-description`);
+    track.className='debug-option-switch';track.setAttribute('aria-hidden','true');description.id=`${input.id}-description`;description.className='sr-only';description.textContent=option.description;
+    row.append(copy,input,track,description);$('debug-prepare-options').append(row);
+    input.addEventListener('change',()=>{
+      selectedDebugOptions=normalizeDebugOptions({...selectedDebugOptions,[option.id]:input.checked});
+      try{localStorage.setItem(debugOptionsStorageKey,JSON.stringify(selectedDebugOptions));}catch{}
+    });
+  }
+}
 const initialWeapons=initialWeaponIds.map(id=>ARCHIVE_ENTRIES.find(entry=>entry.id===`weapon:${id}`));
 const weaponRadios=new Map(),stageRadios=new Map(),heroRadios=new Map(),heroPortraits=new Map();
 function preparationChoice({id,name,group,color,art,role}){
@@ -293,7 +310,7 @@ function startGame(){
   sceneLoadingView.start('scene',{stage:'正在创建冒险'});$('scene-loading-label').focus({preventScroll:true});
   arena.setAttribute('aria-busy','true');
   selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();
-  const options={hero:selectedHeroId,difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugFull:debugConfig.full,debugWorld:debugConfig.world};
+  const options={hero:selectedHeroId,difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
   // Unlock audio in the originating click, before yielding to the loading view.
   initAudio();
   let committed=false;
@@ -330,7 +347,7 @@ function startGame(){
   })();
   return activeStartPromise;
 }
-function commitPreparedGame(preparedGame){prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=preparedGame;game.viewWidth=width;game.viewHeight=height;archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?(debugConfig.full?'完整调试 · 武器技能满级 · 3 倍移速':'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却'):game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');updateHUD();}
+function commitPreparedGame(preparedGame){prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=preparedGame;game.viewWidth=width;game.viewHeight=height;archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?'调试模式 · 准备页设置已生效':game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');updateHUD();}
 function restartGame(){
   if(startLoading)return activeStartPromise;
   if(game){

@@ -17,9 +17,8 @@
 .choice-card .select-arrow{font-size:11px;color:var(--quality);gap:8px;padding-top:14px;margin-top:auto;width:100%;line-height:16px;display:flex;justify-content:space-between}
 .choice-card .select-arrow>span:first-child{color:#aabda0}
 .choice-card .select-arrow>span:last-child{white-space:nowrap}
-#upgrade-overlay,#super-overlay{align-items:flex-start}.upgrade-panel{margin:auto 0;flex-shrink:0}
+.upgrade-panel{margin:auto 0;flex-shrink:0}
 @media(max-width:760px){
-  #upgrade-overlay,#super-overlay{padding:10px}
   #upgrade-overlay .eyebrow,#super-overlay .eyebrow{display:none}
   #upgrade-overlay h2,#super-overlay h2{font-size:21px;line-height:26px;margin:0 0 4px}
   #upgrade-overlay .upgrade-panel>p,#super-overlay .upgrade-panel>p{font-size:11px;line-height:16px;margin:0}
@@ -38,7 +37,7 @@
 /* Wide short viewports retain three columns; tiny portrait views scroll the panel,
    never the individual cards. Descriptions are not clamped or truncated. */
 @media(min-width:761px) and (max-height:500px){
-  #upgrade-overlay,#super-overlay{padding:10px}.upgrade-card.choice-card{padding:10px;min-height:185px}
+  .upgrade-card.choice-card{padding:10px;min-height:185px}
   .choice-top{margin-bottom:8px}.choice-heading{gap:5px;margin-bottom:6px}.choice-heading strong{font-size:15px}
   .choice-card .upgrade-icon{width:26px;height:26px;font-size:21px}.choice-summary{font-size:12px;line-height:18px}
   .choice-card .select-arrow{padding-top:8px}.choice-level{font-size:10px}

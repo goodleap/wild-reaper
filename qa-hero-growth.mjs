@@ -83,7 +83,7 @@ for(const hero of HEROES)for(const difficulty of ['normal','casual']) {
     near(g.player.hp,Math.min(g.player.maxHp,late.before.hp+24),'endless vitality heals only its stated 24');
   }
 
-  const debug=arena({hero:hero.id,difficulty,debug:true,debugFull:true});
+  const debug=arena({hero:hero.id,difficulty,debug:true,debugOptions:{fullLoadout:true}});
   assert.equal(debug.player.maxHp,Math.round(commonBase*multiplier),'full debug does not erase role health');
   assert.equal(debug.levels.vitality,0);assert.equal(debug.levels.endlessVitality,0);
   near(debug.player.speed,hero.baseSpeed*3,'debug movement composes with role speed');

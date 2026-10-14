@@ -92,7 +92,7 @@ for(const initialWeaponId of INITIAL_WEAPON_IDS) {
   assert.equal(game.initialWeaponId,initialWeaponId,'later acquisitions never rewrite restart equipment');
   const restart=arena({initialWeaponId:game.initialWeaponId});assert.deepEqual(restart.weapons.map(weapon=>weapon.id),[initialWeaponId]);
 
-  const full=arena({initialWeaponId,debug:true,debugFull:true});assert.equal(full.initialWeaponId,initialWeaponId);
+  const full=arena({initialWeaponId,debug:true,debugOptions:{fullLoadout:true}});assert.equal(full.initialWeaponId,initialWeaponId);
   assert.deepEqual(full.weapons.map(weapon=>weapon.id).sort(),[...INITIAL_WEAPON_IDS].sort());
   for(const id of INITIAL_WEAPON_IDS)assert.equal(full.build.getWeapon(id).baseRank,WEAPON_DEFS[id].maxBaseRank);
   assert.equal(full.build.getSkill('storm').baseRank,3);assert.equal(full.player.level,1);

@@ -1,5 +1,15 @@
+/* Center single-purpose dialogs; tabbed dialogs opt into a stable top edge. */
+#arena .modal-layer{
+  --modal-padding:25px;--modal-block-padding:var(--modal-padding);
+  align-items:center;overflow:hidden;
+  padding:calc(var(--modal-block-padding) + var(--safe-top)) calc(var(--modal-padding) + var(--safe-right)) calc(var(--modal-block-padding) + var(--safe-bottom)) calc(var(--modal-padding) + var(--safe-left));
+  overscroll-behavior:contain;touch-action:pan-y;
+}
+#arena .modal-layer--anchored{align-items:flex-start}
+@media(min-width:761px) and (pointer:fine){
+  #arena .modal-layer{--modal-block-padding:clamp(42px,7vh,76px)}
+}
 /* Shared dialog shell: fixed header/actions, one main content scroller. */
-#arena .modal-layer{overflow:hidden}
 #arena .panel-shell{
   --panel-gutter:24px;
   position:relative;display:flex;flex-direction:column;flex:0 1 auto;
@@ -66,6 +76,8 @@
 }
 
 @media(max-width:760px){
+  #arena .modal-layer{--modal-padding:15px}
+  #arena #upgrade-overlay,#arena #super-overlay{--modal-padding:10px}
   #arena .panel-shell{--panel-gutter:15px;border-radius:13px}
   .panel-header{padding-top:15px;padding-bottom:11px}
   #arena .panel-header>h2{font-size:21px;margin:5px 0}
@@ -85,7 +97,7 @@
   #arena>#game-version{right:calc(10px + var(--safe-right));font-size:9px}
 }
 @media(max-height:520px){
-  #arena .modal-layer{--modal-padding:10px}
+  #arena .modal-layer{--modal-padding:10px;--modal-block-padding:var(--modal-padding)}
   #arena .panel-shell{--panel-gutter:18px}
   .panel-header{padding-top:10px;padding-bottom:8px}
   #arena .panel-header>.eyebrow{display:none}

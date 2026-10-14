@@ -55,7 +55,10 @@ function attributes(game) {
     otherSources.push(`${def.name} ×${rank(def.id)}${effects.length?'：'+effects.join(' · '):''}`);
   }
   if(game.relics?.has?.('swiftFeather'))otherSources.push(`风羽：移速 ${bonus(RELIC_RULES.movement-1)}`);
-  if(game.debug)otherSources.push('调试模式：移动速度 ×3，天雷无冷却');
+  const debugEffects=[];
+  if(game.debug&&game.debugOptions?.fastMovement)debugEffects.push('移动速度 ×3');
+  if(game.debug&&game.debugOptions?.zeroStormCooldown)debugEffects.push('天雷无冷却');
+  if(debugEffects.length)otherSources.push(`调试模式：${debugEffects.join('，')}`);
   if(move.modifier!==1)otherSources.push(`当前位置地形：移动速度 ×${number(move.modifier)}`);
   if(game.adventure?.magnetTime>0)otherSources.push(`磁力涌动：当前拾取范围 ${number(magnet)}`);
   return summary('展示当前生效属性，已计入角色特性与成长。武器和技能页展示各自的攻击数值。')+

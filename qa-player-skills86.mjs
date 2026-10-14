@@ -53,7 +53,7 @@ for(const source of ['region','castle']) {
   game.status='super';assert.equal(game.superSkills.choose('domain:binding'),false);assert.equal(game.superSkills.choose('vortex'),false);
   assert(game.superSkills.choose('swords'));assert.equal(game.build.getSkill('swords').baseRank,1);
 }
-const full=arena();full.debug=true;full.debugFull=true;assert(applyFullDebugBuild(full));
+const full=arena();full.debug=true;full.debugOptions=Object.freeze({fullLoadout:true});full.debugFull=true;assert(applyFullDebugBuild(full));
 assert.equal(full.build.getRank('fireball'),5);assert.equal(full.build.getRank('frostbolt'),5);
 assert.equal(full.build.getSkill('domain'),null);assert.equal(full.build.getSkill('vortex'),null);
 assert.equal(full.build.awardDomain('binding'),false);

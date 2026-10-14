@@ -37,7 +37,7 @@ for(const hero of HEROES) {
   const grown=arena({hero:hero.id});grown.player.level=11;grown.levels.power=2;grown.levels.speed=2;grown.levels.magnet=1;grown.levels.toughness=2;grown.levels.vitality=1;grown._refreshStats();
   const s=resolveCharacterStats(grown);near(s.attack,32*baseline.damage*1.6,'hero factor remains after shared growth');near(s.moveSpeed,baseline.speed*1.16,'movement upgrades');near(s.magnet,baseline.magnet*1.35,'pickup upgrades');assert.equal(s.defense,baseline.defense+50);assert.equal(grown.player.maxHp,Math.round((100+20+25)*hero.hpMultiplier));
   const before=JSON.stringify(s);for(let i=0;i<8;i++)grown._refreshStats();assert.equal(JSON.stringify(resolveCharacterStats(grown)),before,'refresh never reapplies innate grants');
-  const debug=arena({hero:hero.id,debug:true,debugFull:true});near(debug.player.speed,debug.hero.baseSpeed*3,'debug speed preserves role; full mode grants no attributes');assert.equal(debug.player.skillCooldownMax,0);assert.equal(debug.hero.id,hero.id);
+  const debug=arena({hero:hero.id,debug:true,debugOptions:{fullLoadout:true}});near(debug.player.speed,debug.hero.baseSpeed*3,'debug speed preserves role; full mode grants no attributes');assert.equal(debug.player.skillCooldownMax,0);assert.equal(debug.hero.id,hero.id);
 }
 
 // Exercise real attack paths, including a delayed super snapshot. Character

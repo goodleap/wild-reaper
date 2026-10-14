@@ -42,7 +42,7 @@ export function resolveCharacterStats(game) {
   const attack=applyHeroStat(hero,'attack',COMBAT_REFERENCE_ATTACK*(1+effectTotal(game,'power','damageBonus')+effectTotal(game,'endlessPower','damageBonus')+(game.rescuePower||0)*CONFIG.rescueDamageBonus+(p.level-1)*CONFIG.attackPerLevel));
   const attackMultiplier=attack/COMBAT_REFERENCE_ATTACK;
   const externalDamageMultiplier=(game.adventure?.damageMultiplier()??1)*(game.relics?.damageMultiplier()??1);
-  const moveGrowth=1+effectTotal(game,'speed','moveSpeedBonus'),externalMoveMultiplier=(game.relics?.movementMultiplier()??1)*(game.debug?3:1);
+  const moveGrowth=1+effectTotal(game,'speed','moveSpeedBonus'),externalMoveMultiplier=(game.relics?.movementMultiplier()??1)*(game.debugOptions?.fastMovement?3:1);
   const moveMultiplier=moveGrowth*externalMoveMultiplier;
   return {
     attack,attackMultiplier,
@@ -55,7 +55,7 @@ export function resolveCharacterStats(game) {
     moveSpeed:applyHeroStat(hero,'moveSpeed',HERO_DEFAULTS.baseMoveSpeed*moveGrowth)*externalMoveMultiplier,moveMultiplier,
     magnet:applyHeroStat(hero,'pickupRange',ATTACK_DEFAULTS.magnet*(1+effectTotal(game,'magnet','pickupRangeBonus'))),
     fireRate:1+effectTotal(game,'rapid','attackRateBonus'),
-    stormCooldown:game.debug?0:hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction'))
+    stormCooldown:game.debugOptions?.zeroStormCooldown?0:hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction'))
   };
 }
 
@@ -136,7 +136,7 @@ export function skillStats(game,id) {
   if(id==='storm') {
     const rules=SKILL_RULES.storm;
     const upgrades=boundedRank(game,'storm',rules.maxUpgradeRank),baseDamage=rules.damage*(1+effectTotal(game,'storm','baseDamageBonus'));
-    return {id,level:1+upgrades,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),cooldown:game.debug?0:game.hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction')),manual:true,super:true};
+    return {id,level:1+upgrades,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),cooldown:game.debugOptions?.zeroStormCooldown?0:game.hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction')),manual:true,super:true};
   }
   if(id==='pulse') {
     const rules=SKILL_RULES.pulse;

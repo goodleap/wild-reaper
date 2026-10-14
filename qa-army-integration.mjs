@@ -44,8 +44,9 @@ const worlds=new Game();const travellers=army(worlds);worlds.enemies=worlds.enem
 const portal=worlds.regions.portals.find(p=>p.nextRegionIndex===1);assert(worlds._switchRegion(portal));checkArrival(worlds,travellers);
 const back=worlds.regions.portals.find(p=>p.nextRegionIndex===0);assert(worlds._switchRegion(back));checkArrival(worlds,travellers);
 
-const full=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,debug:true,debugFull:true});
-assert.equal(full.companions.members.length,5,'debug=full starts with the five unique companions');
+const full=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,debug:true,debugOptions:{fullLoadout:true}});
+assert.equal(full.companions.members.length,0,'full loadout does not automatically recruit companions');
+army(full);assert.equal(full.companions.members.length,5,'the roster fixture explicitly recruits its companions');
 assert.equal(full.rescuePower,0,'debug recruitment grants no repeatable rescue attack bonus');
 const previous=friendlyTargets(full),removed=full.companions.members.find(m=>m.kind==='dog');full.companions.dismiss(removed.id);const replacement=full.companions.recruit('dog');
 assert(friendlyTargets(full).includes(replacement)&&!friendlyTargets(full).includes(removed),'same-frame dismissal/recruitment refreshes shared target snapshot');

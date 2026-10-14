@@ -24,8 +24,15 @@ for(const options of [{},{debug:false},{debug:'true'},{debug:1},{debug:0},{debug
   assert(Math.hypot(castle(g).door.x,castle(g).door.y)>320,'ordinary castle retains exploration distance');
 }
 
+const defaultDebug=new Game({debug:true});
+assert.equal(defaultDebug.enemies.some(enemy=>enemy.debugWave),false,'the initial wave is opt-in');
+const regularFacilities=new Game({debug:true,debugOptions:{testFacilities:false}});
+assert.deepEqual(layout(regularFacilities),ordinaryLayout,'disabled facilities preserve ordinary generation order and locations');
+assert(!regularFacilities.enemies.some(enemy=>enemy.trainingDummy||enemy.debugBoss));
+assert.equal(regularFacilities.gold,500,'facilities do not control the gold option');
+
 for(let terrainSeed=0;terrainSeed<100;terrainSeed++) {
-  const g=new Game({debug:true,terrain:new Terrain({seed:terrainSeed})}),site=castle(g),from=feet(g);
+  const g=new Game({debug:true,debugOptions:{enemyWave:true},terrain:new Terrain({seed:terrainSeed})}),site=castle(g),from=feet(g);
   assert.equal(g.debug,true);assert.equal(g.settlements.sites.length,5);
   const ring=g.enemies.filter(enemy=>enemy.debugWave);
   assert(ring.length>=32&&ring.length<=DEBUG_WAVE_RULES.count,`seed ${terrainSeed}: the surrounding test cohort is substantial and bounded (${ring.length})`);
@@ -62,7 +69,7 @@ for(let terrainSeed=0;terrainSeed<100;terrainSeed++) {
   if(terrainSeed===0)assert.deepEqual(site.door,{x:0,y:-170},'default castle is visible directly above spawn');
 }
 
-const g=new Game({debug:true}),site=castle(g),initialLayout=layout(g),worldTerrain=g.terrain;
+const g=new Game({debug:true,debugOptions:{enemyWave:true}}),site=castle(g),initialLayout=layout(g),worldTerrain=g.terrain;
 g.enemies=[];g._spawn=Infinity;g._shot=Infinity;
 g.update(.016,{});assert.equal(g.status,'playing','the first real update has no opening skill choice');assert.equal(g.skillLevel,1);assert.equal(g.crystals,0);
 assert.equal(g.chooseUpgrade('not-a-choice'),false);assert.deepEqual(resources(g),{gold:500,crystals:0},'invalid choices never spend the debug budget');
@@ -115,7 +122,7 @@ assert.deepEqual(resources(g),spentResources,'castle entry, exit and reentry nev
 assert.equal(g.player.speed,upgradedSpeed,'castle exit and reentry preserve the speed multiplier');
 assert.equal(debugGrants(g).length,1);
 
-const restarted=new Game({debug:true});assert.deepEqual(layout(restarted),initialLayout);assert.equal(restarted.dungeon.states.size,0,'restart creates a fresh run at the same nearby entrance');
+const restarted=new Game({debug:true,debugOptions:{enemyWave:true}});assert.deepEqual(layout(restarted),initialLayout);assert.equal(restarted.dungeon.states.size,0,'restart creates a fresh run at the same nearby entrance');
 assert(restarted.enemies.filter(enemy=>enemy.debugWave).length>=32,'a fresh run gets a fresh testing cohort');
 assert.deepEqual(resources(restarted),{gold:500,crystals:0},'a new run receives gold without pre-earned crystals');
 assert.equal(restarted.player.speed,660,'a new run restores the initial debug speed');

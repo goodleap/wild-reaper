@@ -68,7 +68,7 @@ const unstarted=run({runTime:99,kills:999});const beforeUnstarted=JSON.stringify
 restored.observe(unstarted);restored.checkpoint(unstarted);restored.finish(unstarted);assert.equal(JSON.stringify(restored.data),beforeUnstarted,'observation must never start a run implicitly');
 
 const debugStorage=memory(),debugArchive=new AdventureArchive({storage:debugStorage});
-for(const extra of [{debug:true},{debug:true,debugFull:true},{debugFull:true}]){
+for(const extra of [{debug:true},{debug:true,debugOptions:{fullLoadout:true}},{debugFull:true}]){
   const debug=run(extra);assert(debugArchive.begin(debug));debug.runTime=500;debug.kills=900;debug.player.level=99;
   debug.build.skills.barrier.baseRank=2;
   debugArchive.observe(debug,{visibleEnemies:[{type:'boar',hp:99}]});debugArchive.recordDefeat(debug,{type:'boss',hp:0});debugArchive.checkpoint(debug,{force:true});
@@ -85,7 +85,7 @@ assert(debugStorage.writes>0,'debug progress uses the normal persistent archive'
 assert.deepEqual(new AdventureArchive({storage:debugStorage}).data,debugArchive.data,'debug observations, victories and builds survive reload');
 
 const fullStorage=memory(),fullArchive=new AdventureArchive({storage:fullStorage});
-const fullGame=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,debug:true,debugFull:true});
+const fullGame=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,debug:true,debugOptions:{fullLoadout:true}});
 assert(fullArchive.begin(fullGame));
 for(const entry of ARCHIVE_ENTRIES.filter(entry=>['weapons','skills','weaponSkills'].includes(entry.category))){
   assert(fullArchive.data.entries[entry.id]?.seen,`debug=full immediately records owned ${entry.id}`);

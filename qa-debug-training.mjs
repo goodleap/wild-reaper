@@ -3,7 +3,7 @@ import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { CombatBuild } from './dist/combat-build.js';
 import { UPGRADE_DEFS, WEAPON_DEFS, SKILL_DEFS } from './dist/combat-catalog.js';
-import { debugConfigFromSearch } from './dist/debug-mode.js';
+import { debugConfigFromSearch, DEBUG_OPTION_DEFS, normalizeDebugOptions } from './dist/debug-mode.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy, DEBUG_FULL_BRANCHES, TRAINING_DUMMY_RULES } from './dist/debug-training.js';
 import { WEAPON_KNOCKBACK } from './dist/weapon-knockback.js';
 
@@ -15,31 +15,62 @@ const isolate=g=>{
   for(const id of Object.keys(g.build.weapons))g.build.setEquipped(id,false);
   g._refreshWeapons();return g;
 };
-for(const search of ['', '?x=1', '?debug=false','?debug=0','?debug=enabled','?debug=fuller'])assert.deepEqual(debugConfigFromSearch(search),{enabled:false,full:false});
-for(const search of ['?debug','?debug=','?debug=1','?debug=true','?debug=TRUE','?x=1&debug=true'])assert.deepEqual(debugConfigFromSearch(search),{enabled:true,full:false});
-assert.deepEqual(debugConfigFromSearch('?debug=full'),{enabled:true,full:true});
-assert.deepEqual(debugConfigFromSearch('?debug=FULL'),{enabled:true,full:true});
-assert.deepEqual(debugConfigFromSearch(new URLSearchParams('debug=full')),{enabled:true,full:true});
+for(const search of ['', '?x=1', '?debug=false','?debug=0','?debug=enabled','?debug=fuller'])assert.deepEqual(debugConfigFromSearch(search),{enabled:false});
+for(const search of ['?debug','?debug=','?debug=1','?debug=true','?debug=TRUE','?x=1&debug=true'])assert.deepEqual(debugConfigFromSearch(search),{enabled:true});
+assert.deepEqual(debugConfigFromSearch('?debug=full'),{enabled:true});
+assert.deepEqual(debugConfigFromSearch('?debug=FULL'),{enabled:true});
+assert.deepEqual(debugConfigFromSearch(new URLSearchParams('debug=full')),{enabled:true});
 
-for(const options of [{},{debug:false,debugFull:true},{debug:true,debugFull:'true'}]) {
+for(const options of [{},{debug:false,debugOptions:{fullLoadout:true}},{debug:true,debugFull:true},{debug:true,debugOptions:{fullLoadout:'true'}}]) {
   const g=factory(options);
-  assert.equal(g.debugFull,false,'the full build requires both strict boolean flags');
+  assert.equal(g.debugFull,false,'full loadout requires an explicit boolean setting in a debug run');
   assert.equal(g.build.getWeapon('arrow').acquired,false);
   if(!g.debug){assert.equal(g.enemies.some(e=>e.trainingDummy),false);assert.equal(spawnDebugTrainingDummy(g),null);}
   assert.equal(applyFullDebugBuild(g),false);
 }
-const ordinary=factory({debug:true}),full=factory({debug:true,debugFull:true});
+const disabledOptions=Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,false]));
+const defaults=normalizeDebugOptions();assert(Object.isFrozen(defaults));
+assert.deepEqual(Object.keys(defaults),DEBUG_OPTION_DEFS.map(def=>def.id));
+assert.deepEqual(normalizeDebugOptions({unknown:true,fullLoadout:'true'}),defaults,'only known booleans are accepted');
+assert.deepEqual(normalizeDebugOptions(Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,true])),false),disabledOptions);
+const normalWithOptions=factory({debugOptions:Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,true]))});
+assert.deepEqual(normalWithOptions.debugOptions,disabledOptions);assert.equal(normalWithOptions.gold,0);assert.equal(normalWithOptions.player.speed,220);
+assert.equal(normalWithOptions.player.skillCooldownMax,normalWithOptions.hero.skillCooldown);
+assert(!normalWithOptions.enemies.some(enemy=>enemy.trainingDummy||enemy.debugBoss||enemy.debugWave));
+assert.equal(normalWithOptions.build.getWeapon('arrow').acquired,false);
+const inputOptions={...disabledOptions},plainDebug=factory({debug:true,debugOptions:inputOptions});
+inputOptions.fastMovement=true;
+assert.equal(plainDebug.debugOptions.fastMovement,false,'run settings are a snapshot of prepared preferences');
+assert(Object.isFrozen(plainDebug.debugOptions));
+assert.equal(plainDebug.player.speed,220);assert.equal(plainDebug.player.skillCooldownMax,plainDebug.hero.skillCooldown);assert.equal(plainDebug.gold,0);
+assert(!plainDebug.enemies.some(enemy=>enemy.trainingDummy||enemy.debugBoss||enemy.debugWave));
+for(const def of DEBUG_OPTION_DEFS) {
+  const g=factory({debug:true,debugOptions:{...disabledOptions,[def.id]:true}});
+  assert.equal(g.gold,def.id==='extraGold'?500:0,`${def.id}: gold is independent`);
+  assert.equal(g.player.speed,def.id==='fastMovement'?660:220,`${def.id}: movement is independent`);
+  assert.equal(g.player.skillCooldownMax===0,def.id==='zeroStormCooldown',`${def.id}: zero cooldown is independent`);
+  if(!['zeroStormCooldown','fullLoadout'].includes(def.id))assert.equal(g.player.skillCooldownMax,g.hero.skillCooldown);
+  assert.equal(g.enemies.some(enemy=>enemy.trainingDummy),def.id==='testFacilities',`${def.id}: dummy is independent`);
+  assert.equal(g.enemies.some(enemy=>enemy.debugBoss),def.id==='testFacilities',`${def.id}: boss is independent`);
+  assert.equal(g.enemies.some(enemy=>enemy.debugWave),def.id==='enemyWave',`${def.id}: wave is independent`);
+  assert.equal(g.build.getWeapon('arrow').acquired,def.id==='fullLoadout',`${def.id}: full loadout is independent`);
+  assert.equal(g.companions.members.length,0);
+  g.player.skillCooldown=5;g.update(.01,{});
+  assert.equal(g.player.skillCooldown,def.id==='zeroStormCooldown'?0:4.99,`${def.id}: cooldown update follows the run setting`);
+}
+const ordinary=factory({debug:true}),full=factory({debug:true,debugOptions:{fullLoadout:true}});
 full.enemies=full.enemies.filter(e=>e.trainingDummy);
 assert.equal(ordinary.build.getWeapon('sword').baseRank,1);assert.equal(ordinary.skills.length,1);
 assert.equal(ordinary.player.level,1);assert.equal(ordinary.progressionTier,1);assert.equal(ordinary.status,'playing');
 assert.deepEqual(full.build.attributes,ordinary.build.attributes,'full mode does not buy base-attribute upgrades');
 assert.equal(full.player.level,ordinary.player.level);assert.equal(full.player.hp,ordinary.player.hp);assert.equal(full.player.maxHp,ordinary.player.maxHp);
 assert.equal(full.player.speed,ordinary.player.speed);assert.equal(full.player.attack,ordinary.player.attack);assert.equal(full.player.defense,ordinary.player.defense);
+assert.equal(full.companions.members.length,0,'full loadout does not silently recruit companions');
 assert.equal(full.gold,ordinary.gold);assert.equal(full.crystals,ordinary.crystals);assert.equal(full.progressionTier,1);assert.equal(full.status,'playing');
 assert.equal(full.events.some(e=>['skillUpgrade','superChosen','evolution'].includes(e.type)),false,'full grants cause no purchase modals or reward queues');
-for(const def of UPGRADE_DEFS.filter(def=>def.category!=='attribute'))assert.equal(full.build.getRank(def.id),def.cap,`${def.id} reaches its real cap`);
+for(const def of UPGRADE_DEFS.filter(def=>def.category!=='attribute'&&(def.category==='weapon'||full.build.getSkill(def.ownerId))))assert.equal(full.build.getRank(def.id),def.cap,`${def.id} reaches its real cap`);
 for(const [id,def] of Object.entries(WEAPON_DEFS)){assert.equal(full.build.getWeapon(id).baseRank,def.maxBaseRank);assert(full.build.isEquipped(id));}
-for(const [id,def] of Object.entries(SKILL_DEFS))assert.equal(full.build.getSkill(id).baseRank,def.maxBaseRank,`${id} is fully learned`);
+for(const [id,def] of Object.entries(SKILL_DEFS).filter(([id])=>full.build.getSkill(id)))assert.equal(full.build.getSkill(id).baseRank,def.maxBaseRank,`${id} is fully learned`);
 for(const [id,branch] of Object.entries(DEBUG_FULL_BRANCHES))assert.equal(full.branches[id],branch);
 const snapshot=full.build.serialize();assert.deepEqual(CombatBuild.fromSnapshot(snapshot).serialize(),snapshot,'full debug is a valid serializable build with exclusive branches');
 assert.equal(full.superSkills.owned,full.build.superLevels,'granting a build preserves runtime state references');
@@ -86,4 +117,4 @@ const live=full.enemies.find(e=>e.trainingDummy);full.enemies=[live];full._spawn
 advance(full,10);assert(Number.isFinite(live.hp)&&live.hp>0&&live.hp<live.maxHp,'the full attack loadout runs against real defended HP');
 assert.equal(full.status,'playing');assert.equal(full.kills,0);assert.equal(full.gold,500);assert.equal(full.player.level,1);
 assert(Number.isFinite(live.x)&&Number.isFinite(live.y));
-console.log('Debug modes: strict query parsing, capped valid full build without attribute grants, safe nearby training placement, real defense/standard push, passive contact, ally exclusion, no rewards and ten-second live combat passed.');
+console.log('Debug settings: independent switches, strict query parsing, capped valid full build without attribute grants, safe nearby training placement, real defense/standard push, passive contact, ally exclusion, no rewards and ten-second live combat passed.');

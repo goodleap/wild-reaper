@@ -10,7 +10,7 @@ export const DEBUG_BOSS_RULES=Object.freeze({health:1e9,minDistance:180,maxDista
 // Grant the same capped records ordinary rewards build. Attribute purchases,
 // character XP and crystal progression are deliberately left untouched.
 export function applyFullDebugBuild(game) {
-  if(game.debug!==true||game.debugFull!==true||game._debugFullApplied)return false;
+  if(game.debug!==true||game.debugOptions?.fullLoadout!==true||game._debugFullApplied)return false;
   const build=game.build;
   const upgrades=UPGRADE_DEFS.filter(def=>def.category!=='attribute');
   // Normal acquisition/rank APIs enforce prerequisites and branch thresholds.
@@ -58,7 +58,7 @@ function debugSpawnPoint(game,{radius:r,minDistance,maxDistance}) {
 }
 
 export function spawnDebugTrainingDummy(game) {
-  if(game.debug!==true||game._debugTrainingSpawned||(game.regionIndex!==0&&!game.stage)||game.dungeon?.active)return null;
+  if(game.debug!==true||game.debugOptions?.testFacilities!==true||game._debugTrainingSpawned||(game.regionIndex!==0&&!game.stage)||game.dungeon?.active)return null;
   const {radius:r,foot,defense,health}=TRAINING_DUMMY_RULES;
   const point=debugSpawnPoint(game,TRAINING_DUMMY_RULES);
   if(!point)return null;
@@ -69,7 +69,7 @@ export function spawnDebugTrainingDummy(game) {
 }
 
 export function spawnDebugBoss(game) {
-  if(game.debug!==true||game._debugBossSpawned||game.dungeon?.active)return null;
+  if(game.debug!==true||game.debugOptions?.testFacilities!==true||game._debugBossSpawned||game.dungeon?.active)return null;
   const point=debugSpawnPoint(game,{...DEBUG_BOSS_RULES,radius:enemyDefinition('boss').r});
   // Sealed custom maps may have no safe nearby footing. Keep their terrain intact.
   if(!point)return null;

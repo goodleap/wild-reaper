@@ -70,7 +70,7 @@ for(const stage of STAGES)for(const difficulty of ['normal','casual']){
 }
 assert.equal(Object.keys(archive.data.stages).length,WORLD_IDS.length);
 for(const stage of STAGES){
-  const debug=new Game({stageId:stage.id,debug:true,debugFull:true});
+  const debug=new Game({stageId:stage.id,debug:true,debugOptions:{fullLoadout:true}});
   assert(debug.enemies.some(e=>e.trainingDummy),`${stage.id}: debug training dummy`);
   assert(debug.enemies.some(e=>e.debugWave),`${stage.id}: debug starting cohort`);
   assert(debug.settlements.sites.some(s=>s.type==='castle'&&Math.hypot(s.x,s.y)<500),`${stage.id}: nearby debug castle`);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { harness } from './qa-app-harness.mjs';
 
-for(const search of ['', '?debug']){
+for(const search of ['', '?debug', '?debug=full']){
   const h=harness(search);
   h.run('startGame();');await h.flush();h.run('game.crystals=game.crystalsNext;game._trySkillUpgrade();');
   h.tick();
@@ -9,8 +9,10 @@ for(const search of ['', '?debug']){
   assert.equal(h.nodes['upgrade-overlay'].classList.contains('hidden'),false,'ordinary runs keep manual choices');
 }
 
-const h=harness('?debug=full');
-h.run('startGame();');await h.flush();h.run(`game.crystals=game.crystalsNext;game._trySkillUpgrade();
+const h=harness('?debug');
+h.nodes['start-button'].onclick();
+const toggle=h.document.getElementById('debug-option-fullLoadout');toggle.checked=true;h.fire(toggle,'change');
+h.nodes['prepare-start-button'].onclick();await h.flush();h.run(`game.crystals=game.crystalsNext;game._trySkillUpgrade();
   let selected=[];const chooseUpgrade=game.chooseUpgrade.bind(game);
   game.chooseUpgrade=id=>{const ok=chooseUpgrade(id);if(ok)selected.push(id);return ok;};
   const firstUpgrade=game.getUpgradeChoices()[0].id;keys.add('KeyD');`);

@@ -36,6 +36,7 @@ import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
 import { SceneTransition } from './scene-transition.js';
 import { spawnDebugWave } from './debug-wave.js';
+import { normalizeDebugOptions } from './debug-mode.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBoss } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, selectFriendlyTarget, damageFriendly, clearFriendlyPath } from './friendly-combat.js';
@@ -61,10 +62,11 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false,debugWorld=null,stageId=null}={}) {
+  constructor({difficulty='normal',hero='traveler',initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,stageId=null}={}) {
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
-    this.debugFull=this.debug&&debugFull===true;
+    this.debugOptions=normalizeDebugOptions(debugOptions,this.debug);
+    this.debugFull=this.debugOptions.fullLoadout;
     this.stage=stageId?new StageRun(this,stageId):null;
     this.regionIndex=this.stage?.currentIsland.themeIndex??(this.debug?Math.max(0,REGIONS.findIndex(region=>region.id===debugWorld)):0);
     this.mapId=this.stage?.currentMapId??this.regionIndex;
@@ -81,7 +83,7 @@ export class Game {
     this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
     const baseMaxHp=this.easy?HERO_DEFAULTS.easyBaseHealth:HERO_DEFAULTS.baseHealth,maxHp=Math.max(1,Math.round(applyHeroStat(this.hero,'maxHealth',baseMaxHp)));
-    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
+    this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debugOptions.zeroStormCooldown?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
     this.initialWeaponId=normalizeInitialWeaponId(initialWeaponId);
     this.build=new CombatBuild({initialWeaponId:this.initialWeaponId,heroId:this.hero.id});
@@ -115,7 +117,7 @@ export class Game {
     this.combatStatus=new CombatStatus(this);
     // Reserve the nearby debug entrance before environmental hazards choose
     // their positions. The ordinary world keeps its original generation order.
-    if(this.debug&&settlements)this.settlements=new Settlements(this);
+    if(this.debugOptions.testFacilities&&settlements)this.settlements=new Settlements(this);
     this.environment=environment?new Environment(this):null;
     // Natural water is fixed before smaller supplies choose their habitat.
     this.adventure=adventure?new Adventure(this):null;
@@ -131,9 +133,8 @@ export class Game {
     spawnDebugWave(this);
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
-    if(this.debug)this.grantResources({gold:500},'debugStart');
+    if(this.debugOptions.extraGold)this.grantResources({gold:500},'debugStart');
     applyFullDebugBuild(this);spawnDebugTrainingDummy(this);spawnDebugBoss(this);
-    if(this.debugFull)for(const definition of COMPANIONS)this.companions.recruit?.(definition.id,{sourceId:'debugFull'});
   }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
@@ -469,7 +470,7 @@ export class Game {
     this.relics.update(dt);
     this.barrier.update(dt);
     if(!inDungeon){this.regions.update(dt);this._updatePressure(dt);}
-    p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debug?0:Math.max(0,p.skillCooldown-dt);
+    p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debugOptions.zeroStormCooldown?0:Math.max(0,p.skillCooldown-dt);
     p.hurtFlash=Math.max(0,(p.hurtFlash||0)-dt);
     p.hurtFace=Math.max(0,(p.hurtFace||0)-dt);p.castFace=Math.max(0,(p.castFace||0)-dt);
     this.environment?.update(dt);
