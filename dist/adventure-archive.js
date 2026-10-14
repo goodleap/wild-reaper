@@ -1,7 +1,8 @@
 import { ARCHIVE_ENTRIES, enemyArchiveId, companionArchiveId, ownedArchiveEntries } from './archive-catalog.js';
 import { UPGRADE_DEFS } from './combat-catalog.js';
 
-export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive';
+export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive-v2';
+const PREVIOUS_ARCHIVE_KEY='wild-echoes-adventure-archive';
 const LEGACY_KEY='wild-echoes-endless-record';
 const ENTRY_IDS=new Set(ARCHIVE_ENTRIES.map(entry=>entry.id));
 const MODIFIER_CAPS=new Map(UPGRADE_DEFS.filter(def=>def.upgradeKind==='modifier').map(def=>[def.id,def.cap]));
@@ -12,7 +13,8 @@ const plain=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const safeId=value=>typeof value==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(value);
 const emptyBest=()=>({time:0,kills:0,bossKills:0,level:0,wave:0});
 const emptyEntry=()=>({seen:true,defeats:0,acquisitions:0,maxLevel:0,branches:[],evolved:false,modifiers:{}});
-const emptyData=()=>({version:1,totals:{runs:0,time:0,kills:0,bossKills:0,maxLevel:0,maxWave:0},best:{normal:emptyBest(),casual:emptyBest()},entries:{},legacy:null});
+const emptyStageRecord=()=>({clears:0,bestTime:0});
+const emptyData=()=>({version:2,totals:{runs:0,time:0,kills:0,bossKills:0,maxLevel:0,maxWave:0},best:{normal:emptyBest(),casual:emptyBest()},entries:{},stages:{},legacy:null});
 const sanitizeBest=value=>({time:finite(value?.time),kills:integer(value?.kills),bossKills:integer(value?.bossKills),level:integer(value?.level,1e6),wave:integer(value?.wave,1e6)});
 function branchesOf(value){return [...new Set((Array.isArray(value)?value:[]).filter(safeId))].slice(0,12);}
 function modifiersOf(value){const result={};if(plain(value))for(const [id,cap] of MODIFIER_CAPS){const rank=integer(value[id],cap);if(rank)result[id]=rank;}return result;}
@@ -26,6 +28,14 @@ function sanitize(value){
     const entry={...emptyEntry(),defeats:integer(source.defeats),acquisitions:integer(source.acquisitions),maxLevel:integer(source.maxLevel,1e6),branches:branchesOf(source.branches),evolved:source.evolved===true,modifiers:modifiersOf(source.modifiers)};
     if(source.seen===true||entry.defeats||entry.acquisitions)data.entries[id]=entry;
   }
+  if(plain(value.stages))for(const [id,record] of Object.entries(value.stages).slice(0,128)){
+    if(!safeId(id)||!plain(record))continue;
+    data.stages[id]={};
+    for(const difficulty of ['normal','casual']){
+      const source=record[difficulty],clears=integer(source?.clears);
+      data.stages[id][difficulty]={clears,bestTime:clears?finite(source?.bestTime):0};
+    }
+  }
   data.legacy=legacyOf(value.legacy);return data;
 }
 function defaultStorage(){try{return globalThis.localStorage??null;}catch{return null;}}
@@ -38,11 +48,14 @@ export class AdventureArchive {
     this.data=emptyData();this._runs=new WeakMap();this._active=null;this._dirty=false;this._readOnly=false;
     if(!this.storageOk)return;
     try{
-      const raw=storage.getItem(ARCHIVE_STORAGE_KEY);
+      // A separate generation prevents an already-open v1 tab from erasing
+      // stage records when its older checkpoint code writes the previous key.
+      const current=storage.getItem(ARCHIVE_STORAGE_KEY);
+      const raw=current??storage.getItem(PREVIOUS_ARCHIVE_KEY);
       let saved=null;try{saved=raw?JSON.parse(raw):null;}catch{}
-      if(saved?.version===1){this.data=sanitize(saved);return;}
+      if(saved?.version===1||saved?.version===2){this.data=sanitize(saved);this._dirty=current===null||saved.version===1;if(this._dirty)this.flush();return;}
       // A newer release owns its save; an older tab must not overwrite it.
-      if(Number.isFinite(saved?.version)&&saved.version>1){this._readOnly=true;this.storageOk=false;return;}
+      if(Number.isFinite(saved?.version)&&saved.version>2){this._readOnly=true;this.storageOk=false;return;}
       let legacy=null;try{legacy=JSON.parse(storage.getItem(LEGACY_KEY));}catch{}
       this.data.legacy=legacyOf(legacy);this._dirty=!!this.data.legacy;
     }catch{this.storageOk=false;}
@@ -52,7 +65,8 @@ export class AdventureArchive {
     if(this._runs.has(game))return true;
     if(this._active)this.finish(this._active,'exit');
     const difficulty=game.difficulty==='casual'||game.difficulty==='easy'?'casual':'normal';
-    const run={difficulty,ended:false,reason:null,baseline:{...this.data.best[difficulty]},counted:emptyBest(),lastSavedTime:0,defeated:new WeakSet(),defeatedBosses:0,acquired:new Set(),discoveries:[],final:null};
+    const stageId=safeId(game.stage?.id)?game.stage.id:null;
+    const run={difficulty,stageId,stageCompletion:null,ended:false,reason:null,baseline:{...this.data.best[difficulty]},counted:emptyBest(),lastSavedTime:0,defeated:new WeakSet(),defeatedBosses:0,acquired:new Set(),discoveries:[],final:null};
     this._runs.set(game,run);this._active=game;
     this.data.totals.runs=integer(this.data.totals.runs+1);this._dirty=true;
     this.checkpoint(game,{force:true});return true;
@@ -129,6 +143,13 @@ export class AdventureArchive {
     if(!run.ended){
       this.checkpoint(game,{force:true});
       run.final={...run.counted};run.ended=true;run.reason=typeof reason==='string'?reason.slice(0,32):'death';
+      if(reason==='victory'&&game.status==='victory'&&run.stageId&&game.stage?.id===run.stageId&&game.stage.completed===true&&game.stage.coreDefeated===true){
+        const records=this.data.stages[run.stageId]??={normal:emptyStageRecord(),casual:emptyStageRecord()};
+        const record=records[run.difficulty],time=run.final.time,isBest=record.clears===0||time<record.bestTime;
+        record.clears=integer(record.clears+1);if(isBest)record.bestTime=time;
+        run.stageCompletion={id:run.stageId,time,clears:record.clears,bestTime:record.bestTime,isBest};
+        this._dirty=true;this.flush();
+      }
       if(this._active===game)this._active=null;
     }
     return this.summary(game);
@@ -137,7 +158,7 @@ export class AdventureArchive {
     const run=this._runs.get(game);
     if(!run)return {excluded:true,reason:null,discoveries:[],records:[],run:emptyBest()};
     const snapshot=run.final||run.counted;
-    return {excluded:false,reason:run.reason,discoveries:[...run.discoveries],records:Object.keys(snapshot).filter(key=>snapshot[key]>run.baseline[key]).map(key=>({key,previous:run.baseline[key],value:snapshot[key]})),run:{...snapshot}};
+    return {excluded:false,reason:run.reason,discoveries:[...run.discoveries],records:Object.keys(snapshot).filter(key=>snapshot[key]>run.baseline[key]).map(key=>({key,previous:run.baseline[key],value:snapshot[key]})),run:{...snapshot},stageCompletion:run.stageCompletion?{...run.stageCompletion}:null};
   }
   flush(){
     if(!this._dirty)return this.storageOk;

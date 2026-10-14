@@ -241,7 +241,7 @@ export class PropArt {
   }
   drawProp(c,prop,options=OPTIONS){
     let key,scale=1;
-    if(prop.type==='portal')key=prop.state==='locked'?'portal:locked':prop.nextRegion?.id==='marsh'?'portal:marsh':prop.nextRegion?.id==='ruins'?'portal:ruins':'portal:forest';
+    if(prop.type==='portal')key=prop.state==='locked'?'portal:locked':prop.kind==='victory'?'portal:ruins':prop.nextRegion?.id==='marsh'?'portal:marsh':prop.nextRegion?.id==='ruins'?'portal:ruins':'portal:forest';
     else if(prop.type==='mushroom')key=prop.state==='armed'?'mushroom:armed':'mushroom:idle';
     else if(prop.type==='supply')key=prop.hit>0?'crate:hit':'crate:idle';
     else if(prop.type==='treasure'){

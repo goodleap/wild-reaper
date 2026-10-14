@@ -4,7 +4,7 @@ import { groundOffset } from './terrain.js';
 // A latch belongs to a physical doorway, not a changing reward/exit label.
 export class TouchInteractions {
   constructor(game){this.game=game;this.scene=this._scene();this.latched=null;}
-  _scene(){const g=this.game;return g.dungeon?.active?`inside:${g.dungeon.active.id}`:`world:${g.regionIndex}`;}
+  _scene(){const g=this.game,map=g.mapId??g.regionIndex;return g.dungeon?.active?`world:${map}:inside:${g.dungeon.active.id}`:`world:${map}`;}
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _distance(point){const p=this._foot();return Math.hypot(p.x-point.x,p.y-point.y);}
   _radius(choice){return choice.touchRadius??(['dungeonChest','castleTreasure','hutChest'].includes(choice.type)?38:choice.type==='merchant'?32:26);}

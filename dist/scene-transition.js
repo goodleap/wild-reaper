@@ -36,7 +36,7 @@ export class SceneTransition {
       this.opacity=1;this.committing=true;
       try{this.commitSucceeded=!!this.game.interact(this._id);}
       finally{this.committing=false;}
-      this.name=this.game.dungeon.active?.name||this.game.region.name;
+      this.name=this.game.dungeon.active?.name||this.game.stage?.currentIsland?.name||this.game.region.name;
       this.game.regionTransition=null;this.phase='in';this.elapsed=0;return;
     }
     this.opacity=1-smooth(this.elapsed/SCENE_TRANSITION_RULES.inDuration);

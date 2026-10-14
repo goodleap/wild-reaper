@@ -1,3 +1,4 @@
+import { mapSeed } from './map-context.js';
 import { treasureGuardianType } from './encounter-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
@@ -21,7 +22,7 @@ export class Adventure {
   constructor(game,{generation=true}={}) {
     this.game=game;this.generation=generation;
     this.region=WORLD_IDS.includes(game.region?.id)?game.region.id:'forest';
-    this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
+    this.seed=mapSeed(game);
     this.props=[];this.pickups=[];this.treasure=null;
     this.furyTime=0;this.magnetTime=0;this.buffDuration=8;
     this._id=0;this._treasureCount=0;this._nextTreasureAt=(game.time||0)+50;

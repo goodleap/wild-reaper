@@ -113,7 +113,7 @@ const cleaned=new AdventureArchive({storage:dirty});
 assert.equal(cleaned.data.totals.runs,0);assert.equal(cleaned.data.totals.time,0);assert.equal(cleaned.data.totals.kills,4);
 assert.equal(cleaned.data.entries['enemy:slime'].defeats,0);assert.equal(cleaned.data.entries['enemy:slime'].maxLevel,1e6);assert.deepEqual(cleaned.data.entries['enemy:slime'].branches,['safe']);
 assert.deepEqual(cleaned.data.entries['enemy:slime'].modifiers,{swordEnergy:3});assert(!cleaned.data.entries.unknown);assert.equal(cleaned.data.legacy,null);
-const futureStorage=memory({[ARCHIVE_STORAGE_KEY]:JSON.stringify({version:2,important:'keep'})}),future=new AdventureArchive({storage:futureStorage});future.begin(run());future.flush();assert.equal(futureStorage.writes,0,'unknown future format is never overwritten');
+const futureStorage=memory({[ARCHIVE_STORAGE_KEY]:JSON.stringify({version:3,important:'keep'})}),future=new AdventureArchive({storage:futureStorage});future.begin(run());future.flush();assert.equal(futureStorage.writes,0,'unknown future format is never overwritten');
 const blocked=new AdventureArchive({storage:{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}}}),offline=run();blocked.begin(offline);offline.runTime=2;blocked.finish(offline);assert(!blocked.storageOk);assert.equal(blocked.data.totals.time,2,'unavailable storage still permits session play and stats');
 const absent=new AdventureArchive({storage:null});assert.doesNotThrow(()=>absent.begin(run()));assert(!absent.storageOk);
 

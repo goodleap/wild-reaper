@@ -29,6 +29,7 @@ import { SuperSkills, SUPER_SKILLS } from './super-skills.js';
 import { Dungeon } from './dungeon.js';
 import { Settlements } from './settlements.js';
 import { WaveDirector } from './wave-director.js';
+import { StageRun } from './stage-run.js';
 import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
@@ -56,12 +57,15 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false,debugWorld=null}={}) {
+  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false,debugWorld=null,stageId=null}={}) {
     this.debug=debug===true;
     this.debugFull=this.debug&&debugFull===true;
-    this.regionIndex=this.debug?Math.max(0,REGIONS.findIndex(region=>region.id===debugWorld)):0;
+    this.stage=stageId?new StageRun(this,stageId):null;
+    this.regionIndex=this.stage?.currentIsland.themeIndex??(this.debug?Math.max(0,REGIONS.findIndex(region=>region.id===debugWorld)):0);
+    this.mapId=this.stage?.currentMapId??this.regionIndex;
     this.region=regionFor(this.regionIndex);
-    this.terrain=terrain??new Terrain({region:this.region.id,seed:this.regionIndex,island:new Island({region:this.region.id,seed:this.regionIndex})});
+    const seed=this.stage?.currentIsland.seed??this.regionIndex;
+    this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:this.stage?.currentIsland})});
     this._islandWorlds=!!this.terrain.island;
     this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
@@ -159,6 +163,7 @@ export class Game {
     return best;
   }
   _difficultyTime() {
+    if(this.stage)return Math.min(this.time,600)*.18;
     // Pressure follows cleared connections and elapsed time, not the world
     // array index. The first three cleared routes start the endless clock.
     if(!this._features.adventure||!this._islandWorlds)return this.time;
@@ -166,6 +171,7 @@ export class Game {
     return base+(this.regions?.endlessUnlocked?Math.max(0,this.time-this.regions.endlessStartedAt):0);
   }
   _waveTier() {
+    if(this.stage)return Math.min(3,Math.floor(this.time/180));
     if(!this._features.adventure||!this._islandWorlds)return null;
     const exploration=Math.round(Math.max(0,(this.region.danger||1)-1)*20)+Math.min(3,this.regions?.defeatedConnectionsCount||0)*2+Math.min(3,Math.floor(this.time/180));
     return exploration+(this.regions?.endlessUnlocked?Math.floor(Math.max(0,this.time-this.regions.endlessStartedAt)/50):0);
@@ -340,7 +346,7 @@ export class Game {
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
     if(interaction.category==='relic'||interaction.type==='relic')return !!this.relicSites?.interact(interaction.id);
-    return interaction.type==='portal'?this.enterPortal(interaction.id):this.settlements.interact(interaction.id);
+    return interaction.type==='portal'||interaction.type==='stageExit'?this.enterPortal(interaction.id):this.settlements.interact(interaction.id);
   }
   requestInteraction(id) {
     const interaction=this.getInteraction();
@@ -350,7 +356,9 @@ export class Game {
   enterPortal(id) {
     if(this.sceneTransition.active&&!this.sceneTransition.committing)return false;
     if(!this.canEnterPortal(id))return false;
-    return this._switchRegion(this.regions._portal(id));
+    const portal=this.regions._portal(id);
+    if(portal.kind==='victory')return this.stage?.complete()??false;
+    return this._switchRegion(portal);
   }
   getSuperChoices() {return this.superSkills.getChoices();}
   chooseSuper(id) {
@@ -382,35 +390,40 @@ export class Game {
   }
   _switchRegion(portal=this.portal) {
     if(!portal||!Number.isInteger(portal.nextRegionIndex)||this.dungeon.active)return false;
-    const from=this.region.id,fromIndex=this.regionIndex,p=this.player;
+    const nextIsland=this.stage?this.stage.island(portal.nextMapId):null;
+    if(this.stage&&!nextIsland)return false;
+    const from=this.region.id,fromIndex=this.regionIndex,fromMapId=this.mapId,p=this.player;
     const furyTime=this.adventure?.furyTime||0,magnetTime=this.adventure?.magnetTime||0;
     // Clear only transient attacks. Persistent sites and surviving objective
     // guards remain in a suspended per-region snapshot for return journeys.
     for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
     this.superSkills.clearScene();this.barrier.clearScene();this.regions.saveWorld();
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];
+    if(this.stage)this.stage.currentMapId=nextIsland.id;
+    this.mapId=nextIsland?.id??this.regionIndex;
     this.status='playing';this.regionGrace=2;this.sceneKind='world';
-    this.regionTransition={life:.7,maxLife:.7,name:this.region.name,from,to:this.region.id};
+    this.regionTransition={life:.7,maxLife:.7,name:nextIsland?.name??this.region.name,from,to:this.region.id};
     this.attacks.clearTrails();
     this.bullets=[];this.enemyBullets=[];this.effects=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];this._grid.clear();this._choices=null;
     this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply'||e.type==='superChosen');
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;
-    if(!this.regions.restoreWorld(this.regionIndex)) {
-      this.terrain=new Terrain({region:this.region.id,seed:this.regionIndex,island:new Island({region:this.region.id,seed:this.regionIndex})});this.enemies=[];this.gems=[];this.coins=[];
+    if(!this.regions.restoreWorld(this.mapId)) {
+      const seed=nextIsland?.seed??this.regionIndex,generate=!this.stage?.isBossIsland;
+      this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:nextIsland})});this.enemies=[];this.gems=[];this.coins=[];
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.discoveredMap=new Set();
-      this.companions.camps=[];this.companions.generation=this._features.companions;this.companions.nextAt=this.time+35;
+      this.companions.camps=[];this.companions.generation=generate&&this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();
       this._moveEntity(p,0,0,true);
-      if(this._features.environment)this.environment=new Environment(this);
-      if(this._features.adventure)this.adventure=new Adventure(this);
-      if(this._features.encounters)this.encounters=new Encounters(this);
-      this.settlements=new Settlements(this,{generation:this._features.settlements});
+      if(this._features.environment)this.environment=new Environment(this,{generation:generate});
+      if(this._features.adventure)this.adventure=new Adventure(this,{generation:generate});
+      if(generate&&this._features.encounters)this.encounters=new Encounters(this);
+      this.settlements=new Settlements(this,{generation:generate&&this._features.settlements});
       this.regions.initialize(portal,fromIndex);
-      this.relicSites=new RelicSites(this,{generation:!!(this._features.adventure&&(this._features.encounters||this._features.companions))});
+      this.relicSites=new RelicSites(this,{generation:!!(generate&&this._features.adventure&&(this._features.encounters||this._features.companions))});
     }
     if(this.adventure){this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;}
-    const arrival=this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>candidate.nextRegionIndex===fromIndex);
+    const arrival=this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>this.stage?candidate.nextMapId===fromMapId:candidate.nextRegionIndex===fromIndex);
     if(arrival) {
       // Land just in front of the paired gate, never at a different region's
       // coordinates. The interaction latch prevents an immediate bounce back.
@@ -427,7 +440,7 @@ export class Game {
     if(this.adventure?.generation)this.adventure._refreshSupplies(true);
     this.companions.onSceneChange?.(arrival?{doorway:portalDoor(arrival),direction:{x:0,y:1}}:null);
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
-    this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex});return true;
+    this._emit('regionEnter',{regionId:this.region.id,name:nextIsland?.name??this.region.name,regionIndex:this.regionIndex,mapId:this.mapId});return true;
   }
 
   update(dt,input={}) {
@@ -465,7 +478,7 @@ export class Game {
     else this.dungeon.update(dt);
     const regen=resolveCharacterStats(this).regen;if(regen)p.hp=Math.min(p.maxHp,p.hp+regen*dt);
     if(!inDungeon)this._spawn-=dt;
-    if(!inDungeon&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
+    if(!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
       const bossActive=this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false);
@@ -476,7 +489,7 @@ export class Game {
         if(enemy)this.elites.maybePromote(enemy);
       }
     }
-    if(!inDungeon&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0)) {
+    if(!inDungeon&&!this.stage&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');

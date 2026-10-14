@@ -14,10 +14,10 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 // Only the current region is simulated. Inactive worlds retain their finite
 // authored objectives; disposable chase mobs and terrain caches are released.
 export class Regions {
-  constructor(game){this.game=game;this._lastBossId=null;this.portals=[];this.states=new Map();this.guarded=!!game._features.adventure;this.rewardPortal=null;this.unlockedConnections=new Set();this.claimedConnections=new Set();this.endlessStartedAt=null;this._rewardQueue=[];}
+  constructor(game){this.game=game;this._lastBossId=null;this.portals=[];this.states=new Map();this.guarded=!!(game.stage||game._features.adventure);this.rewardPortal=null;this.unlockedConnections=new Set();this.claimedConnections=new Set();this.endlessStartedAt=null;this._rewardQueue=[];}
   _setStructures(){this.game.terrain.setStructures?.(this.portals.flatMap(portalObstacles),'portals');}
   get defeatedConnectionsCount(){return this.unlockedConnections.size;}
-  get endlessUnlocked(){return this.unlockedConnections.size>=3;}
+  get endlessUnlocked(){return !this.game.stage&&this.unlockedConnections.size>=3;}
   _endpoint(target,{origin=null,back=false}={}) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
     const point=plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
@@ -26,6 +26,7 @@ export class Regions {
     return {id:`portal:${index}:${target}`,...point,r:32,interactRadius:PORTAL_RULES.interactRadius,state:active?'active':'locked',direction:back?'back':'forward',connectionId,nextRegionIndex:target,nextRegion:regionFor(target),targetPortalId:`portal:${target}:${index}`,discovered:back&&active,rewardClaimed:this.claimedConnections.has(connectionId)};
   }
   _syncConnections() {
+    if(this.game.stage)return;
     const g=this.game,sync=(portals,enemies)=>{
       const removed=new Set();
       for(const portal of portals)if(this.unlockedConnections.has(portal.connectionId)) {
@@ -70,6 +71,7 @@ export class Regions {
   }
   initialize(fromPortal=null,fromRegionIndex=null) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex);this.portals=[];g.portal=null;this._setStructures();
+    if(g.stage){g.stage.initialize();g.settlements?.ensureAngels?.();return;}
     // Small isolated mechanics fixtures keep the legacy timed-boss trigger.
     // Once entered they still use the same finite world graph.
     if(!this.guarded&&!fromPortal)return;
@@ -84,6 +86,7 @@ export class Regions {
   }
   update() {
     const g=this.game;if(g.dungeon?.active)return;
+    if(g.stage){g.stage.update();return;}
     const p=feet(g);
     for(const portal of this.portals) {
       if(portal.state!=='locked')continue;
@@ -99,6 +102,7 @@ export class Regions {
     }
   }
   updateEnemy(enemy,dt) {
+    if(enemy.stageBoss)return this.game.stage?.updateEnemy(enemy,dt)??false;
     if(!enemy.portalId)return false;
     const g=this.game,portal=this.portals.find(p=>p.id===enemy.portalId);if(!portal)return true;
     if(!enemy.guardActive) {
@@ -112,12 +116,14 @@ export class Regions {
     return false;
   }
   canTarget(enemy) {
+    if(enemy.stageBoss)return this.game.stage?.canTarget(enemy)??false;
     if(!enemy.portalId)return true;
     const portal=this.portals.find(p=>p.id===enemy.portalId);
     return !!portal&&portal.state==='locked'&&distance(feet(this.game),portal)<=PORTAL_RULES.leashRadius;
   }
   canDamage(enemy) {
     if(!this.canTarget(enemy))return false;
+    if(enemy.stageBoss){this.game.stage.awaken(enemy);return true;}
     if(!enemy.portalId)return true;
     enemy.guardActive=true;
     if(!enemy._portalAnnounced){enemy._portalAnnounced=true;this.game.bossCount++;this.game._emit('boss');}
@@ -125,6 +131,7 @@ export class Regions {
   }
   openPortal(enemy) {
     if(enemy.type!=='boss'||enemy.dungeonBoss||enemy.dungeonId||enemy.debugBoss||enemy.hp>0||enemy.id===this._lastBossId)return null;
+    if(this.game.stage)return this.game.stage.onBossKilled(enemy);
     const g=this.game;let portal=enemy.portalId?this.portals.find(p=>p.id===enemy.portalId):g.portal;
     if(!portal&&!this.guarded) {
       const targets=worldNeighbors(g.regionIndex),target=targets[0];
@@ -153,6 +160,7 @@ export class Regions {
     g._regionRewardPending=false;g.status='super';g._emit('superChoice',{source:'region',regionId:g.region.id});return true;
   }
   completeReward(){
+    if(this.rewardPortal?.stageReward)this.game.stage?.claimReward(this.rewardPortal.stageReward);
     if(this.rewardPortal){this.rewardPortal.rewardClaimed=true;if(this.rewardPortal.connectionId)this.claimedConnections.add(this.rewardPortal.connectionId);}
     this.rewardPortal=null;this.game._regionRewardPending=false;this._syncConnections();this._offerReward();
   }
@@ -167,12 +175,15 @@ export class Regions {
   canEnter(portalOrId) {
     const g=this.game,portal=this._portal(portalOrId);
     return !!(portal&&portal.state==='active'&&g.status==='playing'&&!g.superSkills.pending&&!this._rewardQueue.length&&!g.dungeon?.active&&
-      !g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false)&&portalEntranceContains(portal,feet(g)));
+      !this.rewardPortal&&(!g.stage||portal.kind!=='victory'||g.stage.coreDefeated)&&
+      (g.stage||!g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false))&&portalEntranceContains(portal,feet(g)));
   }
   getInteraction() {
     const portal=this.nearest(),g=this.game;if(!portal||g.status!=='playing'||g.dungeon?.active)return null;
     const door=portalDoor(portal);if(distance(feet(g),door)>portal.interactRadius)return null;
     const locked=portal.state!=='active',enabled=this.canEnter(portal);
+    if(portal.kind==='victory')return {id:portal.id,type:'stageExit',label:'进入通关门',description:'完成本局试炼',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
+    if(portal.kind==='travel')return {id:portal.id,type:'portal',label:`前往${portal.nextRegion.name}`,description:'可自由往返',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
     return {id:portal.id,type:'portal',label:locked?`通往${portal.nextRegion.name}`:`前往${portal.nextRegion.name}`,description:locked?'击败驻门首领 · 解锁双向通道':'已激活 · 可以往返穿越',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
   }
   arrivalPoint(portal,r=this.game.player.r){
@@ -193,11 +204,11 @@ export class Regions {
   }
   saveWorld() {
     const g=this.game;
-    const enemies=g.enemies.filter(e=>e.hp>0&&(e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId||e.debugBoss));
+    const enemies=g.enemies.filter(e=>e.hp>0&&(e.stageBoss||e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId||e.debugBoss));
     g.terrain._cache?.clear();
     const state={savedAt:g.time,savedClock:g._clock,terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,settlements:g.settlements,relicSites:g.relicSites,enemies,gems:g.gems,coins:g.coins,portals:this.portals,portal:g.portal,dungeonStates:g.dungeon.states,discoveredMap:g.discoveredMap,
       companionCamps:g.companions.camps,companionNextAt:g.companions.nextAt,companionGeneration:g.companions.generation,bossDefeated:g.bossDefeated,nextBossAt:g.nextBossAt};
-    this.states.set(g.regionIndex,state);return state;
+    this.states.set(g.mapId??g.regionIndex,state);return state;
   }
   restoreWorld(index) {
     const state=this.states.get(index);if(!state)return false;

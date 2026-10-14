@@ -1,3 +1,4 @@
+import { mapIdentity, mapSeed } from './map-context.js';
 import { settlementGuardType } from './encounter-definitions.js';
 import { Terrain, groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
@@ -20,7 +21,7 @@ export class Settlements {
     this.resetRegion();
   }
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
-  _hash(x,y=0){return hash(x+(this.game.regionIndex||0)*137,y+(this.game.regionIndex||0)*281);}
+  _hash(x,y=0){const seed=mapSeed(this.game);return hash(x+seed*137,y+seed*281);}
   _bodyCenter(site){return {x:site.x,y:site.y-(settlementType(site)?.bodyOffset===false?0:site.depth*.5)};}
   _obstacles(site) {
     if(settlementType(site)?.foundation===false)return [];
@@ -69,14 +70,14 @@ export class Settlements {
     return true;
   }
   _createSite(def,index,{nearSpawn=false}={}) {
-    const region=this.game.region?.id||'forest',seed=this._hash(index+83,17),rotation=(this.game.regionIndex||0)===0?0:this._hash(71,23)*TAU;
+    const region=this.game.region?.id||'forest',seed=this._hash(index+83,17),rotation=mapSeed(this.game)===0?0:this._hash(71,23)*TAU;
     def=worldSettlementDefinition(region,def);
     const spawn=nearSpawn?this._foot():null,plan=!nearSpawn&&this.game.terrain.island?.plan?.[def.type];
     for(let i=0;i<(plan?33:nearSpawn?128:192);i++) {
       const ring=Math.floor(i/32),angle=(nearSpawn?-Math.PI/2:def.angle+rotation)+(i%32)*TAU/32,radius=nearSpawn?190+ring*40:def.radius+ring*100;
       const offset=i===0?0:Math.ceil(i/8)*20,localAngle=(i%8)*TAU/8;
       const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
-      const site={...def,id:`site:${this.game.regionIndex||0}:${def.type}`,x,y,sortY:y,door:{x,y:y+(settlementType(def)?.doorOffset??30)},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
+      const site={...def,id:`site:${mapIdentity(this.game)}:${def.type}`,x,y,sortY:y,door:{x,y:y+(settlementType(def)?.doorOffset??30)},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
       if(!this._validSite(site,{nearSpawn}))continue;
       if(site.type==='supply')site.name=WORLD_HUT_NAMES[region]||WORLD_HUT_NAMES.forest;
       if(site.type==='merchant') {
@@ -117,10 +118,11 @@ export class Settlements {
     return null;
   }
   ensureAngels() {
-    const g=this.game;if(!this.generation||g.dungeon?.active)return;
-    const anchors=(g.regionIndex||0)===0?[{id:'spawn:0',x:0,y:19.8}]:[];
-    for(const portal of g.regions?.portals||[])if(portal.state==='active'&&Number.isFinite(portal.x)&&Number.isFinite(portal.y))anchors.push(portal);
-    if(g.portal?.state==='active'&&!anchors.some(a=>a.id===g.portal.id))anchors.push(g.portal);
+    const g=this.game,stageSanctuary=!!(g.stage&&g._features?.settlements);if((!this.generation&&!stageSanctuary)||g.dungeon?.active)return;
+    const spawn=g.stage?g.stage.currentIsland.role==='outer':(g.regionIndex||0)===0;
+    const anchors=spawn?[{id:`spawn:${mapIdentity(g)}`,x:0,y:19.8}]:[];
+    for(const portal of g.regions?.portals||[])if(portal.kind!=='victory'&&portal.state==='active'&&Number.isFinite(portal.x)&&Number.isFinite(portal.y))anchors.push(portal);
+    if(g.portal?.kind!=='victory'&&g.portal?.state==='active'&&!anchors.some(a=>a.id===g.portal.id))anchors.push(g.portal);
     for(const anchor of anchors) {
       const id=`angel:${anchor.id}`;if(this.sites.some(s=>s.id===id))continue;
       const point=this._angelPoint(anchor);if(!point)continue;

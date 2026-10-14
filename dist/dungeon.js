@@ -100,7 +100,7 @@ export class Dungeon {
     if(g.adventure){g.adventure.furyTime=furyTime;g.adventure.magnetTime=magnetTime;}
     if(g.superSkills)g.superSkills.pending=world.superPending??null;
     if(g.companions){g.companions.camps=world.companionCamps||(world.companionCamp?[world.companionCamp]:[]);g.companions.generation=world.companionGeneration;g.companions.nextAt=Math.max(world.companionNextAt??0,g.companions.nextAt??0);}
-    this.active=null;this._world=null;g.regionGrace=Math.max(2,world.regionGrace||0);g.regionTransition={life:.7,maxLife:.7,name:g.region.name,from:state.kind,to:g.region.id};
+    this.active=null;this._world=null;g.regionGrace=Math.max(2,world.regionGrace||0);g.regionTransition={life:.7,maxLife:.7,name:g.stage?.currentIsland?.name||g.region.name,from:state.kind,to:g.region.id};
     this._clearScene();this._placePlayer(this._returnPoint(world),{doorway:world.door,direction:{x:0,y:1}});g._refreshStats();g._refreshWeapons();g._emit('dungeonExit',{name:state.name,cleared:state.rewardClaimed});return true;
   }
   getInteraction(){

@@ -100,6 +100,7 @@ export class WaveDirector {
   }
   update(dt=0) {
     const g=this.game;
+    if(g.stage?.isBossIsland){this._setPhase('steady',WAVE_RULES.exploration);return;}
     // The overworld clock freezes inside a castle, and its surviving wave is
     // restored on exit. The brief exit grace pauses that wave rather than
     // cancelling earned progress. Region changes explicitly call reset().

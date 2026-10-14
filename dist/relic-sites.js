@@ -1,3 +1,4 @@
+import { mapIdentity, mapSeed } from './map-context.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { advanceRelicActivation } from './relic-activation.js';
@@ -54,7 +55,7 @@ export class RelicSites {
     return true;
   }
   _generate() {
-    const g=this.game,regionIndex=g.regionIndex||0,rotation=hash(regionIndex+71,23)*TAU;
+    const g=this.game,regionIndex=g.regionIndex||0,seed=mapSeed(g),rotation=hash(seed+71,23)*TAU;
     const entries=relicSiteEntries(g);
     for(const [index,entry] of entries.entries()) {
       const {key}=entry;
@@ -65,9 +66,9 @@ export class RelicSites {
         const offset=i===0?0:Math.ceil(i/8)*20,localAngle=(i%8)*TAU/8;
         const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round(Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round(Math.sin(angle)*radius);
         const profile=relicSiteProfile(entry);
-        const site={id:`relic-site:${regionIndex}:${key}`,category:'relic',...entry,x,y,r:profile.r,width:profile.width,depth:profile.depth,sortY:y,
+        const site={id:`relic-site:${mapIdentity(g)}:${key}`,category:'relic',...entry,x,y,r:profile.r,width:profile.width,depth:profile.depth,sortY:y,
           door:{x,y:y+profile.doorOffset},interactRadius:RELIC_SITE_RULES.interactRadius,state:'ready',gateOpen:profile.gateOpen===true,progress:0,
-          goal:profile.goal??entry.guardCount??0,discovered:false,regionIndex,seed:hash(regionIndex+131,index+41)};
+          goal:profile.goal??entry.guardCount??0,discovered:false,regionIndex,mapId:mapIdentity(g),seed:hash(seed+131,index+41)};
         if(this._valid(site)){
           const mechanism=createRelicMechanism(site,entry);if(mechanism)site.mechanism=mechanism;
           this.sites.push(site);break;

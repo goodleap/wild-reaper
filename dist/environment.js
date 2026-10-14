@@ -1,3 +1,4 @@
+import { mapSeed } from './map-context.js';
 import { ENEMY_BODY_HEIGHTS, enemyVisual } from './enemy-visuals.js';
 import { groundOffset } from './terrain.js';
 import { groundFootprint, surfaceAllows, placementAllowed } from './placement-rules.js';
@@ -45,7 +46,7 @@ export class Environment {
   constructor(game,{generation=true}={}){
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
     this.world=worldForId(game.region?.id);this.region=this.world.id;this.rules=this.world.environment;
-    this.seed=Number.isFinite(game.regionIndex)?Math.trunc(game.regionIndex):0;
+    this.seed=mapSeed(game);
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();
     if(generation)this._refresh(true);
