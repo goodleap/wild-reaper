@@ -60,8 +60,8 @@ for(const source of ['pulse','echo','companionPulse','companionEcho','raw','futu
 const specialResistance=arena(),specialBrute=enemy(specialResistance,'brute');
 hit(specialResistance,specialBrute,'pulse',48);finish(specialResistance,specialBrute);close(specialBrute.x,121.6,'a special push retains heavy-body resistance');
 
-// Bosses do not move. Heavy creatures still react, with smaller displacement.
-for(const [type,factor] of [['boss',0],['brute',.45],['boar',.6],['slime',1]]) {
+// Bosses keep the common distance; heavy ordinary creatures retain resistance.
+for(const [type,factor] of [['boss',1],['brute',.45],['boar',.6],['slime',1]]) {
   const world=arena(),target=enemy(world,type);hit(world,target);finish(world,target);
   close(target.x,100+standard*factor,`${type} resistance`);assert.equal(target.hp,9990);
 }

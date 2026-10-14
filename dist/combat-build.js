@@ -1,11 +1,11 @@
-import { WEAPON_DEFS, SKILL_DEFS, SUPER_SKILL_DEFS, UPGRADE_DEFS, ENDLESS_UPGRADES, EVOLUTIONS, getUpgradeDefinition, canTakeUpgrade, meetsUpgradeRequirements } from './combat-catalog.js';
+import { WEAPON_DEFS, SKILL_DEFS, SUPER_SKILL_DEFS, UPGRADE_DEFS, ENDLESS_UPGRADES, EVOLUTIONS, getUpgradeDefinition, canTakeUpgrade, meetsUpgradeRequirements, normalizeInitialWeaponId } from './combat-catalog.js';
 import { branchDefinition, isBranchReady } from './weapon-branches.js';
 
 const ALL_UPGRADES=[...UPGRADE_DEFS,...ENDLESS_UPGRADES];
 const natural=value=>Number.isFinite(value)?Math.max(0,Math.floor(value)):0;
 const view=(target,id,get,set)=>Object.defineProperty(target,id,{enumerable:true,configurable:false,get,set});
-function record(def) {
-  const state={id:def.id,baseRank:def.initialRank,modifiers:{},branch:null,evolved:false,equipped:def.initialRank>0};
+function record(def,initialRank=def.initialRank) {
+  const state={id:def.id,baseRank:initialRank,modifiers:{},branch:null,evolved:false,equipped:initialRank>0};
   // Overall Lv counts each investment once. Main ranks remain separately
   // capped so a post-evolution modifier never accidentally adds more blades.
   Object.defineProperties(state,{
@@ -17,11 +17,12 @@ function record(def) {
 }
 
 export class CombatBuild {
-  constructor() {
+  constructor({initialWeaponId='sword'}={}) {
     this.progressionTier=1;this.rescuePower=0;
     this.attributes=Object.fromEntries(ALL_UPGRADES.filter(def=>def.category==='attribute').map(def=>[def.id,0]));
     this.attributes.defense=0;
-    this.weapons=Object.fromEntries(Object.values(WEAPON_DEFS).map(def=>[def.id,record(def)]));
+    const startingWeapon=normalizeInitialWeaponId(initialWeaponId);
+    this.weapons=Object.fromEntries(Object.values(WEAPON_DEFS).map(def=>[def.id,record(def,def.id===startingWeapon?1:0)]));
     this.skills=Object.fromEntries(Object.values(SKILL_DEFS).map(def=>[def.id,record(def)]));
     this.levels={};this.branches={};this.evolutions={};this.superLevels={};
     for(const def of ALL_UPGRADES) {
@@ -152,7 +153,7 @@ export class CombatBuild {
       if(!source||typeof source!=='object')throw new TypeError('Missing combat build records');
       for(const [id,item] of Object.entries(destination)) {
         const saved=source[id];if(!saved)continue;
-        item.baseRank=readNumber(saved.baseRank,`${id}.baseRank`,defs[id].initialRank,defs[id].maxBaseRank);
+        item.baseRank=readNumber(saved.baseRank,`${id}.baseRank`,defs[id].category==='weapon'?0:defs[id].initialRank,defs[id].maxBaseRank);
         if(typeof saved.equipped!=='boolean'||typeof saved.evolved!=='boolean')throw new TypeError(`Invalid combat build flags: ${id}`);
         if(saved.branch!==null&&!branchDefinition(id,saved.branch))throw new TypeError(`Invalid combat build branch: ${id}`);
         item.branch=saved.branch;item.equipped=item.baseRank>0&&saved.equipped;item.evolved=saved.evolved;

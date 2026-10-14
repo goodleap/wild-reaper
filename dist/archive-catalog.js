@@ -1,6 +1,6 @@
 import { ENEMY_DEFS, ENEMY_CODEX_IDS } from './enemy-definitions.js';
 import { BOSS_DEFS } from './boss-definitions.js';
-import { WEAPON_DEFS, SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS } from './combat-catalog.js';
+import { WEAPON_DEFS, SKILL_DEFS, UPGRADE_DEFS, EVOLUTIONS, INITIAL_WEAPON_IDS } from './combat-catalog.js';
 import { WEAPON_BRANCHES } from './weapon-branches.js';
 import { companionDefinition } from './companion-catalog.js';
 
@@ -27,7 +27,7 @@ const copy={
   swords:{role:'自动 · 追击强敌',description:'灵剑从周身分散飞出，再沿曲线追向范围内敌人，优先选择首领与精英。',growth:'升级增加灵剑数量与伤害，并缩短冷却。',advice:'灵剑会追踪存活目标；目标提前被击败时仍飞向其最后位置。'},
   vortex:{role:'自动 · 聚怪压制',description:'在敌人附近形成持续漩涡，牵引普通怪物并反复伤害，优先锁定强敌区域。',growth:'升级提升伤害、范围、牵引速度与释放频率。',advice:'利用聚怪配合范围攻击；首领会受伤，但不会被漩涡拉动。'}
 };
-const sourceLabel=def=>def.source==='innate'?'出场自带':def.source==='castle'?'击败城堡首领后，从王城宝藏获得':def.source==='region'?'击败区域首领后，从奖励中获得':'消耗灵晶成长时获得';
+const sourceLabel=def=>def.category==='weapon'&&INITIAL_WEAPON_IDS.includes(def.id)?'冒险准备中选择，或消耗灵晶成长时获得':def.source==='innate'?'出场自带':def.source==='castle'?'击败城堡首领后，从王城宝藏获得':def.source==='region'?'击败区域首领后，从奖励中获得':'消耗灵晶成长时获得';
 const equipment=(def,category)=>({id:`${category==='weapons'?'weapon':'skill'}:${def.id}`,ownerId:def.id,category,name:def.name,color:def.color,icon:def.icon,tier:def.tier,activation:def.activation,source:sourceLabel(def),...copy[def.id],branches:(WEAPON_BRANCHES[def.id]||[]).map(branch=>({id:branch.branch,name:branch.name,description:branch.desc})),evolution:EVOLUTIONS[def.id]||null});
 const weaponSkills=[
   {id:'weaponSkill:swordEnergy',category:'weaponSkills',ownerId:'sword',modifierId:'swordEnergy',name:'剑气',color:'#a9e4dc',tier:'regular',role:'长剑专属 · 短程延伸',description:'随挥砍释放多道略微发散的剑气，飞离剑身，延伸长剑的攻击距离。',growth:'升级增加剑气距离、威力和覆盖；同次挥砍对同一敌人只命中一次。',advice:'保持长剑的正面攻击节奏，用剑气打到稍远的敌人。',source:'长剑达到基础 3 级后，在灵晶成长中获得'},

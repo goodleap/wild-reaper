@@ -20,6 +20,8 @@ export const WEAPON_DEFS=freeze({
   arrow:{id:'arrow',name:'翠羽飞矢',icon:'➶',color:'#a7dab7',category:'weapon',binding:'weapon',activation:'automatic',tier:'regular',source:'crystal',initialRank:0,maxBaseRank:1,attackId:'arrow'},
   orbit:{id:'orbit',name:'环刃',icon:'◈',color:'#f0d28a',category:'weapon',binding:'weapon',activation:'automatic',tier:'regular',source:'crystal',initialRank:0,maxBaseRank:5,attackId:'orbit'}
 });
+export const INITIAL_WEAPON_IDS=Object.freeze(['sword','orbit','arrow']);
+export const normalizeInitialWeaponId=id=>INITIAL_WEAPON_IDS.includes(id)?id:'sword';
 export const SUPER_SKILL_DEFS=freeze([
   {id:'domain',name:'荒野领域',desc:'选择荆棘束缚或瘴雾侵蚀，形成持续作用的领域',icon:'♧',color:'#a9d888',source:'region',regionId:'forest',rewardTier:'区域超级技能'},
   {id:'meteor',name:'星陨',desc:'标记数处敌群位置，短暂蓄能后落下星陨，造成高额范围伤害',icon:'✦',color:'#f1bc79',source:'castle',regionId:null,rewardTier:'城堡超级技能'},

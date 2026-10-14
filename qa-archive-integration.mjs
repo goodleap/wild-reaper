@@ -8,7 +8,7 @@ assert.equal(new Set(ids).size,ids.length,'shipped modal and entry IDs remain un
 const key=(h,code)=>h.listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat:false,target:h.nodes['game-canvas'],preventDefault(){}});
 const click=(h,id)=>{h.nodes[id].focus();h.nodes[id].onclick();};
 const start=h=>{
-  click(h,'start-button');
+  click(h,'start-button');click(h,'prepare-start-button');
   h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
 };
 const data=h=>JSON.parse(h.run('JSON.stringify(archive.data)'));

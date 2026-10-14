@@ -4,7 +4,7 @@ import { harness } from './qa-app-harness.mjs';
 // tests share the same parent relationships and browser surface.
 const {nodes,listeners,document,run}=harness('?debug');
 const key=(code,repeat=false)=>listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat,target:nodes['game-canvas'],preventDefault(){}});
-nodes['start-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
 // Freeze rendering only: the actual frame, game clock, input and HUD run normally.
 run('renderGame=()=>{};renderIntro=()=>{}');
 assert(run('game.status')==='playing');
@@ -85,7 +85,7 @@ assert.equal(chestRendering.calls[2].clipped,true);assert.equal(chestRendering.c
 nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('mapOpen'),false);assert(nodes['map-overlay'].classList.contains('hidden'));
 // Drive the real frame and native UI handlers across a door fade. Only drawing
 // is stubbed: movement, input revisions and the scene controller are live.
-nodes['start-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
 run(`game=new Game({terrain:new game.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
 game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;
 const fadeHut={id:'ui-fade-hut',type:'supply',name:'测试小屋',x:400,y:0,door:{x:400,y:30},width:54,depth:28,interactRadius:82,state:'ready',seed:1,guardIds:[]};
@@ -128,7 +128,7 @@ nodes['quit-button'].onclick();assert.equal(run('game'),null);assert.equal(run('
 // Pause and the independent character panel share one detail view. Equipment
 // controls, tab state, gestures and reward guards are covered by
 // qa-character-hud.mjs with a DOM that parses the new dynamic panel markup.
-nodes['start-button'].onclick();nodes['pause-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();nodes['pause-button'].onclick();
 assert(run('paused'));nodes['pause-character-button'].onclick();
 assert(run('paused&&characterOpen'));assert(nodes['character-content'].innerHTML.includes('攻击'));
 nodes['character-done'].onclick();assert(run('paused&&!characterOpen'));
@@ -141,7 +141,7 @@ const fpsNode=nodes['debug-fps'];
 assert(!fpsNode.classList.contains('hidden'),'debug mode exposes the FPS readout');
 let fpsText=fpsNode.textContent,fpsWrites=[];
 Object.defineProperty(fpsNode,'textContent',{get:()=>fpsText,set:value=>{fpsText=String(value);fpsWrites.push(fpsText);},configurable:true});
-nodes['start-button'].onclick();
+nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
 let fpsNow=100000;
 const sampleRate=rate=>{
   // A new game is a real reset boundary, not a direct call to telemetry internals.

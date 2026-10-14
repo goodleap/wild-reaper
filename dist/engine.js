@@ -4,7 +4,7 @@ import { CombatResolution } from './combat-resolution.js';
 import { CombatProgression } from './combat-progression.js';
 import { GuardianBarrier } from './guardian-barrier.js';
 import { resolveCharacterStats, upgradeEffectTotal } from './combat-stats.js';
-import { EVOLUTIONS } from './combat-catalog.js';
+import { EVOLUTIONS, normalizeInitialWeaponId } from './combat-catalog.js';
 export { EVOLUTIONS } from './combat-catalog.js';
 import { Terrain, groundOffset } from './terrain.js';
 import { blocksObstacle, isGrounded, movementProfile } from './height-rules.js';
@@ -57,7 +57,7 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false,debugWorld=null,stageId=null}={}) {
+  constructor({difficulty='normal',hero='traveler',initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugFull=false,debugWorld=null,stageId=null}={}) {
     this.debug=debug===true;
     this.debugFull=this.debug&&debugFull===true;
     this.stage=stageId?new StageRun(this,stageId):null;
@@ -78,7 +78,8 @@ export class Game {
     const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
-    this.build=new CombatBuild();
+    this.initialWeaponId=normalizeInitialWeaponId(initialWeaponId);
+    this.build=new CombatBuild({initialWeaponId:this.initialWeaponId});
     this.levels=this.build.levels;this.branches=this.build.branches;this.evolutions=this.build.evolutions;
     for(const [name,key] of [['progressionTier','progressionTier'],['skillLevel','progressionTier'],['rescuePower','rescuePower']])Object.defineProperty(this,name,{enumerable:true,get:()=>this.build[key],set:value=>{this.build[key]=value;}});
     this.player.baseMaxHp=maxHp;

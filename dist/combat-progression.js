@@ -59,7 +59,7 @@ export class CombatProgression {
     const g=this.game,id=definition.id,rank=g.build.getRank(id);
     let desc=definition.desc,kind=definition.kind;
     if(id==='sword') {
-      desc='提升伤害、挥砍距离和频率；5 级选择横扫或重斩';kind='武器强化';
+      desc=rank?'提升伤害、挥砍距离和频率；5 级选择横扫或重斩':'自动朝近身敌人挥剑，扇形斩击身前敌群';kind=rank?'武器强化':'获得武器';
     }else if(id==='barrier') {
       desc=rank?'提高护盾容量与持续时间，缩短冷却':'受击自动展开，吸收首击与随后伤害；无受击时持续待命';kind=rank?'技能强化':'独立技能';
     }else if(id==='orbit') {
@@ -122,8 +122,9 @@ export class CombatProgression {
     }else {
       // Revalidate against the canonical build, including ownership, branch
       // requirements and caps. A stale card can never bypass prerequisites.
+      const acquiring=this._group(choice)==='acquisition';
       if(!getUpgradeDefinition(id)||!canTakeUpgrade(g.build,id)||!g.build.increment(id))return false;
-      if(ACQUISITIONS.includes(id)&&g.build.getRank(id)===1) {
+      if(acquiring) {
         if(id==='pulse')g._pulse=.15;
         if(id==='lightning')g._lightning=.15;
         g._emit('weaponAcquired',{weaponId:id,name:choice.name,category:choice.category});

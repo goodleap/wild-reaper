@@ -7,7 +7,7 @@ for(const search of ['', '?debug']){
   assert.equal(debugDetails.length,search?1:0,'performance detail is attached once in debug and absent on normal URLs');
   assert.equal(run('diagnostics===null'),!search,'ordinary URLs allocate no diagnostic capture');
   if(!search){assert(nodes['debug-diagnostics'].classList.contains('hidden'));assert(nodes['diagnostic-live'].classList.contains('hidden'));assert.equal(nodes['diagnostic-start'].onclick,undefined);assert.equal(nodes['diagnostic-auto'].onclick,undefined);}
-  nodes['start-button'].onclick();
+  nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
   run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
   assert.equal(nodes['game-canvas'].width,786,'phone rendering retains native 2x detail within the pixel budget');
   assert.equal(run('game.viewWidth'),393);
@@ -81,7 +81,7 @@ game.settlements.sites=[hut];game.player.x=hut.door.x;game.player.y=hut.door.y-g
 // procedural scenery, and the existing renderer counter avoids raster cost.
 {
   const {nodes,listeners,document,navigator,run,tick,resize,drawImages}=harness('?debug');
-  nodes['start-button'].onclick();
+  nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
   run(`game=new Game({terrain:new game.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
 game.enemies=[];game.regionGrace=Infinity;game._spawn=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;game.viewWidth=width;game.viewHeight=height;updateHUD();`);
   tick();nodes['pause-button'].onclick();
@@ -142,7 +142,7 @@ game.settlements.sites=[diagnosticHut];game.player.x=diagnosticHut.door.x;game.p
 // stages. It must not pause, reset movement, or leave a 5-second manual default.
 {
   const {nodes,run,tick,resize}=harness('?debug');
-  nodes['start-button'].onclick();
+  nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();
   const quietGame=()=>run(`game=new Game({terrain:new game.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
 game.enemies=[];game.regionGrace=Infinity;game._spawn=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;game.viewWidth=width;game.viewHeight=height;updateHUD();`);
   quietGame();tick();nodes['pause-button'].onclick();nodes['diagnostic-lights-off'].onclick();

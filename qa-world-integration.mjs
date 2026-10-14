@@ -7,7 +7,7 @@ import { debugConfigFromSearch } from './dist/debug-mode.js';
 assert.deepEqual(debugConfigFromSearch('?world=volcano'),{enabled:false,full:false});
 assert.equal(new Game({debugWorld:'volcano'}).region.id,'forest');
 assert.equal(new Game({debug:true,debugWorld:'unknown'}).region.id,'forest');
-const h=harness('?debug&world=beach');h.nodes['start-button'].onclick();
+const h=harness('?debug&world=beach');h.nodes['start-button'].onclick();h.nodes['prepare-start-button'].onclick();
 assert.equal(h.run('game.region.id'),'beach','URL starts the requested debug world');
 assert.equal(h.run('game.environment.region'),'beach');
 h.run('game.enemies=[];game.player.invuln=Infinity;game.player.xpNext=Infinity;game.crystalsNext=Infinity;');

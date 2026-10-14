@@ -10,7 +10,7 @@ let source=fs.readFileSync(new URL('./dist/app.js',import.meta.url),'utf8');
 const modules={};
 for(const match of source.matchAll(/^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"];?$/gm)){
   const exports=await import(new URL(`./dist/${match[2].replace('./','')}`,import.meta.url));
-  for(const name of match[1].split(',').map(value=>value.trim()))modules[name]=exports[name];
+  for(const specifier of match[1].split(',').map(value=>value.trim())){const [exported,local=exported]=specifier.split(/\s+as\s+/);modules[local]=exports[exported];}
 }
 source=source.replace(/^import[^\n]+;\s*$/gm,'');
 const gradient={addColorStop(){}};
@@ -20,7 +20,7 @@ const camel=s=>s.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());
 let viewport={width:393,height:717,left:0,top:0};
 class Element{
   constructor(tag='div'){
-    this.tagName=tag.toUpperCase();this.id='';this.attributes={};this.dataset={};this.children=[];this.parentElement=null;this.listeners={};this._html='';this._text='';this.disabled=false;this.isConnected=true;
+    this.tagName=tag.toUpperCase();this.id='';this.attributes={};this.dataset={};this.children=[];this.parentElement=null;this.listeners={};this._html='';this._text='';this.disabled=false;this.isConnected=true;this.scrollLeft=0;this.scrollTop=0;
     this.style={setProperty(name,value){this[name]=String(value);},getPropertyValue(name){return this[name]??'';}};
     const classes=new Set();this.classList={contains:name=>classes.has(name),add:(...names)=>names.forEach(name=>classes.add(name)),remove:(...names)=>names.forEach(name=>classes.delete(name)),toggle:(name,on)=>{on=on??!classes.has(name);on?classes.add(name):classes.delete(name);return on;}};
     Object.defineProperty(this,'className',{get:()=>[...classes].join(' '),set:value=>{classes.clear();String(value).split(/\s+/).filter(Boolean).forEach(name=>classes.add(name));}});
@@ -42,6 +42,12 @@ class Element{
   contains(target){return target===this||this.children.some(child=>child.contains(target));}
   addEventListener(type,handler){(this.listeners[type]??=[]).push(handler);}
   getBoundingClientRect(){return viewport;}
+  get clientWidth(){return viewport.width;}
+  get scrollWidth(){return this.clientWidth;}
+  get offsetLeft(){return 0;}
+  get offsetWidth(){return 120;}
+  scrollBy({left=0}={}){this.scrollLeft=Math.max(0,this.scrollLeft+left);}
+  scrollTo({left=0,top=0}={}){this.scrollLeft=left;this.scrollTop=top;}
   getContext(){return drawing;}
   setPointerCapture(id){this.captured=id;}
   releasePointerCapture(id){if(this.captured===id)this.captured=null;}
@@ -61,6 +67,7 @@ function parseInto(markup,root){
 }
 const root=new Element('root');parseInto(html,root);
 Object.assign(document,{body:root.querySelector('body'),getElementById:id=>root.querySelector(`#${id}`),createElement:tag=>new Element(tag),querySelectorAll:selector=>root.querySelectorAll(selector),addEventListener:(type,handler)=>{(documentListeners[type]??=[]).push(handler);}});
+globalThis.document=document;
 const $=id=>{const node=document.getElementById(id);assert(node,`missing #${id}`);return node;};
 const sandbox={...modules,document,performance,window:{location:{search:''},devicePixelRatio:1,addEventListener:(type,handler)=>{(windowListeners[type]??=[]).push(handler);}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:query=>({matches:query.includes('pointer: coarse')}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
@@ -77,7 +84,7 @@ const tap=id=>{
   const node=$(id),pointerId=touchPointerId++,event={pointerId,pointerType:'touch',isPrimary:true};
   fire(node,'pointerdown',event);fire(node,'pointerup',event);return fire(node,'click',{...event,detail:1});
 };
-const start=()=>{click('start-button');run('renderGame=()=>{};renderIntro=()=>{};game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;');};
+const start=()=>{click('start-button');click('prepare-start-button');run('renderGame=()=>{};renderIntro=()=>{};game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;');};
 const model=()=>JSON.parse(run('JSON.stringify({time:game.runTime,clock,skill:game.player.skillCooldown,point:[game.player.x,game.player.y]})'));
 assert($('run-summary').classList.contains('hidden'),'the menu starts without run statistics');
 assert(!fire($('game-canvas'),'touchstart',{cancelable:true}).defaultPrevented,'the intro has no canvas touch fallback');
