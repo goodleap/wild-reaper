@@ -3,6 +3,7 @@
 // base damage / reference attack is its coefficient, not another attack bonus.
 import { getUpgradeDefinition } from './combat-catalog.js';
 import { weaponKnockbackDistance } from './weapon-knockback.js';
+import { applyHeroStat } from './heroes.js';
 
 export const COMBAT_REFERENCE_ATTACK=32;
 export const CHARACTER_DEFENSE_PER_LEVEL=1;
@@ -23,21 +24,31 @@ const effectTotal=(g,id,stat)=>{
 };
 export { effectTotal as upgradeEffectTotal };
 
+export function maxHealthGrowth(game) {
+  return Math.max(0,game.player.level-1)*2+effectTotal(game,'vitality','maxHealth')+effectTotal(game,'endlessVitality','maxHealth');
+}
+export function resolveMaxHealth(game) {
+  const base=game.player.baseMaxHp??(game.easy?140:100);
+  return Math.max(1,Math.round(applyHeroStat(game.hero,'maxHealth',base+maxHealthGrowth(game))));
+}
+
 export function resolveCharacterStats(game) {
   const p=game.player,hero=game.hero;
-  const attackMultiplier=(hero.damageMultiplier??1)*(1+effectTotal(game,'power','damageBonus')+effectTotal(game,'endlessPower','damageBonus')+(game.rescuePower||0)*.08+(p.level-1)*.01);
+  const attack=applyHeroStat(hero,'attack',COMBAT_REFERENCE_ATTACK*(1+effectTotal(game,'power','damageBonus')+effectTotal(game,'endlessPower','damageBonus')+(game.rescuePower||0)*.08+(p.level-1)*.01));
+  const attackMultiplier=attack/COMBAT_REFERENCE_ATTACK;
   const externalDamageMultiplier=(game.adventure?.damageMultiplier()??1)*(game.relics?.damageMultiplier()??1);
-  const moveMultiplier=(1+effectTotal(game,'speed','moveSpeedBonus'))*(game.relics?.movementMultiplier()??1)*(game.debug?3:1);
+  const moveGrowth=1+effectTotal(game,'speed','moveSpeedBonus'),externalMoveMultiplier=(game.relics?.movementMultiplier()??1)*(game.debug?3:1);
+  const moveMultiplier=moveGrowth*externalMoveMultiplier;
   return {
-    attack:COMBAT_REFERENCE_ATTACK*attackMultiplier,attackMultiplier,
+    attack,attackMultiplier,
     externalDamageMultiplier,damageMultiplier:attackMultiplier*externalDamageMultiplier,
-    defense:Math.max(0,(hero.baseDefense??0)+(game.build?.attributes?.defense??0)+Math.max(0,p.level-1)*CHARACTER_DEFENSE_PER_LEVEL+effectTotal(game,'toughness','defense')+effectTotal(game,'endlessToughness','defense')),
+    defense:Math.max(0,applyHeroStat(hero,'defense',(game.build?.attributes?.defense??0)+Math.max(0,p.level-1)*CHARACTER_DEFENSE_PER_LEVEL+effectTotal(game,'toughness','defense')+effectTotal(game,'endlessToughness','defense'))),
     // Critical attributes remain neutral until a real source grants them.
     criticalChance:0,criticalMultiplier:1,
     maxHp:p.maxHp,currentHp:p.hp,
     regen:effectTotal(game,'regen','healthRegen')+effectTotal(game,'endlessRegen','healthRegen'),
-    moveSpeed:hero.baseSpeed*moveMultiplier,moveMultiplier,
-    magnet:ATTACK_DEFAULTS.magnet*(hero.magnetMultiplier??1)*(1+effectTotal(game,'magnet','pickupRangeBonus')),
+    moveSpeed:applyHeroStat(hero,'moveSpeed',220*moveGrowth)*externalMoveMultiplier,moveMultiplier,
+    magnet:applyHeroStat(hero,'pickupRange',ATTACK_DEFAULTS.magnet*(1+effectTotal(game,'magnet','pickupRangeBonus'))),
     fireRate:1+effectTotal(game,'rapid','attackRateBonus'),
     stormCooldown:game.debug?0:hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction'))
   };

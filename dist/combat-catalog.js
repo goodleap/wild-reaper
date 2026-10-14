@@ -52,7 +52,7 @@ export const UPGRADE_DEFS=freeze([
   upgrade({id:'lightning',name:'唤雷',desc:'连锁闪电附加 2.5 秒感电，飞矢或环刃命中可向附近敌人传导',kind:'学习技能',icon:'ϟ',color:'#b6bafa',category:'skill',ownerId:'lightning',upgradeKind:'rank',cap:5,branchAtRank:4}),
   upgrade({id:'speed',name:'轻盈步伐',desc:'移动速度提升 8%，更轻松穿过兽群',kind:'属性强化',icon:'↗',color:'#9acbcc',category:'attribute',ownerId:'speed',upgradeKind:'rank',cap:4,effects:[effect('moveSpeedBonus',.08)]}),
   upgrade({id:'magnet',name:'林间引力',desc:'灵晶和金币拾取范围增加 35%',kind:'属性强化',icon:'✧',color:'#a1cf98',category:'attribute',ownerId:'magnet',upgradeKind:'rank',cap:4,effects:[effect('pickupRangeBonus',.35)]}),
-  upgrade({id:'vitality',name:'古树之心',desc:'最大生命增加 25，并恢复 35 生命',kind:'属性强化',icon:'♥',color:'#e7a68b',category:'attribute',ownerId:'vitality',upgradeKind:'rank',cap:5,effects:[effect('maxHealth',25),effect('heal',35)]}),
+  upgrade({id:'vitality',name:'古树之心',desc:'基础最大生命增加 25，并恢复 35 生命',kind:'属性强化',icon:'♥',color:'#e7a68b',category:'attribute',ownerId:'vitality',upgradeKind:'rank',cap:5,effects:[effect('maxHealth',25),effect('heal',35)]}),
   upgrade({id:'toughness',name:'坚韧',desc:'防御增加 20，降低受到的伤害',kind:'属性强化',icon:'⬡',color:'#a7c8df',category:'attribute',ownerId:'defense',upgradeKind:'rank',cap:5,effects:[effect('defense',20)]}),
   upgrade({id:'regen',name:'生生不息',desc:'每秒恢复 0.8 生命',kind:'属性强化',icon:'✚',color:'#a4dc9d',category:'attribute',ownerId:'regen',upgradeKind:'rank',cap:3,effects:[effect('healthRegen',.8)]}),
   upgrade({id:'arrowPower',name:'飞矢淬锋',desc:'仅翠羽飞矢基础伤害加成提高 15%',kind:'武器强化',icon:'➶',color:'#a7dab7',category:'weapon',ownerId:'arrow',upgradeKind:'modifier',cap:3,requires:[owned('arrow')],effects:[effect('baseDamageBonus',.15)]}),
@@ -70,7 +70,7 @@ export const UPGRADE_DEFS=freeze([
 export const ENDLESS_UPGRADES=freeze([
   upgrade({id:'endlessPower',name:'百炼锋芒',desc:'角色通用伤害加成提高 8%',kind:'无尽属性强化',icon:'✦',color:'#e6be73',category:'attribute',ownerId:'power',upgradeKind:'rank',cap:Infinity,effects:[effect('damageBonus',.08)]}),
   upgrade({id:'endlessToughness',name:'百炼坚韧',desc:'防御增加 10，降低受到的伤害',kind:'无尽属性强化',icon:'⬡',color:'#a7c8df',category:'attribute',ownerId:'defense',upgradeKind:'rank',cap:Infinity,requires:[rank('toughness',5)],effects:[effect('defense',10)]}),
-  upgrade({id:'endlessVitality',name:'深根之心',desc:'本局最大生命增加 12，并恢复 24 生命',kind:'无尽属性强化',icon:'♥',color:'#e7a68b',category:'attribute',ownerId:'vitality',upgradeKind:'rank',cap:Infinity,effects:[effect('maxHealth',12),effect('heal',24)]}),
+  upgrade({id:'endlessVitality',name:'深根之心',desc:'本局基础最大生命增加 12，并恢复 24 生命',kind:'无尽属性强化',icon:'♥',color:'#e7a68b',category:'attribute',ownerId:'vitality',upgradeKind:'rank',cap:Infinity,effects:[effect('maxHealth',12),effect('heal',24)]}),
   upgrade({id:'endlessRegen',name:'林泉赐福',desc:'本局每秒生命恢复量增加 0.3',kind:'无尽属性强化',icon:'✚',color:'#a4dc9d',category:'attribute',ownerId:'regen',upgradeKind:'rank',cap:Infinity,effects:[effect('healthRegen',.3)]})
 ]);
 export const LEVEL_CAPS=freeze(Object.fromEntries(UPGRADE_DEFS.map(def=>[def.id,def.cap])));

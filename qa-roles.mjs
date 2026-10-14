@@ -35,7 +35,7 @@ for(const hero of ['traveler','princess','elder','ranger','warden','stormcaller'
   const g=arena({hero,fresh:true});
   assert.equal(g.hero.id,id);assert.equal(g.player.heroId,id,'obsolete saved selections cannot restore NPC roles');
   assert.equal(g.player.maxHp,expected.hp);assert.equal(g.player.hp,expected.hp);assert.equal(g.player.defense,expected.defense);
-  assert.equal(g.player.speed,expected.speed);assert.equal(g.player.skillCooldownMax,15);
+  assert(Math.abs(g.player.speed-expected.speed)<1e-8,'role base speed remains unchanged within floating-point precision');assert.equal(g.player.skillCooldownMax,15);
   assert(Object.entries(g.levels).every(([id,level])=>level===(id==='sword'?1:0)),'every role starts with only the selected sword and no earned passive upgrades');
   assert.equal(g.player.xp,0);assert.equal(g.player.level,1);assert.equal(g.status,'playing');
   assert.deepEqual(g.weapons.map(w=>[w.id,w.level]),[['sword',1]]);

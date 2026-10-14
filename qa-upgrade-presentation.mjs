@@ -96,7 +96,7 @@ for(const id of ['toughness','endlessToughness']) {
   assert.equal(model.scope,'角色属性 · 受到伤害降低');
   assert.doesNotMatch(html,/choice-new|Lv\./,'defense is an attribute investment, not a newly acquired skill');
   assert.equal(Number(model.rows[0].before),beforeDefense);
-  if(id==='toughness')assert.equal(model.summary,'防御 +20，减伤 28.57%→37.5%。');
+  if(id==='toughness')assert.equal(model.summary,'防御 +20，减伤 32.43%→40.48%。');
   else assert.match(model.summary,/防御 \+10/);
   const cost=current.crystalsNext,crystals=current.crystals;
   assert(current.chooseUpgrade(id));assert.equal(current.crystals,crystals-cost);

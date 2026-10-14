@@ -3,6 +3,7 @@ import { UPGRADE_DEFS, ENDLESS_UPGRADES } from './combat-catalog.js';
 import { getSuperSkillStats } from './super-skills.js';
 import { RELICS, RELIC_RULES } from './relics.js';
 import { STATUS_RULES } from './combat-status.js';
+import { applyHeroStat } from './heroes.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number=value=>Number.isFinite(value)?String(Math.round(value*100)/100):value===Infinity?'∞':'—';
@@ -25,20 +26,28 @@ function attributes(game) {
   const p=game.player,s=resolveCharacterStats(game),move=movement(game,s);
   const magnet=game.adventure?.magnetRange?.(s.magnet)??s.magnet;
   const rank=id=>game.build.getRank(id);
-  const attackSources=[`${game.hero.name}：初始攻击 ${number(COMBAT_REFERENCE_ATTACK*(game.hero.damageMultiplier??1))}`];
-  if(p.level>1)attackSources.push(`角色等级 Lv.${p.level}：攻击加成 ${bonus((p.level-1)*.01)}`);
-  for(const id of ['power','endlessPower'])if(rank(id))attackSources.push(`${id==='power'?'锋芒':'百炼锋芒'}：攻击加成 ${bonus(upgradeEffectTotal(game,id,'damageBonus'))}`);
-  if(game.rescuePower>0)attackSources.push(`营救援助 ×${game.rescuePower}：攻击加成 ${bonus(game.rescuePower*.08)}`);
+  const roleSources=(values,keys)=>{
+    for(const [key,label] of keys) {
+      const {multiplier=1,fixed=0}=game.hero.statModifiers?.[key]??{};
+      if(multiplier!==1)values.push(`${game.hero.name}：持续特性 · ${label} ${bonus(multiplier-1)}（成长后生效）`);
+      if(fixed!==0)values.push(`${game.hero.name}：固定加值 · ${label} ${fixed>0?'+':''}${number(fixed)}（倍率计算后加入）`);
+    }
+  };
+  const attackSources=[`通用基础攻击 ${number(COMBAT_REFERENCE_ATTACK)} · 角色初始攻击 ${number(applyHeroStat(game.hero,'attack',COMBAT_REFERENCE_ATTACK))}`];
+  if(p.level>1)attackSources.push(`角色等级 Lv.${p.level}：基础攻击加成 ${bonus((p.level-1)*.01)}`);
+  for(const id of ['power','endlessPower'])if(rank(id))attackSources.push(`${id==='power'?'锋芒':'百炼锋芒'}：基础攻击加成 ${bonus(upgradeEffectTotal(game,id,'damageBonus'))}`);
+  if(game.rescuePower>0)attackSources.push(`营救援助 ×${game.rescuePower}：基础攻击加成 ${bonus(game.rescuePower*.08)}`);
+  roleSources(attackSources,[['attack','自身伤害']]);
   if(game.adventure?.furyTime>0)attackSources.push(`狂暴：伤害 ×${number(game.adventure.damageMultiplier())}`);
   if((game.relics?.damageMultiplier?.()??1)!==1)attackSources.push(`赤心：伤害 ×${number(game.relics.damageMultiplier())}`);
-  const otherSources=[`初始最大生命 ${number(p.baseMaxHp??s.maxHp)} · 初始移速 ${number(game.hero.baseSpeed)}`];
-  if(game.hero.baseDefense)otherSources.push(`${game.hero.name}：角色初始防御 +${number(game.hero.baseDefense)}`);
-  if((game.hero.magnetMultiplier??1)!==1)otherSources.push(`${game.hero.name}：拾取范围 ${bonus(game.hero.magnetMultiplier-1)}`);
+  const initialMaxHp=Math.round(applyHeroStat(game.hero,'maxHealth',p.baseMaxHp??(game.easy?140:100)));
+  const otherSources=[`初始最大生命 ${number(initialMaxHp)} · 初始移速 ${number(game.hero.baseSpeed)}`];
+  roleSources(otherSources,[['maxHealth','最大生命'],['defense','防御'],['moveSpeed','移速'],['pickupRange','拾取范围']]);
   if(game.build.attributes.defense>0)otherSources.push(`基础防御 +${number(game.build.attributes.defense)}`);
-  if(p.level>1)otherSources.push(`角色等级：最大生命 +${number((p.level-1)*2)} · 防御 +${number((p.level-1)*CHARACTER_DEFENSE_PER_LEVEL)}`);
+  if(p.level>1)otherSources.push(`角色等级：基础最大生命 +${number((p.level-1)*2)} · 基础防御 +${number((p.level-1)*CHARACTER_DEFENSE_PER_LEVEL)}`);
   for(const def of [...UPGRADE_DEFS,...ENDLESS_UPGRADES])if(def.category==='attribute'&&rank(def.id)&&!['power','endlessPower'].includes(def.id)) {
     const effects=[];
-    for(const [stat,label,format] of [['maxHealth','最大生命',value=>`+${number(value)}`],['defense','防御',value=>`+${number(value)}`],['healthRegen','每秒回复',value=>`+${number(value)}`],['moveSpeedBonus','移动速度',bonus],['pickupRangeBonus','拾取范围',bonus]]) {
+    for(const [stat,label,format] of [['maxHealth','基础最大生命',value=>`+${number(value)}`],['defense','基础防御',value=>`+${number(value)}`],['healthRegen','每秒回复',value=>`+${number(value)}`],['moveSpeedBonus','基础移动速度',bonus],['pickupRangeBonus','基础拾取范围',bonus]]) {
       const amount=upgradeEffectTotal(game,def.id,stat);if(amount)effects.push(`${label} ${format(amount)}`);
     }
     otherSources.push(`${def.name} ×${rank(def.id)}${effects.length?'：'+effects.join(' · '):''}`);
@@ -47,7 +56,7 @@ function attributes(game) {
   if(game.debug)otherSources.push('调试模式：移动速度 ×3，天雷无冷却');
   if(move.modifier!==1)otherSources.push(`当前位置地形：移动速度 ×${number(move.modifier)}`);
   if(game.adventure?.magnetTime>0)otherSources.push(`磁力涌动：当前拾取范围 ${number(magnet)}`);
-  return summary('展示当前生效属性；武器和技能页展示各自的攻击数值。')+
+  return summary('展示当前生效属性；基础成长合计后应用角色持续特性，再加入固定加值。武器和技能页展示各自的攻击数值。')+
     grid([
       ['角色等级',`Lv.${p.level}`,'level'],['生命',`${number(s.currentHp)} / ${number(s.maxHp)}`,'health'],
       ['角色攻击',number(s.attack),'attack'],['额外伤害增益',bonus(s.externalDamageMultiplier-1),'damageBonus'],

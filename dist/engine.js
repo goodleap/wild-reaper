@@ -3,7 +3,7 @@ import { CombatAttacks, circleImpact, obstacleImpact } from './combat-attacks.js
 import { CombatResolution } from './combat-resolution.js';
 import { CombatProgression } from './combat-progression.js';
 import { GuardianBarrier } from './guardian-barrier.js';
-import { resolveCharacterStats, upgradeEffectTotal } from './combat-stats.js';
+import { resolveCharacterStats, resolveMaxHealth, maxHealthGrowth } from './combat-stats.js';
 import { EVOLUTIONS, normalizeInitialWeaponId } from './combat-catalog.js';
 export { EVOLUTIONS } from './combat-catalog.js';
 import { Terrain, groundOffset } from './terrain.js';
@@ -16,7 +16,7 @@ import { initBoss, updateBoss, resolveBossSlams, resolveBossPhase, clearBossAtta
 import { enemyDefinition } from './enemy-definitions.js';
 import { initializeEnemyBehavior, updateEnemyBehavior, resolveEnemyBehavior, updateBoar, updateSpore } from './enemy-behaviors.js';
 import { SPECIAL_ENEMY_CAPS } from './encounter-definitions.js';
-import { HEROES, getHero } from './heroes.js';
+import { HEROES, getHero, applyHeroStat } from './heroes.js';
 import { CombatStatus } from './combat-status.js';
 import { Environment } from './environment.js';
 import { REGIONS, Regions, regionFor, regionEnemyType } from './regions.js';
@@ -75,15 +75,19 @@ export class Game {
     this.status = 'playing'; this.time = 0; this.runTime=0; this.kills = 0; this.wave = 1;
     this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
-    const maxHp=Math.round((this.easy?140:100)*this.hero.hpMultiplier);
+    const baseMaxHp=this.easy?140:100,maxHp=Math.max(1,Math.round(applyHeroStat(this.hero,'maxHealth',baseMaxHp)));
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debug?0:this.hero.skillCooldown,facing:0};
     resetLocomotion(this.player);
     this.initialWeaponId=normalizeInitialWeaponId(initialWeaponId);
     this.build=new CombatBuild({initialWeaponId:this.initialWeaponId});
     this.levels=this.build.levels;this.branches=this.build.branches;this.evolutions=this.build.evolutions;
     for(const [name,key] of [['progressionTier','progressionTier'],['skillLevel','progressionTier'],['rescuePower','rescuePower']])Object.defineProperty(this,name,{enumerable:true,get:()=>this.build[key],set:value=>{this.build[key]=value;}});
-    this.player.baseMaxHp=maxHp;
-    Object.defineProperty(this.player,'maxHp',{enumerable:true,get:()=>this.player.baseMaxHp+(this.player.level-1)*2+upgradeEffectTotal(this,'vitality','maxHealth')+upgradeEffectTotal(this,'endlessVitality','maxHealth'),set:value=>{this.player.baseMaxHp=value-(this.player.level-1)*2-upgradeEffectTotal(this,'vitality','maxHealth')-upgradeEffectTotal(this,'endlessVitality','maxHealth');}});
+    // Store the common base, so role multipliers apply once to later growth too.
+    this.player.baseMaxHp=baseMaxHp;
+    Object.defineProperty(this.player,'maxHp',{enumerable:true,get:()=>resolveMaxHealth(this),set:value=>{
+      const modifier=this.hero.statModifiers.maxHealth;
+      this.player.baseMaxHp=(value-modifier.fixed)/modifier.multiplier-maxHealthGrowth(this);
+    }});
     this.skillLevel=1;this.crystals=0;this.crystalsNext=crystalCost(1);this.gold=0;this.coins=[];
     this.enemies = []; this.bullets = []; this.enemyBullets=[];this.gems = []; this.effects = []; this.orbitals = []; this.events = [];
     this.storm = null;
@@ -617,7 +621,9 @@ export class Game {
   _levelUp() {
     const p=this.player;let gained=0;
     while(p.xp>=p.xpNext) {
-      p.xp-=p.xpNext;p.level++;p.xpNext=xpCost(p.level);p.hp=Math.min(p.maxHp,p.hp+2);gained++;
+      const previousMax=p.maxHp;
+      p.xp-=p.xpNext;p.level++;p.xpNext=xpCost(p.level);
+      p.hp=Math.min(p.maxHp,p.hp+Math.max(0,p.maxHp-previousMax));gained++;
     }
     if(!gained)return false;
     this._refreshStats();this._emit('level',{level:p.level,gained});

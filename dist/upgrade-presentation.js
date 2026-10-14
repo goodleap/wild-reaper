@@ -1,5 +1,5 @@
 import { getUpgradeDefinition, WEAPON_DEFS, SKILL_DEFS } from './combat-catalog.js';
-import { resolveCharacterStats, weaponStats, skillStats, defenseReduction } from './combat-stats.js';
+import { resolveCharacterStats, resolveMaxHealth, weaponStats, skillStats, defenseReduction } from './combat-stats.js';
 import { getSuperSkillStats } from './super-skills.js';
 
 // The same build rules and derived stats power combat and non-mutating previews.
@@ -15,11 +15,11 @@ const change=(label,before,after,suffix='')=>({label,before:before===null?null:n
 const fixed=(label,value)=>({label,before:null,after:String(value)});
 const getOwner=(build,id)=>build.getWeapon(id)||build.getSkill(id);
 
-function previewGame(game,choice,definition) {
+function previewGame(game,choice) {
   const preview=game.build.previewUpgrade(choice),build=preview||game.build,player={...game.player};
-  const extraHealth=preview?(definition?.effects?.find(effect=>effect.stat==='maxHealth')?.value||0):0;
-  player.maxHp+=extraHealth;
-  return {...game,build,levels:build.levels,branches:build.branches,evolutions:build.evolutions,player};
+  const next={...game,build,levels:build.levels,branches:build.branches,evolutions:build.evolutions,player};
+  player.maxHp=resolveMaxHealth(next);
+  return next;
 }
 function superSummary(id,before,after,branch) {
   if(!before)return {
@@ -56,7 +56,7 @@ export function presentUpgrade(choice,game) {
     else if(superId==='vortex')model.rows=[change('每次基础伤害',before?.damage??null,after.damage),change('牵引速度',before?.pull??null,after.pull),change('施放间隔',before?.cooldown??null,after.cooldown,'秒')];
     return finish(SUPER_RARITY[superId]);
   }
-  const nextGame=previewGame(game,choice,definition),current=game.build.getRank(id),next=nextGame.build.getRank(id);
+  const nextGame=previewGame(game,choice),current=game.build.getRank(id),next=nextGame.build.getRank(id);
   if(category==='attribute') {
     const before=resolveCharacterStats(game),after=resolveCharacterStats(nextGame),endless=id.startsWith('endless');
     Object.assign(model,{action:'加强',scope:'角色属性 · 武器与技能共享',levelLabel:`累计强化 ${next} 次`,note:endless?'无尽成长 · 无次数上限':'对角色持续生效'});

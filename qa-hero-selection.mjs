@@ -30,7 +30,9 @@ for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   choose(h,'hero',hero.id);choose(h,'weapon',weaponId);
   assert.equal(node(h,'hero-selection-name').textContent,hero.name);
   assert.match(node(h,'prepare-summary').textContent,new RegExp(hero.name));
-  assert.equal(node(h,'hero-attributes').children.length,5);
+  assert.equal(node(h,'hero-attributes').children.length,hero.details.length);
+  assert.match(node(h,'hero-attributes').children[0].textContent,/持续特性.*成长后的属性/);
+  assert.match(node(h,'hero-attributes').children[1].textContent,/固定加值/);
   assert.equal(node(h,'hero-attributes').closest('details')?.tagName,'DETAILS','full numerical traits stay in expandable details');
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0);
   click(h,'prepare-back-button');assert.equal(h.run('game'),null);

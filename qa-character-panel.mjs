@@ -68,7 +68,7 @@ g.build.awardDomain('erosion');g.build.superLevels.domain=2;g.build.superLevels.
 g.build.levels.lightning=5;g.build.branches.lightning='focus';g.build.evolutions.lightning=true;
 g.build.levels.pulse=5;g.build.branches.pulse='echoes';g.build.evolutions.pulse=true;
 const skills=panel('skills');
-assert.equal(value(item(skills,'barrier'),'capacity'),'44.85','barrier preview includes current health and the relic modifier');
+assert.equal(value(item(skills,'barrier'),'capacity'),'45.54','barrier preview includes current health and the relic modifier');
 assert.equal(value(item(skills,'barrier'),'cooldown'),'12.75 秒');
 assert.match(skills,/就绪待命/);
 assert.doesNotMatch(item(skills,'barrier'),/data-stat="damage"/,'automatic protection does not pretend to deal damage');
@@ -101,7 +101,7 @@ const defenseSnapshot=JSON.stringify({build:defensive.build.serialize(),player:d
 const defenseHTML=characterPanelHTML(defensive,'attributes');
 assert.equal(value(defenseHTML,'defense'),'165','base, level, ordinary and endless defense add once');
 assert.equal(value(defenseHTML,'damageReduction'),'62.26%');
-for(const text of ['帅气王子：角色初始防御 +8','基础防御 +7','角色等级：最大生命 +40 · 防御 +20','坚韧 ×5：防御 +100','百炼坚韧 ×3：防御 +30'])assert.equal(defenseHTML.split(text).length-1,1,`source is included exactly once: ${text}`);
+for(const text of ['帅气王子：持续特性 · 最大生命 +10%（成长后生效）','帅气王子：固定加值 · 防御 +8（倍率计算后加入）','基础防御 +7','角色等级：基础最大生命 +40 · 基础防御 +20','坚韧 ×5：基础防御 +100','百炼坚韧 ×3：基础防御 +30'])assert.equal(defenseHTML.split(text).length-1,1,`source is included exactly once: ${text}`);
 assert.match(defenseHTML,/<details class="character-source"><summary>防御、生命与其他来源<\/summary>/,'defense breakdown is folded with other attribute sources');
 assert.doesNotMatch(characterPanelHTML(defensive,'skills'),/坚韧/,'defense investments do not create skills');
 assert.equal(JSON.stringify({build:defensive.build.serialize(),player:defensive.player,events:defensive.events}),defenseSnapshot,'defense inspection does not alter combat state');
