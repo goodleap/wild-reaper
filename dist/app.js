@@ -22,6 +22,7 @@ import { WorldArt } from './world-art.js';
 import { mapSeed } from './map-context.js';
 import { STAGES, getStageDefinition } from './stage-definitions.js';
 import { INITIAL_WEAPON_IDS as initialWeaponIds } from './combat-catalog.js';
+import { HEROES, getHero } from './heroes.js';
 import { WorldSiteArt } from './world-site-art.js';
 import { WorldHazardArt } from './world-hazard-art.js';
 import { WaterArt } from './water-art.js';
@@ -132,8 +133,8 @@ let keys=new Set(),skillRequested=false,touch=null,input={x:0,y:0,skill:false};
 let pendingEvolutions=[],relicChoiceKey='',lastRelics='';
 let portalRequested=false,superChoiceKey='',lastSupers='',shopKey='';
 let prepareOpen=false,prepareArtReady=false;
-let selectedDifficulty='normal',selectedMode='stage',selectedStageId='forest-trial',selectedWeaponId='sword';
-try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;if(initialWeaponIds.includes(saved?.weaponId))selectedWeaponId=saved.weaponId;}catch{}
+let selectedDifficulty='normal',selectedMode='stage',selectedStageId='forest-trial',selectedHeroId='traveler',selectedWeaponId='sword';
+try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;selectedHeroId=getHero(saved?.heroId).id;if(initialWeaponIds.includes(saved?.weaponId))selectedWeaponId=saved.weaponId;}catch{}
 if(debugConfig.world)selectedMode='free';
 let soundOn=false,audio=null;
 try{soundOn=localStorage.getItem('wild-echoes-sound')==='on';}catch{}
@@ -180,17 +181,17 @@ function refreshArchiveEntry(){
   $('archive-entry-note').textContent='图鉴 · 记录 · 里程碑';
 }
 syncSound();refreshArchiveEntry();
-function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty,mode:selectedMode,stageId:selectedStageId,weaponId:selectedWeaponId}));}catch{}}
+function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty,mode:selectedMode,stageId:selectedStageId,heroId:selectedHeroId,weaponId:selectedWeaponId}));}catch{}}
 const initialWeapons=initialWeaponIds.map(id=>ARCHIVE_ENTRIES.find(entry=>entry.id===`weapon:${id}`));
-const weaponRadios=new Map(),stageRadios=new Map();
+const weaponRadios=new Map(),stageRadios=new Map(),heroRadios=new Map(),heroPortraits=new Map();
 function preparationChoice({id,name,group,color,art,role}){
   const label=document.createElement('label'),radio=document.createElement('input'),content=document.createElement('span'),portrait=document.createElement('canvas'),title=document.createElement('strong');
-  label.className=`preparation-choice ${group==='stage'?'stage-option':'weapon-option'}`;label.style.setProperty('--choice-color',color);
+  label.className=`preparation-choice ${group}-option`;label.style.setProperty('--choice-color',color);
   radio.id=`${group}-${id}`;radio.type='radio';radio.name=group;radio.value=id;radio.setAttribute('aria-label',name);
-  content.className='preparation-choice-content';portrait.width=group==='stage'?320:256;portrait.height=group==='stage'?200:224;portrait.setAttribute(group==='stage'?'data-world-archive-art':'data-archive-art',art);portrait.setAttribute('aria-hidden','true');
+  content.className='preparation-choice-content';portrait.width=group==='stage'?320:256;portrait.height=group==='stage'?200:group==='hero'?256:224;if(group!=='hero')portrait.setAttribute(group==='stage'?'data-world-archive-art':'data-archive-art',art);portrait.setAttribute('aria-hidden','true');
   title.textContent=name;content.append(portrait,title);
   if(role){const note=document.createElement('small');note.textContent=role;content.append(note);}
-  label.append(radio,content);return {label,radio};
+  label.append(radio,content);return {label,radio,portrait};
 }
 for(const stage of STAGES){
   const {label,radio}=preparationChoice({id:stage.id,name:stage.shortName,group:'stage',color:stage.color,art:`world:${stage.themeId}`});
@@ -198,14 +199,41 @@ for(const stage of STAGES){
   radio.addEventListener('change',()=>{if(radio.checked){selectedStageId=stage.id;saveSetup();refreshStageSetup();revealSelectedStage();}});
   radio.addEventListener('focus',()=>{if(prepareOpen)revealStage(radio.parentElement);});
 }
+for(const hero of HEROES){
+  const {label,radio,portrait}=preparationChoice({id:hero.id,name:hero.name,group:'hero',color:hero.color,role:hero.role});
+  $('hero-options').append(label);heroRadios.set(hero.id,radio);heroPortraits.set(hero.id,portrait);
+  radio.addEventListener('change',()=>{if(radio.checked){selectedHeroId=hero.id;saveSetup();refreshHeroSetup();revealHeroChoice(hero.id);}});
+  radio.addEventListener('focus',()=>revealHeroChoice(hero.id));
+}
 for(const weapon of initialWeapons){
   const {label,radio}=preparationChoice({id:weapon.ownerId,name:weapon.name,group:'weapon',color:weapon.color,art:weapon.id,role:weapon.role});
   $('weapon-options').append(label);weaponRadios.set(weapon.ownerId,radio);
   radio.addEventListener('change',()=>{if(radio.checked){selectedWeaponId=weapon.ownerId;saveSetup();refreshWeaponSetup();}});
 }
 function refreshPreparationSummary(){
-  const stage=getStageDefinition(selectedStageId)||STAGES[0],weapon=initialWeapons.find(item=>item.ownerId===selectedWeaponId);
-  $('prepare-summary').textContent=`${selectedMode==='stage'?stage.name:'自由探索'} · ${selectedDifficulty==='casual'?'轻松漫游':'标准试炼'} · ${weapon.name}`;
+  const stage=getStageDefinition(selectedStageId)||STAGES[0],hero=getHero(selectedHeroId),weapon=initialWeapons.find(item=>item.ownerId===selectedWeaponId);
+  $('prepare-summary').textContent=`${selectedMode==='stage'?stage.name:'自由探索'} · ${hero.name} · ${weapon.name} · ${selectedDifficulty==='casual'?'轻松漫游':'标准试炼'}`;
+}
+function refreshHeroSetup(){
+  const hero=getHero(selectedHeroId);selectedHeroId=hero.id;
+  for(const [id,radio] of heroRadios)radio.checked=id===selectedHeroId;
+  $('hero-selection-name').textContent=hero.name;$('hero-description').textContent=hero.summary;
+  $('hero-traits').replaceChildren(...hero.traits.map(trait=>{const item=document.createElement('span');item.textContent=trait;return item;}));
+  $('hero-attributes').replaceChildren(...hero.details.map(detail=>{const item=document.createElement('li');item.textContent=detail;return item;}));
+  refreshPreparationSummary();
+}
+function drawHeroChoices(){
+  for(const hero of HEROES){
+    const portrait=heroPortraits.get(hero.id),artContext=portrait.getContext('2d');
+    artContext.clearRect(0,0,portrait.width,portrait.height);artContext.save();artContext.translate(128,152);artContext.scale(3.5,3.5);
+    artContext.fillStyle='#0b1a1655';artContext.beginPath();artContext.ellipse(0,20,16,5,0,0,TAU);artContext.fill();
+    humanoidArt.draw(artContext,hero.id,{pose:{},entity:{id:0,heroId:hero.id,facing:0},time:2,reduced:true,pixelRatio:3.5});artContext.restore();
+  }
+}
+function revealHeroChoice(id=selectedHeroId){
+  const rail=$('hero-options'),card=heroRadios.get(id)?.parentElement;if(!prepareOpen||!card||!rail.clientWidth)return;
+  if(card.offsetLeft<rail.scrollLeft)rail.scrollLeft=Math.max(0,card.offsetLeft-3);
+  else if(card.offsetLeft+card.offsetWidth>rail.scrollLeft+rail.clientWidth)rail.scrollLeft=card.offsetLeft+card.offsetWidth-rail.clientWidth+3;
 }
 function refreshWeaponSetup(){
   for(const [id,radio] of weaponRadios)radio.checked=id===selectedWeaponId;
@@ -236,15 +264,15 @@ $('stage-options').addEventListener('scroll',updateStageScroll,{passive:true});
 new ResizeObserver(()=>{if(prepareOpen)updateStageScroll();}).observe($('stage-options'));
 for(const difficulty of ['normal','casual']){const radio=$(`difficulty-${difficulty}`);radio.checked=difficulty===selectedDifficulty;radio.addEventListener('change',()=>{if(radio.checked){selectedDifficulty=difficulty;saveSetup();refreshArchiveEntry();refreshPreparationSummary();}});}
 for(const mode of ['stage','free']){const radio=$(`mode-${mode}`);radio.checked=mode===selectedMode;radio.addEventListener('change',()=>{if(radio.checked){selectedMode=mode;saveSetup();refreshStageSetup();if(prepareOpen){revealSelectedStage();updateStageScroll();}}});}
-refreshStageSetup();refreshWeaponSetup();
+refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
 function openPrepare(){
   if(game||helpOpen||archiveOpen||prepareOpen)return;
   prepareOpen=true;clearInput();show('intro',false);show('prepare-screen');arena.classList.add('preparing');
-  refreshStageSetup();refreshWeaponSetup();
+  refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
   // Reuse the static archive portraits once. No world simulation or animation
   // runs in these cards, and later visits reuse their canvas pixels.
-  if(!prepareArtReady){drawArchiveArt($('prepare-screen'));prepareArtReady=true;}
-  revealSelectedStage();updateStageScroll();$('prepare-back-button').focus({preventScroll:true});
+  if(!prepareArtReady){drawArchiveArt($('prepare-screen'));drawHeroChoices();prepareArtReady=true;}
+  revealSelectedStage();revealHeroChoice();updateStageScroll();$('prepare-back-button').focus({preventScroll:true});
 }
 function closePrepare(){
   if(!prepareOpen||helpOpen||archiveOpen)return;
@@ -253,14 +281,14 @@ function closePrepare(){
 
 
 function clearInput(){keys.clear();skillRequested=false;portalRequested=false;touch=null;input={x:0,y:0,skill:false};show('joystick',false);$('joystick-thumb').style.transform='';}
-function startGame(){prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();game=new Game({difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugFull:debugConfig.full,debugWorld:debugConfig.world});game.viewWidth=width;game.viewHeight=height;archive.begin(game);const archiveGame=game;game.onEnemyDefeated=enemy=>archive.recordDefeat(archiveGame,enemy);archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?(debugConfig.full?'完整调试 · 武器技能满级 · 3 倍移速':'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却'):game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');worldMap.discover(game,{viewportWidth:width,viewportHeight:height});updateHUD();canvas.focus({preventScroll:true});}
+function startGame(){prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game&&!runEnded)archive.finish(game,'restart');resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);pendingEvolutions=[];relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();game=new Game({hero:selectedHeroId,difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugFull:debugConfig.full,debugWorld:debugConfig.world});game.viewWidth=width;game.viewHeight=height;archive.begin(game);const archiveGame=game;game.onEnemyDefeated=enemy=>archive.recordDefeat(archiveGame,enemy);archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;toastPriority=0;toastUntil=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);notify(debugMode?(debugConfig.full?'完整调试 · 武器技能满级 · 3 倍移速':'调试模式 · 3 倍移速 · 500 金币 · 天雷无冷却'):game.stage?'外岛探索成长 · 随时前往核心岛挑战首领':'击杀获得经验 · 灵晶强化属性、武器与技能。');worldMap.discover(game,{viewportWidth:width,viewportHeight:height});updateHUD();canvas.focus({preventScroll:true});}
 function restartGame(){
   if(game){
-    selectedDifficulty=game.difficulty;selectedMode=game.stage?'stage':'free';selectedWeaponId=game.initialWeaponId;
+    selectedDifficulty=game.difficulty;selectedMode=game.stage?'stage':'free';selectedHeroId=game.hero.id;selectedWeaponId=game.initialWeaponId;
     if(game.stage)selectedStageId=game.stage.id;
     for(const difficulty of ['normal','casual'])$(`difficulty-${difficulty}`).checked=difficulty===selectedDifficulty;
     for(const mode of ['stage','free'])$(`mode-${mode}`).checked=mode===selectedMode;
-    refreshStageSetup();refreshWeaponSetup();
+    refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
   }
   startGame();
 }
@@ -297,7 +325,7 @@ function renderArchiveSummary(report){
   const target=$('end-archive-summary');
   if(report?.excluded){target.textContent='本次冒险未建立记录';return;}
   const parts=[];
-  if(report?.stageCompletion)parts.push(report.stageCompletion.isBest?'通关成绩已记录 · 最快通关':'通关成绩已记录');
+  if(report?.stageCompletion){const hero=HEROES.find(item=>item.id===report.stageCompletion.heroId);parts.push(`${hero?`${hero.name} · `:''}${report.stageCompletion.isBest?'通关成绩已记录 · 最快通关':'通关成绩已记录'}`);}
   if(report?.discoveries?.length)parts.push(`新增 ${report.discoveries.length} 项图鉴`);
   if(report?.records?.length)parts.push(`刷新 ${report.records.length} 项纪录`);
   const milestones=archiveMilestones(archive.data).filter(item=>item.complete&&!archiveMilestonesBefore.has(item.id));
@@ -810,8 +838,8 @@ function backgroundLand(camX,camY,intro){decorativeShadowShapes.length=0;if(!int
 function drawRegionBackground(camX,camY){if(!worldArt.drawGround(ctx,game.region.id,camX,camY,width,height,{seed:mapSeed(game)}))regionalArt.drawGround(ctx,game.region.id,camX,camY,width,height);}
 function runeCircle(x,y,r,t,alpha=.5){ctx.save();ctx.translate(x,y);ctx.scale(1,.6);ctx.rotate(t*.11);ctx.globalAlpha=alpha;ctx.strokeStyle='#c4e699';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.stroke();ctx.setLineDash([2,8]);ctx.beginPath();ctx.arc(0,0,r-10,0,TAU);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<8;i++){const a=i*TAU/8;ctx.save();ctx.rotate(a);ctx.translate(r,0);diamond(0,0,4,'#cced9e');line(-6,0,6,0,'#c4e699',1);ctx.restore();}ctx.restore();}
 
-// All three humanoids share the traveler's body envelope and grounded shadow.
-const HERO_VISUALS={traveler:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:{...ACTOR_VISUALS.player,top:40,halfWidth:39}};
+// Playable characters share the same grounded envelope and collision scale.
+const HERO_VISUALS={traveler:ACTOR_VISUALS.player,princess:ACTOR_VISUALS.player,elder:ACTOR_VISUALS.player,warden:ACTOR_VISUALS.player,stormcaller:{...ACTOR_VISUALS.player,top:40,halfWidth:39}};
 function actorVisual(entity,isPlayer=false,scaleOverride){
   const companionShape=(entity.isCompanion||entity.isCaptive)&&COMPANION_VISUALS[entity.kind||entity.heroId];
   const type=isPlayer?'player':entity.type,shape=companionShape||(isPlayer?(HERO_VISUALS[entity.heroId||'traveler']||HERO_VISUALS.traveler):actorShape(entity));
@@ -1232,7 +1260,7 @@ function player(x,y,t,scale=1,facing=0,hurtFlash=0,entity={}){
   const time=game?._clock??t,pose=humanoidPose(entity,!game,time);
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
   if(hurtFlash>0&&Math.floor(time*18)%2===0)ctx.globalAlpha=.65;
-  humanoidArt.draw(ctx,'traveler',{pose,entity,time,reduced,pixelRatio:dpr});ctx.restore();
+  humanoidArt.draw(ctx,getHero(entity.heroId).id,{pose,entity,time,reduced,pixelRatio:dpr});ctx.restore();
 }
 function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(actorShape(e).radius);ctx.scale(s,s);const bob=enemyBob(e,t,reduced);ctx.translate(0,bob);const hit=e.hit>0;
   // A brief foot-anchored compression and lean makes a landed hit tangible.

@@ -1,10 +1,12 @@
 import { ARCHIVE_ENTRIES, enemyArchiveId, companionArchiveId, ownedArchiveEntries } from './archive-catalog.js';
 import { UPGRADE_DEFS } from './combat-catalog.js';
+import { HEROES } from './heroes.js';
 
 export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive-v2';
 const PREVIOUS_ARCHIVE_KEY='wild-echoes-adventure-archive';
 const LEGACY_KEY='wild-echoes-endless-record';
 const ENTRY_IDS=new Set(ARCHIVE_ENTRIES.map(entry=>entry.id));
+const HERO_IDS=new Set(HEROES.map(hero=>hero.id));
 const MODIFIER_CAPS=new Map(UPGRADE_DEFS.filter(def=>def.upgradeKind==='modifier').map(def=>[def.id,def.cap]));
 const COUNTER_LIMIT=1e12;
 const finite=(value,limit=COUNTER_LIMIT)=>typeof value==='number'&&Number.isFinite(value)?Math.min(limit,Math.max(0,value)):0;
@@ -33,7 +35,9 @@ function sanitize(value){
     data.stages[id]={};
     for(const difficulty of ['normal','casual']){
       const source=record[difficulty],clears=integer(source?.clears);
-      data.stages[id][difficulty]={clears,bestTime:clears?finite(source?.bestTime):0};
+      const clean={clears,bestTime:clears?finite(source?.bestTime):0};
+      if(clears)for(const key of ['bestHeroId','lastHeroId'])if(HERO_IDS.has(source?.[key]))clean[key]=source[key];
+      data.stages[id][difficulty]=clean;
     }
   }
   data.legacy=legacyOf(value.legacy);return data;
@@ -66,7 +70,8 @@ export class AdventureArchive {
     if(this._active)this.finish(this._active,'exit');
     const difficulty=game.difficulty==='casual'||game.difficulty==='easy'?'casual':'normal';
     const stageId=safeId(game.stage?.id)?game.stage.id:null;
-    const run={difficulty,stageId,stageCompletion:null,ended:false,reason:null,baseline:{...this.data.best[difficulty]},counted:emptyBest(),lastSavedTime:0,defeated:new WeakSet(),defeatedBosses:0,acquired:new Set(),discoveries:[],final:null};
+    const heroId=HERO_IDS.has(game.hero?.id)?game.hero.id:null;
+    const run={difficulty,stageId,heroId,stageCompletion:null,ended:false,reason:null,baseline:{...this.data.best[difficulty]},counted:emptyBest(),lastSavedTime:0,defeated:new WeakSet(),defeatedBosses:0,acquired:new Set(),discoveries:[],final:null};
     this._runs.set(game,run);this._active=game;
     this.data.totals.runs=integer(this.data.totals.runs+1);this._dirty=true;
     this.checkpoint(game,{force:true});return true;
@@ -146,8 +151,10 @@ export class AdventureArchive {
       if(reason==='victory'&&game.status==='victory'&&run.stageId&&game.stage?.id===run.stageId&&game.stage.completed===true&&game.stage.coreDefeated===true){
         const records=this.data.stages[run.stageId]??={normal:emptyStageRecord(),casual:emptyStageRecord()};
         const record=records[run.difficulty],time=run.final.time,isBest=record.clears===0||time<record.bestTime;
-        record.clears=integer(record.clears+1);if(isBest)record.bestTime=time;
-        run.stageCompletion={id:run.stageId,time,clears:record.clears,bestTime:record.bestTime,isBest};
+        record.clears=integer(record.clears+1);
+        if(isBest){record.bestTime=time;if(run.heroId)record.bestHeroId=run.heroId;else delete record.bestHeroId;}
+        if(run.heroId)record.lastHeroId=run.heroId;else delete record.lastHeroId;
+        run.stageCompletion={id:run.stageId,heroId:run.heroId,time,clears:record.clears,bestTime:record.bestTime,isBest};
         this._dirty=true;this.flush();
       }
       if(this._active===game)this._active=null;

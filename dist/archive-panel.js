@@ -9,6 +9,7 @@ import { drawOrbitBlade } from './prop-art.js';
 import { HumanoidArt } from './humanoid-art.js';
 import { CompanionArt, COMPANION_VISUALS } from './companion-art.js';
 import { STAGES } from './stage-definitions.js';
+import { HEROES, getHero } from './heroes.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number=value=>Math.max(0,Math.floor(Number(value)||0)).toLocaleString('zh-CN');
@@ -18,6 +19,7 @@ const knownCount=(data,category)=>ARCHIVE_ENTRIES.filter(entry=>(!category||entr
 const enemyEntry=entry=>entry.category==='enemies'||entry.category==='bosses';
 const safeChoice=(value,choices,fallback)=>choices.includes(value)?value:fallback;
 const bestTime=data=>Math.max(data?.best?.normal?.time||0,data?.best?.casual?.time||0);
+const recordedHeroName=id=>HEROES.some(hero=>hero.id===id)?getHero(id).name:'';
 
 export function archiveMilestones(data={}){
   const totals=data.totals||{},entries=data.entries||{};
@@ -76,7 +78,8 @@ function stat(label,value,unit=''){return `<div class="archive-stat"><span>${lab
 function stageRecordsHTML(data,difficulty){
   return `<section class="archive-stage-records"><h3>关卡通关</h3><div class="archive-stage-grid">${STAGES.map(stage=>{
     const record=data.stages?.[stage.id]?.[difficulty]||{},clears=record.clears||0;
-    return `<div class="archive-stage-record" data-stage-record="${escape(stage.id)}" style="--stage-color:${escape(stage.color)}"><strong>${escape(stage.name)}</strong><span>通关 <b>${number(clears)}</b> 次</span><span>最快 <b>${clears?duration(record.bestTime):'尚未通关'}</b></span></div>`;
+    const bestHero=clears?recordedHeroName(record.bestHeroId):'',lastHero=clears?recordedHeroName(record.lastHeroId):'';
+    return `<div class="archive-stage-record" data-stage-record="${escape(stage.id)}" style="--stage-color:${escape(stage.color)}"><strong>${escape(stage.name)}</strong><span>通关 <b>${number(clears)}</b> 次</span><span>最快 <b>${clears?duration(record.bestTime):'尚未通关'}</b>${bestHero?`<small class="archive-stage-hero">${escape(bestHero)}</small>`:''}</span>${lastHero&&lastHero!==bestHero?`<span class="archive-stage-latest">最近通关 · ${escape(lastHero)}</span>`:''}</div>`;
   }).join('')}</div><p class="archive-small-note">各关卡、难度分别记录；进入通关门才计为胜利。</p></section>`;
 }
 function recordsHTML(data,difficulty){

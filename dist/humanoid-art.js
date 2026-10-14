@@ -1,7 +1,8 @@
+import {HERO_PALETTES,drawHeroPart,drawHeroFace} from './hero-art.js';
 // Small illustrated people retain their original silhouettes. Material detail is
 // rasterized once per facing; only grounded feet, hands and two simple eyes move.
 const TAU=Math.PI*2,CACHE_LIMIT=2*1024*1024;
-const KINDS=new Set(['traveler','warden','stormcaller','merchant','angel']);
+const KINDS=new Set(['traveler','warden','stormcaller','merchant','angel',...Object.keys(HERO_PALETTES)]);
 const BOX={back:[64,52,32,32],body:[36,29,18,11],head:[46,44,23,41],left:[48,29,24,11],right:[48,29,24,11],staff:[32,58,9,38]};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const line=(c,p,color,w=1)=>{c.beginPath();for(let i=0;i<p.length;i++)c[i?'lineTo':'moveTo'](...p[i]);c.strokeStyle=color;c.lineWidth=w;c.stroke();};
@@ -15,6 +16,7 @@ function gem(c,x,y,r,colors=['#77745a','#d9c17b','#fff1b9'],flip=1){poly(c,[[x,y
 function coatPath(c,w=12){c.beginPath();c.moveTo(-8,-7);c.quadraticCurveTo(0,-9,8,-7);c.lineTo(w,10);c.quadraticCurveTo(0,15,-w,10);c.closePath();}
 function hoodPath(c){c.beginPath();c.moveTo(-14,-8);c.quadraticCurveTo(-17,-26,0,-32);c.quadraticCurveTo(17,-28,16,-8);c.quadraticCurveTo(10,1,-12,-2);c.closePath();}
 const PALETTES={
+  ...HERO_PALETTES,
   traveler:{cloth:['#567b49','#adc19a','#70964f'],arm:['#70964f','#70964f','#70964f'],outline:'#253c2a',skin:['#d8d1a7','#d8d1a7','#d8d1a7'],face:'#32452f',eye:'#ecf6c8'},
   warden:{cloth:['#5b6340','#8f8052','#c1ac76'],arm:['#495e3a','#718653','#a4ac70'],outline:'#374831',skin:['#908662','#bfb185','#e0d1a0'],face:'#344638',eye:'#f2ebbf'},
   stormcaller:{cloth:['#49435e','#796e9d','#aaa0c4'],arm:['#58516f','#8a80aa','#b1a6cc'],outline:'#373c4d',skin:['#9292ac','#c3bfda','#e1dceb'],face:'#353d54',eye:'#eaf0ff'},
@@ -42,7 +44,7 @@ export class HumanoidArt {
     const key=`${kind}:${part}:${flip}`;let item=this.cache.get(key);if(item)return item;
     const [w,h,baseOx,oy]=BOX[part],ox=flip<0?w-baseOx:baseOx,canvas=this.makeCanvas();canvas.width=Math.ceil(w*ratio);canvas.height=Math.ceil(h*ratio);const c=canvas.getContext('2d');
     c.scale(ratio,ratio);c.translate(ox,oy);c.scale(flip,1);c.lineJoin='round';c.lineCap='round';
-    this[`_${part}`](c,kind,flip);
+    if(!drawHeroPart(c,kind,part,flip))this[`_${part}`](c,kind,flip);
     item={canvas,w,h,ox,oy,bytes:canvas.width*canvas.height*4};
     while(this.bytes+item.bytes>CACHE_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.bytes-=this.cache.get(oldest).bytes;this.cache.delete(oldest);}
     this.cache.set(key,item);this.bytes+=item.bytes;this.builds++;return item;
@@ -97,7 +99,7 @@ export class HumanoidArt {
       }
       c.restore();return;
     }
-    const leather=kind==='stormcaller'?['#36364a','#5c576d','#8b8596']:kind==='angel'?['#667464','#98a189','#c9c8ab']:['#303a2b','#555d40','#87906a'];
+    const leather=kind==='princess'?['#49363d','#78525a','#b58c85']:kind==='elder'?['#3b3c31','#62624b','#99927a']:kind==='stormcaller'?['#36364a','#5c576d','#8b8596']:kind==='angel'?['#667464','#98a189','#c9c8ab']:['#303a2b','#555d40','#87906a'];
     for(const side of [-1,1]){const lift=side<0?p.leftLift:p.rightLift,x=(side*6-side*p.step*1.6)*flip;
       line(c,[[side*5.5*flip,8+p.bodyY],[x,14-lift]],leather[1],4.6);
       c.beginPath();c.moveTo(x-3.4,12-lift);c.quadraticCurveTo(x,10.6-lift,x+3.2,12-lift);c.lineTo(x+4.2,15.4-lift);c.quadraticCurveTo(x+1,18.3-lift,x-4,16.1-lift);c.closePath();paint(c,leather[1],leather[0],.9);
@@ -248,6 +250,7 @@ export class HumanoidArt {
     poly(c,[[12,-34],[12,-28],flip>0?[16,-29]:[7,-30]],'#f3fcff');poly(c,[flip>0?[7,-30]:[16,-29],[12,-28],[12,-25]],'#9ca4c9');line(c,[[8,-25],[12,-24],[15,-27]],'#c5b490',1.3);
   }
   _face(c,kind,state){
+    if(drawHeroFace(c,kind,state))return;
     const p=PALETTES[kind],angel=kind==='angel',xs=kind==='traveler'?[-2,6]:angel?[-3.8,3.8]:[-4,4],y=kind==='traveler'?-12:angel?-11.5:-12.6;
     for(let i=0;i<2;i++){
       const x=xs[i];

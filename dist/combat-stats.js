@@ -25,19 +25,19 @@ export { effectTotal as upgradeEffectTotal };
 
 export function resolveCharacterStats(game) {
   const p=game.player,hero=game.hero;
-  const attackMultiplier=1+effectTotal(game,'power','damageBonus')+effectTotal(game,'endlessPower','damageBonus')+(game.rescuePower||0)*.08+(p.level-1)*.01;
+  const attackMultiplier=(hero.damageMultiplier??1)*(1+effectTotal(game,'power','damageBonus')+effectTotal(game,'endlessPower','damageBonus')+(game.rescuePower||0)*.08+(p.level-1)*.01);
   const externalDamageMultiplier=(game.adventure?.damageMultiplier()??1)*(game.relics?.damageMultiplier()??1);
   const moveMultiplier=(1+effectTotal(game,'speed','moveSpeedBonus'))*(game.relics?.movementMultiplier()??1)*(game.debug?3:1);
   return {
     attack:COMBAT_REFERENCE_ATTACK*attackMultiplier,attackMultiplier,
     externalDamageMultiplier,damageMultiplier:attackMultiplier*externalDamageMultiplier,
-    defense:Math.max(0,(game.build?.attributes?.defense??0)+Math.max(0,p.level-1)*CHARACTER_DEFENSE_PER_LEVEL+effectTotal(game,'toughness','defense')+effectTotal(game,'endlessToughness','defense')),
+    defense:Math.max(0,(hero.baseDefense??0)+(game.build?.attributes?.defense??0)+Math.max(0,p.level-1)*CHARACTER_DEFENSE_PER_LEVEL+effectTotal(game,'toughness','defense')+effectTotal(game,'endlessToughness','defense')),
     // Critical attributes remain neutral until a real source grants them.
     criticalChance:0,criticalMultiplier:1,
     maxHp:p.maxHp,currentHp:p.hp,
     regen:effectTotal(game,'regen','healthRegen')+effectTotal(game,'endlessRegen','healthRegen'),
     moveSpeed:hero.baseSpeed*moveMultiplier,moveMultiplier,
-    magnet:ATTACK_DEFAULTS.magnet*(1+effectTotal(game,'magnet','pickupRangeBonus')),
+    magnet:ATTACK_DEFAULTS.magnet*(hero.magnetMultiplier??1)*(1+effectTotal(game,'magnet','pickupRangeBonus')),
     fireRate:1+effectTotal(game,'rapid','attackRateBonus'),
     stormCooldown:game.debug?0:hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction'))
   };

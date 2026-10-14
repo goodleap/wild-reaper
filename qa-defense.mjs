@@ -51,16 +51,16 @@ function capRegularUpgrades(game) {
 // XP grants only the natural +1 defense per character level. Crystal ranks
 // remain separate, and derived-stat refreshes never apply growth twice.
 const growth=arena(),buildBefore=growth.build.serialize();
-assert.equal(growth.player.defense,0);
+assert.equal(growth.player.defense,8);
 const xpTo20=Array.from({length:19},(_,i)=>xpCost(i+1)).reduce((sum,xp)=>sum+xp,0);
 assert(growth.addExperience(xpTo20));
 assert.equal(growth.player.level,20);assert.equal(growth.player.xp,0);
-assert.equal(growth.player.defense,19);assert.equal(growth.stats.defense,19);
+assert.equal(growth.player.defense,27);assert.equal(growth.stats.defense,27);
 assert.equal(growth.crystals,0);assert.equal(growth.progressionTier,1);assert.equal(growth.status,'playing');
 assert.deepEqual(growth.build.serialize(),buildBefore,'character XP does not grant crystal investments or ability slots');
 growth.build.attributes.defense=7;
 for(let i=0;i<20;i++)growth._refreshStats();
-assert.equal(growth.player.defense,26,'legacy defense remains additive without absorbing natural level growth');
+assert.equal(growth.player.defense,34,'legacy defense remains additive without absorbing natural level growth');
 assert.equal(growth.build.attributes.defense,7);
 
 // Defense is an ordinary paid attribute choice, with the same offer and
@@ -83,13 +83,13 @@ for(let rank=1;rank<=5;rank++) {
   assert.equal(normal.build.getRank('toughness'),rank-1);
   normal.addCrystals(1);assert(normal.chooseUpgrade('toughness'));
   assert.equal(normal.crystals,0);assert.equal(normal.build.getRank('toughness'),rank);
-  assert.equal(normal.player.defense,rank*20);assert.equal(normal.player.hp,53);
-  assert.equal(normal.player.maxHp,100);assert.equal(normal.player.level,1);
+  assert.equal(normal.player.defense,8+rank*20);assert.equal(normal.player.hp,53);
+  assert.equal(normal.player.maxHp,110);assert.equal(normal.player.level,1);
   assert.equal(normal.build.attributes.defense,0,'paid defense is stored as its own investment, not baked into legacy base');
   assert.deepEqual({arrow:weaponStats(normal,'arrow').damage,storm:skillStats(normal,'storm').damage,attack:resolveCharacterStats(normal).attack},offenseBefore);
   assert.deepEqual({weapons:normal.build.getWeaponLoadout(),skills:normal.build.getSkillLoadout()},loadoutBefore);
   for(let refresh=0;refresh<4;refresh++)normal._refreshStats();
-  assert.equal(normal.player.defense,rank*20);
+  assert.equal(normal.player.defense,8+rank*20);
 }
 assert.equal(canTakeUpgrade(normal.build,'toughness'),false);assert.equal(normal.build.increment('toughness'),false);
 const stale=arena();stale.progressionTier=2;fund(stale);offerContaining(stale,'toughness');
@@ -119,7 +119,7 @@ assert.deepEqual([...seen].sort(),['endlessPower','endlessRegen','endlessToughne
 offerContaining(late,'endlessToughness');assert(late.chooseUpgrade('endlessToughness'));
 for(let rank=2;rank<=32;rank++)purchase(late,'endlessToughness');
 assert.equal(late.build.getRank('toughness'),5);assert.equal(late.build.getRank('endlessToughness'),32);
-assert.equal(late.player.defense,420);assert.equal(late.player.hp,57);
+assert.equal(late.player.defense,428);assert.equal(late.player.hp,57);
 assert.equal(resolveCharacterStats(late).attack,lateAttack,'endless defense has no damage conversion');
 
 // Snapshot restoration preserves paid growth; old snapshots without the new
@@ -127,12 +127,12 @@ assert.equal(resolveCharacterStats(late).attack,lateAttack,'endless defense has 
 late.build.attributes.defense=9;
 const snapshot=late.build.serialize(),restored=CombatBuild.fromSnapshot(JSON.parse(JSON.stringify(snapshot)));
 assert.deepEqual(restored.serialize(),snapshot);
-near(resolveCharacterStats({...late,build:restored}).defense,429,'restored defense matches its paid and legacy sources');
+near(resolveCharacterStats({...late,build:restored}).defense,437,'restored defense matches its paid and legacy sources');
 const oldSnapshot=new CombatBuild().serialize();delete oldSnapshot.attributes.toughness;delete oldSnapshot.attributes.endlessToughness;
 oldSnapshot.attributes.defense=11;
 const oldBuild=CombatBuild.fromSnapshot(oldSnapshot);
 assert.equal(oldBuild.getRank('toughness'),0);assert.equal(oldBuild.getRank('endlessToughness'),0);
-near(resolveCharacterStats({...growth,build:oldBuild}).defense,30,'old build inherits current character level independently');
+near(resolveCharacterStats({...growth,build:oldBuild}).defense,38,'old build inherits current character level independently');
 for(const [id,value] of [['toughness',6],['toughness',-1],['toughness',1.5],['endlessToughness',-1],['endlessToughness',NaN]]) {
   const corrupt=structuredClone(snapshot);corrupt.attributes[id]=value;
   assert.throws(()=>CombatBuild.fromSnapshot(corrupt),`reject invalid ${id} rank ${value}`);
@@ -141,9 +141,10 @@ const impossible=structuredClone(snapshot);impossible.attributes.toughness=4;
 assert.throws(()=>CombatBuild.fromSnapshot(impossible),'endless defense cannot be restored without its prerequisite');
 
 // Actual hit resolution uses the shared formula for level and card sources.
-for(const defense of [0,20,100,119]) {
-  const game=arena();game.levels.toughness=defense===20?1:defense>=100?5:0;
-  if(defense===119)game.addExperience(xpTo20);
+for(const investment of [0,20,100,119]) {
+  const defense=8+investment;
+  const game=arena();game.levels.toughness=investment===20?1:investment>=100?5:0;
+  if(investment===119)game.addExperience(xpTo20);
   game._refreshStats();const hp=game.player.hp;
   assert.equal(game.player.defense,defense);
   near(defenseDamageMultiplier(defense),100/(100+defense),'damage multiplier');
@@ -157,13 +158,13 @@ for(const defense of [0,20,100,119]) {
 }
 const shielded=arena();shielded.levels.toughness=5;shielded._refreshStats();
 assert(shielded.relics.acquire('leafWard'));assert(shielded.relics.grantWard(18));
-assert(shielded._hurtPlayer(100));near(shielded.player.hp,100,'100 raw damage halves before 18 ward and the 34.5-capacity barrier absorb it');
-near(shielded.barrier.remaining,2.5,'the same active barrier retains unused capacity');
+assert(shielded._hurtPlayer(100));near(shielded.player.hp,110,'damage is reduced by 108 defense before ward and the role-health barrier absorb it');
+near(shielded.barrier.remaining,110*.3*1.15-(100*100/208-18),'the same active barrier retains unused capacity');
 assert.equal(shielded.relics.wardAmount,0);assert.equal(shielded.relics.shieldReady,false);
 assert.equal(shielded.relics.shieldCooldown,12.75);assert.equal(shielded.player.invuln,.8);
 const blocked=arena();blocked.levels.toughness=5;blocked._refreshStats();
 assert(blocked.relics.acquire('leafWard'));assert(blocked.relics.grantWard(18));
-assert(blocked._hurtPlayer(30));assert.equal(blocked.player.hp,100);
+assert(blocked._hurtPlayer(30));assert.equal(blocked.player.hp,110);
 assert.equal(blocked.player.hurtFlash,0,'a fully absorbed hit does not blink like health damage');
 assert.equal(blocked.relics.wardAmount,0);assert.equal(blocked.relics.shieldReady,true,'a ward that absorbs the reduced hit preserves the automatic barrier');
 assert.equal(blocked.player.invuln,.8);

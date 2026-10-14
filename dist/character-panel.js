@@ -25,13 +25,15 @@ function attributes(game) {
   const p=game.player,s=resolveCharacterStats(game),move=movement(game,s);
   const magnet=game.adventure?.magnetRange?.(s.magnet)??s.magnet;
   const rank=id=>game.build.getRank(id);
-  const attackSources=[`初始攻击 ${COMBAT_REFERENCE_ATTACK}`];
+  const attackSources=[`${game.hero.name}：初始攻击 ${number(COMBAT_REFERENCE_ATTACK*(game.hero.damageMultiplier??1))}`];
   if(p.level>1)attackSources.push(`角色等级 Lv.${p.level}：攻击加成 ${bonus((p.level-1)*.01)}`);
   for(const id of ['power','endlessPower'])if(rank(id))attackSources.push(`${id==='power'?'锋芒':'百炼锋芒'}：攻击加成 ${bonus(upgradeEffectTotal(game,id,'damageBonus'))}`);
   if(game.rescuePower>0)attackSources.push(`营救援助 ×${game.rescuePower}：攻击加成 ${bonus(game.rescuePower*.08)}`);
   if(game.adventure?.furyTime>0)attackSources.push(`狂暴：伤害 ×${number(game.adventure.damageMultiplier())}`);
   if((game.relics?.damageMultiplier?.()??1)!==1)attackSources.push(`赤心：伤害 ×${number(game.relics.damageMultiplier())}`);
   const otherSources=[`初始最大生命 ${number(p.baseMaxHp??s.maxHp)} · 初始移速 ${number(game.hero.baseSpeed)}`];
+  if(game.hero.baseDefense)otherSources.push(`${game.hero.name}：角色初始防御 +${number(game.hero.baseDefense)}`);
+  if((game.hero.magnetMultiplier??1)!==1)otherSources.push(`${game.hero.name}：拾取范围 ${bonus(game.hero.magnetMultiplier-1)}`);
   if(game.build.attributes.defense>0)otherSources.push(`基础防御 +${number(game.build.attributes.defense)}`);
   if(p.level>1)otherSources.push(`角色等级：最大生命 +${number((p.level-1)*2)} · 防御 +${number((p.level-1)*CHARACTER_DEFENSE_PER_LEVEL)}`);
   for(const def of [...UPGRADE_DEFS,...ENDLESS_UPGRADES])if(def.category==='attribute'&&rank(def.id)&&!['power','endlessPower'].includes(def.id)) {

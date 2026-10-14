@@ -28,25 +28,27 @@ function offer(g,id) {
 }
 function shootOnce(g) {g.levels.arrow=1;g._shot=0;g.update(0);g._shot=Infinity;}
 
-assert.deepEqual(HEROES.map(h=>h.id),['traveler'],'there is only one playable protagonist');
-for(const hero of ['traveler','ranger','warden','stormcaller','unknown']) {
+assert.deepEqual(HEROES.map(h=>h.id),['traveler','princess','elder']);
+const expectedHeroes={traveler:{hp:110,speed:220,defense:8},princess:{hp:90,speed:246.4,defense:0},elder:{hp:85,speed:202.4,defense:0}};
+for(const hero of ['traveler','princess','elder','ranger','warden','stormcaller','unknown']) {
+  const id=Object.hasOwn(expectedHeroes,hero)?hero:'traveler',expected=expectedHeroes[id];
   const g=arena({hero,fresh:true});
-  assert.equal(g.hero.id,'traveler');assert.equal(g.player.heroId,'traveler','obsolete saved selections cannot restore removed starting roles');
-  assert.equal(g.player.maxHp,100);assert.equal(g.player.hp,100);
-  assert.equal(g.player.speed,220);assert.equal(g.player.skillCooldownMax,15);
-  assert(Object.entries(g.levels).every(([id,level])=>level===(id==='sword'?1:0)),'the protagonist starts with only the default sword and no earned passive upgrades');
+  assert.equal(g.hero.id,id);assert.equal(g.player.heroId,id,'obsolete saved selections cannot restore NPC roles');
+  assert.equal(g.player.maxHp,expected.hp);assert.equal(g.player.hp,expected.hp);assert.equal(g.player.defense,expected.defense);
+  assert.equal(g.player.speed,expected.speed);assert.equal(g.player.skillCooldownMax,15);
+  assert(Object.entries(g.levels).every(([id,level])=>level===(id==='sword'?1:0)),'every role starts with only the selected sword and no earned passive upgrades');
   assert.equal(g.player.xp,0);assert.equal(g.player.level,1);assert.equal(g.status,'playing');
-  assert.deepEqual(g.weapons.map(w=>[w.id,w.level]),[['sword',1]],'the default sword is available without a permanently held weapon');
+  assert.deepEqual(g.weapons.map(w=>[w.id,w.level]),[['sword',1]]);
   // Character level never gates access to any of the three secondary skills.
   for(const id of ['orbit','pulse','lightning']) {
     offer(g,id);assert(g.chooseUpgrade(id));assert.equal(g.levels[id],1);
     assert.equal(g.player.level,1,'all skills can be acquired while still character level one');
   }
   const baseSpeed=g.player.speed;offer(g,'speed');assert(g.chooseUpgrade('speed'));
-  assert(Math.abs(g.player.speed/baseSpeed-1.08)<1e-10,'earned movement upgrades still change real movement speed');
-  assert.equal(arena({hero,difficulty:'casual'}).player.maxHp,140);
+  assert(Math.abs(g.player.speed/baseSpeed-1.08)<1e-10,'earned movement upgrades preserve each role speed baseline');
+  assert.equal(arena({hero,difficulty:'casual'}).player.maxHp,Math.round(expected.hp*1.4));
   const restarted=arena({hero:g.player.heroId,fresh:true});
-  assert.equal(restarted.player.heroId,'traveler');assert(Object.entries(restarted.levels).every(([id,level])=>level===(id==='sword'?1:0)));
+  assert.equal(restarted.player.heroId,id);assert(Object.entries(restarted.levels).every(([id,level])=>level===(id==='sword'?1:0)));
   assert.equal(restarted.player.xp,0);assert.equal(restarted.player.level,1);
 }
 const quick=arena(),regular=arena();quick.levels.rapid=1;quick._refreshStats();
@@ -202,7 +204,7 @@ const savedFuse=bomb.fuse;blast.environment.hitAt(bomb.x,bomb.aimY,30,'pulse');
 assert.equal(bomb.fuse,savedFuse,'repeated hits cannot restart or accelerate a lit fuse');
 blast.status='upgrade';advance(blast,1);blast.environment.update(.05);assert.equal(bomb.fuse,savedFuse);
 blast.status='playing';advance(blast,.075);
-assert.equal(blast.player.hp,beforeBlast.player-12,'the blast damages the player through the normal damage path');
+assert(Math.abs(blast.player.hp-(beforeBlast.player-12*100/108))<1e-9,'the blast uses the normal path including initial role defense');
 assert(beforeBlast.near-near.hp>80&&beforeBlast.near-near.hp<100,'the nearby enemy receives environmental damage');
 assert.equal(outside.hp,beforeBlast.outside,'the blast does not reach a distant enemy');
 assert(!blast.environment.props.includes(bomb));assert.equal(blast.events.filter(e=>e.type==='mushroomBlast').length,1);
@@ -296,4 +298,4 @@ assert.equal(stable.adventure._environmentFree(stableMud.x,stableMud.y,18),false
 stable.adventure.props=[];const restoredMud=readMud();assert(restoredMud);
 assert.equal(restoredMud.x,stableMud.x);assert.equal(restoredMud.y,stableMud.y,'removing the dynamic objective leaves the same mud geometry');
 
-console.log('Protagonist and interaction mechanics: fixed starting state, open skill slots, bleed/shock reactions, mud, delayed mushrooms, bounded world state and interrupted Boss attacks passed.');
+console.log('Protagonist and interaction mechanics: three role baselines, legacy fallback, open skill slots, bleed/shock reactions, mud, delayed mushrooms, bounded world state and interrupted Boss attacks passed.');
