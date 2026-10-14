@@ -33,7 +33,7 @@ import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { SceneTransition } from './scene-transition.js';
 import { spawnDebugWave } from './debug-wave.js';
-import { applyFullDebugBuild, spawnDebugTrainingDummy } from './debug-training.js';
+import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBoss } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, selectFriendlyTarget, damageFriendly, clearFriendlyPath } from './friendly-combat.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
@@ -116,7 +116,7 @@ export class Game {
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
     if(this.debug)this.grantResources({gold:500},'debugStart');
-    applyFullDebugBuild(this);spawnDebugTrainingDummy(this);
+    applyFullDebugBuild(this);spawnDebugTrainingDummy(this);spawnDebugBoss(this);
     if(this.debugFull)for(const definition of COMPANIONS)this.companions.recruit?.(definition.id,{sourceId:'debugFull'});
   }
 
@@ -467,7 +467,7 @@ export class Game {
     if(!inDungeon&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
-      const bossActive=this.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false);
+      const bossActive=this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false);
       const rate=Math.min(4.5,BALANCE.spawnBase+this._difficultyTime()*.008)*(this.easy?.78:1)*(bossActive?.38:1);
       this._spawn=1/rate;
       if(this.enemies.length<180) {
@@ -475,7 +475,7 @@ export class Game {
         if(enemy)this.elites.maybePromote(enemy);
       }
     }
-    if(!inDungeon&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&e.hp>0)) {
+    if(!inDungeon&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');

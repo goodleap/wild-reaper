@@ -130,7 +130,7 @@ export class CombatResolution {
       if(enemy.type==='boss') {
         enemy.slam=null;clearBossAttacks(enemy);
         g._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482');
-        if(!enemy.dungeonBoss&&!enemy.dungeonId) {
+        if(!enemy.dungeonBoss&&!enemy.dungeonId&&!enemy.debugBoss) {
           g.bossDefeated=true;g.bossKills++;g._emit('bossKill');
           g.grantResources({gold:30,crystals:45},'regionalBoss');g.regions.openPortal(enemy);
         }

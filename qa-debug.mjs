@@ -30,7 +30,7 @@ for(let terrainSeed=0;terrainSeed<100;terrainSeed++) {
   const ring=g.enemies.filter(enemy=>enemy.debugWave);
   assert(ring.length>=32&&ring.length<=DEBUG_WAVE_RULES.count,`seed ${terrainSeed}: the surrounding test cohort is substantial and bounded (${ring.length})`);
   assert.equal(g.regions.portals.length,2,'the initial island has two fixed world gateways');
-  assert.equal(g.enemies.filter(enemy=>enemy.type==='boss').length,g.regions.portals.filter(portal=>portal.state==='locked').length,'each locked portal retains its ordinary guardian');
+  assert.equal(g.enemies.filter(enemy=>enemy.type==='boss'&&!enemy.debugBoss).length,g.regions.portals.filter(portal=>portal.state==='locked').length,'each locked portal retains its ordinary guardian');
   assert.equal(g.enemies.filter(enemy=>enemy.type==='slime'&&enemy.id<=4).length,0,'the ring replaces the four random starter slimes');
   const quarters=new Set(),stats={slime:[26,85,9,4],beetle:[43,100,12,6],brute:[115,60,17,13]};
   for(const enemy of ring) {

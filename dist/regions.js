@@ -124,7 +124,7 @@ export class Regions {
     return true;
   }
   openPortal(enemy) {
-    if(enemy.type!=='boss'||enemy.dungeonBoss||enemy.dungeonId||enemy.hp>0||enemy.id===this._lastBossId)return null;
+    if(enemy.type!=='boss'||enemy.dungeonBoss||enemy.dungeonId||enemy.debugBoss||enemy.hp>0||enemy.id===this._lastBossId)return null;
     const g=this.game;let portal=enemy.portalId?this.portals.find(p=>p.id===enemy.portalId):g.portal;
     if(!portal&&!this.guarded) {
       const targets=worldNeighbors(g.regionIndex),target=targets[0];
@@ -167,7 +167,7 @@ export class Regions {
   canEnter(portalOrId) {
     const g=this.game,portal=this._portal(portalOrId);
     return !!(portal&&portal.state==='active'&&g.status==='playing'&&!g.superSkills.pending&&!this._rewardQueue.length&&!g.dungeon?.active&&
-      !g.enemies.some(e=>e.type==='boss'&&e.hp>0&&e.guardActive!==false)&&portalEntranceContains(portal,feet(g)));
+      !g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false)&&portalEntranceContains(portal,feet(g)));
   }
   getInteraction() {
     const portal=this.nearest(),g=this.game;if(!portal||g.status!=='playing'||g.dungeon?.active)return null;
@@ -193,7 +193,7 @@ export class Regions {
   }
   saveWorld() {
     const g=this.game;
-    const enemies=g.enemies.filter(e=>e.hp>0&&(e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId));
+    const enemies=g.enemies.filter(e=>e.hp>0&&(e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId||e.debugBoss));
     g.terrain._cache?.clear();
     const state={savedAt:g.time,savedClock:g._clock,terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,settlements:g.settlements,relicSites:g.relicSites,enemies,gems:g.gems,coins:g.coins,portals:this.portals,portal:g.portal,dungeonStates:g.dungeon.states,discoveredMap:g.discoveredMap,
       companionCamps:g.companions.camps,companionNextAt:g.companions.nextAt,companionGeneration:g.companions.generation,bossDefeated:g.bossDefeated,nextBossAt:g.nextBossAt};

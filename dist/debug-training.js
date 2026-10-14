@@ -1,9 +1,11 @@
 import { UPGRADE_DEFS, SUPER_SKILL_DEFS } from './combat-catalog.js';
 import { isBranchReady } from './weapon-branches.js';
 import { groundOffset } from './terrain.js';
+import { enemyDefinition } from './enemy-definitions.js';
 
 export const DEBUG_FULL_BRANCHES=Object.freeze({sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain',domain:'binding'});
 export const TRAINING_DUMMY_RULES=Object.freeze({radius:16,foot:18,defense:100,health:1e9,minDistance:110,maxDistance:230});
+export const DEBUG_BOSS_RULES=Object.freeze({health:1e9,minDistance:180,maxDistance:450});
 
 // Grant the same capped records ordinary rewards build. Attribute purchases,
 // character XP and crystal progression are deliberately left untouched.
@@ -37,9 +39,7 @@ function segmentDistance(point,a,b) {
   return Math.hypot(point.x-a.x-dx*t,point.y-a.y-dy*t);
 }
 
-export function spawnDebugTrainingDummy(game) {
-  if(game.debug!==true||game._debugTrainingSpawned||game.regionIndex!==0||game.dungeon?.active)return null;
-  const {radius:r,foot,defense,health,minDistance,maxDistance}=TRAINING_DUMMY_RULES;
+function debugSpawnPoint(game,{radius:r,minDistance,maxDistance}) {
   const from={x:game.player.x,y:game.player.y+groundOffset(game.player,true)};
   const doors=(game.settlements?.sites||[]).filter(site=>!['angel','merchant'].includes(site.type)).map(site=>site.door).filter(Boolean);
   let point=null;
@@ -55,11 +55,29 @@ export function spawnDebugTrainingDummy(game) {
       point=candidate;break;
     }
   }
-  // A custom sealed map may have no safe point. Never move authored obstacles
-  // or place the post inside the player to force a testing fixture into it.
+  return point;
+}
+
+export function spawnDebugTrainingDummy(game) {
+  if(game.debug!==true||game._debugTrainingSpawned||game.regionIndex!==0||game.dungeon?.active)return null;
+  const {radius:r,foot,defense,health}=TRAINING_DUMMY_RULES;
+  const point=debugSpawnPoint(game,TRAINING_DUMMY_RULES);
   if(!point)return null;
   const enemy={id:++game._id,type:'trainingDummy',trainingDummy:true,x:point.x,y:point.y-foot,r,hp:health,maxHp:health,defense,
     speed:0,damage:0,xp:0,hit:0,attackCooldown:0,charge:null,cast:null,phase:0};
   game.enemies.push(enemy);game._debugTrainingSpawned=true;
+  return enemy;
+}
+
+export function spawnDebugBoss(game) {
+  if(game.debug!==true||game._debugBossSpawned||game.dungeon?.active)return null;
+  const point=debugSpawnPoint(game,{...DEBUG_BOSS_RULES,radius:enemyDefinition('boss').r});
+  // Sealed custom maps may have no safe nearby footing. Keep their terrain intact.
+  if(!point)return null;
+  const enemy=game._spawnEnemy('boss',1);
+  enemy.x=point.x;enemy.y=point.y-groundOffset(enemy);
+  enemy.hp=enemy.maxHp=DEBUG_BOSS_RULES.health;
+  enemy.debugBoss=true;enemy.name='调试领主';
+  game._debugBossSpawned=true;
   return enemy;
 }
