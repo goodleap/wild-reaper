@@ -368,7 +368,7 @@ export class Companions {
       const enemy=g._nearest(origin.x,origin.y,i?rule.chainRange:rule.range,excluded,origin,{source:'companionLightning'});if(!enemy)break;
       if(!hits)active.castFacing=Math.atan2(enemy.y-active.y,enemy.x-active.x);
       excluded.add(enemy.id);hits++;
-      g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:enemy.x,y2:enemy.y,evolved:true,branch:'chain',chainIndex:i,ally:true});
+      g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:enemy.x,y2:enemy.y,renderGroundY:origin.y+groundOffset(origin,origin===active),renderEndGroundY:enemy.y+groundOffset(enemy),evolved:true,branch:'chain',chainIndex:i,ally:true});
       g._hitEnemy(enemy,damage,0,origin,'companionLightning');origin=enemy;
     }
     if(!hits)return false;

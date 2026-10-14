@@ -273,7 +273,7 @@ export class SuperSkills {
     const origin=this._foot(),visual={x:g.player.x,y:g.player.y},angle=Math.atan2((target.aimY??target.y)-visual.y,target.x-visual.x);
     this._runicShots.push({origin,visual,angle,tick:TIMING.runicDelay,width:TIMING.runicWidth+TIMING.runicWidthPerRank*(stats.runic-1),range:TIMING.runicRange,damage:stats.runicDamage??stats.damage*(TIMING.runicDamageFallbackMultiplier+TIMING.runicDamageFallbackPerRank*(stats.runic-1))});
     this._runicCooldown=stats.runicInterval??TIMING.runicInterval-TIMING.runicIntervalReductionPerRank*(stats.runic-1);
-    g._effect(visual.x,visual.y,'superRunicCharge',TIMING.runicDelay,18,'#89ddd8',undefined,{skillId:'runeArrow',angle,seed:++this._id});
+    g._effect(visual.x,visual.y,'superRunicCharge',TIMING.runicDelay,18,'#89ddd8',undefined,{skillId:'runeArrow',renderGroundY:origin.y,angle,seed:++this._id});
     return true;
   }
   _updateRunic(dt) {
@@ -292,7 +292,7 @@ export class SuperSkills {
       const end={x:visual.x+dx*length,y:visual.y+dy*length};
       const targets=g.enemies.filter(enemy=>this._visible(enemy,origin)&&segmentDistance(enemy.x,enemy.y,visual.x,visual.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
         .sort((a,b)=>distance(visual,a)-distance(visual,b)).slice(0,SUPER_RULES.maxTargets);
-      g._effect(visual.x,visual.y,'superRay',.48,width,'#89ddd8',undefined,{x2:end.x,y2:end.y,skillId:'runeArrow',seed:++this._id});
+      g._effect(visual.x,visual.y,'superRay',.48,width,'#89ddd8',undefined,{x2:end.x,y2:end.y,renderGroundY:origin.y,renderEndGroundY:end.y+origin.y-visual.y,skillId:'runeArrow',seed:++this._id});
       for(const enemy of targets)this._damage(enemy,shot.damage,origin,'runeArrow');
       g._emit('superCast',{skillId:'runeArrow',weaponId:'arrow'});
     }

@@ -165,7 +165,7 @@ export class RegionalMechanisms {
     const damage=COMBAT.runeDamage*(1+Math.min(Math.max(g.time,0),COMBAT.runeGrowthTimeCap)/COMBAT.runeGrowthTimePeriod);
     for(const enemy of targets){
       if(g.status!=='playing')break;
-      g._effect(prop.x,prop.y,'runeBolt',.32,enemy.r,prop.element==='frost'?'#c2efff':'#85e2de',undefined,{x2:enemy.x,y2:enemy.y,seed:enemy.id});
+      g._effect(prop.x,prop.y,'runeBolt',.32,enemy.r,prop.element==='frost'?'#c2efff':'#85e2de',undefined,{x2:enemy.x,y2:enemy.y,renderGroundY:prop.y,renderEndGroundY:enemy.y+groundOffset(enemy),seed:enemy.id});
       g._hurtEnemy(enemy,damage,0,prop,'rune');
       if(prop.element==='frost'&&enemy.hp>0){const now=g._clock||0,previous=(enemy.superSlowUntil||0)>now?(enemy.superSlowFactor??1):1;enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,now+COMBAT.frostDuration);enemy.superSlowFactor=Math.min(previous,enemy.type==='boss'?COMBAT.frostBossSpeed:COMBAT.frostEnemySpeed);}
     }

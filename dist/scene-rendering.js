@@ -38,7 +38,7 @@ function terrainVisible(prop,vision){
 export function sceneItemVisible(item,vision){
   if(!vision||sceneItemLayer(item)==='ground')return true;
   if(item.kind==='actor')return vision.isVisible(item.actor.x,item.actor.footY,item.actor.entity.r||0);
-  if(item.kind==='sword')return sceneEntityVisible(item.effect,vision);
+  if(item.kind==='sword'||item.kind==='attack')return sceneEntityVisible(item.effect,vision);
   const prop=item.prop;
   // Walls own remembered-segment rendering, not live actor visibility. Their
   // existing fixed structure pieces keep foreground occlusion depth-sorted.
@@ -46,7 +46,7 @@ export function sceneItemVisible(item,vision){
   return item.kind==='terrain'?terrainVisible(prop,vision):vision.isVisible(prop.x,prop.y,prop.r||0);
 }
 
-const KIND_ORDER={terrain:0,adventure:1,actor:2,sword:3};
+const KIND_ORDER={terrain:0,adventure:1,actor:2,sword:3,attack:4};
 export function compareSceneDepth(a,b){
-  return a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:a.kind==='sword'?(a.effect.seed||0)-(b.effect.seed||0):String(a.prop.id).localeCompare(String(b.prop.id))):KIND_ORDER[a.kind]-KIND_ORDER[b.kind]);
+  return a.sortY-b.sortY||(a.kind===b.kind?(a.kind==='actor'?a.actor.orderId-b.actor.orderId:a.kind==='attack'?(a.orderId||0)-(b.orderId||0):a.kind==='sword'?(a.effect.seed||0)-(b.effect.seed||0):String(a.prop.id).localeCompare(String(b.prop.id))):KIND_ORDER[a.kind]-KIND_ORDER[b.kind]);
 }

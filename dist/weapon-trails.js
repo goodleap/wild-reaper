@@ -1,3 +1,5 @@
+import { visitAttackDepthBands } from './attack-depth.js';
+
 // World-space samples belong to the simulated weapon, never to the camera or
 // a render frame. A fixed ring bounds both memory and drawing work per weapon.
 export const TRAIL_CAPACITY=12;
@@ -72,4 +74,24 @@ export function drawWeaponTrail(ctx,weapon,{time,reduced=false,dense=false}={}) 
     ribbon(ctx,t,start,end,now,1.05);
   }
   ctx.restore();return true;
+}
+
+export function visitWeaponTrailDepthItems(weapon,options={},visit){
+  const t=weapon.trail,drawBody=typeof options.drawBody==='function'?options.drawBody:null;
+  const now=finite(options.time)?options.time:t?.clock;let start=0;
+  while(t&&start<t.count&&now-t.points[t.index(start)+2]>t.maxAge)start++;
+  const hasTrail=!!t&&t.count-start>=2;
+  if(!hasTrail&&!drawBody)return 0;
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  if(hasTrail)for(let n=start;n<t.count;n++){const i=t.index(n),x=t.points[i],y=t.points[i+1];minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
+  if(drawBody){
+    const bounds=options.bodyBounds||{},x=finite(weapon.x)?weapon.x:0,y=finite(weapon.y)?weapon.y:0;
+    minX=Math.min(minX,finite(bounds.minX)?bounds.minX:x);maxX=Math.max(maxX,finite(bounds.maxX)?bounds.maxX:x);
+    minY=Math.min(minY,finite(bounds.minY)?bounds.minY:y);maxY=Math.max(maxY,finite(bounds.maxY)?bounds.maxY:y);
+  }
+  // Replaying the same ribbon in disjoint bands retains its global taper and
+  // original corner normals. Keep the body after its own trail within every
+  // band, including an upward shot whose tail lies below the visible head.
+  const draw=ctx=>{drawWeaponTrail(ctx,weapon,options);drawBody?.(ctx);};
+  return visitAttackDepthBands(weapon,{...options,minX:minX-4,maxX:maxX+4,minY,maxY,draw},visit);
 }

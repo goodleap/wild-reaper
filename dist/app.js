@@ -7,8 +7,10 @@ import { Game, RELICS } from './engine.js';
 import { SceneryArt } from './scenery-art.js';
 import { CombatArt } from './combat-art.js';
 import { CombatVfx } from './combat-vfx.js';
-import { drawAbilityGround, drawAbilityProjectiles } from './ability-art.js';
-import { drawWeaponTrail } from './weapon-trails.js';
+import { drawAbilityGround, drawAbilityProjectiles, visitAbilityDepthItems, drawAbilityDepthItem } from './ability-art.js';
+import { visitWeaponTrailDepthItems } from './weapon-trails.js';
+import { visitSwordFlightDepthItems } from './sword-flight-art.js';
+import { isDepthAttackEffect, visitLegacyAttackDepthItems } from './legacy-attack-depth.js';
 import { drawSwordSlash, swordSlashPose } from './sword-art.js';
 import { drawSwordEnergy } from './sword-energy-art.js';
 import { drawGuardianBarrier, drawBarrierEffect } from './guardian-art.js';
@@ -1021,9 +1023,61 @@ function sceneDrawList(actors,props,adventureProps=[],weaponItems=[]){
   items.push(...weaponItems);
   return items.sort(compareSceneDepth);
 }
+function collectAttackDepthItems(actors,props=[],adventureProps=[]){
+  const items=[],p=game.player,lift=groundOffset(p,true);
+  // Only silhouettes in the attack's horizontal reach can split a long trail.
+  // Foot/base depth is independent of bobbing, recoil, immersion and camera.
+  const occluders=actors.map(a=>({minX:a.x-a.shape.halfWidth*a.scale,maxX:a.x+a.shape.halfWidth*a.scale,minY:a.y-a.shape.top*a.scale,maxY:a.footY,sortY:a.footY}));
+  for(const prop of [...props,...adventureProps]){
+    if(prop.visual===false)continue;
+    const half=prop.visual?.halfWidth??Math.max(prop.r||0,prop.width?prop.width/2+20:0,(prop.halfLength||0)*Math.abs(Math.cos(prop.angle||0))+40);
+    const top=prop.visual?.top??(prop.isSettlement?(prop.depth||90)+120:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength||0)+180),bottom=prop.visual?.bottom??Math.max(prop.r||0,20);
+    occluders.push({minX:prop.x-half,maxX:prop.x+half,minY:prop.y-top,maxY:prop.y+bottom,sortY:prop.sortY??prop.y});
+  }
+  const crosses=(box,path)=>{
+    if(!path)return true;
+    const r=path.radius||0;let start=0,end=1;
+    for(const [position,delta,min,max] of [[path.x,path.x2-path.x,box.minX-r,box.maxX+r],[path.y,path.y2-path.y,box.minY-r,box.maxY+r]]){
+      if(Math.abs(delta)<1e-8){if(position<min||position>max)return false;continue;}
+      const a=(min-position)/delta,b=(max-position)/delta;start=Math.max(start,Math.min(a,b));end=Math.min(end,Math.max(a,b));
+      if(start>end)return false;
+    }
+    return true;
+  };
+  const options={...combatOptions,visible:sceneVisible,viewBounds:{minX:p.x-width/2,minY:p.y-height/2,maxX:p.x+width/2,maxY:p.y+height/2},
+    depthTransform:ctx.getTransform?.(),depthCutsFor:(minX,maxX,path)=>occluders.filter(o=>o.maxX>=minX&&o.minX<=maxX&&crosses(o,path)).map(o=>o.sortY)};
+  const add=item=>{if(Number.isFinite(item.sortY))items.push({...item,kind:'attack',orderId:items.length});};
+  for(const b of game.bullets){
+    if(!sceneVisible(b)||Math.abs(b.x-p.x)>=width/2+100||Math.abs(b.y-p.y)>=height/2+100)continue;
+    const angle=Number.isFinite(b.angle)?b.angle:Math.atan2(b.vy||0,b.vx||0),sortY=(b.groundY??b.y+lift)+Math.sin(angle)*.01;
+    visitWeaponTrailDepthItems(b,{...options,groundLift:lift,sortYAt:()=>sortY,bodyBounds:{minX:b.x-50,maxX:b.x+50,minY:b.y-50,maxY:b.y+50},drawBody:target=>combatArt.drawArrow(target,b,combatOptions)},add);
+  }
+  for(const b of game.enemyBullets||[]){
+    if(!sceneVisible(b)||Math.abs(b.x-p.x)>=width/2+24||Math.abs(b.y-p.y)>=height/2+24)continue;
+    // These legacy toxic bullets already store projected ground coordinates.
+    add({effect:b,sortY:(b.groundY??b.y)+Math.sin(Math.atan2(b.vy||0,b.vx||0))*.01,draw:target=>propArt.drawEnemyBullet(target,b,combatOptions)});
+  }
+  drawSwordEnergyWaves(add);
+  for(const sword of game.superSkills?.swordFlights||[]){
+    if(!sceneVisible(sword)||Math.abs(sword.x-p.x)>=width/2+100||Math.abs(sword.visualY-p.y)>=height/2+100)continue;
+    const sortY=(sword.groundY??sword.visualY+sword.groundLift)+Math.sin(sword.visualAngle??sword.angle)*.01;
+    visitSwordFlightDepthItems(sword,superArt.swordVectors,{...options,sortYAt:()=>sortY},add);
+  }
+  for(const b of game.orbitals){
+    if(!sceneVisible(b))continue;
+    const sortY=(b.groundY??b.y+lift)+Math.sin(b.heading??(b.angle||0)+Math.PI/2)*.01;
+    visitWeaponTrailDepthItems(b,{...options,groundLift:lift,sortYAt:()=>sortY,bodyBounds:{minX:b.x-50,maxX:b.x+50,minY:b.y-50,maxY:b.y+50},drawBody:target=>propArt.drawBlade(target,b,combatOptions)},add);
+  }
+  visitAbilityDepthItems(game,options,item=>add({...item,draw:target=>drawAbilityDepthItem(target,item,options)}));
+  for(const effect of game.effects){
+    if(!isDepthAttackEffect(effect)||!sceneVisible(effect)||!effectInView(effect))continue;
+    visitLegacyAttackDepthItems(game,effect,options,()=>effects(effect),add);
+  }
+  return items;
+}
 function drawScene(actors,props,mainPlayer,adventureProps=[]){
   const vision=game?.dungeon?.active?game.dungeon.vision:null;
-  const actor=actors.find(item=>item.entity===mainPlayer),weaponItems=[];
+  const actor=actors.find(item=>item.entity===mainPlayer),weaponItems=collectAttackDepthItems(actors,props,adventureProps);
   if(actor){
     const heroPose=humanoidArt.directionalPose(mainPlayer,{time:game?._clock??clock,reduced,frozen:game?.abilities?.isFrozen(mainPlayer)??false})||humanoidPose(mainPlayer);
     const options={...combatOptions,actor,bodyY:heroPose.bodyY*actor.scale};
@@ -1037,8 +1091,8 @@ function drawScene(actors,props,mainPlayer,adventureProps=[]){
     if(!sceneItemVisible(item,vision))continue;
     // Only ground artwork follows the floor polygon. All visible raised
     // objects use complete silhouettes and the same foot/base depth order.
-    ctx.save();if(vision&&sceneItemLayer(item)==='ground')vision.clipVisible(ctx);
-    if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else if(item.kind==='sword')drawSwordSlash(ctx,item.effect,game,item.options);else drawActor(item.actor);
+    ctx.save();if(vision&&(sceneItemLayer(item)==='ground'||item.kind==='attack'))vision.clipVisible(ctx);
+    if(item.kind==='terrain')drawTerrain(item.prop,mainPlayer);else if(item.kind==='adventure')drawAdventureProp(item.prop);else if(item.kind==='sword')drawSwordSlash(ctx,item.effect,game,item.options);else if(item.kind==='attack')item.draw(ctx);else drawActor(item.actor);
     ctx.restore();
   }
 }
@@ -1492,10 +1546,11 @@ function drawDungeonChest(prop){
   ctx.fillText(claimed?'已领取':locked?'击败最终首领':royal?(game.dungeon?.active?.treasureName||'王城宝藏'):prop.hut?(game.dungeon?.active?.treasureName||'屋内补给'):'支路宝箱',0,claimed?-77:-48);ctx.restore();
 }
 function drawWorldMap(){worldMap.draw(ctx,game,minimapBounds(width,height,hudInsets));}
-function drawSwordEnergyWaves(){
+function drawSwordEnergyWaves(visit=null){
   for(const wave of game.attacks?.sword?.energyWaves||[]){
     if(wave.delay>0||wave.life<=0||!sceneVisible(wave)||!effectInView(wave))continue;
-    drawSwordEnergy(ctx,wave,combatOptions);
+    if(visit)visit({effect:wave,sortY:wave.groundY??wave.y+(wave.groundLift||0),draw:target=>drawSwordEnergy(target,wave,combatOptions)});
+    else drawSwordEnergy(ctx,wave,combatOptions);
   }
 }
 function drawCoins(){for(const coin of game.coins||[]){if(!sceneVisible(coin))continue;if(Math.abs(coin.x-game.player.x)>width/2+20||Math.abs(coin.y-game.player.y)>height/2+20)continue;ellipse(coin.x,coin.y+5,5,2,'#172a1855');ellipse(coin.x,coin.y,4.5,5.5,'#a08037');ellipse(coin.x-.7,coin.y-.8,3.2,4.2,'#e7c469');line(coin.x,coin.y-2.5,coin.x,coin.y+2,'#fff0aa',1);}}
@@ -1557,16 +1612,9 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   ctx.restore();ctx.restore();
   ctx.save();ctx.translate(offsetX,offsetY);drawScene(actors,terrain,p,adventureProps);ctx.restore();
   ctx.save();if(vision)vision.clipVisible(ctx,offsetX,offsetY);ctx.save();ctx.translate(offsetX,offsetY);
-  drawSuperFields(true);drawEnemyBullets();drawAbilityProjectiles(ctx,game,{...combatOptions,visible:sceneVisible});
+  drawSuperFields(true);drawAbilityProjectiles(ctx,game,{...combatOptions,visible:sceneVisible,depthSorted:true});
   drawGuardianBarrier(ctx,game,p,combatOptions);
-  for(const b of game.bullets)if(sceneVisible(b)&&Math.abs(b.x-p.x)<width/2+100&&Math.abs(b.y-p.y)<height/2+100){drawWeaponTrail(ctx,b,combatOptions);combatArt.drawArrow(ctx,b,combatOptions);}
-  drawSwordEnergyWaves();
-  for(const sword of game.superSkills?.swordFlights||[]){
-    if(!sceneVisible(sword)||Math.abs(sword.x-p.x)>width/2+100||Math.abs(sword.visualY-p.y)>height/2+100)continue;
-    superArt.drawSwordFlight(ctx,sword,combatOptions);
-  }
-  for(const b of game.orbitals){drawWeaponTrail(ctx,b,combatOptions);propArt.drawBlade(ctx,b,combatOptions);}
-  for(const e of game.effects)if(e.type!=='ring'&&e.type!=='rescueWarning'&&e.type!=='eliteSummon'&&e.type!=='swordSlash'&&!(e.type==='superBurst'&&e.skillId==='swords'))effects(e);
+  for(const e of game.effects)if(e.type!=='ring'&&e.type!=='rescueWarning'&&e.type!=='eliteSummon'&&e.type!=='swordSlash'&&!isDepthAttackEffect(e)&&!(e.type==='superBurst'&&e.skillId==='swords'))effects(e);
   drawStorm();combatArt.drawStormAir(ctx,game.storm,combatOptions);
   ctx.restore();
   const exposure=stormExposure(game.storm);if(exposure>0){ctx.fillStyle=`rgba(177,219,255,${exposure})`;ctx.fillRect(0,0,width,height);}

@@ -278,7 +278,7 @@ export class CombatAttacks {
       if(target) {
         hit=true;
         recordHeroAction(g,{kind:'cast',angle:Math.atan2(target.y-p.y,target.x-p.x),duration:.4,priority:1});
-        g._effect(p.x,p.y,'lightning',.32,0,'#dcecff',undefined,{x2:target.x,y2:target.y,evolved:true,branch:'focus',focus:true,chainIndex:0});
+        g._effect(p.x,p.y,'lightning',.32,0,'#dcecff',undefined,{x2:target.x,y2:target.y,renderGroundY:p.y+groundOffset(p,true),renderEndGroundY:target.y+groundOffset(target),evolved:true,branch:'focus',focus:true,chainIndex:0});
         g._hitEnemy(target,stats.primaryDamage,0,p,'lightning');
         g.environment?.hitAt(target.x,target.y,target.r,'lightning',prop=>propPath(g,target,prop,'lightning'));
       }
@@ -287,7 +287,7 @@ export class CombatAttacks {
       if(i===0)recordHeroAction(g,{kind:'cast',angle:Math.atan2(e.y-p.y,e.x-p.x),duration:.4,priority:1});
       hit=true;
       excluded.add(e.id);
-      g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:stats.evolved,branch:stats.branch,chainIndex:i});
+      g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,renderGroundY:origin.y+groundOffset(origin,origin===p),renderEndGroundY:e.y+groundOffset(e),evolved:stats.evolved,branch:stats.branch,chainIndex:i});
       g._hitEnemy(e,stats.damage*(i>=stats.fullDamageTargetCount?(stats.chainRetention??LIGHTNING_RULES.chainRetention):1),0,origin,'lightning');
       g.environment?.hitAt(e.x,e.y,e.r,'lightning',prop=>propPath(g,e,prop,'lightning'));origin=e;
     }

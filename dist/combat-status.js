@@ -1,6 +1,7 @@
 import { getConfigSection } from './content-config.js';
 import { attackSource } from './combat-resolution.js';
 import { scalePlayerDamage } from './combat-stats.js';
+import { groundOffset } from './terrain.js';
 
 // Weapon reactions share the normal damage/death path, but never call hit()
 // recursively. Each enemy keeps only one bleed and one shock record.
@@ -52,7 +53,7 @@ export class CombatStatus {
       if(distance<=nearest&&game.combat.canTarget(enemy,origin,{requireView:true,source:'conduction',checkPath:true})) { target=enemy;nearest=distance; }
     }
     if(!target)return;
-    game._effect(x,y,'conduction',.26,0,'#c4e8ff',undefined,{x2:target.x,y2:target.y});
+    game._effect(x,y,'conduction',.26,0,'#c4e8ff',undefined,{x2:target.x,y2:target.y,renderGroundY:y+groundOffset(source),renderEndGroundY:target.y+groundOffset(target)});
     game._hurtEnemy(target,damage,0,origin,'conduction');
     if(target.hp<=0) { target.bleed=null;target.shock=null; }
   }

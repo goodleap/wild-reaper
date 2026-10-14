@@ -162,15 +162,21 @@ export class AbilityVisuals{
       ctx.save();ctx.globalAlpha=fade*.78;ctx.fillStyle='#f4ac63';ctx.beginPath();ctx.moveTo(m.x-uy*3,m.y+ux*3);ctx.quadraticCurveTo(m.x+ux*20,m.y+uy*20,end.x-uy*9,end.y+ux*9);ctx.lineTo(end.x+uy*9,end.y-ux*9);ctx.quadraticCurveTo(m.x+ux*20,m.y+uy*20,m.x+uy*3,m.y-ux*3);ctx.closePath();ctx.fill();ctx.globalAlpha=fade*.9;ellipse(ctx,m.x,m.y,3,3,'#ffe5ab');ctx.restore();return;
     }
     if(e.shape==='beam'){
-      const p=e.parameters,fade=clamp(e.remaining/p.duration),y=e.y+(e.groundOffset||0),m=muzzle(e);
-      ctx.save();ctx.translate(e.x,y);ctx.rotate(e.angle);ctx.beginPath();ctx.rect(0,-p.radius,p.range,p.radius*2);ctx.clip();
-      ctx.globalAlpha=fade*.3;ctx.fillStyle=e.hostile?'#d695bb':'#bca4ee';ctx.fillRect(0,-p.radius,p.range,p.radius*2);
-      ctx.globalAlpha=fade*.7;ctx.strokeStyle='#c3a5ee';ctx.lineWidth=p.radius*1.05;ctx.beginPath();segment(ctx,0,0,p.range,0);ctx.stroke();ctx.globalAlpha=fade;ctx.strokeStyle='#f7eaff';ctx.lineWidth=Math.max(2,p.radius*.23);ctx.stroke();ctx.restore();
-      ctx.save();ctx.globalAlpha=fade;ctx.strokeStyle='#f5dfff';ctx.lineWidth=2;ctx.beginPath();segment(ctx,m.x,m.y,e.x+Math.cos(e.angle)*22,y+Math.sin(e.angle)*22);ctx.stroke();ctx.restore();return;
+      this.drawBeamBody(ctx,e,options);this.drawBeamMouth(ctx,e,options);return;
     }
     if(ZONES.has(e.abilityId)&&!options.hasBurstsRuntime){
       const view=this.view(e);Object.assign(view,{id:e.id,abilityId:e.abilityId,x:e.x,y:e.y,radius:e.parameters.radius,groundOffset:e.groundOffset||0,age:e.age-e.windup,life:e.parameters.duration,angle:e.angle,kind:'landing'});this.drawBurst(ctx,view,options);
     }
+  }
+  drawBeamBody(ctx,e,options={}){
+    const p=e.parameters,fade=clamp(e.remaining/p.duration),y=e.y+(e.groundOffset||0);
+    ctx.save();ctx.translate(e.x,y);ctx.rotate(e.angle);ctx.beginPath();ctx.rect(0,-p.radius,p.range,p.radius*2);ctx.clip();
+    ctx.globalAlpha=fade*.3;ctx.fillStyle=e.hostile?'#d695bb':'#bca4ee';ctx.fillRect(0,-p.radius,p.range,p.radius*2);
+    ctx.globalAlpha=fade*.7;ctx.strokeStyle='#c3a5ee';ctx.lineWidth=p.radius*1.05;ctx.beginPath();segment(ctx,0,0,p.range,0);ctx.stroke();ctx.globalAlpha=fade;ctx.strokeStyle='#f7eaff';ctx.lineWidth=Math.max(2,p.radius*.23);ctx.stroke();ctx.restore();
+  }
+  drawBeamMouth(ctx,e,options={}){
+    const p=e.parameters,fade=clamp(e.remaining/p.duration),y=e.y+(e.groundOffset||0),m=muzzle(e);
+    ctx.save();ctx.globalAlpha=fade;ctx.strokeStyle='#f5dfff';ctx.lineWidth=2;ctx.beginPath();segment(ctx,m.x,m.y,e.x+Math.cos(e.angle)*22,y+Math.sin(e.angle)*22);ctx.stroke();ctx.restore();
   }
   projectile(ctx,e,options){
     const r=e.parameters.radius,color=abilityColor(e),phase=options.reduced?0:e.age*13;

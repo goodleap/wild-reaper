@@ -57,7 +57,7 @@ const items=[{kind:'terrain',prop:north,sortY:-100},actorAt('boss',0,-35,49),act
   {kind:'adventure',prop:{type:'treasure',isDungeonTreasure:true,x:-60,y:-35,r:21},sortY:-35},
   {kind:'adventure',prop:{type:'rug',isHutFurniture:true,x:0,y:0},sortY:-1000},
   {kind:'terrain',prop:south,sortY:70}].sort(compareSceneDepth);
-const bindings={ctx,game:{effects:[],dungeon:{active:{},vision:drawVision}},sceneDrawList:()=>items,sceneItemVisible,sceneItemLayer,
+const bindings={ctx,game:{effects:[],dungeon:{active:{},vision:drawVision}},collectAttackDepthItems:()=>[],sceneDrawList:()=>items,sceneItemVisible,sceneItemLayer,
   drawTerrain:prop=>draws.push({id:prop.id,clipped}),drawAdventureProp:prop=>draws.push({id:prop.type,clipped}),drawActor:actor=>draws.push({id:actor.entity.type,clipped})};
 const drawScene=new Function(...Object.keys(bindings),`${drawSource};return drawScene;`)(...Object.values(bindings));
 const rebuilds=room.vision.stats.rebuilds,explored=room.vision.stats.exploredTiles;

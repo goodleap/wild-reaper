@@ -1,7 +1,10 @@
 import { AbilityVisuals, TAU, clamp, abilityColor, circle, polygon, segment } from './ability-visuals.js';
 import { drawSpecialistBossGround } from './enemy-art/specialist-bosses.js';
+import { visitAttackDepthBands } from './attack-depth.js';
 
 const art=new AbilityVisuals();
+const depthItems=new WeakMap();
+const groundedWindups=new Set(['domain','vineTrap','vortex','frostRing','tidalWave']);
 const visible=(options,item,extra=0)=>{
   if(options.visible&&!options.visible(item))return false;
   const b=options.viewBounds;if(!b)return true;
@@ -10,6 +13,55 @@ const visible=(options,item,extra=0)=>{
   return item.x+r>=b.minX&&item.x-r<=b.maxX&&item.y+r>=b.minY&&item.y-r<=b.maxY;
 };
 export const abilityArtDiagnostics=()=>art.diagnostics;
+const directionalDepth=e=>(e.sourceY??e.origin?.y??e.y)+(e.sourceGroundOffset??e.groundOffset??0)+Math.sin(e.angle||0)*.25;
+const movingDepth=e=>Number.isFinite(e.groundY)?e.groundY:e.y+(e.groundOffset||0);
+function depthPart(e){
+  if(e.age<e.windup){
+    if(e.abilityId==='stoneLob')return e.age/e.windup>=.5?'stone-lob':null;
+    return e.abilityId==='meteor'||groundedWindups.has(e.abilityId)?null:'windup';
+  }
+  return ['projectile','cone','beam'].includes(e.shape)?e.shape:null;
+}
+function emitDepthItem(e,items,index,part,sortY,visit){
+  let item=items[index];if(!item){item={effect:e,index};items[index]=item;}
+  item.part=part;item.sortY=sortY;visit(item);
+}
+// Reuse descriptors while each effect is alive. The runtime remains untouched;
+// sorting changes only which existing pixels an actor can cover.
+export function visitAbilityDepthItems(game,options={},visit){
+  for(const e of game.abilities?.effects||[]){
+    if(!visible(options,e))continue;
+    const part=depthPart(e);if(!part)continue;
+    let items=depthItems.get(e);if(!items){items=[];depthItems.set(e,items);}
+    if(part==='beam'){
+      const {range,radius}=e.parameters,ux=Math.cos(e.angle),uy=Math.sin(e.angle),groundY=movingDepth(e),endY=groundY+uy*range;
+      const horizontal=Math.abs(uy)<1e-8,side=horizontal?0:Math.abs(ux)*radius;
+      const minY=Math.min(groundY,endY)-side,maxY=Math.max(groundY,endY)+side;
+      const minX=Math.min(e.x,e.x+ux*range)-Math.abs(uy)*radius,maxX=Math.max(e.x,e.x+ux*range)+Math.abs(uy)*radius;
+      if(!items.drawBeam)items.drawBeam=ctx=>art.drawBeamBody(ctx,e);
+      let index=0;
+      // The complete old painter is clipped at horizontal, pixel-aligned
+      // boundaries. Actor feet supply exact cuts when the scene has them.
+      visitAttackDepthBands(e,{minY,maxY,step:32,draw:items.drawBeam,viewBounds:options.viewBounds,depthTransform:options.depthTransform,depthCuts:options.depthCutsFor?.(minX,maxX,{x:e.x,y:groundY,x2:e.x+ux*range,y2:endY,radius:radius+2})},band=>{
+        let item=items[index];if(!item){item={effect:e,index};items[index]=item;}
+        item.part='beam-body';item.sortY=band.sortY;item.draw=band.draw;visit(item);index++;
+      });
+      emitDepthItem(e,items,index,'beam-mouth',directionalDepth(e),visit);
+    }else{
+      const sourceDepth=directionalDepth(e),flight=part==='stone-lob'?clamp((e.age/e.windup-.5)*2):0;
+      const sortY=part==='projectile'?movingDepth(e)+Math.sin(e.angle||0)*.01:part==='stone-lob'?sourceDepth+(movingDepth(e)-sourceDepth)*flight:sourceDepth;
+      emitDepthItem(e,items,0,part,sortY,visit);
+    }
+  }
+}
+export function drawAbilityDepthItem(ctx,item,options={}){
+  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=0;
+  if(item.part==='windup'||item.part==='stone-lob')art.drawWindupAir(ctx,item.effect,options);
+  else if(item.part==='beam-body')item.draw(ctx);
+  else if(item.part==='beam-mouth')art.drawBeamMouth(ctx,item.effect,options);
+  else art.drawActiveAir(ctx,item.effect,options);
+  ctx.restore();
+}
 function shape(ctx,e,r){
   const p=e.parameters,x=e.x,y=e.y+(e.groundOffset||0);
   ctx.beginPath();
@@ -93,6 +145,7 @@ export function drawAbilityProjectiles(ctx,game,options={}){
   ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=0;
   for(const e of game.abilities?.effects||[]){
     if(!visible(options,e,e.abilityId==='meteor'?260:0))continue;
+    if(options.depthSorted&&depthPart(e))continue;
     if(e.age<e.windup)art.drawWindupAir(ctx,e,visualOptions);else art.drawActiveAir(ctx,e,visualOptions);
   }
   for(const burst of game.abilities?.visualBursts||[])if(visible(options,burst,burst.abilityId==='storm'||burst.abilityId==='lightning'?250:0))art.drawBurst(ctx,burst,visualOptions);
