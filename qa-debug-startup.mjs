@@ -15,7 +15,7 @@ for(const {search,fullLoadout=false} of [{search:''},{search:'?debug'},{search:'
   assert(game&&game.status==='playing',`${search||'ordinary'} starts successfully`);
   assert.equal(game.enemies.some(enemy=>enemy.trainingDummy),!!search);
   assert.equal(game.debugFull,fullLoadout,'the preparation setting alone enables the full loadout');
-  assert.equal(game.enemies.some(enemy=>enemy.debugWave),false,'a debug URL does not enable the optional wave');
+  assert.equal(game.enemies.some(enemy=>enemy.debugWave),false,'the removed opening wave is never created');
   assert.equal(game.enemies.some(enemy=>enemy.debugBoss),false,'nearby debug fixtures no longer add an unsolicited boss');
   assert.equal(game.debugOptions.allBosses,false);assert.equal(game.debugOptions.allMonsters,false);
   // Use the shipped draw pass as well as the real app update/RAF handler.
@@ -46,11 +46,11 @@ for(const {search,fullLoadout=false} of [{search:''},{search:'?debug'},{search:'
   const game=h.run('game'),bosses=game.enemies.filter(e=>e.debugBoss);
   assert.equal(game.debugOptions.allBosses,true);assert.equal(game.debugOptions.allMonsters,true);
   assert.deepEqual(bosses.map(e=>e.debugBossId).sort(),DEBUG_BOSS_ROSTER.map(def=>def.id).sort());
-  assert.equal(bosses.length,10);assert.deepEqual([...new Set(bosses.map(e=>e.bossKind))].sort(),Object.keys(BOSS_DEFS).sort());
+  assert.equal(bosses.length,6);assert.deepEqual([...new Set(bosses.map(e=>e.bossKind))].sort(),Object.keys(BOSS_DEFS).sort());
   assert(bosses.every(e=>e.hp===100000&&e.maxHp===100000));
   h.run(`renderGame=shippedRenderGame;game.player.invuln=1e9;
     for(const id of Object.keys(game.build.weapons))game.build.setEquipped(id,false);game._refreshWeapons();
-    const rosterProbe=game.enemies.find(e=>e.debugBossId==='castle:belltower:bloom');rosterProbe.x=game.player.x+80;rosterProbe.y=game.player.y;
+    const rosterProbe=game.enemies.find(e=>e.bossKind==='bloom'&&e.debugBoss);rosterProbe.x=game.player.x+80;rosterProbe.y=game.player.y;
     game.enemies=[rosterProbe,...game.enemies.filter(e=>e!==rosterProbe)];updateHUD();`);
   assert.equal(h.nodes['boss-name'].textContent,`${h.run('rosterProbe.name')} · 调试 · 10 万生命`);
   assert.equal(h.nodes['boss-hp'].textContent,'100%');assert(!h.nodes['boss-bar'].classList.contains('hidden'));
@@ -63,4 +63,4 @@ for(const {search,fullLoadout=false} of [{search:''},{search:'?debug'},{search:'
   h.nodes['resume-button'].onclick();for(let frame=0;frame<40;frame++)h.tick();
   assert(game.enemies.filter(e=>e.debugMonster).length>beforePause,'resume continues the same stream');
 }
-console.log('Startup: ordinary, debug, legacy link/full loadout and both roster switches survive shipped update/render; ten 100000-HP world/castle Boss identities, true castle HUD label, dense streaming and UI pause/resume passed (VM Canvas).');
+console.log('Startup: ordinary, debug, legacy link/full loadout and both roster switches survive shipped update/render; six unique 100000-HP Boss combat kinds, correct HUD label, dense streaming and UI pause/resume passed (VM Canvas).');

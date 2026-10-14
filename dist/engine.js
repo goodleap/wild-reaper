@@ -36,7 +36,7 @@ import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
 import { SceneTransition } from './scene-transition.js';
-import { spawnDebugWave, updateDebugMonsterStream } from './debug-wave.js';
+import { updateDebugMonsterStream } from './debug-wave.js';
 import { normalizeDebugOptions } from './debug-mode.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBosses } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
@@ -133,7 +133,6 @@ export class Game {
     this.discoveredMap=new Set();this.regions.initialize();
     this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
     this.settlements.ensureAngels?.();
-    spawnDebugWave(this);
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
     if(this.debugOptions.extraGold)this.grantResources({gold:500},'debugStart');

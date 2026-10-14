@@ -2,23 +2,16 @@ import { UPGRADE_DEFS, SUPER_SKILL_DEFS } from './combat-catalog.js';
 import { isBranchReady } from './weapon-branches.js';
 import { groundOffset } from './terrain.js';
 import { enemyDefinition } from './enemy-definitions.js';
-import { BOSS_DEFS, initBoss, bossKindFor } from './bosses.js';
-import { CASTLE_PROFILE } from './interior-profiles.js';
-import { WORLD_SITE_FEATURES } from './world-sites.js';
-import { getConfigSection } from './content-config.js';
+import { BOSS_DEFS, initBoss } from './bosses.js';
 
 export const DEBUG_FULL_BRANCHES=Object.freeze({sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain'});
 export const TRAINING_DUMMY_RULES=Object.freeze({radius:16,foot:18,defense:100,health:1e9,minDistance:110,maxDistance:230});
 export const DEBUG_BOSS_RULES=Object.freeze({health:100000,minDistance:260,maxDistance:650});
-const castleRules=getConfigSection('sites').castleCombat;
-const castleProfiles=[{id:'default',...CASTLE_PROFILE},...Object.values(WORLD_SITE_FEATURES).filter(profile=>profile.type==='castle').map(profile=>({...CASTLE_PROFILE,...profile}))];
-export const DEBUG_BOSS_ROSTER=Object.freeze([
-  ...Object.values(BOSS_DEFS).map(boss=>({id:`world:${boss.id}`,kind:boss.id,name:boss.name})),
-  ...castleProfiles.flatMap(profile=>(profile.bossIndex?[profile.bossIndex]:[1,2]).map(index=>{
-    const kind=bossKindFor(index),variant=profile.bossIndex?'':index===1?' · 震地':' · 孢子';
-    return {id:`castle:${profile.id}:${kind}`,kind,index,name:`${profile.bossName}${variant}`,castle:true};
-  }))
-].map(Object.freeze));
+// World and castle encounters share combat kinds. Location-specific names or
+// stat multipliers do not create a second testing copy of the same boss.
+export const DEBUG_BOSS_ROSTER=Object.freeze(Object.values(BOSS_DEFS).map(boss=>
+  Object.freeze({id:`world:${boss.id}`,kind:boss.id,name:boss.name})
+));
 
 // Grant the same capped records ordinary rewards build. Attribute purchases,
 // character XP and crystal progression are deliberately left untouched.
@@ -90,16 +83,10 @@ export function spawnDebugBosses(game) {
     // Never damage terrain or overlap the player on a sealed custom map.
     if(!point)continue;
     const enemy=game._spawnEnemy('boss',1);
-    if(definition.castle) {
-      enemy.bossIndex=definition.index;
-      enemy.speed=game.easy?castleRules.boss.speed.easy:castleRules.boss.speed.normal;
-      enemy.damage=(game.easy?castleRules.boss.damage.easy:castleRules.boss.damage.normal)*(1+game.time/castleRules.boss.damageGrowthPeriod);
-      enemy.xp=castleRules.boss.xp+Math.floor(game.time/castleRules.boss.xpGrowthPeriod);
-    }
     initBoss(enemy,definition.kind);
     enemy.x=point.x;enemy.y=point.y-groundOffset(enemy);
     enemy.hp=enemy.maxHp=DEBUG_BOSS_RULES.health;
-    // Keep their real combat profiles, but never attach a dungeon/stage owner:
+    // Keep the normal combat kinds, but never attach a dungeon/stage owner:
     // these outdoor copies must not unlock real rooms or advance objectives.
     enemy.debugBoss=true;enemy.debugBossId=definition.id;enemy.name=definition.name;
     spawned.push(enemy);

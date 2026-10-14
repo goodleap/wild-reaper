@@ -10,7 +10,6 @@ export const HUT_GUARD_PACKS=content.hutGuardPacks;
 export const CASTLE_GUARD_PACKS=content.castleGuardPacks;
 export const CASTLE_SIDE_PACKS=content.castleSidePacks;
 export const ELITE_ELIGIBLE_TYPES=content.eliteEligibleTypes;
-export const DEBUG_WAVE_TYPES=content.debugWaveTypes;
 export const SPECIALIST_SPAWN_RULES=content.specialistSpawnRules;
 
 function matches(rule,index,{time=0,enemies=[],counts=null}={}) {
@@ -90,7 +89,7 @@ export function specialistEnemyRoll(game,roll){
 export function validateSpawnCatalog(regions=[]) {
   const checkSequence=definition=>{enemyDefinition(definition.fallback);for(const rule of definition.rules)enemyDefinition(rule.type);};
   for(const definition of [...Object.values(ENCOUNTER_SEQUENCES),...WAVE_PATTERNS])checkSequence(definition);
-  for(const list of [...Object.values(HUT_GUARD_PACKS),...CASTLE_GUARD_PACKS,CASTLE_SIDE_PACKS.early,CASTLE_SIDE_PACKS.late,ELITE_ELIGIBLE_TYPES,DEBUG_WAVE_TYPES])for(const type of list)enemyDefinition(type);
+  for(const list of [...Object.values(HUT_GUARD_PACKS),...CASTLE_GUARD_PACKS,CASTLE_SIDE_PACKS.early,CASTLE_SIDE_PACKS.late,ELITE_ELIGIBLE_TYPES])for(const type of list)enemyDefinition(type);
   for(const profile of Object.values(ENCOUNTER_CAPS)){enemyDefinition(profile.fallback);for(const type of Object.keys(profile.limits))enemyDefinition(type);}
   for(const special of ORDINARY_SPAWN_RULES.specials)enemyDefinition(special.type);
   for(const special of SPECIALIST_SPAWN_RULES.entries)enemyDefinition(special.type);

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
-import { DEBUG_WAVE_RULES, spawnDebugWave } from './dist/debug-wave.js';
 
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 const layout=g=>g.settlements.sites.map(({id,x,y,door})=>({id,x,y,door}));
@@ -20,12 +19,11 @@ for(const options of [{},{debug:false},{debug:'true'},{debug:1},{debug:0},{debug
   assert.deepEqual(resources(g),{gold:0,crystals:0});assert.equal(debugGrants(g).length,0);
   assert.equal(g.player.speed,220,'ordinary and non-boolean debug options retain the normal movement speed');
   assert.equal(g.enemies.filter(e=>e.debugWave).length,0,'normal runs never get the testing ring');
-  assert.deepEqual(spawnDebugWave(g),[],'a helper call cannot bypass the strict debug flag');
   assert(Math.hypot(castle(g).door.x,castle(g).door.y)>320,'ordinary castle retains exploration distance');
 }
 
 const defaultDebug=new Game({debug:true});
-assert.equal(defaultDebug.enemies.some(enemy=>enemy.debugWave),false,'the initial wave is opt-in');
+assert.equal(defaultDebug.enemies.some(enemy=>enemy.debugWave),false,'the removed initial wave stays absent');
 const regularFacilities=new Game({debug:true,debugOptions:{testFacilities:false}});
 assert.deepEqual(layout(regularFacilities),ordinaryLayout,'disabled facilities preserve ordinary generation order and locations');
 assert(!regularFacilities.enemies.some(enemy=>enemy.trainingDummy||enemy.debugBoss));
@@ -34,24 +32,10 @@ assert.equal(regularFacilities.gold,500,'facilities do not control the gold opti
 for(let terrainSeed=0;terrainSeed<100;terrainSeed++) {
   const g=new Game({debug:true,debugOptions:{enemyWave:true},terrain:new Terrain({seed:terrainSeed})}),site=castle(g),from=feet(g);
   assert.equal(g.debug,true);assert.equal(g.settlements.sites.length,5);
-  const ring=g.enemies.filter(enemy=>enemy.debugWave);
-  assert(ring.length>=32&&ring.length<=DEBUG_WAVE_RULES.count,`seed ${terrainSeed}: the surrounding test cohort is substantial and bounded (${ring.length})`);
+  assert.equal(Object.hasOwn(g.debugOptions,'enemyWave'),false,'obsolete options are discarded even when explicitly true');
+  assert.equal(g.enemies.some(enemy=>enemy.debugWave),false,'the removed opening cohort never returns');
   assert.equal(g.regions.portals.length,2,'the initial island has two fixed world gateways');
   assert.equal(g.enemies.filter(enemy=>enemy.type==='boss'&&!enemy.debugBoss).length,g.regions.portals.filter(portal=>portal.state==='locked').length,'each locked portal retains its ordinary guardian');
-  assert.equal(g.enemies.filter(enemy=>enemy.type==='slime'&&enemy.id<=4).length,0,'the ring replaces the four random starter slimes');
-  const quarters=new Set(),stats={slime:[26,85,9,4],beetle:[43,100,12,6],brute:[115,60,17,13]};
-  for(const enemy of ring) {
-    const point={x:enemy.x,y:enemy.y+groundOffset(enemy)},radius=Math.hypot(point.x-from.x,point.y-from.y);
-    assert(radius>=DEBUG_WAVE_RULES.minRadius-.01&&radius<=DEBUG_WAVE_RULES.maxRadius+.01,'testing enemies start outside immediate contact range');
-    assert(g.terrain.isFree(point.x,point.y,enemy.r+2),'every test enemy starts on clear footing');
-    assert.equal(g.terrain.firstBlocker(from.x,from.y,point.x,point.y,enemy.r+2),null,'the cohort can approach the spawn without being trapped behind a building');
-    assert(g.settlements._hazardFree(point.x,point.y,enemy.r),'testing mobs are not initially sunk in mud or standing in hazards');
-    assert.deepEqual([enemy.hp,enemy.speed,enemy.damage,enemy.xp],stats[enemy.type],'debug enemies keep normal combat values and rewards');
-    quarters.add(Math.floor((Math.atan2(point.y-from.y,point.x-from.x)+Math.PI*2)%(Math.PI*2)/(Math.PI/2)));
-  }
-  assert.equal(quarters.size,4,'the cohort surrounds spawn rather than forming a single clump');
-  const ringIds=ring.map(enemy=>enemy.id);
-  assert.deepEqual(spawnDebugWave(g),[]);assert.deepEqual(g.enemies.filter(enemy=>enemy.debugWave).map(enemy=>enemy.id),ringIds,'each game gets the cohort once');
   assert.equal(g.settlements.sites.filter(s=>s.type==='castle').length,1,'debug relocates the existing castle instead of duplicating it');
   const distance=Math.hypot(site.door.x-from.x,site.door.y-from.y);
   assert(distance>=180&&distance<=320,`seed ${terrainSeed}: nearby door distance ${distance}`);
@@ -123,7 +107,7 @@ assert.equal(g.player.speed,upgradedSpeed,'castle exit and reentry preserve the 
 assert.equal(debugGrants(g).length,1);
 
 const restarted=new Game({debug:true,debugOptions:{enemyWave:true}});assert.deepEqual(layout(restarted),initialLayout);assert.equal(restarted.dungeon.states.size,0,'restart creates a fresh run at the same nearby entrance');
-assert(restarted.enemies.filter(enemy=>enemy.debugWave).length>=32,'a fresh run gets a fresh testing cohort');
+assert.equal(restarted.enemies.some(enemy=>enemy.debugWave),false,'a fresh run cannot restore a removed cohort');
 assert.deepEqual(resources(restarted),{gold:500,crystals:0},'a new run receives gold without pre-earned crystals');
 assert.equal(restarted.player.speed,660,'a new run restores the initial debug speed');
 assert.equal(debugGrants(restarted).length,1);
@@ -132,7 +116,7 @@ const restartedRingIds=restarted.enemies.filter(enemy=>enemy.debugWave).map(enem
 restarted.settlements.resetRegion();assert.deepEqual(resources(restarted),remaining,'regenerating regional sites does not refill debug resources');
 assert.deepEqual(restarted.enemies.filter(enemy=>enemy.debugWave).map(enemy=>enemy.id),restartedRingIds,'regenerating sites never duplicates the testing wave');
 restarted.portal={nextRegionIndex:1};assert(restarted._switchRegion());assert.equal(restarted.regionIndex,1);
-assert.equal(restarted.enemies.filter(enemy=>enemy.debugWave).length,0,'later regions use normal populations');assert.deepEqual(spawnDebugWave(restarted),[]);
+assert.equal(restarted.enemies.filter(enemy=>enemy.debugWave).length,0,'later regions use normal populations');
 assert.equal(restarted.settlements.sites.filter(s=>s.type==='castle').length,1);assert(Math.hypot(castle(restarted).door.x,castle(restarted).door.y)>320,'later regions retain regular castle distance');
 assert.deepEqual(resources(restarted),remaining,'changing regions preserves the spent resource balance');
 assert.equal(restarted.player.speed,660,'changing worlds retains debug speed');
@@ -168,4 +152,4 @@ assert.equal(blocked.player.x,0);assert(blocked.terrain.isFree(feet(blocked).x,f
 for(let i=0;i<12;i++)blocked.update(.05,{x:1,y:0});
 assert(blocked.player.x<=thinWall.x-thinWall.r-blocked.player.r,'fast movement never crosses a thin wall');
 assert(blocked.terrain.isFree(feet(blocked).x,feet(blocked).y,blocked.player.r),'the stopped player remains outside the wall');
-console.log('Debug entry: strict flag, gold-only budget, earned crystal upgrades, triple movement with normalized diagonals and thin-wall collision, safe 32–40-monster testing ring across 100 terrains, ordinary enemy stats/rewards, clear castle approach, persistent maze entry/exit/reentry, fresh restart and regular later regions passed.');
+console.log('Debug entry: strict flag, gold-only budget, earned crystal upgrades, triple movement with normalized diagonals and thin-wall collision, removed opening wave and stale preferences across 100 terrains, clear castle approach, persistent maze entry/exit/reentry, fresh restart and regular later regions passed.');

@@ -22,16 +22,13 @@ export function ground(ctx,enemy,{line,diamond}){
     const attack=enemy.bloomAttack;if(!attack||attack.life<=0)return;
     const progress=clamp(1-attack.life/attack.maxLife,0,1);
     if(attack.kind==='fan'){
-      // Short directional arrows describe the locked fan, not its travel limit.
+      // These quiet lines describe the locked spread, not a filled damage
+      // area. The crown charge and visible projectiles carry the attack itself.
       for(let i=0;i<5;i++){const angle=attack.angle-attack.spread/2+i*attack.spread/4,dx=Math.cos(angle),dy=Math.sin(angle),length=240;
-        ctx.globalAlpha=.33;line(attack.x+dx*25,attack.y+dy*25,attack.x+dx*length,attack.y+dy*length,'#c99bd3',7);
-        ctx.globalAlpha=.9;line(attack.x+dx*25,attack.y+dy*25,attack.x+dx*(30+progress*210),attack.y+dy*(30+progress*210),'#efd4f1',1.5);
-        const xx=attack.x+dx*length,yy=attack.y+dy*length;ctx.beginPath();ctx.moveTo(xx-dx*9-dy*4,yy-dy*9+dx*4);ctx.lineTo(xx,yy);ctx.lineTo(xx-dx*9+dy*4,yy-dy*9-dx*4);ctx.strokeStyle='#d4aedf';ctx.lineWidth=1.6;ctx.stroke();
+        ctx.globalAlpha=.3+progress*.25;line(attack.x+dx*25,attack.y+dy*25,attack.x+dx*length,attack.y+dy*length,'#e0b9e9',1.3);
       }
     }else for(const circle of attack.circles||[]){
-      const {x,y,r}=circle;ctx.globalAlpha=.14;ctx.fillStyle='#c38adb';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();ctx.globalAlpha=.9;ctx.strokeStyle='#dba8e8';ctx.lineWidth=2.4;ctx.stroke();
-      ctx.globalAlpha=.95;ctx.strokeStyle='#f6d7fa';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,r-5,-Math.PI/2,-Math.PI/2+TAU*progress);ctx.stroke();
-      for(let i=0;i<4;i++){const angle=i*TAU/4+Math.PI/4;line(x+Math.cos(angle)*(r-14),y+Math.sin(angle)*(r-14),x+Math.cos(angle)*(r-21),y+Math.sin(angle)*(r-21),'#ebc7eb',1.6);}diamond(x,y,5,'#d9afe2');
+      const {x,y,r}=circle;ctx.globalAlpha=.05+progress*.06;ctx.fillStyle='#c38adb';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();ctx.globalAlpha=.58+progress*.3;ctx.strokeStyle='#dfb5e8';ctx.lineWidth=1.5+progress*.5;ctx.stroke();
     }
 }
 export default Object.freeze({paint,overlay,frequency:4,ground,groundOrder:0,phaseLabel:e=>e.bloomAttack?.life>0?(e.bloomAttack.kind==='fan'?'孢冠扇射':'孢爆蓄力'):null,notice:(events,boss)=>events.some(e=>e.type==='bloomWindup')?(boss?.bloomAttack?.kind==='fan'?'孢冠扇射 · 绕至侧面，借树石掩护':'孢爆将至 · 离开紫色预警圈'):null,sounds:Object.freeze({bloomWindup:[270,.28,'sine',.025,390],bloomShot:[400,.13,'triangle',.025,220],bloomBurst:[170,.3,'triangle',.035,70]})});

@@ -18,11 +18,7 @@ export function paint(c,p){
 export function ground(ctx,enemy,{line,diamond}){
     const slam=enemy.slam;if(!slam||slam.life<=0)return;
     const progress=clamp(1-slam.life/slam.maxLife,0,1),{x,y,r}=slam;
-    ctx.globalAlpha=.12+progress*.07;ctx.fillStyle='#e36d45';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();
-    ctx.globalAlpha=.92;ctx.strokeStyle='#e79567';ctx.lineWidth=2.6;ctx.stroke();
-    ctx.globalAlpha=.7;ctx.strokeStyle='#e7b574';ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,r-7,0,TAU);ctx.stroke();
-    ctx.globalAlpha=.95;ctx.strokeStyle='#ffe1a0';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,r-4,-Math.PI/2,-Math.PI/2+TAU*progress);ctx.stroke();
-    // Four inward ticks keep the damage boundary readable in dense grass.
-    ctx.beginPath();for(let i=0;i<4;i++){const angle=i*Math.PI/2;ctx.moveTo(x+Math.cos(angle)*(r-13),y+Math.sin(angle)*(r-13));ctx.lineTo(x+Math.cos(angle)*(r-20),y+Math.sin(angle)*(r-20));}ctx.lineWidth=2;ctx.stroke();
+    ctx.globalAlpha=.05+progress*.06;ctx.fillStyle='#e36d45';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();
+    ctx.globalAlpha=.6+progress*.28;ctx.strokeStyle='#eeb281';ctx.lineWidth=1.6+progress*.5;ctx.stroke();
 }
 export default Object.freeze({paint,frequency:4,ground,groundOrder:1,phaseLabel:e=>e.slam?.life>0?'震地蓄力':null,sounds:Object.freeze({bossWindup:[145,.24,'sine',.025,210],bossSlam:[90,.28,'triangle',.045,40]})});

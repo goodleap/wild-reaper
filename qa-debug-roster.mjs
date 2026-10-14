@@ -31,8 +31,8 @@ const castleVariants=[
   {id:'castle:belltower:bloom',kind:'bloom',index:2,name:'暮钟守卫',featureId:'belltower'},
   {id:'castle:furnace:ancient',kind:'ancient',index:1,name:'熔炉守卫',featureId:'furnace'}
 ];
-assert.equal(rosterIds.length,10);assert.equal(new Set(rosterIds).size,10);
-assert.deepEqual(DEBUG_BOSS_ROSTER.filter(def=>def.castle).map(def=>def.id).sort(),castleVariants.map(def=>def.id).sort());
+assert.equal(rosterIds.length,6);assert.equal(new Set(rosterIds).size,6);
+assert.deepEqual(DEBUG_BOSS_ROSTER.map(def=>def.kind).sort(),kinds,'exactly one sample per actual combat kind');
 assert.equal(DEBUG_BOSS_RULES.health,100000);
 assert.equal(DEBUG_MONSTER_RULES.maxEnemies,320);
 assert.deepEqual([...DEBUG_MONSTER_TYPES].sort(),ENEMY_IDS.filter(id=>id!=='boss').sort());
@@ -43,8 +43,8 @@ assert(Object.isFrozen(DEBUG_MONSTER_TYPES));
 for(const world of WORLD_IDS)for(const testFacilities of [false,true]) {
   const g=new Game({debug:true,debugWorld:world,debugOptions:options({allBosses:true,testFacilities})});
   const bosses=g.enemies.filter(e=>e.debugBoss),p=foot(g.player);
-  assert.deepEqual(bosses.map(e=>e.debugBossId).sort(),rosterIds,`${world}: every world and castle Boss identity is present once`);
-  assert.deepEqual([...new Set(bosses.map(e=>e.bossKind))].sort(),kinds,`${world}: all six combat patterns remain covered`);
+  assert.deepEqual(bosses.map(e=>e.debugBossId).sort(),rosterIds,`${world}: every independent Boss combat kind is present once`);
+  assert.deepEqual(bosses.map(e=>e.bossKind).sort(),kinds,`${world}: all six combat patterns are present without duplicates`);
   for(const boss of bosses) {
     assert.equal(boss.type,'boss');assert.equal(boss.hp,100000);assert.equal(boss.maxHp,100000);
     const definition=DEBUG_BOSS_ROSTER.find(def=>def.id===boss.debugBossId);
@@ -68,24 +68,39 @@ for(const world of WORLD_IDS)for(const testFacilities of [false,true]) {
   g.enemies=g.enemies.filter(e=>!e.debugBoss);assert.deepEqual(spawnDebugBosses(g),[],'defeated or left-behind bosses do not refill');
 }
 
-// Compare outdoor castle samples with the actual castle population routine in
-// both difficulties, including both seeded forms of the old castle guardian.
+// Actual castle populations can rename or strengthen an existing combat kind.
+// Every such population is represented once, without spawning another alias.
 for(const difficulty of ['normal','casual']) {
   const testing=arena({allBosses:true},{difficulty});
   for(const variant of castleVariants) {
-    const sample=testing.enemies.find(e=>e.debugBossId===variant.id);
-    assert(sample);assert.equal(sample.name,variant.name);assert.equal(sample.bossKind,variant.kind);assert.equal(sample.bossIndex,variant.index);
     const reference=arena({}, {difficulty});
     const state=createCastleState(reference.dungeon,{id:`qa-profile-${variant.id}`,type:'castle',featureId:variant.featureId,door:foot(reference.player)});
     if(!variant.featureId)state.seed=(state.seed&~1)|(variant.index===2?1:0);
     populateCastle(reference.dungeon,state);
     const real=reference.enemies.find(e=>e.dungeonBoss);
-    assert(real);assert.equal(sample.bossKind,real.bossKind);
-    for(const stat of ['speed','damage','xp'])assert.equal(sample[stat],real[stat],`${difficulty} ${variant.id}: preserves real castle ${stat}`);
+    assert(real);assert.equal(real.bossKind,variant.kind);
+    const samples=testing.enemies.filter(e=>e.bossKind===real.bossKind);
+    assert.equal(samples.length,1,`${difficulty} ${variant.id}: its real combat kind has one sample`);
+    assert.equal(samples[0].name,BOSS_DEFS[real.bossKind].name,'samples use the canonical identity, not a castle alias');
   }
 }
 
-// Killing copied castle guards outdoors cannot open a real castle treasury,
+// Adding debug samples must not relocate, duplicate, strengthen or remove the
+// existing guarded objectives; those actors still belong to their real map.
+{
+  const g=new Game({debug:true,debugOptions:options({})});
+  const natural=g.enemies.filter(e=>e.type==='boss');
+  assert(natural.length>0,'the real world supplies objective guardians');
+  const snapshots=natural.map(e=>JSON.stringify(e));
+  const portals=JSON.stringify(g.regions.portals);
+  g.debugOptions=Object.freeze(options({allBosses:true}));
+  assert.equal(spawnDebugBosses(g).length,6);
+  assert.deepEqual(g.enemies.filter(e=>e.type==='boss'&&!e.debugBoss),natural);
+  assert.deepEqual(natural.map(e=>JSON.stringify(e)),snapshots);
+  assert.equal(JSON.stringify(g.regions.portals),portals);
+}
+
+// Killing debug samples outdoors cannot open a real castle treasury,
 // complete a stage objective, unlock a portal or count as a regional Boss win.
 {
   const g=new Game({debug:true,stageId:STAGES[0].id,debugOptions:options({allBosses:true})});
@@ -186,4 +201,4 @@ assert(safeSpawns>0);
 const sealed=arena({allMonsters:true});sealed.terrain.isFree=()=>false;
 assert.deepEqual(updateDebugMonsterStream(sealed,.5),[],'a sealed map has no unsafe spawn fallback');
 assert.equal(sealed.enemies.length,0);
-console.log(`Debug rosters: 10 world/castle Boss identities once at 100000 HP in ${WORLD_IDS.length} worlds, real castle profiles and objective isolation; initial 64 with 16 per rapid batch, at least 128 in a real second, four spread offscreen sides, pause/interior isolation, 320-live cap recovery and ${safeSpawns} safe world spawns passed.`);
+console.log(`Debug rosters: 6 unique Boss combat kinds once at 100000 HP in ${WORLD_IDS.length} worlds, castle-kind coverage and unchanged objective owners; initial 64 with 16 per rapid batch, at least 128 in a real second, four spread offscreen sides, pause/interior isolation, 320-live cap recovery and ${safeSpawns} safe world spawns passed.`);

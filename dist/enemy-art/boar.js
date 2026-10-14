@@ -23,8 +23,6 @@ export function telegraph(ctx,enemy,{capsulePath}){
   const charge=enemy.charge;if(charge?.phase!=='windup')return;
   const progress=clamp(1-charge.life/charge.maxLife,0,1),r=enemy.r,length=charge.length||256;
   ctx.save();ctx.translate(charge.startX,charge.startY);ctx.rotate(Math.atan2(charge.dy,charge.dx));ctx.translate(length/2,0);
-  ctx.beginPath();capsulePath(ctx,length/2,r);ctx.fillStyle='#d9825533';ctx.fill();ctx.strokeStyle='#dfb278';ctx.lineWidth=1.8;ctx.globalAlpha=.75;ctx.stroke();
-  ctx.globalAlpha=.9;ctx.strokeStyle='#f0cf8b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-length/2,0);ctx.lineTo(-length/2+length*progress,0);ctx.stroke();
-  for(let i=1;i<=3;i++){const x=-length/2+length*i/4;ctx.beginPath();ctx.moveTo(x-7,-6);ctx.lineTo(x,0);ctx.lineTo(x-7,6);ctx.stroke();}ctx.restore();
+  ctx.beginPath();capsulePath(ctx,length/2,r);ctx.fillStyle='#d98255';ctx.globalAlpha=.045+progress*.06;ctx.fill();ctx.strokeStyle='#dfb278';ctx.lineWidth=1.35+progress*.45;ctx.globalAlpha=.55+progress*.3;ctx.stroke();ctx.restore();
 }
 export default Object.freeze({paint,isStill,facing,overlay,telegraph});

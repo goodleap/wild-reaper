@@ -259,14 +259,6 @@
     "beetle",
     "brute"
   ],
-  "debugWaveTypes": [
-    "slime",
-    "beetle",
-    "slime",
-    "brute",
-    "beetle",
-    "slime"
-  ],
   "ordinarySpawnRules": {
     "fallback": "slime",
     "baselineWorld": "forest",

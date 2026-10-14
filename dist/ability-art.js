@@ -22,25 +22,20 @@ function shape(ctx,e,r){
     const ux=Math.cos(e.angle),uy=Math.sin(e.angle);ctx.moveTo(x-uy*r,y+ux*r);ctx.lineTo(x+uy*r,y-ux*r);
   }else ctx.arc(x,y,r,0,TAU);
 }
-function direction(ctx,e,progress){
-  if(!['projectile','beam','cone','wave'].includes(e.shape))return;
-  const p=e.parameters,length=e.shape==='projectile'?Math.min(90,p.range):e.shape==='wave'?14:p.range*.9,ux=Math.cos(e.angle),uy=Math.sin(e.angle),x=e.x+ux*length,y=e.y+(e.groundOffset||0)+uy*length;
-  ctx.strokeStyle=e.hostile?'#ffd0b5':abilityColor(e);ctx.lineWidth=1.7;ctx.globalAlpha=.65+progress*.3;ctx.beginPath();
-  segment(ctx,x-ux*8-uy*4,y-uy*8+ux*4,x,y);segment(ctx,x,y,x-ux*8+uy*4,y-uy*8-ux*4);ctx.stroke();
-}
 function warning(ctx,e){
+  // Traveling shots announce themselves at the casting hand and in flight.
+  // Their old short ground rectangles implied a damage area they never had.
+  if(e.shape==='projectile')return;
   const p=e.parameters,progress=clamp(e.age/Math.max(.001,e.windup));
-  shape(ctx,e,p.radius);ctx.fillStyle=e.hostile?'#b55249':abilityColor(e);ctx.globalAlpha=(e.hostile?.07:.035)+progress*.075;if(e.shape!=='wave')ctx.fill();
-  ctx.strokeStyle=e.hostile?'#f1a181':abilityColor(e);ctx.lineWidth=e.hostile?1.8:1.2;ctx.globalAlpha=e.hostile?.88:.55;ctx.stroke();
-  if(['zone','field','ring'].includes(e.shape)){
-    ctx.strokeStyle=e.hostile?'#ffd2ad':abilityColor(e);ctx.lineWidth=2.4;ctx.globalAlpha=.95;ctx.beginPath();ctx.arc(e.x,e.y+(e.groundOffset||0),p.radius,-Math.PI/2,-Math.PI/2+TAU*progress);ctx.stroke();
-    if(e.hostile){ctx.globalAlpha=.85;ctx.lineWidth=1.5;ctx.beginPath();for(let i=0;i<4;i++){const a=i*TAU/4,ux=Math.cos(a),uy=Math.sin(a),x=e.x+ux*p.radius,y=e.y+(e.groundOffset||0)+uy*p.radius;segment(ctx,x-ux*5-uy*3,y-uy*5+ux*3,x,y);segment(ctx,x,y,x-ux*5+uy*3,y-uy*5-ux*3);}ctx.stroke();}
-  }
-  direction(ctx,e,progress);
+  shape(ctx,e,p.radius);ctx.fillStyle=e.hostile?'#b55249':abilityColor(e);ctx.globalAlpha=(e.hostile?.045:.025)+progress*.055;if(e.shape!=='wave')ctx.fill();
+  // One complete boundary is visible from the first windup frame. Imminence
+  // strengthens this same edge instead of adding a clock, ticks or arrows.
+  ctx.strokeStyle=e.hostile?'#f1a181':abilityColor(e);ctx.lineWidth=(e.hostile?1.35:1)+progress*.45;ctx.globalAlpha=(e.hostile?.55:.35)+progress*.3;ctx.stroke();
 }
 function activeBoundary(ctx,e){
-  if(e.shape==='projectile'||e.shape==='ring'||e.shape==='zone')return;
-  shape(ctx,e,e.parameters.radius);ctx.strokeStyle=e.hostile?'#eaa18a':abilityColor(e);ctx.globalAlpha=e.hostile?.78:.4;ctx.lineWidth=e.hostile?1.5:1;ctx.stroke();
+  // Waves already carry a hostile front and end caps in their water artwork.
+  if(['projectile','ring','zone','wave'].includes(e.shape))return;
+  shape(ctx,e,e.parameters.radius);ctx.strokeStyle=e.hostile?'#eaa18a':abilityColor(e);ctx.globalAlpha=e.hostile?(e.shape==='field'?.4:.55):.25;ctx.lineWidth=e.hostile?1.25:1;ctx.stroke();
 }
 function drawMarks(ctx,enemy,options){
   for(const mark of enemy.specialMarks||[]){
@@ -57,8 +52,7 @@ function drawMarks(ctx,enemy,options){
       if(!options.reduced&&!options.dense){ctx.globalAlpha=fade*.7;ctx.fillStyle='#f4be7e';for(let i=0;i<3;i++){const phase=((enemy.specialVisualTime||0)*.8+i*.31)%1;circle(ctx,(i-1)*r*.38,-phase*r*.8,1.2);ctx.fill();}}
     }
     ctx.restore();
-    ctx.strokeStyle=ready?'#ffd0b0':ice?'#a9d5e3':'#cd8b65';ctx.globalAlpha=fade*(ready?.92:.5);ctx.lineWidth=ready?2:1.2;circle(ctx,mark.x,mark.y,r);ctx.stroke();
-    if(ready){ctx.globalAlpha=.95;ctx.strokeStyle='#ffdeb8';ctx.lineWidth=2.7;ctx.beginPath();ctx.arc(mark.x,mark.y,r,-Math.PI/2,-Math.PI/2+TAU*progress);ctx.stroke();}
+    ctx.strokeStyle=ready?'#ffd0b0':ice?'#a9d5e3':'#cd8b65';ctx.globalAlpha=fade*(ready?.55+progress*.3:.32);ctx.lineWidth=ready?1.4+progress*.4:1;circle(ctx,mark.x,mark.y,r);ctx.stroke();
   }
 }
 function drawSpecialGround(ctx,game,options){
@@ -70,15 +64,12 @@ function drawSpecialGround(ctx,game,options){
     for(const c of a.circles||[]){
       if(c.done||!visible(options,c))continue;
       const local=a.phase==='strikes'?clamp(1-c.delay/Math.max(.001,c.maxDelay??a.maxLife)):progress;
-      ctx.globalAlpha=.09+local*.12;circle(ctx,c.x,c.y,c.r);ctx.fill();ctx.globalAlpha=.9;ctx.lineWidth=2;ctx.stroke();
-      ctx.globalAlpha=.8;ctx.lineWidth=2.7;ctx.beginPath();ctx.arc(c.x,c.y,c.r,-Math.PI/2,-Math.PI/2+TAU*local);ctx.stroke();
+      ctx.globalAlpha=.045+local*.065;circle(ctx,c.x,c.y,c.r);ctx.fill();ctx.globalAlpha=.58+local*.3;ctx.lineWidth=1.4+local*.5;ctx.stroke();
     }
     if(a.length>0){
       const ux=Math.cos(a.angle),uy=Math.sin(a.angle),r=a.r||enemy.r,x2=a.x+ux*a.length,y2=a.y+uy*a.length;
-      ctx.beginPath();ctx.moveTo(a.x-uy*r,a.y+ux*r);ctx.lineTo(x2-uy*r,y2+ux*r);ctx.lineTo(x2+uy*r,y2-ux*r);ctx.lineTo(a.x+uy*r,a.y-ux*r);ctx.closePath();ctx.globalAlpha=.1+progress*.08;ctx.fill();ctx.globalAlpha=.9;ctx.lineWidth=2;ctx.stroke();
-      ctx.lineWidth=2.2;ctx.beginPath();segment(ctx,x2-ux*16-uy*10,y2-uy*16+ux*10,x2,y2);segment(ctx,x2,y2,x2-ux*16+uy*10,y2-uy*16-ux*10);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(a.x-uy*r,a.y+ux*r);ctx.lineTo(x2-uy*r,y2+ux*r);ctx.lineTo(x2+uy*r,y2-ux*r);ctx.lineTo(a.x+uy*r,a.y-ux*r);ctx.closePath();ctx.globalAlpha=.045+progress*.065;ctx.fill();ctx.globalAlpha=.58+progress*.3;ctx.lineWidth=1.4+progress*.5;ctx.stroke();
     }
-    if(a.destination){ctx.globalAlpha=.5;ctx.lineWidth=1.3;ctx.beginPath();segment(ctx,a.x,a.y,a.destination.x,a.destination.y);ctx.stroke();}
   }
 }
 export function drawAbilityGround(ctx,game,options={}){

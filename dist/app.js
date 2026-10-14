@@ -55,6 +55,7 @@ import { ACTOR_VISUALS, actorShape } from './actor-visuals.js';
 import { drawDamageOverlay } from './damage-numbers.js';
 import { drawCastleActivation } from './relic-activation.js';
 import { sceneEntityVisible, sceneItemVisible, sceneItemLayer, compareSceneDepth } from './scene-rendering.js';
+import { visitSceneUnits } from './unit-counts.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
@@ -96,6 +97,8 @@ const diagnosticModes=['default','hud-off','lights-off'];
 const diagnosticLabels={default:'默认','hud-off':'停更 HUD','lights-off':'关闭光影'};
 const debugFpsNode=$('debug-fps');
 const debugPerformanceNode=debugMode?document.createElement('span'):null;
+const debugUnitCountsNode=debugMode?document.createElement('span'):null;
+let debugUnitCounts={sceneTotal:0,screenTotal:0};
 const frameMetrics=new FrameMetrics();
 const renderSchedule=new RenderSchedule();
 if(debugFpsNode){
@@ -108,13 +111,20 @@ if(debugPerformanceNode){
   // Stay inside the narrow pause column without adding a gameplay overlay.
   $('pause-button').parentElement?.append(debugPerformanceNode);
 }
-function resetDebugFps(){frameMetrics?.reset();if(debugFpsNode)debugFpsNode.textContent='-- FPS';if(debugPerformanceNode)debugPerformanceNode.textContent='';}
+if(debugUnitCountsNode){
+  debugUnitCountsNode.id='debug-unit-counts';debugUnitCountsNode.className='debug-unit-counts';
+  debugUnitCountsNode.setAttribute('aria-label','场景单位总数与屏幕内单位总数');
+  debugUnitCountsNode.title='当前场景与屏幕内的单位数量，包含主角、伙伴、敌人和 NPC；不计子弹、特效与掉落物';
+  $('pause-button').parentElement?.append(debugUnitCountsNode);
+}
+function resetDebugFps(){frameMetrics?.reset();if(debugFpsNode)debugFpsNode.textContent='-- FPS';if(debugPerformanceNode)debugPerformanceNode.textContent='';if(debugUnitCountsNode)debugUnitCountsNode.textContent='';}
 function updateDebugFps(now,rendered,updateMs,renderMs,state){
   if(!debugFpsNode)return;
   if(document.hidden){frameMetrics.reset();return;}
   const sample=frameMetrics.sample(now,{rendered,updateMs,renderMs});if(!sample)return;
   debugFpsNode.textContent=renderSchedule.isLive(state)?`${sample.fps} FPS`:'已暂停';
   if(!debugPerformanceNode)return;
+  if(debugUnitCountsNode&&game)debugUnitCountsNode.textContent=`场景 ${debugUnitCounts.sceneTotal}\n屏幕 ${debugUnitCounts.screenTotal}`;
   debugPerformanceNode.textContent=`Δ${sample.rafMs.toFixed(1)}ms
 U${sample.updateMs.toFixed(1)}ms
 D${sample.renderMs.toFixed(1)}ms
@@ -1514,7 +1524,16 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.dense=width<6
   combatOptions.viewBounds={minX:-offsetX,minY:-offsetY,maxX:width-offsetX,maxY:height-offsetY};
   combatVfx.beginFrame(combatOptions);
   background(camX-sx,camY-sy,false);
-  const actors=game.enemies.filter(sceneVisible).map(e=>actorVisual(e));actors.push(actorVisual(p,true));for(const ally of game.companions?.members||[])if(sceneVisible(ally))actors.push(actorVisual(ally,true));if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if((site.type==='merchant'||site.type==='angel')&&site.state!=='spent'){const npc={x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,heroId:'traveler',site,name:site.type==='merchant'?'商人':'天使',id:site.id,castFace:site.castFace||0,facing:0};actors.push(actorVisual(npc,true));}for(const camp of rescueCamps()){const definition=companionDefinition(camp.kind);actors.push(actorVisual({...camp,y:camp.y-(definition?.groundOffset??19.8),r:definition?.r||15,groundOffset:definition?.groundOffset??19.8,flying:!!definition?.flying,heroId:camp.kind,isCaptive:true},true));}if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[])if((site.type==='rescue'||site.type==='dogcamp')&&site.state==='ready'){const definition=companionDefinition(site.kind);actors.push(actorVisual({x:site.x,y:site.y-(definition?.groundOffset??19.8),r:definition?.r||15,heroId:site.kind,kind:site.kind,name:definition?.name||'伙伴',groundOffset:definition?.groundOffset??19.8,flying:!!definition?.flying,state:site.appearance==='golemaltar'?'dormant':site.type==='dogcamp'?'ready':'trapped',isCaptive:true},true));};for(let i=actors.length-1;i>=0;i--)if(!actorInView(actors[i],offsetX,offsetY))actors.splice(i,1);
+  const actors=[],visionForActors=game.dungeon?.active?game.dungeon.vision:null;
+  let screenTotal=0;
+  const sceneTotal=visitSceneUnits(game,(entity,isPlayer)=>{
+    if(!sceneVisible(entity))return;
+    const actor=actorVisual(entity,isPlayer);
+    if(!actorInView(actor,offsetX,offsetY))return;
+    actors.push(actor);
+    if(debugMode&&(!visionForActors||sceneItemVisible({kind:'actor',actor},visionForActors)))screenTotal++;
+  });
+  if(debugMode)debugUnitCounts={sceneTotal,screenTotal};
   const terrain=terrainInView(camX,camY),adventureProps=adventureSceneProps(camX,camY);
   const vision=game.dungeon?.active?game.dungeon.vision:null;
   if(vision){

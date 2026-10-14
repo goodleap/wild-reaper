@@ -31,7 +31,7 @@ for(const options of [{},{debug:false,debugOptions:{fullLoadout:true}},{debug:tr
 const disabledOptions=Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,false]));
 const defaults=normalizeDebugOptions();assert(Object.isFrozen(defaults));
 assert.deepEqual(Object.keys(defaults),DEBUG_OPTION_DEFS.map(def=>def.id));
-assert.deepEqual(normalizeDebugOptions({unknown:true,fullLoadout:'true'}),defaults,'only known booleans are accepted');
+assert.deepEqual(normalizeDebugOptions({unknown:true,enemyWave:true,fullLoadout:'true'}),defaults,'only known booleans are accepted');
 assert.deepEqual(normalizeDebugOptions(Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,true])),false),disabledOptions);
 const normalWithOptions=factory({debugOptions:Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,true]))});
 assert.deepEqual(normalWithOptions.debugOptions,disabledOptions);assert.equal(normalWithOptions.gold,0);assert.equal(normalWithOptions.player.speed,220);
@@ -52,7 +52,7 @@ for(const def of DEBUG_OPTION_DEFS) {
   if(!['zeroStormCooldown','fullLoadout'].includes(def.id))assert.equal(g.player.skillCooldownMax,g.hero.skillCooldown);
   assert.equal(g.enemies.some(enemy=>enemy.trainingDummy),def.id==='testFacilities',`${def.id}: dummy is independent`);
   assert.equal(g.enemies.some(enemy=>enemy.debugBoss),def.id==='allBosses',`${def.id}: boss roster is independent`);
-  assert.equal(g.enemies.some(enemy=>enemy.debugWave),def.id==='enemyWave',`${def.id}: wave is independent`);
+  assert.equal(g.enemies.some(enemy=>enemy.debugWave),false,`${def.id}: removed opening wave never reappears`);
   assert.equal(g.build.getWeapon('arrow').acquired,def.id==='fullLoadout',`${def.id}: full loadout is independent`);
   assert.equal(g.companions.members.length,0);
   g.player.skillCooldown=5;g.update(.01,{});

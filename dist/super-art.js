@@ -67,11 +67,11 @@ export class SuperArt {
       const growth=.88+emerge*.12+strike*.016;
       ctx.globalAlpha=fade;ctx.save();ctx.scale(size*growth/128,size*growth/128);this.vectors.drawThorns(ctx,variant,{raised:true});ctx.restore();
     }else if(kind==='miasma'){
-      // A hard game radius remains readable while the interior consists of soft,
-      // mottled clouds. The foliage and enemies above it are never obscured.
+      // The clipped mist describes this friendly field without a ring of UI
+      // ticks competing with hostile warnings or the actors above it.
       ctx.save();ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.clip();ctx.globalAlpha=fade*.25;ctx.drawImage(this._glow('#ad83cd'),-r,-r,r*2,r*2);
       for(let i=0;i<(dense?5:8);i++){const p=data.particles[i],a=p.a+(reduced?0:elapsed*.09),rr=p.r*r*.64,xx=Math.cos(a)*rr,yy=Math.sin(a)*rr*.82,size=r*(.75+p.r*.25);ctx.globalAlpha=fade*(.45+Math.sin(p.phase+(reduced?0:elapsed*.45))*.08);ctx.drawImage(this._mist(i%2),xx-size*.65,yy-size*.42,size*1.3,size*.85);}
-      ctx.restore();ctx.globalAlpha=fade*.7;ctx.strokeStyle='#d0addd';ctx.lineWidth=1.2;ctx.beginPath();for(let i=0;i<12;i++){const a=i*TAU/12;ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);ctx.arc(0,0,r,a,a+.08);}ctx.stroke();
+      ctx.restore();
       if(!dense){ctx.globalAlpha=fade*.5;for(let i=0;i<8;i++){const p=data.particles[i],xx=Math.cos(p.a)*r*p.r,yy=Math.sin(p.a)*r*p.r-(reduced?0:Math.sin(elapsed*.6+p.phase)*3);ellipse(ctx,xx,yy,1.4,1.1,'#eed3ef');}}
     }else if(kind==='meteor')this._meteorWarning(ctx,field,t,reduced,dense);
     else if(kind==='vortex')this._vortex(ctx,field,elapsed,data,reduced,dense,fade);
@@ -79,14 +79,10 @@ export class SuperArt {
     ctx.restore();return true;
   }
   _meteorWarning(ctx,f,t,reduced,dense){
-    const r=f.r;ctx.globalAlpha=.12;ctx.drawImage(this._glow('#f1bc79'),-r,-r,r*2,r*2);ctx.globalAlpha=.72;ctx.strokeStyle='#e7bc76';ctx.lineWidth=1.15;
-    ctx.beginPath();for(let i=0;i<16;i++){const a=i*TAU/16+.025;ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);ctx.arc(0,0,r,a,a+.16);}ctx.stroke();
-    // Countdown uses the real impact boundary. Gold and an inward star separate
-    // this friendly meteor warning from the red/purple enemy danger marks.
-    ctx.strokeStyle='#ffdda0';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,r,-Math.PI/2,-Math.PI/2+TAU*t);ctx.stroke();
-    ctx.globalAlpha=.35+t*.5;for(let i=0;i<4;i++){const a=i*Math.PI/2,rr=r*.71;glyph(ctx,Math.cos(a)*rr,Math.sin(a)*rr,a,4,i,'#edd4a3');}
-    ctx.globalAlpha=.65;ctx.strokeStyle='#f7d693';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<8;i++){const a=i*TAU/8,rr=i%2?7:20;ctx[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr);}ctx.closePath();ctx.stroke();
-    if(!reduced&&!dense){ctx.globalAlpha=.4;for(let i=0;i<6;i++){const a=i*TAU/6+.4,rr=r*(.25+.4*(1-t));shard(ctx,Math.cos(a)*rr,Math.sin(a)*rr,a,2,'#f4c780');}}
+    // This is the friendly SuperSkills path. Hostile meteors retain their
+    // complete damage boundary in ability-art instead of borrowing this shadow.
+    const r=f.r;ctx.globalAlpha=.07+t*.07;ellipse(ctx,0,0,r,r,'#5c4a35');
+    const size=r*(.2+t*.22);ctx.globalAlpha=.11+t*.1;ellipse(ctx,0,0,size,size*.76,'#332e29');
   }
   _vortex(ctx,f,elapsed,data,reduced,dense,fade){
     const r=f.r,phase=reduced?0:elapsed*.72;

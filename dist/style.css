@@ -95,6 +95,7 @@
 /* FPS shares the pause column; detailed telemetry is debug-only. */
 .pause-control{display:flex;flex-direction:column;align-items:center;gap:5px;width:44px;flex:0 0 44px}.debug-fps{display:block;max-width:44px;white-space:nowrap;font:500 9px/1.4 ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#d3dfc5;text-shadow:0 1px 3px #14251e;pointer-events:none}
 .debug-performance{display:block;max-width:44px;overflow:hidden;white-space:pre;pointer-events:none;text-align:center;font:500 8px/1.2 ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#b9cbb0;text-shadow:0 1px 3px #14251e;margin-top:-3px}
+.debug-unit-counts{display:block;white-space:pre;pointer-events:none;text-align:center;font:500 9px/1.5 ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#c7d8bb;text-shadow:0 1px 3px #14251e}
 
 /* Edge-to-edge playfield. Only controls are inset; world art fills the viewport. */
 .intro-tools{position:absolute;top:calc(20px + var(--safe-top));right:calc(20px + var(--safe-right));z-index:1;display:flex;gap:8px}

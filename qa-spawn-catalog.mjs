@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { ENEMY_DEFS } from './dist/enemy-definitions.js';
 import { REGIONS,regionEnemyType } from './dist/regions.js';
-import { ENCOUNTER_SEQUENCES,WAVE_PATTERNS,HUT_GUARD_PACKS,CASTLE_GUARD_PACKS,DEBUG_WAVE_TYPES,
+import { ENCOUNTER_SEQUENCES,WAVE_PATTERNS,HUT_GUARD_PACKS,CASTLE_GUARD_PACKS,
   validateSpawnCatalog,sequenceEnemyType,waveEnemyType,arenaGuardType,rescueGuardType,
   castleRoomTypes,cappedEncounterType,hutGuardType,treasureGuardianType } from './dist/encounter-definitions.js';
 
@@ -18,7 +18,7 @@ const zeroWeights=Object.fromEntries(Object.keys(validWeights).map(type=>[type,0
 assert.throws(()=>validateSpawnCatalog([{id:'empty',enemyWeights:zeroWeights}]),/weight total/);
 assert.throws(()=>validateSpawnCatalog([{id:'empty',enemyWeights:{...zeroWeights,boss:1}}]),/weight total/);
 assert.throws(()=>validateSpawnCatalog([{id:'missing'}]),/Missing enemy weights/);
-for(const table of [ENCOUNTER_SEQUENCES,WAVE_PATTERNS,HUT_GUARD_PACKS,CASTLE_GUARD_PACKS,DEBUG_WAVE_TYPES])assert(Object.isFrozen(table));
+for(const table of [ENCOUNTER_SEQUENCES,WAVE_PATTERNS,HUT_GUARD_PACKS,CASTLE_GUARD_PACKS])assert(Object.isFrozen(table));
 
 // Catalog selection is deterministic: it must not move any caller's RNG stream.
 const originalRandom=Math.random;Math.random=()=>{throw new Error('spawn catalog consumed random state');};
