@@ -1,5 +1,5 @@
 import { getConfigSection } from './content-config.js';
-import { enemyDefinition } from './enemy-definitions.js';
+import { ENEMY_DEFS, enemyDefinition } from './enemy-definitions.js';
 
 const content=getConfigSection('encounters');
 export const ENCOUNTER_SEQUENCES=content.sequences;
@@ -72,7 +72,9 @@ export function ordinaryEnemyType(game,roll) {
 export function specialistEnemyRoll(game,roll){
   const rules=SPECIALIST_SPAWN_RULES,time=game._difficultyTime?.()??game.time;
   let total=0,alive=0;const counts={};
-  for(const enemy of game.enemies)if(enemy.hp>0&&enemyDefinition(enemy.type).behavior==='specialist'){alive++;counts[enemy.type]=(counts[enemy.type]||0)+1;}
+  // Live targets also include training fixtures outside the monster catalog.
+  // Only catalogued specialist monsters consume these spawn limits.
+  for(const enemy of game.enemies)if(enemy.hp>0&&ENEMY_DEFS[enemy.type]?.behavior==='specialist'){alive++;counts[enemy.type]=(counts[enemy.type]||0)+1;}
   if(alive>=rules.globalCap)return {roll};
   const choices=[];
   for(const entry of rules.entries){
