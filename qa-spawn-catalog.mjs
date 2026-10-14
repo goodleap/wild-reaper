@@ -1,22 +1,24 @@
 import assert from 'node:assert/strict';
 import { ENEMY_DEFS } from './dist/enemy-definitions.js';
 import { REGIONS,regionEnemyType } from './dist/regions.js';
-import { ENCOUNTER_SEQUENCES,WAVE_PATTERNS,HUT_GUARD_PACKS,CASTLE_GUARD_PACKS,
+import { ENCOUNTER_SEQUENCES,WAVE_PATTERNS,HUT_GUARD_PACKS,CASTLE_GUARD_PACKS,SPECIALIST_SPAWN_RULES,
   validateSpawnCatalog,sequenceEnemyType,waveEnemyType,arenaGuardType,rescueGuardType,
   castleRoomTypes,cappedEncounterType,hutGuardType,treasureGuardianType } from './dist/encounter-definitions.js';
 
 assert.equal(validateSpawnCatalog(REGIONS),true);
 assert.throws(()=>validateSpawnCatalog([{id:'invalid',enemyWeights:{missingEnemy:1}}]),RangeError);
 assert.throws(()=>validateSpawnCatalog([{id:'invalid',enemyWeights:{slime:-1}}]),TypeError);
-const validWeights={...REGIONS[0].enemyWeights};
-for(const type of Object.keys(validWeights)) {
-  const missing={...validWeights};delete missing[type];
-  assert.throws(()=>validateSpawnCatalog([{id:'missing',enemyWeights:missing}]),/Missing enemy weight/);
-  for(const invalid of [-1,NaN,Infinity,undefined,'1'])assert.throws(()=>validateSpawnCatalog([{id:'invalid',enemyWeights:{...validWeights,[type]:invalid}}]),/Invalid enemy weight/);
+for(const region of REGIONS)for(const type of Object.keys(region.enemyWeights)) {
+  const missing={...region.enemyWeights};delete missing[type];
+  assert.throws(()=>validateSpawnCatalog([{...region,enemyWeights:missing}]),/Missing enemy weight/,`${region.id}/${type} requires an explicit weight, including zero`);
+  for(const invalid of [-1,NaN,Infinity,undefined,'1'])assert.throws(()=>validateSpawnCatalog([{...region,enemyWeights:{...region.enemyWeights,[type]:invalid}}]),/Invalid enemy weight/);
 }
+const validWeights={...REGIONS[0].enemyWeights};
 const zeroWeights=Object.fromEntries(Object.keys(validWeights).map(type=>[type,0]));
 assert.throws(()=>validateSpawnCatalog([{id:'empty',enemyWeights:zeroWeights}]),/weight total/);
 assert.throws(()=>validateSpawnCatalog([{id:'empty',enemyWeights:{...zeroWeights,boss:1}}]),/weight total/);
+for(const {type} of SPECIALIST_SPAWN_RULES.entries)assert.throws(()=>validateSpawnCatalog([{id:'no-ordinary',enemyWeights:{...zeroWeights,[type]:1}}]),/weight total/);
+assert.equal(validateSpawnCatalog([{id:'ordinary-only',enemyWeights:{...zeroWeights,slime:1}}]),true);
 assert.throws(()=>validateSpawnCatalog([{id:'missing'}]),/Missing enemy weights/);
 for(const table of [ENCOUNTER_SEQUENCES,WAVE_PATTERNS,HUT_GUARD_PACKS,CASTLE_GUARD_PACKS])assert(Object.isFrozen(table));
 

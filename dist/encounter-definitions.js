@@ -94,6 +94,7 @@ export function validateSpawnCatalog(regions=[]) {
   for(const special of ORDINARY_SPAWN_RULES.specials)enemyDefinition(special.type);
   for(const special of SPECIALIST_SPAWN_RULES.entries)enemyDefinition(special.type);
   const ordinaryTypes=['brute','bat','beetle','slime',...ORDINARY_SPAWN_RULES.specials.map(item=>item.type)];
+  const weightedTypes=new Set([...ordinaryTypes,...SPECIALIST_SPAWN_RULES.entries.map(item=>item.type)]);
   for(const region of regions) {
     const weights=region.enemyWeights;
     if(!weights||typeof weights!=='object')throw new TypeError(`Missing enemy weights: ${region.id}`);
@@ -101,13 +102,13 @@ export function validateSpawnCatalog(regions=[]) {
       enemyDefinition(type);
       if(!Number.isFinite(weight)||weight<0)throw new TypeError(`Invalid enemy weight: ${region.id}/${type}`);
     }
-    let total=0;
-    for(const type of ordinaryTypes) {
+    // Explicit zero disables a regional type; omission is a broken catalog.
+    for(const type of weightedTypes) {
       if(!Object.hasOwn(weights,type))throw new TypeError(`Missing enemy weight: ${region.id}/${type}`);
-      const weight=weights[type];
-      if(!Number.isFinite(weight)||weight<0)throw new TypeError(`Invalid enemy weight: ${region.id}/${type}`);
-      total+=weight;
     }
+    // Specialists only consume part of a roll, so the ordinary pool must
+    // remain viable even when a region has positive specialist weights.
+    const total=ordinaryTypes.reduce((sum,type)=>sum+weights[type],0);
     if(!Number.isFinite(total)||total<=0)throw new TypeError(`Invalid ordinary enemy weight total: ${region.id}`);
   }
   return true;

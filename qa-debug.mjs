@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { worldNeighbors } from './dist/world-definitions.js';
 
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 const layout=g=>g.settlements.sites.map(({id,x,y,door})=>({id,x,y,door}));
 const castle=g=>g.settlements.sites.find(site=>site.type==='castle');
-const ordinaryLayout=layout(new Game());
+const ordinaryGame=new Game(),ordinaryLayout=layout(ordinaryGame);
 const resources=g=>({gold:g.gold,crystals:g.crystals});
 const debugGrants=g=>g.events.filter(e=>e.type==='resources'&&e.source==='debugStart');
 function settleTransition(game) {
@@ -34,8 +35,15 @@ for(let terrainSeed=0;terrainSeed<100;terrainSeed++) {
   assert.equal(g.debug,true);assert.equal(g.settlements.sites.length,5);
   assert.equal(Object.hasOwn(g.debugOptions,'enemyWave'),false,'obsolete options are discarded even when explicitly true');
   assert.equal(g.enemies.some(enemy=>enemy.debugWave),false,'the removed opening cohort never returns');
-  assert.equal(g.regions.portals.length,2,'the initial island has two fixed world gateways');
+  assert.deepEqual(g.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),worldNeighbors(g.regionIndex),'debug retains every configured world gateway exactly once');
+  assert.equal(new Set(g.regions.portals.map(portal=>portal.id)).size,g.regions.portals.length,'configured gateways have distinct identities');
   assert.equal(g.enemies.filter(enemy=>enemy.type==='boss'&&!enemy.debugBoss).length,g.regions.portals.filter(portal=>portal.state==='locked').length,'each locked portal retains its ordinary guardian');
+  for(const portal of g.regions.portals) {
+    assert.equal(portal.state,'locked','debug does not unlock ordinary world connections');
+    const guardians=g.enemies.filter(enemy=>enemy.type==='boss'&&!enemy.debugBoss&&enemy.portalId===portal.id&&enemy.hp>0);
+    assert.equal(guardians.length,1,'each gateway owns exactly one living ordinary guardian');
+    assert.equal(guardians[0].id,portal.bossId,'the gateway refers to its own guardian');
+  }
   assert.equal(g.settlements.sites.filter(s=>s.type==='castle').length,1,'debug relocates the existing castle instead of duplicating it');
   const distance=Math.hypot(site.door.x-from.x,site.door.y-from.y);
   assert(distance>=180&&distance<=320,`seed ${terrainSeed}: nearby door distance ${distance}`);
@@ -47,7 +55,10 @@ for(let terrainSeed=0;terrainSeed<100;terrainSeed++) {
     assert(g.settlements._hazardFree(x,y,g.player.r),'subsequent environment generation preserves the entrance path');
   }
   assert.deepEqual(resources(g),{gold:500,crystals:0});assert.equal(g.player.speed,660);
-  assert.equal(g.player.level,1);assert.equal(g.player.xp,0);assert.equal(g.player.hp,100);assert.equal(g.player.invuln,0,'the debug budget does not add invulnerability or character levels');
+  assert.equal(g.player.level,1);assert.equal(g.player.xp,0);
+  assert.deepEqual({hp:g.player.hp,maxHp:g.player.maxHp},{hp:ordinaryGame.player.hp,maxHp:ordinaryGame.player.maxHp},'debug retains the selected hero\'s ordinary starting health');
+  assert.equal(g.player.hp,g.player.maxHp,'the selected hero starts at full health');
+  assert.equal(g.player.invuln,0,'the debug budget does not add invulnerability or character levels');
   assert.equal(g.skillLevel,1);assert.equal(g.status,'playing','construction does not open an upgrade before gameplay is ready');
   assert.equal(debugGrants(g).length,1);assert.deepEqual(debugGrants(g)[0],{type:'resources',source:'debugStart',gold:500,crystals:0});
   if(terrainSeed===0)assert.deepEqual(site.door,{x:0,y:-170},'default castle is visible directly above spawn');
