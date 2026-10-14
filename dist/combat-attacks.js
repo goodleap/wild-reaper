@@ -5,6 +5,7 @@ import { blocksObstacle, isGrounded } from './height-rules.js';
 import { weaponStats, skillStats, ATTACK_DEFAULTS } from './combat-stats.js';
 import { WeaponTrail } from './weapon-trails.js';
 import { SwordCombat } from './sword-combat.js';
+import { recordHeroAction } from './hero-animation.js';
 import { clearWeaponKnockbackScene, weaponKnockbackDistance } from './weapon-knockback.js';
 
 const CONFIG=getConfigSection('combat').stats;
@@ -61,7 +62,7 @@ export class CombatAttacks {
 
   clearOrbit(){this._orbitTrails.clear();this._orbitContacts.clear();this._orbitNextContacts.clear();this._orbitTrailClock=undefined;}
 
-  clearScene(){this.sword.clearScene();this.clearOrbit();}
+  clearScene(){this.sword.clearScene();this.clearOrbit();delete this.game.player._heroAction;}
 
   clearTrails() {
     for(const b of this.game.bullets)b.trail?.clear();
@@ -74,6 +75,7 @@ export class CombatAttacks {
     if(g.abilities?.isFrozen(p))return false;
     const targets=g.enemies.filter(e=>canTarget(g,e,p,{requireView:true,source:'storm',checkPath:true}));
     p.skillCooldownMax=stats.cooldown;p.skillCooldown=stats.cooldown;p.castFace=.25;
+    recordHeroAction(g,{kind:'cast',angle:p.facing,duration:.65,priority:4});
     g.storm={x:p.x,y:p.y,viewWidth:g.viewWidth,viewHeight:g.viewHeight,life:STORM_DURATION,maxLife:STORM_DURATION,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
     g._emit('skill');
     for(const e of targets)g._hitEnemy(e,stats.damage,0,p,'storm');
@@ -99,6 +101,7 @@ export class CombatAttacks {
       if(target) {
         g._shot=stats.interval;
         const base=Math.atan2((target.aimY??target.y)-p.y,target.x-p.x),branch=stats.branch;
+        recordHeroAction(g,{kind:'ranged',angle:base,duration:.32,priority:g.initialWeaponId==='arrow'?3:1});
         g._volley=(g._volley||0)+1;
         // Siblings share settled HP damage; their travel and hop budgets remain independent.
         const volley=stats.count>1?{limit:stats.damage*stats.volleyTargetMultiplier,damageByTarget:new Map()}:null;
@@ -256,6 +259,7 @@ export class CombatAttacks {
     const hasVine=!hasEnemy&&!hasSupply&&(g.environment?.mechanisms?.props||[]).some(prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active')&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
     if(!hasEnemy&&!hasSupply&&!hasVine){g._pulse=.06;return;}
     g._pulse=stats.cooldown;
+    recordHeroAction(g,{kind:'cast',angle:p.facing,duration:.48,priority:1});
     this.castPulse(p.x,p.y,stats.radius,stats.damage,stats.knockback,false,stats.control,stats.controlDuration);
     if(stats.echo)g._pulseEchoes.push({x:p.x,y:p.y,r:stats.radius*stats.echoRadiusMultiplier,damage:stats.damage*stats.echoRetention,life:stats.echoDelay,maxLife:stats.echoDelay});
   }
@@ -273,12 +277,14 @@ export class CombatAttacks {
       }
       if(target) {
         hit=true;
+        recordHeroAction(g,{kind:'cast',angle:Math.atan2(target.y-p.y,target.x-p.x),duration:.4,priority:1});
         g._effect(p.x,p.y,'lightning',.32,0,'#dcecff',undefined,{x2:target.x,y2:target.y,evolved:true,branch:'focus',focus:true,chainIndex:0});
         g._hitEnemy(target,stats.primaryDamage,0,p,'lightning');
         g.environment?.hitAt(target.x,target.y,target.r,'lightning',prop=>propPath(g,target,prop,'lightning'));
       }
     }else for(let i=0;i<stats.targetLimit;i++) {
       const e=g._nearest(origin.x,origin.y,i===0?stats.range:stats.chainRange,excluded,origin,{source:'lightning'});if(!e)break;
+      if(i===0)recordHeroAction(g,{kind:'cast',angle:Math.atan2(e.y-p.y,e.x-p.x),duration:.4,priority:1});
       hit=true;
       excluded.add(e.id);
       g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:e.x,y2:e.y,evolved:stats.evolved,branch:stats.branch,chainIndex:i});

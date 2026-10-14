@@ -24,7 +24,8 @@ import { WorldArt } from './world-art.js';
 import { mapSeed } from './map-context.js';
 import { STAGES, getStageDefinition } from './stage-definitions.js';
 import { INITIAL_WEAPON_IDS as initialWeaponIds } from './combat-catalog.js';
-import { HEROES, getHero } from './heroes.js';
+import { HEROES, HERO_CHOICES, getHero, getHeroAppearance } from './heroes.js';
+import { HeroPreview } from './hero-preview.js';
 import { WorldSiteArt } from './world-site-art.js';
 import { WorldHazardArt } from './world-hazard-art.js';
 import { WaterArt } from './water-art.js';
@@ -137,8 +138,8 @@ let portalRequested=false,superChoiceKey='',lastSupers='',shopKey='';
 let prepareOpen=false,prepareArtReady=false,startLoading=false,activeStartPromise=null;
 const sceneLoadingView=createLoadingView(document,{setTimer:setTimeout,clearTimer:clearTimeout});
 const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer:setTimeout});
-let selectedDifficulty='normal',selectedMode='stage',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
-try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;selectedHeroId=getHero(saved?.heroId).id;if(initialWeaponIds.includes(saved?.weaponId))selectedWeaponId=saved.weaponId;}catch{}
+let selectedDifficulty='normal',selectedMode='stage',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
+try{const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));if(saved?.difficulty==='casual')selectedDifficulty='casual';if(saved?.mode==='free')selectedMode='free';if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;selectedHeroId=getHero(saved?.heroId).id;selectedAppearanceId=getHeroAppearance(saved?.heroId,saved?.appearanceId).id;if(initialWeaponIds.includes(saved?.weaponId))selectedWeaponId=saved.weaponId;}catch{}
 const debugOptionsStorageKey='wild-echoes-debug-options';
 let selectedDebugOptions=normalizeDebugOptions(null,debugMode);
 if(debugMode){try{selectedDebugOptions=normalizeDebugOptions(JSON.parse(localStorage.getItem(debugOptionsStorageKey)));}catch{}}
@@ -188,7 +189,7 @@ function refreshArchiveEntry(){
   $('archive-entry-note').textContent='图鉴 · 记录 · 里程碑';
 }
 syncSound();refreshArchiveEntry();
-function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty,mode:selectedMode,stageId:selectedStageId,heroId:selectedHeroId,weaponId:selectedWeaponId}));}catch{}}
+function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({difficulty:selectedDifficulty,mode:selectedMode,stageId:selectedStageId,heroId:selectedHeroId,appearanceId:selectedAppearanceId,weaponId:selectedWeaponId}));}catch{}}
 if(debugMode){
   show('debug-prepare-settings');
   for(const option of DEBUG_OPTION_DEFS){
@@ -220,10 +221,11 @@ for(const stage of STAGES){
   radio.addEventListener('change',()=>{if(radio.checked){selectedStageId=stage.id;saveSetup();refreshStageSetup();revealSelectedStage();}});
   radio.addEventListener('focus',()=>{if(prepareOpen)revealStage(radio.parentElement);});
 }
-for(const hero of HEROES){
-  const {label,radio,portrait}=preparationChoice({id:hero.id,name:hero.name,group:'hero',color:hero.color,role:hero.role});
+const heroPreview=new HeroPreview({document,art:new HumanoidArt(()=>document.createElement('canvas')),poseFor:humanoidPose,reduced});
+for(const hero of HERO_CHOICES){
+  const {label,radio,portrait}=preparationChoice({id:hero.id,name:hero.name,group:'hero',color:hero.color,role:`${hero.label} · ${hero.role}`});
   $('hero-options').append(label);heroRadios.set(hero.id,radio);heroPortraits.set(hero.id,portrait);
-  radio.addEventListener('change',()=>{if(radio.checked){selectedHeroId=hero.id;saveSetup();refreshHeroSetup();revealHeroChoice(hero.id);}});
+  radio.addEventListener('change',()=>{if(radio.checked){selectedHeroId=hero.heroId;selectedAppearanceId=hero.appearanceId;saveSetup();refreshHeroSetup();revealHeroChoice(hero.id);}});
   radio.addEventListener('focus',()=>revealHeroChoice(hero.id));
 }
 for(const weapon of initialWeapons){
@@ -232,26 +234,27 @@ for(const weapon of initialWeapons){
   radio.addEventListener('change',()=>{if(radio.checked){selectedWeaponId=weapon.ownerId;saveSetup();refreshWeaponSetup();}});
 }
 function refreshPreparationSummary(){
-  const stage=getStageDefinition(selectedStageId)||STAGES[0],hero=getHero(selectedHeroId),weapon=initialWeapons.find(item=>item.ownerId===selectedWeaponId);
+  const stage=getStageDefinition(selectedStageId)||STAGES[0],hero=getHeroAppearance(selectedHeroId,selectedAppearanceId),weapon=initialWeapons.find(item=>item.ownerId===selectedWeaponId);
   $('prepare-summary').textContent=`${selectedMode==='stage'?stage.name:'自由探索'} · ${hero.name} · ${weapon.name} · ${selectedDifficulty==='casual'?'轻松漫游':'标准试炼'}`;
 }
 function refreshHeroSetup(){
-  const hero=getHero(selectedHeroId);selectedHeroId=hero.id;
-  for(const [id,radio] of heroRadios)radio.checked=id===selectedHeroId;
-  $('hero-selection-name').textContent=hero.name;$('hero-description').textContent=hero.summary;
+  const hero=getHero(selectedHeroId),appearance=getHeroAppearance(hero.id,selectedAppearanceId);selectedHeroId=hero.id;selectedAppearanceId=appearance.id;
+  for(const [id,radio] of heroRadios)radio.checked=id===selectedAppearanceId;
+  heroPreview.select(hero,appearance);
+  $('hero-selection-name').textContent=appearance.name;$('hero-description').textContent=hero.summary;
   $('hero-traits').replaceChildren(...hero.traits.map(trait=>{const item=document.createElement('span');item.textContent=trait;return item;}));
   $('hero-attributes').replaceChildren(...hero.details.map(detail=>{const item=document.createElement('li');item.textContent=detail;return item;}));
   refreshPreparationSummary();
 }
 function drawHeroChoices(){
-  for(const hero of HEROES){
+  for(const hero of HERO_CHOICES){
     const portrait=heroPortraits.get(hero.id),artContext=portrait.getContext('2d');
     artContext.clearRect(0,0,portrait.width,portrait.height);artContext.save();artContext.translate(128,152);artContext.scale(3.5,3.5);
     artContext.fillStyle='#0b1a1655';artContext.beginPath();artContext.ellipse(0,20,16,5,0,0,TAU);artContext.fill();
-    humanoidArt.draw(artContext,hero.appearanceId||hero.id,{pose:{},entity:{id:0,heroId:hero.id,facing:0},time:2,reduced:true,pixelRatio:3.5});artContext.restore();
+    humanoidArt.draw(artContext,hero.appearanceId||hero.id,{pose:{},entity:{id:0,heroId:hero.heroId,appearanceId:hero.appearanceId,facing:Math.PI/2},time:2,reduced:true,pixelRatio:3.5});artContext.restore();
   }
 }
-function revealHeroChoice(id=selectedHeroId){
+function revealHeroChoice(id=selectedAppearanceId){
   const rail=$('hero-options'),card=heroRadios.get(id)?.parentElement;if(!prepareOpen||!card||!rail.clientWidth)return;
   if(card.offsetLeft<rail.scrollLeft)rail.scrollLeft=Math.max(0,card.offsetLeft-3);
   else if(card.offsetLeft+card.offsetWidth>rail.scrollLeft+rail.clientWidth)rail.scrollLeft=card.offsetLeft+card.offsetWidth-rail.clientWidth+3;
@@ -310,7 +313,7 @@ function startGame(){
   sceneLoadingView.start('scene',{stage:'正在创建冒险'});$('scene-loading-label').focus({preventScroll:true});
   arena.setAttribute('aria-busy','true');
   selectedDifficulty=$('difficulty-casual').checked?'casual':'normal';selectedMode=$('mode-free').checked?'free':'stage';saveSetup();
-  const options={hero:selectedHeroId,difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
+  const options={hero:selectedHeroId,appearanceId:selectedAppearanceId,difficulty:selectedDifficulty,initialWeaponId:selectedWeaponId,stageId:selectedMode==='stage'?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
   // Unlock audio in the originating click, before yielding to the loading view.
   initAudio();
   let committed=false;
@@ -351,7 +354,7 @@ function commitPreparedGame(preparedGame){prepareOpen=false;arena.classList.remo
 function restartGame(){
   if(startLoading)return activeStartPromise;
   if(game){
-    selectedDifficulty=game.difficulty;selectedMode=game.stage?'stage':'free';selectedHeroId=game.hero.id;selectedWeaponId=game.initialWeaponId;
+    selectedDifficulty=game.difficulty;selectedMode=game.stage?'stage':'free';selectedHeroId=game.hero.id;selectedAppearanceId=getHeroAppearance(selectedHeroId,game.appearanceId).id;selectedWeaponId=game.initialWeaponId;
     if(game.stage)selectedStageId=game.stage.id;
     for(const difficulty of ['normal','casual'])$(`difficulty-${difficulty}`).checked=difficulty===selectedDifficulty;
     for(const mode of ['stage','free'])$(`mode-${mode}`).checked=mode===selectedMode;
@@ -1012,7 +1015,8 @@ function drawScene(actors,props,mainPlayer,adventureProps=[]){
   const vision=game?.dungeon?.active?game.dungeon.vision:null;
   const actor=actors.find(item=>item.entity===mainPlayer),weaponItems=[];
   if(actor){
-    const options={...combatOptions,actor,bodyY:humanoidPose(mainPlayer).bodyY*actor.scale};
+    const heroPose=humanoidArt.directionalPose(mainPlayer,{time:game?._clock??clock,reduced,frozen:game?.abilities?.isFrozen(mainPlayer)??false})||humanoidPose(mainPlayer);
+    const options={...combatOptions,actor,bodyY:heroPose.bodyY*actor.scale};
     for(const effect of game.effects){
       if(effect.type!=='swordSlash'||!(effect.life>0)||!sceneVisible(effect)||!effectInView(effect))continue;
       const pose=swordSlashPose(effect,game,options);
@@ -1329,7 +1333,7 @@ function player(x,y,t,scale=1,facing=0,hurtFlash=0,entity={}){
   const time=game?._clock??t,pose=humanoidPose(entity,!game,time);
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
   if(hurtFlash>0&&Math.floor(time*18)%2===0)ctx.globalAlpha=.65;
-  humanoidArt.draw(ctx,getHero(entity.heroId).appearanceId||getHero(entity.heroId).id,{pose,entity,time,reduced,pixelRatio:dpr});ctx.restore();
+  humanoidArt.draw(ctx,getHeroAppearance(entity.heroId,entity.appearanceId).id,{pose,entity,time,reduced,pixelRatio:dpr,frozen:game?.abilities?.isFrozen(entity)??false});ctx.restore();
 }
 function enemy(e,t){const {x,y,r,type}=e;ctx.save();ctx.translate(x,y);const s=r/(actorShape(e).radius);ctx.scale(s,s);const bob=enemyBob(e,t,reduced);ctx.translate(0,bob);if(Number.isFinite(e.specialLift))ctx.translate(0,-clamp(e.specialLift,0,60)/s);const hit=e.hit>0;
   // A brief foot-anchored compression and lean makes a landed hit tangible.
@@ -1623,6 +1627,7 @@ function frame(now){
     // after HUD refresh retains that freshly drawn frame until a real change.
     state=frameState();renderSchedule.commit(state);
   }
+  if(prepareOpen&&!startLoading&&!helpOpen&&!archiveOpen&&!document.hidden)heroPreview.render(dt);
   updateDebugFps(now,rendered,updateMs,renderMs,state);
   requestAnimationFrame(frame);
   if(diagnostics?.running){

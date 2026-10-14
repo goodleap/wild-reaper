@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
-import { HEROES } from './dist/heroes.js';
+import { HEROES, HERO_CHOICES } from './dist/heroes.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
 import { movementProfile } from './dist/height-rules.js';
@@ -12,7 +12,7 @@ let seed=830033;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)
 const node=(h,id)=>h.document.getElementById(id);
 const click=(h,id)=>h.fire(node(h,id),'click');
 const choose=(h,group,id)=>{
-  const ids=group==='hero'?HEROES.map(hero=>hero.id):['sword','orbit','arrow'];
+  const ids=group==='hero'?HERO_CHOICES.map(hero=>hero.id):['sword','orbit','arrow'];
   for(const item of ids)node(h,`${group}-${item}`).checked=item===id;
   h.fire(node(h,`${group}-${id}`),'change');
 };
@@ -26,7 +26,7 @@ const place=(game,point)=>{game.player.x=point.x;game.player.y=point.y-groundOff
 for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   const h=harness(),stats=expected[hero.id];
   click(h,'start-button');
-  assert.equal(node(h,'hero-options').children.length,3);
+  assert.equal(node(h,'hero-options').children.length,6);
   choose(h,'hero',hero.id);choose(h,'weapon',weaponId);
   assert.equal(node(h,'hero-selection-name').textContent,hero.name);
   assert.match(node(h,'prepare-summary').textContent,new RegExp(hero.name));

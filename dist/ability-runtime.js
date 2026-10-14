@@ -1,6 +1,7 @@
 import { ABILITY_RULES as RULES, getAbilityDefinition, abilityAllowed, abilityActorKind } from './ability-definitions.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from './friendly-combat.js';
 import { isGrounded } from './height-rules.js';
+import { recordHeroAction } from './hero-animation.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const point=e=>({x:e.x,y:e.y});
@@ -68,7 +69,9 @@ export class AbilityRuntime {
     const reference=['field','zone'].includes(def.shape)&&target?target:caster,groundOffset=friendlyFoot(reference).y-reference.y;
     const effect={id:this.nextId++,abilityId:id,caster,hostile,shape:def.shape,profile:def.profile,parameters:p,x:center.x,y:center.y,origin:{...point(origin),groundY:origin.y+friendlyFoot(caster).y-caster.y},groundOffset,angle,age:0,windup,remaining:p.duration,hit:new Set(),lastHit:new Map(),distance:0,
       sourceX:caster.x,sourceY:caster.y,sourceGroundOffset:friendlyFoot(caster).y-caster.y,casterKind:caster.bossKind||caster.type||caster.companionKind||caster.heroId||abilityActorKind(caster,g),visualVariant:id==='domain'&&caster.bossKind==='broodmother'?'web':undefined};
-    this.effects.push(effect);this.beginVisualCast(effect);return true;
+    this.effects.push(effect);this.beginVisualCast(effect);
+    if(caster===g.player)recordHeroAction(g,{kind:'cast',angle,duration:Math.min(1.1,windup+.44),windup,priority:1});
+    return true;
   }
   beginVisualCast(effect){
     const caster=effect.caster,previous=this.visualCasts.get(caster);

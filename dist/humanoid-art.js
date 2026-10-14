@@ -1,4 +1,5 @@
 import {HERO_PALETTES,drawHeroPart,drawHeroFace} from './hero-art.js';
+import {DirectionalHeroArt,DIRECTIONAL_HERO_IDS} from './hero-directional-art.js';
 // Small illustrated people retain their original silhouettes. Material detail is
 // rasterized once per facing; only grounded feet, hands and two simple eyes move.
 const TAU=Math.PI*2,CACHE_LIMIT=2*1024*1024;
@@ -39,6 +40,11 @@ export function humanoidFaceState(entity={},time=0,reduced=false){
 export class HumanoidArt {
   constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.bytes=0;this.builds=0;this.ratio=0;}
   get cacheStats(){return{entries:this.cache.size,bytes:this.bytes,limitBytes:CACHE_LIMIT,builds:this.builds,pixelRatio:this.ratio};}
+  directionalPose(entity,options={}){
+    if(!DIRECTIONAL_HERO_IDS.has(entity?.appearanceId))return null;
+    this.directional??=new DirectionalHeroArt(this.makeCanvas);
+    return this.directional.animator.sample(entity,options);
+  }
   _sprite(kind,part,flip,ratio){
     if(ratio!==this.ratio){this.cache.clear();this.bytes=0;this.ratio=ratio;}
     const key=`${kind}:${part}:${flip}`;let item=this.cache.get(key);if(item)return item;
@@ -50,7 +56,13 @@ export class HumanoidArt {
     this.cache.set(key,item);this.bytes+=item.bytes;this.builds++;return item;
   }
   _part(c,kind,part,flip,ratio,x=0,y=0){const s=this._sprite(kind,part,flip,ratio);c.drawImage(s.canvas,x-s.ox,y-s.oy,s.w,s.h);}
-  draw(c,kind,{pose={},entity={},time=0,reduced=false,pixelRatio=2}={}){
+  draw(c,kind,options={}){
+    const {pose={},entity={},time=0,reduced=false,pixelRatio=2}=options;
+    const appearanceId=options.appearanceId??entity.appearanceId??kind;
+    if(DIRECTIONAL_HERO_IDS.has(appearanceId)){
+      this.directional??=new DirectionalHeroArt(this.makeCanvas);
+      return this.directional.draw(c,appearanceId.replace(/-v2$/,''),options);
+    }
     if(!KINDS.has(kind))return false;
     const facing=entity.castFace>0&&Number.isFinite(entity.castFacing)?entity.castFacing:entity.facing||0;
     const flip=Math.cos(facing)<-.1?-1:1,ratio=clamp(Math.ceil(Number.isFinite(pixelRatio)?pixelRatio:2),1,2);

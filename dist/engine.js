@@ -17,7 +17,7 @@ import { initBoss, updateBoss, resolveBossSlams, resolveBossPhase, clearBossAtta
 import { enemyDefinition } from './enemy-definitions.js';
 import { initializeEnemyBehavior, updateEnemyBehavior, resolveEnemyBehavior, updateBoar, updateSpore } from './enemy-behaviors.js';
 import { SPECIAL_ENEMY_CAPS } from './encounter-definitions.js';
-import { HEROES, getHero, applyHeroStat } from './heroes.js';
+import { HEROES, getHero, getHeroAppearance, applyHeroStat } from './heroes.js';
 import { CombatStatus } from './combat-status.js';
 import { Environment } from './environment.js';
 import { REGIONS, Regions, regionFor, regionEnemyType } from './regions.js';
@@ -63,7 +63,7 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,stageId=null}={}) {
+  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,stageId=null}={}) {
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
     this.debugOptions=normalizeDebugOptions(debugOptions,this.debug);
@@ -80,11 +80,13 @@ export class Game {
     this.difficulty = difficulty;
     this.easy = difficulty === 'casual' || difficulty === 'easy';
     this.hero=getHero(hero);
+    this.appearanceId=getHeroAppearance(hero,appearanceId).id;
     this.status = 'playing'; this.time = 0; this.runTime=0; this.kills = 0; this.wave = 1;
     this.pressurePhase='steady';this.phaseEndsAt=20;
     this.viewWidth = 1100; this.viewHeight = 650;
     const baseMaxHp=this.easy?HERO_DEFAULTS.easyBaseHealth:HERO_DEFAULTS.baseHealth,maxHp=Math.max(1,Math.round(applyHeroStat(this.hero,'maxHealth',baseMaxHp)));
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debugOptions.zeroStormCooldown?0:this.hero.skillCooldown,facing:0};
+    this.player.appearanceId=this.appearanceId;
     resetLocomotion(this.player);
     this.initialWeaponId=normalizeInitialWeaponId(initialWeaponId);
     this.build=new CombatBuild({initialWeaponId:this.initialWeaponId,heroId:this.hero.id});
@@ -487,6 +489,7 @@ export class Game {
     const oldX=p.x,oldY=p.y;
     this._moveEntity(p,ix*p.speed*movement*dt,iy*p.speed*movement*dt,true);
     updateLocomotion(p,oldX,oldY,dt);
+    if(p.moving)p.moveFacing=Math.atan2(p.y-oldY,p.x-oldX);
     if(this.touchInteractions.update())return;
     this.adventure?.update(dt);
     this.companions.update(dt);

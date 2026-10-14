@@ -37,3 +37,16 @@ function hero({id,name,role,summary,color,appearanceId=id,statModifiers={}}) {
 }
 export const HEROES=Object.freeze(HERO_CONFIG.definitions.map(hero));
 export const getHero=id=>HEROES.find(hero=>hero.id===id)||HEROES[0];
+
+// Appearance choices share a stable hero identity and its exact gameplay stats.
+// Legacy saves without an appearance always resolve to that hero's original art.
+export const HERO_APPEARANCES=Object.freeze(HERO_CONFIG.appearances.map(appearance=>Object.freeze({...appearance,name:getHero(appearance.heroId).name+appearance.nameSuffix})));
+export function getHeroAppearance(heroId,appearanceId) {
+  const validIdentity=HEROES.find(identity=>identity.id===heroId),identity=validIdentity||HEROES[0];
+  if(!validIdentity)appearanceId=identity.appearanceId;
+  return HERO_APPEARANCES.find(appearance=>appearance.heroId===identity.id&&appearance.id===appearanceId)
+    ||HERO_APPEARANCES.find(appearance=>appearance.heroId===identity.id&&appearance.id===identity.appearanceId);
+}
+export const HERO_CHOICES=Object.freeze(HEROES.flatMap(identity=>HERO_APPEARANCES.filter(appearance=>appearance.heroId===identity.id).map(appearance=>Object.freeze({
+  ...identity,...appearance,id:appearance.id,heroId:identity.id,appearanceId:appearance.id
+}))));

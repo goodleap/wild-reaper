@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { recordHeroAction } from './hero-animation.js';
 
 const TAU=Math.PI*2;
 const angleDelta=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
@@ -33,6 +34,7 @@ export class SwordCombat {
 
   clearScene() {
     this.pending=null;this._visual=null;this.cooldown=0;this.energyWaves.length=0;this._enemyPoints=new WeakMap();
+    if(this.game.player._heroAction?.kind==='melee')delete this.game.player._heroAction;
     if(this.game.effects)this.game.effects=this.game.effects.filter(e=>e.type!=='swordSlash');
     this._terrain=this.game.terrain;this._scene=this.game.dungeon?.active;this._region=this.game.region?.id;this._sceneKind=this.game.sceneKind;
     this._owner=this.game.player;
@@ -88,7 +90,9 @@ export class SwordCombat {
     // A freeze interrupts the body-driven windup, while already released
     // sword energy keeps travelling independently of its caster.
     if(g.abilities?.isFrozen(p)){
-      this.pending=null;if(this._visual)this._visual.life=0;this._visual=null;return;
+      this.pending=null;if(this._visual)this._visual.life=0;this._visual=null;
+      if(p._heroAction?.kind==='melee')delete p._heroAction;
+      return;
     }
     this._followVisual(dt);
     if(this.pending) {
@@ -107,6 +111,7 @@ export class SwordCombat {
       energyDamage:stats.energyDamage??stats.damage*.8,energySpeed:stats.energySpeed??440,branch:stats.branch};
     this.cooldown=stats.interval;
     p.castFace=Math.max(p.castFace||0,windup+.1);
+    recordHeroAction(g,{kind:'melee',angle,duration:stats.duration??.28,windup,priority:g.initialWeaponId==='sword'?3:1,sword:{arc:stats.arc,hitTime,meleeRange:stats.meleeRange??stats.range,branch:stats.branch}});
     const sequence=++this._sequence;
     g._effect(origin.x,origin.y,'swordSlash',stats.duration??.28,stats.meleeRange??stats.range,stats.branch==='heavy'?'#f1d594':'#daf2ed',undefined,{angle,arc:stats.arc,branch:stats.branch,groundY:origin.groundY,seed:sequence,windup,hitTime,attackAge:0,followOwner:true,owner:p,meleeRange:stats.meleeRange??stats.range,energyRank:stats.energyRank??0,energyBonus:stats.energyBonus??0});
     const visual=g.effects?.[g.effects.length-1];this._visual=visual?.type==='swordSlash'&&visual.seed===sequence?visual:null;
