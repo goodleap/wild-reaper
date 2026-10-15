@@ -34,11 +34,12 @@ export const ATTACK_SOURCES=Object.freeze({
   conduction:Object.freeze({owner:'reaction',kind:'secondary'}),
   bleed:Object.freeze({owner:'reaction',kind:'secondary'}),
   angel:Object.freeze({owner:'ally',skillId:'storm'}),
+  storyJudgment:Object.freeze({owner:'ally',skillId:'storm',fixedDamage:true}),
   mushroom:Object.freeze({owner:'environment'})
 });
 const RAW_SOURCE=Object.freeze({owner:'external'});
 export const attackSource=source=>ATTACK_SOURCES[source]||RAW_SOURCE;
-const PROPAGATION_PROFILES=Object.freeze({pulse:'ground',echo:'ground',companionPulse:'ground',companionEcho:'ground',companionGolem:'ground',storm:'overhead',angel:'overhead'});
+const PROPAGATION_PROFILES=Object.freeze({pulse:'ground',echo:'ground',companionPulse:'ground',companionEcho:'ground',companionGolem:'ground',storm:'overhead',angel:'overhead',storyJudgment:'overhead'});
 export const attackProfile=source=>PROPAGATION_PROFILES[source]||'projectile';
 
 export class CombatResolution {
@@ -97,17 +98,21 @@ export class CombatResolution {
 
   applyEnemyDamage(enemy,amount,knockback=0,origin=this.game.player,source='raw') {
     const g=this.game;
-    if(!this.canTarget(enemy,origin,{source})||!Number.isFinite(amount)||amount<=0)return 0;
-    if(g.regions?.canDamage(enemy)===false)return 0;
+    const judgment=source==='storyJudgment'&&g.story?.active&&g.story.step==='judgment'&&g.enemies.includes(enemy)&&enemy.hp>0;
+    if((!judgment&&!this.canTarget(enemy,origin,{source}))||!Number.isFinite(amount)||amount<=0)return 0;
+    if(!judgment&&g.regions?.canDamage(enemy)===false)return 0;
     provokeEnemyGroup(g,enemy);
     if(['player','ally'].includes(attackSource(source).owner)||origin===g.player||origin?.isCompanion)g.companions?.alert?.(enemy);
     // A shield absorbing a valid hit still alerts its defender. Visibility
     // and origin checks above remain pure and reject blocked strikes first.
     if(enemy.dungeonId)g.dungeon.awaken?.(enemy);
-    amount*=defenseDamageMultiplier(Number.isFinite(enemy.defense)?enemy.defense:0);
-    amount*=specialistDamageMultiplier(enemy,origin,source);
-    amount=g.elites?.beforeDamage(enemy,amount)??amount;
-    amount=g.abilities?.absorbDamage(enemy,amount,origin)??amount;
+    if(judgment)amount=g.story.rules.judgmentDamage;
+    else {
+      amount*=defenseDamageMultiplier(Number.isFinite(enemy.defense)?enemy.defense:0);
+      amount*=specialistDamageMultiplier(enemy,origin,source);
+      amount=g.elites?.beforeDamage(enemy,amount)??amount;
+      amount=g.abilities?.absorbDamage(enemy,amount,origin)??amount;
+    }
     if(amount<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
     const angle=Math.atan2(enemy.y-(Number.isFinite(origin?.y)?origin.y:enemy.y),enemy.x-(Number.isFinite(origin?.x)?origin.x:enemy.x));
@@ -127,16 +132,14 @@ export class CombatResolution {
       // never opens a modal in the middle of an attack's target loop.
       if(enemy.xp>0&&!enemy.summoned) {
         g.addExperience(enemy.xp);
-        if(enemy.type!=='boss') {
+        if(enemy.type!=='boss'&&!enemy.storyEnemy) {
           g.dropCrystals(enemy.x,enemy.y,enemy.xp);
           if(enemy.affix)g.dropGold(enemy.x+9,enemy.y,3);
           else if(Math.random()<.08)g.dropGold(enemy.x+9,enemy.y,1);
         }
       }
-      g.waveDirector?.onEnemyKilled(enemy);
-      g.dungeon.onEnemyKilled(enemy);
-      g.settlements.onEnemyKilled(enemy);
-      if(enemy.type==='boss') {
+      if(!enemy.storyEnemy){g.waveDirector?.onEnemyKilled(enemy);g.dungeon.onEnemyKilled(enemy);g.settlements.onEnemyKilled(enemy);}
+      if(enemy.type==='boss'&&!enemy.storyEnemy) {
         enemy.slam=null;clearBossAttacks(enemy);
         g._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482');
         if(!enemy.dungeonBoss&&!enemy.dungeonId&&!enemy.debugBoss) {
@@ -144,10 +147,7 @@ export class CombatResolution {
           g.grantResources({gold:30,crystals:45},'regionalBoss');g.regions.openPortal(enemy);
         }
       }
-      g.adventure?.onEnemyKilled(enemy);
-      g.encounters?.onEnemyKilled(enemy);
-      g.companions?.onEnemyKilled(enemy);
-      g.relics?.onEnemyKilled(enemy,source);
+      if(!enemy.storyEnemy){g.adventure?.onEnemyKilled(enemy);g.encounters?.onEnemyKilled(enemy);g.companions?.onEnemyKilled(enemy);g.relics?.onEnemyKilled(enemy,source);}
       if(g.kills%24===0 && g.player.hp<g.player.maxHp) {
         g.player.hp=Math.min(g.player.maxHp,g.player.hp+7);
         g._effect(g.player.x,g.player.y-26,'heal',.8,0,'#b9e89c','+7'); g._emit('heal');
@@ -156,11 +156,19 @@ export class CombatResolution {
     return actual;
   }
 
+  // Script-only fixed rescue damage: no player scaling, shields, regional
+  // progression or super rewards. Only available during this chapter's cast.
+  storyJudgment(enemy,origin) {
+    const g=this.game;
+    if(!g.story?.active||g.story.step!=='judgment'||!enemy?.storyEnemy)return 0;
+    return this.applyEnemyDamage(enemy,g.story.rules.judgmentDamage,0,origin,'storyJudgment');
+  }
+
   damagePlayer(amount,origin=null) {
     const g=this.game;
     const p=g.player;if(p.invuln>0||g.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
     g.companions?.alert?.(origin);
-    amount*=defenseDamageMultiplier(resolveCharacterStats(g).defense);
+    amount*=1-resolveCharacterStats(g).damageReduction;
     amount*=g.companions?.protectionMultiplier?.(p)??1;
     amount=g.relics?.modifyIncomingDamage(amount)??amount;
     amount=g.barrier?.absorbDamage(amount)??amount;
@@ -169,6 +177,6 @@ export class CombatResolution {
     p.hp=Math.max(0,p.hp-amount);p.invuln=.8;
     if(p.hp<previousHp){p.hurtFlash=.8;p.hurtFace=.24;g._emit('hurt');g._effect(p.x,p.y,'ring',.3,42,'#e48d78');}
     else g._emit('shieldAbsorbed');
-    if(p.hp<=0)g.status='dead';return true;
+    if(p.hp<=0){g.status='dead';g.story?.cleanup('death');}return true;
   }
 }

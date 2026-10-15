@@ -1,9 +1,9 @@
 /* Category uses a label/icon; colour always means rarity. */
 .upgrade-card.choice-card{--quality:#b9c9b0;padding:17px 18px 14px;min-height:220px;gap:0;border-color:color-mix(in srgb,var(--quality) 38%,transparent);border-top:3px solid var(--quality);background:linear-gradient(155deg,#29362e,#17251f);overflow:visible;display:flex;flex-direction:column}
-.upgrade-card.choice-card:hover{border-color:var(--quality);background:linear-gradient(155deg,#334338,#203026);transform:translateY(-3px)}
+@media (hover:hover) and (pointer:fine){.upgrade-card.choice-card:hover{border-color:var(--quality);background:linear-gradient(155deg,#334338,#203026);transform:translateY(-3px)}}
 .choice-card:focus-visible{outline-color:var(--quality);outline-offset:3px}
 .choice-card.choice-attribute{background:linear-gradient(155deg,#30372f,#1f2822)}
-.choice-card.choice-attribute:hover{background:linear-gradient(155deg,#3b4439,#283229)}
+@media (hover:hover) and (pointer:fine){.choice-card.choice-attribute:hover{background:linear-gradient(155deg,#3b4439,#283229)}}
 .choice-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;width:100%}
 .choice-category{display:inline-flex;align-items:center;flex-wrap:wrap;min-width:0;gap:5px;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.3px;color:#e0ead7}
 .choice-category svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
@@ -42,7 +42,7 @@
   .choice-card .upgrade-icon{width:26px;height:26px;font-size:21px}.choice-summary{font-size:12px;line-height:18px}
   .choice-card .select-arrow{padding-top:8px}.choice-level{font-size:10px}
 }
-@media(prefers-reduced-motion:reduce){.upgrade-card.choice-card,.upgrade-card.choice-card:hover{transition:none;transform:none}}
+@media(prefers-reduced-motion:reduce){.upgrade-card.choice-card{transition:none;transform:none}@media (hover:hover) and (pointer:fine){.upgrade-card.choice-card:hover{transition:none;transform:none}}}
 
 /* Ownership and super tier are separate from rarity and from numeric rank. */
 .choice-card.choice-weapon{background:linear-gradient(155deg,#30392c,#1c2a20)}

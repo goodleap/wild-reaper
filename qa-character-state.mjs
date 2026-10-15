@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { defenseDamageMultiplier, resolveCharacterStats } from './dist/combat-stats.js';
 
 let seed=58173;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -12,7 +13,8 @@ function arena(){
 function advance(g,t){for(let left=t;left>1e-8;left-=.025)g.update(Math.min(.025,left));}
 const hurt=arena();assert.equal(hurt.player.hurtFace,0);
 hurt.player.invuln=2;assert.equal(hurt._hurtPlayer(20),false);assert.equal(hurt.player.hurtFace,0,'Entry protection cannot show a hurt expression.');
-hurt.player.invuln=0;hurt._hurtPlayer(5);assert.equal(hurt.player.hp,95);assert.equal(hurt.player.hurtFace,.24);
+const initialHealth=hurt.player.hp,expectedDamage=5*defenseDamageMultiplier(resolveCharacterStats(hurt).defense);
+hurt.player.invuln=0;hurt._hurtPlayer(5);assert(Math.abs(hurt.player.hp-(initialHealth-expectedDamage))<1e-8,'actual health damage respects the selected hero armor');assert.equal(hurt.player.hurtFace,.24);
 advance(hurt,.1);const pausedFace=hurt.player.hurtFace;hurt.status='upgrade';advance(hurt,.5);assert.equal(hurt.player.hurtFace,pausedFace,'Choice pauses freeze facial animation.');
 hurt.status='playing';advance(hurt,.16);assert.equal(hurt.player.hurtFace,0);assert(hurt.player.invuln>0,'Pain ends well before the invulnerability window.');
 const ward=arena();ward.relics.ward=18;const beforeWard=ward.player.hp;ward._hurtPlayer(5);

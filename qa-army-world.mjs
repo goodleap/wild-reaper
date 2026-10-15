@@ -12,7 +12,8 @@ function quiet(g){g.enemies=g.enemies.filter(e=>e.portalId);g.nextBossAt=Infinit
 function joinSite(g,site){feet(g,site.door);assert(g.relicSites.interact(site.id),`${site.key} can activate`);const camp=g.companions.camp;assert(camp);assert.equal(camp.guardTotal,site.guardCount);
  for(const enemy of g.enemies.filter(e=>e.rescueId===camp.id)){assert(Math.hypot(enemy.x-g.player.x,enemy.y+groundOffset(enemy)-site.door.y)>=150,'defenders have safe doorway clearance');enemy.rescueSpawnGrace=0;g._hurtEnemy(enemy,enemy.hp+100);}
  assert.equal(camp.state,'ready');feet(g,camp);assert(g.companions._join());assert.equal(site.state,'cleared');return g.companions.members.find(m=>m.kind===site.kind);}
-const g=quiet(new Game());g.gold=100;
+for(const region of ['forest','marsh']){
+const g=quiet(new Game({debug:region!=='forest',debugWorld:region,debugOptions:{testFacilities:false}})),homeIndex=g.regionIndex;g.gold=100;
 const required=['stormcaller','warden','dog','owl','golem'];assert.deepEqual(g.relicSites.sites.filter(s=>s.kind).map(s=>s.kind),required,'all five kinds are obtainable without changing worlds');
 assert.equal(g.relicSites.sites.filter(s=>s.type==='stonevault').length,1,'optional vault count is bounded');
 const vault=g.relicSites.sites.find(s=>s.type==='stonevault');feet(g,vault.door);assert.equal(g.relicSites.getInteraction().enabled,false);assert.equal(g.relicSites.interact(vault.id),false);assert.equal(vault.gateOpen,false);assert(!g.terrain.isFree(vault.x,vault.y+61,15));
@@ -28,7 +29,11 @@ g.companions.dismiss(golem.id);g.relicSites._setStructures();assert(vault.gateOp
 feet(g,vault);const before={gold:g.gold,crystals:g.crystals};assert(g.relicSites.interact(vault.id));assert.equal(g.gold,before.gold+ARMY_SITE_RULES.vaultGold);assert.equal(g.crystals,before.crystals+ARMY_SITE_RULES.vaultCrystals);assert.equal(g.relicSites.interact(vault.id),false);assert.equal(vault.state,'cleared');
 // A real portal round trip retains the opened architecture rather than merely
 // checking a stand-alone serialization of a test object.
-const portal=g.regions.portals[0];feet(g,portalDoor(portal));const guardian=g.enemies.find(e=>e.id===portal.bossId);g._hurtEnemy(guardian,guardian.hp+100);g.regions.flushReward();assert(g.chooseSuper(g.getSuperChoices()[0].id));assert(g.enterPortal(portal.id));const back=g.regions.portals.find(p=>p.nextRegionIndex===0);feet(g,portalDoor(back));assert(g.enterPortal(back.id));assert.equal(g.relicSites.sites.find(s=>s.id===vault.id),vault);assert(vault.gateOpen);assert.equal(vault.state,'cleared');
+const portal=g.regions.portals[0];feet(g,portalDoor(portal));const guardian=g.enemies.find(e=>e.id===portal.bossId);
+if(portal.natural){assert.equal(portal.state,'active');assert.equal(guardian,undefined);assert.equal(g.superSkills.pending,null,'natural exits have no artificial boss reward');}
+else{assert(guardian,'guarded worlds exercise the actual boss/reward flow');g._hurtEnemy(guardian,guardian.hp+100);assert(g.regions.flushReward());assert(g.chooseSuper(g.getSuperChoices()[0].id));assert(portal.rewardClaimed);}
+const portalRewards={gold:g.gold,crystals:g.crystals};assert(g.enterPortal(portal.id));const back=g.regions.portals.find(p=>p.nextRegionIndex===homeIndex);feet(g,portalDoor(back));assert(g.enterPortal(back.id));assert.equal(g.relicSites.sites.find(s=>s.id===vault.id),vault);assert(vault.gateOpen);assert.equal(vault.state,'cleared');assert.deepEqual({gold:g.gold,crystals:g.crystals},portalRewards,'natural and unlocked return travel never duplicate resources');
+}
 // Check reservation-driven generation against several deterministic coast and
 // terrain seeds; no destructible gate encloses any recruitment point.
 for(const region of ['forest','marsh','ruins'])for(const seed of [0,1,9]){

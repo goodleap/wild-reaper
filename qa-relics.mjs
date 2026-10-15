@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Adventure } from './dist/adventure.js';
-import { RELICS } from './dist/relics.js';
+import { RELICS, RELIC_RULES } from './dist/relics.js';
+import { defenseDamageMultiplier, resolveCharacterStats, skillStats } from './dist/combat-stats.js';
 
 let seed=108473;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -21,6 +22,7 @@ function herb(g) {
   return g.adventure.dropPickup('herb',g.player.x,g.player.y+groundOffset(g.player,true));
 }
 const xpTotal=g=>g.player.xp;
+const near=(actual,expected,message)=>assert(Math.abs(actual-expected)<1e-8,`${message}: ${actual} != ${expected}`);
 
 assert.equal(RELICS.length,6);assert.equal(new Set(RELICS.map(r=>r.id)).size,6);
 const collection=arena();assert.deepEqual(collection.getRelicChoices(),[],'ordinary play does not spontaneously offer relic choices');
@@ -36,15 +38,17 @@ for(let i=0;i<6;i++) {
   collection.status='playing';assert.equal(collection.relics.owned.length,i+1);assert.equal(collection.player.xp,0);
 }
 collection.player.hp=10;collection.relics.offer();
+const fullCollectionHp=Math.min(collection.player.maxHp,10+collection.player.maxHp*RELIC_RULES.collectionHeal);
 assert(collection.relics.completeCollectionReward(),'the legacy full-collection recovery remains independently usable');
-assert.equal(collection.player.hp,30,'the complete-collection reward heals once');
-assert.equal(collection.relics.completeCollectionReward(),false);assert.equal(collection.player.hp,30);
+assert.equal(collection.player.hp,fullCollectionHp,'the complete-collection reward heals its configured fraction of actual hero maximum once');
+assert.equal(collection.relics.completeCollectionReward(),false);assert.equal(collection.player.hp,fullCollectionHp);
 assert.equal(collection.relics.owned.length,6);
 
 const storm=arena({owned:['thunderstone']}),stormVictims=[];
-for(let i=0;i<8;i++)stormVictims.push(monster(storm,180+(i%4)*65,(i>3?1:-1)*80,1));
+const stormRange=skillStats(storm,'storm').radius;
+for(let i=0;i<8;i++){const angle=i*Math.PI/4;stormVictims.push(monster(storm,Math.cos(angle)*stormRange*.65,Math.sin(angle)*stormRange*.65,1));}
 storm.update(0,{skill:true});
-assert.equal(storm.kills,8);assert(Math.abs(storm.player.skillCooldown-(storm.player.skillCooldownMax-1.2))<1e-9,'a screen clear obeys the one-second refund budget');
+assert.equal(storm.kills,8);assert(Math.abs(storm.player.skillCooldown-(storm.player.skillCooldownMax-1.2))<1e-9,'a real in-range group clear obeys the one-second refund budget');
 const refundCooldown=storm.player.skillCooldown;
 for(const e of stormVictims)storm.relics.onEnemyKilled(e,'storm');
 assert.equal(storm.player.skillCooldown,refundCooldown,'repeat kill notifications cannot refund again');
@@ -64,13 +68,13 @@ assert(Math.abs(conducted.player.skillCooldown-(beforeConduction-.2-.3))<1e-8,'a
 const clamp=arena({owned:['thunderstone']});clamp.player.skillCooldown=.1;const nearDead=monster(clamp,150,0,1);
 clamp._hurtEnemy(nearDead,10,0,clamp.player,'lightning');assert.equal(clamp.player.skillCooldown,0,'a refund cannot make cooldown negative');
 
-function arrowDamage(hp,owned=[]) {
-  const g=arena({owned}),e=monster(g,80);g.player.hp=hp;const before=e.hp;shoot(g);advance(g,.2);return before-e.hp;
+function arrowDamage(healthFraction,owned=[]) {
+  const g=arena({owned}),e=monster(g,80);g.player.hp=g.player.maxHp*healthFraction;const before=e.hp;shoot(g);advance(g,.2);return before-e.hp;
 }
-const normalArrow=arrowDamage(39);
-assert.equal(arrowDamage(40,['bloodstone']),normalArrow,'exactly forty percent health does not activate the low-health effect');
-assert.equal(arrowDamage(39,['bloodstone']),normalArrow*1.25,'a real arrow gains the low-health damage bonus');
-assert.equal(arrowDamage(100,['bloodstone']),normalArrow,'healing out of low health removes the conditional bonus');
+const normalArrow=arrowDamage(RELIC_RULES.lowHealthThreshold-.01);
+assert.equal(arrowDamage(RELIC_RULES.lowHealthThreshold,['bloodstone']),normalArrow,'exactly the configured health fraction does not activate the low-health effect');
+assert.equal(arrowDamage(RELIC_RULES.lowHealthThreshold-.01,['bloodstone']),normalArrow*RELIC_RULES.lowHealthDamage,'a real arrow gains the low-health damage bonus');
+assert.equal(arrowDamage(1,['bloodstone']),normalArrow,'healing out of low health removes the conditional bonus');
 
 const fast=arena({hero:'warden',owned:['swiftFeather']}),baseline=arena({hero:'warden'});
 fast.levels.speed=2;baseline.levels.speed=2;fast._refreshStats();baseline._refreshStats();
@@ -78,19 +82,22 @@ fast.update(.05,{x:1});baseline.update(.05,{x:1});
 assert(Math.abs(fast.player.x/baseline.player.x-1.08)<1e-10,'the movement relic combines with hero and ordinary speed upgrades');
 
 const shield=arena({owned:['leafWard']});shield.player.invuln=1;
+const shieldFullHp=shield.player.maxHp,shieldCapacity=skillStats(shield,'barrier').capacity,armorMultiplier=defenseDamageMultiplier(resolveCharacterStats(shield).defense);
 assert.equal(shield._hurtPlayer(30),false);assert(shield.relics.shieldReady,'existing invulnerability does not consume a shield');
 shield.player.invuln=0;assert(shield._hurtPlayer(8));
-assert.equal(shield.player.hp,100);assert(!shield.relics.shieldReady);assert.equal(shield.relics.shieldCooldown,12.75);
-assert.equal(shield.barrier.remaining,26.5,'the relic strengthens the skill instead of adding a second shield');
+assert.equal(shield.player.hp,shieldFullHp);assert(!shield.relics.shieldReady);assert.equal(shield.relics.shieldCooldown,12.75);
+near(shield.barrier.remaining,shieldCapacity-8*armorMultiplier,'hero armor resolves before the one relic-strengthened shield');
 assert(shield.player.invuln>0,'even a fully absorbed hit starts the normal damage grace period');
-shield._hurtPlayer(30);assert.equal(shield.player.hp,100,'overlapping hits cannot bypass that grace period');
+shield._hurtPlayer(30);assert.equal(shield.player.hp,shieldFullHp,'overlapping hits cannot bypass that grace period');
 for(const state of ['upgrade','relic','paused','dead']) {
   shield.status=state;advance(shield,1);shield.relics.update(.05);assert.equal(shield.relics.shieldCooldown,12.75,'shield recovery freezes outside live play');
 }
 shield.status='playing';advance(shield,12.65);assert(!shield.relics.shieldReady);
-advance(shield,.125);assert(shield.relics.shieldReady);shield.player.invuln=0;shield._hurtPlayer(40);
-assert.equal(shield.player.hp,94.5,'the replenished barrier absorbs its full boosted capacity and lets excess through');
-shield.player.invuln=0;shield._hurtPlayer(10);assert.equal(shield.player.hp,84.5,'an exhausted barrier leaves no second relic shield');
+const overflowDamage=(shieldCapacity+5.5)/armorMultiplier;
+advance(shield,.125);assert(shield.relics.shieldReady);shield.player.invuln=0;shield._hurtPlayer(overflowDamage);
+const afterOverflow=shieldFullHp-5.5;assert.equal(shield.barrier.remaining,0);
+near(shield.player.hp,afterOverflow,'the replenished barrier absorbs its full boosted capacity after armor and lets excess through');
+shield.player.invuln=0;shield._hurtPlayer(10);near(shield.player.hp,afterOverflow-10*armorMultiplier,'an exhausted barrier leaves no second relic shield');
 
 const herbs=arena({owned:['herbalEcho','deepRoot','thunderstone']});herbs.player.skillCooldown=8;
 const herbEnemy=monster(herbs,100),farEnemy=monster(herbs,200),drop=herb(herbs);herbs.update(0);
@@ -101,8 +108,8 @@ assert(!herbs.adventure.pickups.includes(drop));assert.equal(herbEnemy.hp,9940);
 assert(!herbEnemy.bleed&&!herbEnemy.shock,'the herb wave uses raw damage without applying weapon status reactions');
 assert.equal(herbs.player.skillCooldown,8);
 const afterHerbHp=herbEnemy.hp;herbs.update(0);assert.equal(herbEnemy.hp,afterHerbHp,'one pickup cannot cast repeatedly');
-herbs.player.hp=99;herbEnemy.hp=1;const beforeHerbKill={kills:herbs.kills,xp:xpTotal(herbs)};herb(herbs);herbs.update(0);
-assert.equal(herbs.player.hp,100,'enhanced herb healing still clamps at maximum health');
+herbs.player.hp=herbs.player.maxHp-1;herbEnemy.hp=1;const beforeHerbKill={kills:herbs.kills,xp:xpTotal(herbs)};herb(herbs);herbs.update(0);
+assert.equal(herbs.player.hp,herbs.player.maxHp,'enhanced herb healing still clamps at the hero maximum health');
 assert.equal(herbs.kills,beforeHerbKill.kills+1);assert.equal(xpTotal(herbs),beforeHerbKill.xp+herbEnemy.xp);
 assert.equal(herbs.player.skillCooldown,8,'a relic shockwave kill cannot claim a lightning refund');
 herbs.update(0);assert.equal(herbs.kills,beforeHerbKill.kills+1,'the herb wave cannot recursively generate another rewarded kill');

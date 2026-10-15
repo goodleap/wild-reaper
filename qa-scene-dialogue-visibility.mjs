@@ -77,10 +77,10 @@ population.enemies.push({id:181,type:'slime',x:1200,y:0,r:16,hp:100,guardActive:
 population.settlements.sites=[{id:'merchant:far',type:'merchant',x:DIALOGUE_RULES.merchantFar-10,y:0,state:'ready'},{id:'angel:near',type:'angel',x:-140,y:0,state:'ready',guardRadius:190}];
 let visibilityCalls=0;
 const check={isVisible:s=>{visibilityCalls++;return isVisible(population,s);}};
-dialogue.observe(population,0,check);assert.equal(visibilityCalls,2,'Only the two nearby NPCs require LOS; 181 distant or dormant enemies do not.');
+dialogue.observe(population,0,check);assert.equal(visibilityCalls,3,'Only the player and two nearby NPCs require visibility checks; 181 distant or dormant enemies do not.');
 assert.equal(dialogue.items(check).length,2);assert(dialogue.items(check).some(item=>item.speaker.source.type==='merchant'),'The distant visible shop greeting survives proximity pruning.');
 for(let i=0;i<60;i++)dialogue.observe(population,1/60,check);
-const afterFrames=visibilityCalls;dialogue.observe(population,1/60,check);assert.equal(visibilityCalls-afterFrames,2);
+const afterFrames=visibilityCalls;dialogue.observe(population,1/60,check);assert.equal(visibilityCalls-afterFrames,3);
 population.enemies[0].x=200;population.enemies[0].guardActive=true;population.enemies[0].territoryState='chasing';dialogue.observe(population,.1,check);
 assert.equal(dialogue.items(check).length,1);assert.equal(dialogue.items(check)[0].speaker.kind,'enemy','A nearby newly alerted group still speaks immediately.');
 

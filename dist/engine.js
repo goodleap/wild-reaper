@@ -36,6 +36,8 @@ import { StageRun } from './stage-run.js';
 import { ExpeditionRun } from './expedition-run.js';
 import { MonsterTerritories } from './monster-territories.js';
 import { RiftExploration } from './rift-exploration.js';
+import { StoryRun } from './story-run.js';
+import { RealmProgression } from './realm-progression.js';
 import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
@@ -67,15 +69,16 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='forest',stageId=null,mode=null,dungeonId=null}={}) {
+  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='forest',stageId=null,mode=null,dungeonId=null,storyId='prologue'}={}) {
+    if(mode==='story'){hero='traveler';appearanceId=null;initialWeaponId='sword';stageId=null;dungeonId=null;worldId='forest';debug=false;}
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
     this.debugOptions=normalizeDebugOptions(debugOptions,this.debug);
     this.debugFull=this.debugOptions.fullLoadout;
-    this.mode=stageId||dungeonId||mode==='dungeon'?'dungeon':'world';
+    this.mode=mode==='story'?'story':stageId||dungeonId||mode==='dungeon'?'dungeon':'world';
     this.dungeonId=this.mode==='dungeon'?dungeonId:null;
-    this._worldExploration=this.mode==='world'&&!!adventure;
-    if(mode==='world'||mode==='dungeon')difficulty='normal';
+    this._worldExploration=['world','story'].includes(this.mode)&&!!adventure;
+    if(['world','dungeon','story'].includes(mode))difficulty='normal';
     this.stage=stageId&&!dungeonId?new StageRun(this,stageId):null;
     this.expedition=dungeonId?new ExpeditionRun(this,dungeonId):null;
     const selectedWorld=this.debug&&debugWorld?debugWorld:worldId;
@@ -146,14 +149,20 @@ export class Game {
     this.discoveredMap=new Set();this.regions.initialize();
     this.riftExploration=new RiftExploration(this);
     this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
-    this.settlements.ensureAngels?.();
+    if(this.mode!=='story')this.settlements.ensureAngels?.();
     this.territories=new MonsterTerritories(this);
     this.expedition?.initialize();
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
     if(this.debugOptions.extraGold)this.grantResources({gold:500},'debugStart');
     applyFullDebugBuild(this);spawnDebugTrainingDummy(this);spawnDebugBosses(this);
+    this.realms=new RealmProgression(this,{costForLevel:xpCost});
+    this.story=this.mode==='story'?new StoryRun(this,{id:storyId}):null;
+    this.story?.initialize();
   }
+
+  onEnemyDefeated(enemy){this.story?.onEnemyDefeated?.(enemy);this.realms?.onEnemyDefeated(enemy);this.onArchiveDefeat?.(enemy);}
+  dispose(reason='exit') {this.story?.cleanup(reason);this.realms?.dispose();}
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
   _effect(x,y,type,life,r,color,text,extra={}) {
@@ -372,6 +381,7 @@ export class Game {
   canEnterPortal(id) { return !this.dungeon.active&&this.regions.canEnter(id); }
   getInteraction() {
     if(this.status!=='playing')return null;
+    if(this.story?.active)return null;
     if(this.dungeon.active)return this.dungeon.getInteraction();
     const candidates=[];
     const settlement=this.settlements.getInteraction();if(settlement)candidates.push(settlement);
@@ -431,7 +441,9 @@ export class Game {
     this.status='playing';this._trySkillUpgrade();return true;
   }
   _switchRegion(portal=this.portal) {
+    if(this.story?.active)return false;
     if(!portal||!Number.isInteger(portal.nextRegionIndex)||this.dungeon.active)return false;
+    this.realms?.cancel('scene-change');
     const nextIsland=this.stage?this.stage.island(portal.nextMapId):null;
     if(this.stage&&!nextIsland)return false;
     const from=this.region.id,fromIndex=this.regionIndex,fromMapId=this.mapId,p=this.player;
@@ -492,6 +504,7 @@ export class Game {
 
   update(dt,input={}) {
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
+    if(this.status==='dead'){this.story?.cleanup('death');this.realms?.cancel('death');return;}
     if(this.sceneTransition.active){this.sceneTransition.update(dt);return;}
     this.regions.flushReward();
     if(this.status!=='playing') return;
@@ -500,11 +513,14 @@ export class Game {
     const p=this.player;
     const inDungeon=!!this.dungeon.active;
     if(!inDungeon)this.time+=dt;this.runTime+=dt;this._clock+=dt;
+    this.story?.update(dt);
+    this.realms?.update(dt);
+    if(this.status!=='playing')return;
     this.regionGrace=Math.max(0,this.regionGrace-dt);
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
     this.relics.update(dt);
     this.barrier.update(dt);
-    if(!inDungeon){this.expedition?.update(dt);if(this.status!=='playing')return;this.regions.update(dt);this.territories?.update(dt);this._updatePressure(dt);}
+    if(!inDungeon&&!this.story?.active){this.expedition?.update(dt);if(this.status!=='playing')return;this.regions.update(dt);this.territories?.update(dt);this._updatePressure(dt);}
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debugOptions.zeroStormCooldown?0:Math.max(0,p.skillCooldown-dt);
     p.hurtFlash=Math.max(0,(p.hurtFlash||0)-dt);
     p.hurtFace=Math.max(0,(p.hurtFace||0)-dt);p.castFace=Math.max(0,(p.castFace||0)-dt);
@@ -519,11 +535,11 @@ export class Game {
     this._moveEntity(p,ix*p.speed*movement*dt,iy*p.speed*movement*dt,true);
     updateLocomotion(p,oldX,oldY,dt);
     if(p.moving)p.moveFacing=Math.atan2(p.y-oldY,p.x-oldX);
-    if(this.touchInteractions.update())return;
-    this.adventure?.update(dt);
+    if(!this.story?.active&&this.touchInteractions.update())return;
+    if(!this.story?.active)this.adventure?.update(dt);
     this.companions.update(dt);
-    if(!inDungeon){this.encounters?.update(dt);this.settlements.update(dt);this.relicSites?.update(dt);}
-    else this.dungeon.update(dt);
+    if(!inDungeon&&!this.story?.active){this.encounters?.update(dt);this.settlements.update(dt);this.relicSites?.update(dt);}
+    else if(inDungeon)this.dungeon.update(dt);
     const regen=resolveCharacterStats(this).regen;if(regen)p.hp=Math.min(p.maxHp,p.hp+regen*dt);
     if(!inDungeon)this._spawn-=dt;
     updateDebugMonsterStream(this,dt);
@@ -549,6 +565,7 @@ export class Game {
       e._weaponPushTime=updateWeaponKnockback(this,e,dt);
       if(!e.trainingDummy&&usesEnemyLocomotion(e)){e._walkStartX=e.x;e._walkStartY=e.y;}
       if(e.trainingDummy||this.abilities.isFrozen(e))continue;
+      if(this.story?.active&&this.story.beforeEnemy(e,dt))continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.territories?.updateEnemy(e,dt))continue;
@@ -680,11 +697,12 @@ export class Game {
   }
   _levelUp() {
     const p=this.player;let gained=0;
-    while(p.xp>=p.xpNext) {
+    while(p.xp>=p.xpNext&&this.realms?.canLevelUp()!==false) {
       const previousMax=p.maxHp;
       p.xp-=p.xpNext;p.level++;p.xpNext=xpCost(p.level);
       p.hp=Math.min(p.maxHp,p.hp+Math.max(0,p.maxHp-previousMax));gained++;
     }
+    this.realms?.capExperience();
     if(!gained)return false;
     this._refreshStats();this._emit('level',{level:p.level,gained});
     this._effect(p.x,p.y,'ring',.6,75,'#eee0a3');return true;
@@ -728,7 +746,7 @@ export class Game {
       if(d<22){if(kind==='gold')this.addGold(drop.value);else this.addCrystals(drop.value);drop.value=0;}
     }
   }
-  _trySkillUpgrade() {return this.progression.tryUpgrade();}
+  _trySkillUpgrade() {return this.story?.suppressChoices||this.realms?.active?false:this.progression.tryUpgrade();}
   getUpgradeChoices() {return this.progression.getChoices();}
   chooseUpgrade(id) {return this.progression.choose(id);}
 }

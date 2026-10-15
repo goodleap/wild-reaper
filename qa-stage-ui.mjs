@@ -8,12 +8,12 @@ const run=(extra={})=>({difficulty:'normal',runTime:0,kills:0,bossKills:0,wave:1
 const finishVictory=(archive,game,time)=>{archive.begin(game);game.runTime=time;game.stage.coreDefeated=true;game.stage.completed=true;game.status='victory';return archive.finish(game,'victory');};
 
 // Migrate the shipped archive once, retaining discoveries and all counters.
-// A running older tab can continue writing its v1 key without erasing v2.
+// A running older tab can continue writing its v1/v2 key without erasing v3.
 {
   const oldKey='wild-echoes-adventure-archive';
   const previous={version:1,totals:{runs:12,time:900,kills:144,bossKills:3,maxLevel:9,maxWave:5},best:{normal:{time:600,kills:99,bossKills:2,level:9,wave:5}},entries:{'weapon:sword':{seen:true,acquisitions:12,maxLevel:5,branches:['heavy'],evolved:false,modifiers:{swordEnergy:2}}},legacy:{time:123,kills:45,bossKills:1}};
   const storage=memory({[oldKey]:JSON.stringify(previous)}),archive=new AdventureArchive({storage});
-  assert.equal(archive.data.version,2);assert.deepEqual(archive.data.totals,previous.totals);
+  assert.equal(archive.data.version,3);assert.deepEqual(archive.data.totals,previous.totals);
   assert.deepEqual(archive.data.entries['weapon:sword'],{defeats:0,...previous.entries['weapon:sword']});
   assert.deepEqual(archive.data.legacy,previous.legacy);assert(storage.data.has(ARCHIVE_STORAGE_KEY));
   const game=run(),report=finishVictory(archive,game,321);
@@ -30,6 +30,18 @@ const finishVictory=(archive,game,time)=>{archive.begin(game);game.runTime=time;
   assert.deepEqual(reloaded.data.stages['forest-trial'].casual,{clears:1,bestTime:120},'debug participation and difficulty separation are preserved');
   const panel=archivePanelHTML(reloaded.data,{tab:'records',difficulty:'normal'});
   assert.match(panel,/关卡通关/);assert.match(panel,/森林试炼/);assert.match(panel,/4 分 10 秒/);
+}
+
+// The immediately preceding archive already has stage records. Chapter
+// storage migrates those intact and leaves the old generation isolated.
+{
+  const oldKey='wild-echoes-adventure-archive-v2';
+  const previous={version:2,totals:{runs:4,time:500,kills:75,bossKills:2,maxLevel:8,maxWave:3},stages:{'forest-trial':{normal:{clears:2,bestTime:210},casual:{clears:1,bestTime:180}}}};
+  const saved=JSON.stringify(previous),storage=memory({[oldKey]:saved}),archive=new AdventureArchive({storage});
+  assert.equal(archive.data.version,3);assert.deepEqual(archive.data.totals,previous.totals);assert.deepEqual(archive.data.stages,previous.stages);assert.deepEqual(archive.data.stories,{});
+  assert.equal(storage.data.get(oldKey),saved);assert(storage.data.has(ARCHIVE_STORAGE_KEY));
+  finishVictory(archive,run(),200);storage.setItem(oldKey,JSON.stringify({...previous,totals:{runs:0},stages:{}}));
+  const reloaded=new AdventureArchive({storage});assert.equal(reloaded.data.totals.runs,5);assert.deepEqual(reloaded.data.stages['forest-trial'].normal,{clears:3,bestTime:200});
 }
 
 // An optional kill, an unentered exit, death, and quit are never victories.
@@ -84,4 +96,4 @@ const selectForest=h=>{select(h,'dungeon');const input=h.document.getElementById
   assert.equal(harness('?debug&world=invalid').nodes['mode-world'].checked,true);
 }
 
-console.log('stage UI/archive: mode persistence, mobile objective, victory/death lifecycle, v1 migration, old-tab isolation, one-shot clears, fastest time and difficulty records passed');
+console.log('stage UI/archive: mode persistence, mobile objective, victory/death lifecycle, v1/v2 to v3 migration, old-tab isolation, one-shot clears, fastest time and difficulty records passed');

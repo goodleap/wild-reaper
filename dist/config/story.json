@@ -1,0 +1,50 @@
+{
+  "definitions": [
+    {
+      "id": "prologue",
+      "name": "序章 · 林海余烬",
+      "worldId": "forest",
+      "heroIds": ["traveler"],
+      "weaponIds": ["sword"],
+      "anchors": {"wakeArea": "01", "meetingArea": "02", "refugeArea": "03", "searchPassage": "01-02", "escapePassage": "02-03"},
+      "steps": ["awakening", "search", "escape", "escort", "pill", "burst", "fading", "sanctuary", "judgment", "conversation", "complete"],
+      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 30, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 4, "maxEnemies": 44},
+      "dialogue": {
+        "awakening": [
+          {"speaker": "player", "text": "我本是昭衡国王子。论剑术、论风度，谁敢与我争锋？"},
+          {"speaker": "player", "text": "可沈玄策借镇界仪式夺权，把我推下祭井，还诬我引来灾变。"},
+          {"speaker": "player", "text": "我重生了？这一次，我不会再重蹈覆辙……"}
+        ],
+        "search": [{"speaker": "player", "text": "脚步声……有人在搜林。先看清退路。"}],
+        "escape": [{"speaker": "player", "text": "被发现了！东边谷地有路，不能在这里被围住。"}],
+        "escort": [
+          {"speaker": "princess", "text": "那枚佩饰……你是昭衡的王子？"},
+          {"speaker": "player", "text": "若你是来领赏的，能否晚些再谈？"},
+          {"speaker": "princess", "text": "我是霁川公主，正护送难民。先跟我冲出谷地！"}
+        ],
+        "pill": [
+          {"speaker": "princess", "text": "追兵封住了东侧。这颗燃脉丸，能暂时借出你的潜力。"},
+          {"speaker": "princess", "text": "服药后只有片刻。你挡住他们，我向守望者求援。"},
+          {"speaker": "player", "text": "片刻够了。你带难民退后，我来开路。"}
+        ],
+        "burst": [{"speaker": "player", "text": "这股力量……王庭剑阵，随我破敌！"}],
+        "fading": [
+          {"speaker": "player", "text": "剑……怎么突然这么沉？药效尽了！"},
+          {"speaker": "princess", "text": "别逞强！往采石盆地走，守望者已回应祈愿！"}
+        ],
+        "sanctuary": [
+          {"speaker": "angel", "text": "求援我已听见。守护之内，尚有生路。"},
+          {"speaker": "princess", "text": "古老誓约仍在……守住光环，别让他们逼近难民！"}
+        ],
+        "judgment": [{"speaker": "angel", "text": "此雷为护生而降——退开！"}],
+        "conversation": [
+          {"speaker": "player", "text": "我死于摄政沈玄策之手。他夺了王国，还在搜捕这些人。"},
+          {"speaker": "princess", "text": "我追查押运队才来到林海。失踪的难民，都被送往祭场。"},
+          {"speaker": "angel", "text": "林海北方留有押运痕迹。真相，需要你们自己去找。"},
+          {"speaker": "player", "text": "我曾只想着夺回王位。这一次，先救人，再讨旧账。"},
+          {"speaker": "princess", "text": "那就沿路追查。王子，这回可别一个人逞强。"}
+        ]
+      }
+    }
+  ]
+}

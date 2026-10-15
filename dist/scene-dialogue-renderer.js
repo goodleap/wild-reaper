@@ -25,7 +25,13 @@ export function layoutSceneDialogue(items,{project,width,height,avoid=[],measure
     const w=saved?.width??Math.max(48,...rows.map(measure))+20,h=saved?.height??rows.length*18+14;
     // Choose a safe spot once. Subsequent frames preserve the offset from the
     // speaker; a new warning hides this bubble instead of pushing it sideways.
-    const spots=saved?[{x:anchor.x+saved.dx,y:anchor.y+saved.dy}]:[{x:anchor.x-w/2,y:anchor.y-h-12},{x:anchor.x-w-12,y:anchor.y-h-12},{x:anchor.x+12,y:anchor.y-h-12},{x:anchor.x-w/2,y:anchor.y-h-38}];
+    const spots=saved?[{x:anchor.x+saved.dx,y:anchor.y+saved.dy}]:[
+      {x:anchor.x-w/2,y:anchor.y-h-12},{x:anchor.x-w-12,y:anchor.y-h-12},{x:anchor.x+12,y:anchor.y-h-12},{x:anchor.x-w/2,y:anchor.y-h-38},
+      // A nearby follower can occupy every low spot on a narrow screen. Try
+      // a few higher, partly shifted spots before the first appearance only;
+      // clamp their edges without moving an already established bubble.
+      ...[38,76].flatMap(gap=>[0,-w/4,w/4,-w/2,w/2].map(shift=>({x:Math.max(8,Math.min(width-w-8,anchor.x-w/2+shift)),y:anchor.y-h-gap})))
+    ];
     const rect=spots.map(p=>({...p,width:w,height:h})).find(rect=>inside({...rect,height:h+5},width,height)&&occupied.every(other=>!intersects({...rect,height:h+5},other)));
     if(!rect){if(saved){saved.blockedAt=item.clock??0;saved.edgeBlocked=!inside({...spots[0],width:w,height:h+5},width,height);}continue;}
     if(saved?.blockedAt!=null){

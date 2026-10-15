@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { Game, xpCost, crystalCost } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
+import { applyHeroStat } from './dist/heroes.js';
+import { getConfigSection } from './dist/content-config.js';
 
 // Resource identity is checked through real kill and pickup paths. Test fixtures
 // suppress only unrelated random spawns and scenery, never resource mutations.
@@ -17,9 +19,10 @@ kill.player.x=250;kill.update(0);
 assert.equal(kill.crystals,value);assert.equal(kill.player.xp,value,'crystal pickup does not award kill XP again');assert.equal(kill.gems.length,0);
 
 const leveling=arena(),xpBudget=xpCost(1)+xpCost(2)+7;
-leveling.player.hp=63;const initialDamage=leveling.stats.damage,initialSpeed=leveling.player.speed;
+leveling.player.hp=63;const initialDamage=leveling.stats.damage,initialSpeed=leveling.player.speed,initialMaxHp=leveling.player.maxHp;
+const expectedMaxHp=Math.round(applyHeroStat(leveling.hero,'maxHealth',leveling.player.baseMaxHp+2*getConfigSection('combat').stats.healthPerLevel));
 assert(leveling.addExperience(xpBudget));
-assert.equal(leveling.player.level,3);assert.equal(leveling.player.xp,7);assert.equal(leveling.player.maxHp,104);assert.equal(leveling.player.hp,67,'automatic levels heal only their gained max HP');
+assert.equal(leveling.player.level,3);assert.equal(leveling.player.xp,7);assert.equal(leveling.player.maxHp,expectedMaxHp);assert.equal(leveling.player.hp,63+expectedMaxHp-initialMaxHp,'automatic levels heal only their gained hero-adjusted max HP');
 assert(Math.abs(leveling.stats.damage-initialDamage-.02)<1e-10,'character growth adds a restrained one percent base damage per level');
 assert.equal(leveling.player.speed,initialSpeed);assert.equal(leveling.status,'playing');assert.equal(leveling.skillLevel,1);assert.equal(leveling.crystals,0);
 assert.equal(leveling.events.filter(e=>e.type==='skillUpgrade').length,0,'automatic levels never open a skill selection');

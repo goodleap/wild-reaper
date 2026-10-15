@@ -72,6 +72,7 @@ const $=id=>{const node=document.getElementById(id);assert(node,`missing #${id}`
 let taskId=0,taskNow=1000;const frameTasks=new Map(),timerTasks=new Map();
 const sandbox={...modules,document,performance,window:{location:{search:''},devicePixelRatio:1,addEventListener:(type,handler)=>{(windowListeners[type]??=[]).push(handler);}},URLSearchParams,ResizeObserver:class{observe(){}},matchMedia:query=>({matches:query.includes('pointer: coarse')}),localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame:callback=>{const id=++taskId;frameTasks.set(id,callback);return id;},cancelAnimationFrame:id=>frameTasks.delete(id),setTimeout:(callback,delay=0)=>{const id=++taskId;timerTasks.set(id,{callback,at:taskNow+Number(delay)});return id;},clearTimeout:id=>timerTasks.delete(id),console};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
+for(const id of ['start-button','archive-button','help-button','sound-button'])$(id).disabled=false;
 const shippedRenderGame=sandbox.renderGame;
 const run=script=>vm.runInContext(script,sandbox);
 const flush=async()=>{for(let count=0;count<100;count++){await Promise.resolve();await Promise.resolve();if(!run('typeof startLoading!=="undefined"&&startLoading'))return;taskNow+=1000/60;const callbacks=[...frameTasks.values()];frameTasks.clear();for(const callback of callbacks)callback(taskNow);for(const [id,task] of [...timerTasks])if(task.at<=taskNow){timerTasks.delete(id);task.callback();}}assert.fail('startup did not settle');};
@@ -184,7 +185,7 @@ assert($('game-bottom').contains($('skill-button')),'manual skill remains in the
 run("keys.add('KeyW');skillRequested=true;portalRequested=true;touch={id:77,dx:1,dy:0};game.player.skillCooldown=6;");
 click('character-button');
 assert(run('characterOpen&&!mapOpen&&!paused'));assert.equal(run('keys.size'),0);assert.equal(run('touch'),null);assert.equal(run('skillRequested||portalRequested'),false);
-assert.equal($('character-button').getAttribute('aria-expanded'),'true');assert.equal(document.activeElement.id,'close-character');
+assert.equal($('character-button').getAttribute('aria-expanded'),'true');assert(document.activeElement.classList.contains('character-panel'),'a pointer opens the panel without highlighting its close button');
 assert.equal($('character-tab-attributes').getAttribute('aria-selected'),'true');
 const before=model();run('frame(1000);frame(1040);');assert.deepEqual(model(),before,'character details freeze movement, simulation, cooldown and visual clock');
 key('KeyW');key('Space');key('KeyE');click('skill-button');fire($('touch-skill'),'pointerdown');fire($('game-canvas'),'pointerdown');
@@ -210,13 +211,13 @@ fire($('character-button'),'pointerdown',{pointerId:24});fire($('character-butto
 fire($('game-canvas'),'pointerdown',{pointerId:25,clientX:200,clientY:600});fire($('game-canvas'),'pointermove',{pointerId:25,clientX:30,clientY:30});assert.equal(run('characterOpen'),false);assert.equal(run('touch.id'),25);assert.equal($('game-canvas').captured,25);fire($('game-canvas'),'pointerup',{pointerId:25});
 fire($('game-canvas'),'pointerdown',{pointerId:26,clientX:200,clientY:600});fire($('character-button'),'pointerdown',{pointerId:27});fire($('character-button'),'pointerup',{pointerId:27});click('character-button');assert.equal(run('characterOpen'),false,'a second finger cannot accidentally interrupt a live movement gesture');fire($('game-canvas'),'pointerup',{pointerId:26});
 // Keyboard activation does not depend on receiving pointer events.
-fire($('character-button'),'click',{detail:0});assert(run('characterOpen'));key('KeyC');assert.equal(run('characterOpen'),false);
+$('character-button').focus();fire($('character-button'),'click',{detail:0});assert(run('characterOpen'));assert.equal(document.activeElement.id,'close-character');key('KeyC');assert.equal(run('characterOpen'),false);assert.equal(document.activeElement.id,'character-button','keyboard activation restores its original control');
 
 // Details and map are mutually exclusive independent pause reasons.
 key('KeyC');key('KeyM');assert(run('mapOpen&&!characterOpen'));assert($('character-overlay').classList.contains('hidden'));key('KeyC');assert(run('characterOpen&&!mapOpen'));assert($('map-overlay').classList.contains('hidden'));key('Escape');assert(run('!characterOpen&&!mapOpen&&!paused'));
-click('pause-button');click('pause-character-button');assert(run('paused&&characterOpen'));key('Escape');assert(run('paused&&!characterOpen'));assert.equal(document.activeElement.id,'resume-button');click('resume-button');assert.equal(run('paused'),false);
+click('pause-button');click('pause-character-button');assert(run('paused&&characterOpen'));key('Escape');assert(run('paused&&!characterOpen'));assert(document.activeElement.classList.contains('pause-panel'),'pointer-opened details return to the containing pause panel');click('resume-button');assert.equal(run('paused'),false);
 key('KeyC');for(const handler of windowListeners.blur||[])handler();assert(run('paused&&characterOpen'));click('character-done');assert(run('paused&&!characterOpen'),'background pause is preserved when closing details');click('resume-button');
-key('KeyC');click('help-button');assert(run('helpOpen&&characterOpen'));key('Escape');assert(run('!helpOpen&&characterOpen'));assert.equal(document.activeElement.id,'close-character');key('Escape');
+key('KeyC');click('help-button');assert(run('helpOpen&&characterOpen'));key('Escape');assert(run('!helpOpen&&characterOpen'));assert(document.activeElement.classList.contains('character-panel'));key('Escape');
 
 // Never spend a crystal/reward or change equipment behind the details modal.
 run("game.crystals=game.crystalsNext;game.status='upgrade';upgradeLevel=0;openUpgrades();");

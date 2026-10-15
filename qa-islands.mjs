@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {Island} from './dist/islands.js';
-import {worldNeighbors} from './dist/world-definitions.js';
+import {WORLD_IDS,worldNeighbors} from './dist/world-definitions.js';
 import {Terrain} from './dist/terrain.js';
 import {Environment,waterObstacleFootprint} from './dist/environment.js';
 import {getWaterContours,waterIntersectsCapsule,waterIntersectsCircle} from './dist/water-geometry.js';
@@ -9,7 +9,47 @@ const inPolygon=(points,x,y)=>{let inside=false;for(let i=0,j=points.length-1;i<
 const gameFor=(terrain,region)=>({terrain,region:{id:region},regionIndex:0,player:{x:0,y:-19.8,r:15},viewWidth:960,viewHeight:720});
 let boundaryChecks=0,propsChecked=0,watersChecked=0,largeWaters=0;
 const shapes=[];
-for(const region of ['forest','marsh','ruins']){
+// Authored forests have a bounded rectangle around an immutable baked land
+// union. Their empty areas are solid ridges/deep water, not a procedural coast
+// with a shallow wading band. Exercise that actual collision contract directly.
+let authoredSamples=0;
+for(const region of WORLD_IDS){
+  const island=new Island({region});if(island.layout?.kind!=='rift-forest')continue;
+  const layout=island.layout,b=island.bounds,copy=new Island({region,seed:29});
+  assert.equal(copy.layout,layout);assert.deepEqual(copy.points,island.points);assert.equal(island.spawn,layout.spawn);assert.equal(island.plan,layout.plan);assert.equal(island.routes,layout.routes);
+  assert.deepEqual(island.points,[{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}]);
+  assert.equal(island.shallowWidth,0);assert.equal(island.beachWidth,0);assert.equal(island.contour(0),island.points);
+  if(region==='forest'){assert.equal(b.maxX-b.minX,7200);assert.equal(b.maxY-b.minY,5400);shapes.push(JSON.stringify(island.points));}
+  for(const edge of island._edges){
+    const x=(edge.a.x+edge.b.x)/2+edge.nx*45,y=(edge.a.y+edge.b.y)/2+edge.ny*45;
+    assert(island.isDry(x,y,20));assert.equal(island.depthAt(x,y),0);
+    const outside={x:(edge.a.x+edge.b.x)/2-edge.nx*25,y:(edge.a.y+edge.b.y)/2-edge.ny*25};
+    assert.equal(island.contains(outside.x,outside.y),false);assert.equal(island.depthAt(outside.x,outside.y),1);
+    const constrained=island.constrain(outside.x,outside.y,49);assert(constrained.blocked);assert(island.contains(constrained.x,constrained.y,49));boundaryChecks++;
+  }
+  const terrain=new Terrain({island,region,cacheLimit:24}),spawn=layout.spawn;
+  assert(terrain.rift);assert(terrain.isFree(spawn.x,spawn.y,24),'the authored spawn must fit the actual player and companion bodies');
+  assert(island.isReserved(spawn.x,spawn.y,24));
+  // Independent even/odd polygon membership checks the full baked union, not
+  // only the convenient centers used by the navigation graph.
+  for(let x=b.minX+101;x<b.maxX;x+=241)for(let y=b.minY+83;y<b.maxY;y+=227){
+    const expected=layout.boundaries.reduce((inside,ring)=>inside!==inPolygon(ring.points,x,y),false);
+    assert.equal(terrain.rift.circleFree(x,y,0),expected,`${region} baked land at ${x},${y}`);
+    if(!expected)assert.equal(terrain.isFree(x,y,15),false,'a body cannot enter a masked-out ridge or deep-water region');
+    authoredSamples++;
+  }
+  for(const route of island.routes){
+    assert(island.containsCapsule(route.ax,route.ay,route.bx,route.by,15));
+    assert.equal(terrain.rift.firstBlocker(route.ax,route.ay,route.bx,route.by,15),null,'authored centerline links fit a complete player body inside the baked walkable union');
+  }
+  const envGame=gameFor(terrain,region);envGame.player.x=spawn.x;envGame.player.y=spawn.y-19.8;
+  const environment=new Environment(envGame,{generation:false});
+  for(let x=-9;x<=8;x++)for(let y=-9;y<=8;y++)assert.equal(environment._mudAt(x,y),null,'procedural pools cannot repaint or close authored passages');
+  assert.equal(environment.getImmersion(envGame.player,true),null);assert.equal(environment.movementMultiplier(envGame.player,true),1);
+  const hit=terrain.moveCircle(spawn.x,spawn.y,20000,0,15);assert(hit.blocked);assert(terrain.isFree(hit.x,hit.y,15));assert(island.contains(hit.x,hit.y,15));
+}
+assert(authoredSamples>1000);
+for(const region of ['marsh','ruins']){
   const island=new Island({region});shapes.push(JSON.stringify(island.points));
   assert.deepEqual(new Island({region}).points,island.points);
   assert(island.bounds.maxX-island.bounds.minX>7000&&island.bounds.maxX-island.bounds.minX<9500);
@@ -67,4 +107,4 @@ for(let i=0;i<128&&!bay;i++)for(let j=3;j<48&&!bay;j++){
 }
 assert(bay,'fixture should exercise a real concave coast');
 const result=empty.moveCircle(bay.p.x,bay.p.y,bay.q.x-bay.p.x,bay.q.y-bay.p.y,15);assert(result.blocked);assert(marsh.contains(result.x,result.y,15));assert(Math.hypot(result.x-bay.q.x,result.y-bay.q.y)>2,'long movement cannot skip the bay');
-console.log(JSON.stringify({islands:'passed',boundaryChecks,propsChecked,watersChecked,largeWaters,worlds:3}));
+console.log(JSON.stringify({islands:'passed',boundaryChecks,propsChecked,watersChecked,largeWaters,authoredSamples,coastalWorlds:2,configuredWorlds:WORLD_IDS.length}));

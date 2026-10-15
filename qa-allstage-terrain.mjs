@@ -7,7 +7,10 @@ import { Environment } from './dist/environment.js';
 import { groundFootprint, surfaceAllows } from './dist/placement-rules.js';
 import { waterIntersectsCircle, waterIntersectsCapsule } from './dist/water-geometry.js';
 
-assert.deepEqual(new Set(STAGES.map(stage=>stage.themeId)),new Set(WORLD_IDS),'every existing theme has a playable stage');
+const releasedStageThemes=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
+assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'all eight released stage themes retain their authored terrain');
+assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageThemes.map(id=>`${id}-trial`),'terrain checks cover each released stage identity');
+assert(WORLD_IDS.includes('verdant-rift'));assert(!STAGES.some(stage=>stage.themeId==='verdant-rift'),'the independent exploration world does not inherit a fabricated stage layout');
 let reservations=0,scenery=0,waterChecks=0,arrivalChecks=0;
 const reports=[];
 for(const stage of STAGES){

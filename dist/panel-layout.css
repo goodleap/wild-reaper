@@ -30,7 +30,7 @@
   display:grid;place-items:center;border-radius:8px;font-size:26px;
   touch-action:manipulation;cursor:pointer;
 }
-.panel-header .close-button:hover{background:#c6ed9112}
+@media (hover:hover) and (pointer:fine){.panel-header .close-button:hover{background:#c6ed9112}}
 .panel-body{
   flex:1 1 auto;min-height:0;min-width:0;overflow:auto;
   padding:3px var(--panel-gutter) 8px;
@@ -56,7 +56,7 @@
 #arena .pause-content #pause-archive-button{margin:0 0 16px;min-height:48px}
 .pause-content #resume-button{margin:0}
 .pause-content .warning-button{color:#f0c1bb;background:#b56b6433;border-color:#d391874f}
-.pause-content .warning-button:hover{background:#bd746747;border-color:#d9988d7a}
+@media (hover:hover) and (pointer:fine){.pause-content .warning-button:hover{background:#bd746747;border-color:#d9988d7a}}
 .pause-content .debug-diagnostics{margin-bottom:0;padding-top:18px}
 .panel-body .help-list{margin:0}
 .panel-body .help-list>div:last-child{margin-bottom:4px}

@@ -1,5 +1,5 @@
 import { getConfigSection } from './content-config.js';
-import { COMBAT_REFERENCE_ATTACK, CHARACTER_DEFENSE_PER_LEVEL, resolveCharacterStats, weaponStats, skillStats, scalePlayerDamage, upgradeEffectTotal, defenseReduction } from './combat-stats.js';
+import { COMBAT_REFERENCE_ATTACK, CHARACTER_DEFENSE_PER_LEVEL, resolveCharacterStats, weaponStats, skillStats, scalePlayerDamage, upgradeEffectTotal } from './combat-stats.js';
 import { UPGRADE_DEFS, ENDLESS_UPGRADES, getUpgradeDefinition } from './combat-catalog.js';
 import { getSuperSkillStats } from './super-skills.js';
 import { RELICS, RELIC_RULES } from './relics.js';
@@ -65,7 +65,7 @@ function attributes(game) {
     grid([
       ['角色等级',`Lv.${p.level}`,'level'],['生命',`${number(s.currentHp)} / ${number(s.maxHp)}`,'health'],
       ['角色攻击',number(s.attack),'attack'],['额外伤害增益',bonus(s.externalDamageMultiplier-1),'damageBonus'],
-      ['防御',number(s.defense),'defense'],['受击减伤',percent(defenseReduction(s.defense)),'damageReduction'],
+      ['防御',number(s.defense),'defense'],['受击减伤',percent(s.damageReduction),'damageReduction'],
       ['当前移速',number(move.speed),'moveSpeed'],['自身回复',`${number(s.regen)} / 秒`,'regen'],
       ['拾取范围',number(magnet),'magnet'],['金币',number(game.gold),'gold'],
       ['角色经验',`${number(p.xp)} / ${number(p.xpNext)}`,'experience'],['灵晶进度',`${number(game.crystals)} / ${number(game.crystalsNext)}`,'crystals'],
@@ -165,6 +165,8 @@ function skills(game) {
 }
 function status(game) {
   const active=[],adventure=game.adventure,stats=resolveCharacterStats(game),move=movement(game,stats),relics=game.relics;
+  const storyBuff=game.story?.getBuff?.();
+  if(storyBuff)active.push(card(storyBuff.label,grid([['剩余时间',seconds(storyBuff.remaining)],['移动速度',bonus(storyBuff.speedPercent/100)],['减伤加成',bonus(storyBuff.damageReductionBonus)],['当前受击减伤',percent(stats.damageReduction)]]),{meta:'临时潜力 · 不改变正式等级、段位和构筑；药效结束恢复'}));
   if(adventure?.furyTime>0)active.push(card('狂暴',grid([['剩余时间',seconds(adventure.furyTime)],['伤害加成',bonus(adventure.damageMultiplier()-1)],['飞矢攻速',bonus(adventure.fireRateMultiplier()-1)]]),{meta:'来源：狂暴补给'}));
   if(adventure?.magnetTime>0)active.push(card('磁力涌动',grid([['剩余时间',seconds(adventure.magnetTime)],['当前拾取范围',number(adventure.magnetRange(stats.magnet))]]),{meta:'来源：磁力补给'}));
   if((relics?.damageMultiplier?.()??1)>1)active.push(card('赤心增幅',grid([['伤害加成',bonus(relics.damageMultiplier()-1)]]),{meta:`来源：赤心 · 当前生命低于 ${percent(RELIC_RULES.lowHealthThreshold)}`}));

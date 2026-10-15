@@ -5,10 +5,14 @@ import { WORLD_IDS } from './dist/world-definitions.js';
 import { groundOffset } from './dist/terrain.js';
 import { portalDoor } from './dist/portal-geometry.js';
 import { AdventureArchive } from './dist/adventure-archive.js';
+import { DEBUG_MONSTER_RULES } from './dist/debug-wave.js';
 
 let randomSeed=819381;
 Math.random=()=>((randomSeed=(Math.imul(randomSeed,1664525)+1013904223)>>>0)/4294967296);
-assert.deepEqual(new Set(STAGES.map(s=>s.themeId)),new Set(WORLD_IDS));
+const releasedStageThemes=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
+assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'every released stage retains its authored theme and order');
+assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageThemes.map(id=>`${id}-trial`),'all eight released stage identities remain playable');
+assert(WORLD_IDS.includes('verdant-rift'));assert(!STAGES.some(stage=>stage.themeId==='verdant-rift'),'an independent exploration world does not acquire an unauthored stage');
 const archive=new AdventureArchive({storage:null});
 const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
 function travel(g,target){
@@ -68,12 +72,22 @@ for(const stage of STAGES)for(const difficulty of ['normal','casual']){
   archive.finish(g,'quit');assert.equal(archive.data.stages[stage.id][difficulty].clears,1);
   const elapsed=g.runTime;g.update(.05);assert.equal(g.runTime,elapsed);
 }
-assert.equal(Object.keys(archive.data.stages).length,WORLD_IDS.length);
+assert.equal(Object.keys(archive.data.stages).length,STAGES.length);
+assert.deepEqual(new Set(Object.keys(archive.data.stages)),new Set(STAGES.map(stage=>stage.id)),'completed records cover every authored stage and never invent a record for exploration-only worlds');
 for(const stage of STAGES){
   const debug=new Game({stageId:stage.id,debug:true,debugOptions:{fullLoadout:true}});
   assert(debug.enemies.some(e=>e.trainingDummy),`${stage.id}: debug training dummy`);
-  assert(debug.enemies.some(e=>e.debugWave),`${stage.id}: debug starting cohort`);
+  assert.equal(debug.debugFull,true,`${stage.id}: selected full loadout remains enabled`);
+  assert.equal(debug.debugOptions.allMonsters,false,`${stage.id}: a full loadout does not opt into monster streaming`);
+  assert.equal(debug.enemies.some(e=>e.debugWave||e.debugMonster),false,`${stage.id}: the removed automatic cohort never returns`);
   assert(debug.settlements.sites.some(s=>s.type==='castle'&&Math.hypot(s.x,s.y)<500),`${stage.id}: nearby debug castle`);
   assert.equal(debug.mapId,stage.startMapId);assert(!debug.stage.completed);
+
+  const stream=new Game({stageId:stage.id,debug:true,debugOptions:{fullLoadout:true,allMonsters:true}});
+  assert.equal(stream.enemies.some(e=>e.debugMonster),false,`${stage.id}: stream waits for actual simulation`);
+  stream.update(.01);
+  assert.equal(stream.enemies.filter(e=>e.debugMonster).length,DEBUG_MONSTER_RULES.initialCount,`${stage.id}: explicit monster stream starts its full opening batch`);
+  assert.equal(stream.enemies.some(e=>e.debugWave),false,`${stage.id}: selected stream uses current monster identities`);
+  assert.equal(stream.mapId,stage.startMapId);assert.equal(stream.status,'playing');assert(!stream.stage.completed);
 }
-console.log('All stage flow: eight themes × two difficulties, themed worlds, optional bosses alive, safe portals, persistent objectives, one-shot rewards, victory records and full debug starts passed.');
+console.log('All stage flow: eight themes × two difficulties, themed worlds, optional bosses alive, safe portals, persistent objectives, one-shot rewards, victory records, full debug starts and opt-in monster streams passed.');

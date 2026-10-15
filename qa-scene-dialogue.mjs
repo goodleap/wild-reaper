@@ -8,7 +8,7 @@ import { Terrain } from './dist/terrain.js';
 
 const config=JSON.parse(readFileSync(new URL('./dist/config/sites.json',import.meta.url),'utf8'));
 assert(validateDialogueConfig(config));
-for(const change of [s=>s.dialogue.rules.maxVisible=3,s=>s.dialogue.rules.combatVisible=4,s=>s.dialogue.rules.minDuration=10,s=>s.dialogue.rules.rescueReadyRange=400,s=>s.dialogue.rules.merchantFarExit=10,s=>s.dialogue.lines.angel=['{secret}'],s=>s.dialogue.lines.captive=[],s=>s.dialogue.lines.join=['<button>']]){
+for(const change of [s=>s.dialogue.rules.maxVisible=3,s=>s.dialogue.rules.combatVisible=4,s=>s.dialogue.rules.minDuration=10,s=>s.dialogue.rules.rescueReadyRange=400,s=>s.dialogue.rules.merchantFarExit=10,s=>s.dialogue.lines.angel=['{secret}'],s=>s.dialogue.lines.captive=[],s=>s.dialogue.lines.join=['<button>'],s=>delete s.dialogue.player,s=>s.dialogue.player.rules.idleMin=100,s=>s.dialogue.player.voices.elder.hurt=[]]){
   const invalid=structuredClone(config);change(invalid);assert.throws(()=>validateDialogueConfig(invalid),/Invalid sites.dialogue/);
 }
 const visible={isVisible:s=>!s.source.hidden};
@@ -58,14 +58,15 @@ const territory=game(),warnings=new SceneDialogue();territory.enemies=[enemy('sh
 for(const e of territory.enemies){e.guardActive=true;e.territoryState='chasing';}tick(warnings,territory);
 assert.equal(warnings.items(visible).length,1);assert(contents(warnings).includes('守住入口'));
 tick(warnings,territory,4);territory.enemies.forEach(e=>e.hidden=true);tick(warnings,territory,25);territory.enemies.forEach(e=>e.hidden=false);tick(warnings,territory);
-assert.equal(warnings.items(visible).length,0,'Camera visibility changes cannot re-arm the same active group.');
+assert.equal(warnings.items(visible).filter(item=>item.speaker.kind==='enemy').length,0,'Camera visibility changes cannot re-arm the same active group.');
 territory.enemies.forEach(e=>{e.guardActive=false;e.territoryState='returning';});tick(warnings,territory);
 territory.enemies.forEach(e=>{e.guardActive=true;e.territoryState='chasing';});tick(warnings,territory);
-assert.equal(warnings.items(visible).length,1,'A disengaged group may warn on a later intrusion after cooldown.');
+tick(warnings,territory,4);
+assert.equal(warnings.items(visible).filter(item=>item.speaker.kind==='enemy').length,1,'A disengaged group may warn on a later intrusion after cooldown and the current equal-priority line finishes.');
 const beasts=game(),growl=new SceneDialogue();beasts.enemies=[enemy('boar',1,150,{guardActive:true,territoryId:'boars',territoryState:'alert'})];tick(growl,beasts);assert.match(contents(growl),/哼哧/);
 
 const rescue=game('公主'),voices=new SceneDialogue();rescue.companions.camps=[{id:'camp:1',siteId:'ruin:1',kind:'warden',x:160,y:0,state:'trapped'}];rescue.relicSites.sites=[{id:'ruin:1',type:'rescue',kind:'warden',x:160,y:0,state:'ready'}];
-assert.equal(dialogueSpeakers(rescue).length,1,'An activated ruin and its camp describe one captive.');tick(voices,rescue);assert.match(contents(voices),/束缚/);
+assert.equal(dialogueSpeakers(rescue).filter(s=>s.kind!=='player').length,1,'An activated ruin and its camp describe one captive.');tick(voices,rescue);assert.match(contents(voices),/束缚/);
 rescue.companions.camps[0].state='ready';tick(voices,rescue,4);assert.match(contents(voices),/守卫倒下/);
 tick(voices,rescue,.05);tick(voices,rescue,4);assert.equal(voices.items(visible).length,0,'Ready-state and proximity handling cannot repeat the same rescue cue.');
 rescue.companions.camps=[];rescue.relicSites.sites[0].state='cleared';rescue.companions.members=[{id:1,kind:'warden',heroId:'warden',isCompanion:true,state:'active',x:150,y:-19.8,r:15,hp:100,rescuedFace:.65}];tick(voices,rescue);
@@ -110,6 +111,44 @@ assert.equal(layoutSceneDialogue([nearEdge],{...projection,avoid:[edgeRect]}).le
 assert.equal(layoutSceneDialogue([bubble],{...projection,avoid:[{x:0,y:0,width:640,height:480}]}).length,0,'A packed screen omits dialogue.');
 assert.equal(layoutSceneDialogue([{...bubble,speaker:{x:-10,y:200}}],projection).length,0,'Offscreen speakers never gain an edge indicator.');
 assert.equal(layoutSceneDialogue([{...bubble,text:'长'.repeat(100)}],projection).length,0,'Oversized prose cannot exceed the compact two-line layout.');
+
+// Real 393px phone captures: a following princess below the angel, the angel
+// near the left edge, and a companion beside the group. The earlier candidates were
+// blocked by a body/nameplate or the viewport despite ample free space above.
+const phoneAvoid=[
+  {x:168.8444,y:323.5667,width:55.3111,height:56.7667},
+  {x:10,y:10,width:373,height:104},{x:12,y:690.7031,width:200.4844,height:14.2969},
+  {x:301,y:570,width:65,height:65},{x:279,y:10,width:104,height:104},
+  {x:0,y:557,width:170,height:160},{x:233,y:547,width:160,height:170}
+];
+const phoneCases=[
+  {text:'古老誓约仍在……守住光环，别让他们逼近难民！',anchor:{x:162.5473,y:263.2592},avoid:[
+    {x:151.6307,y:265.4425,width:21.8333,height:11.6444},{x:139.2585,y:277.0870,width:46.5778,height:34.2056},
+    {x:182.6251,y:218.4600,width:32.0222,height:11.6444},{x:180.4418,y:233.7433,width:36.3889,height:42.2111},
+    {x:34.4205,y:118.2959,width:51.6722,height:11.6444},{x:37.6955,y:132.8515,width:45.1222,height:32.7500}
+  ]},
+  {text:'此雷为护生而降——退开！',anchor:{x:59.8454,y:388.0793},avoid:[
+    {x:129.7622,y:330.5155,width:21.8333,height:11.6444},{x:117.3900,y:342.1600,width:46.5778,height:34.2056},
+    {x:43.8343,y:383.7126,width:32.0222,height:11.6444},{x:41.6509,y:398.9960,width:36.3889,height:42.2111}
+  ]},
+  {text:'古老誓约仍在……守住光环，别让他们逼近难民！',anchor:{x:137.5487,y:320.9241},avoid:[
+    {x:126.6320,y:323.1075,width:21.8333,height:11.6444},{x:114.2598,y:334.7519,width:46.5778,height:34.2056},
+    {x:195.1813,y:310.7655,width:32.0222,height:11.6444},{x:192.9980,y:326.0488,width:36.3889,height:42.2111},
+    {x:46.9766,y:210.6014,width:51.6722,height:11.6444},{x:50.2516,y:225.1570,width:45.1222,height:32.7500}
+  ]}
+];
+const overlaps=(a,b)=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
+for(const sample of phoneCases){
+  const item={id:30,clock:0,priority:120,text:sample.text,speaker:{x:sample.anchor.x,y:sample.anchor.y+58,headOffset:58}};
+  const options={project:(x,y)=>({x,y}),width:393,height:717,avoid:[...phoneAvoid,...sample.avoid]};
+  const placed=layoutSceneDialogue([item],options);assert.equal(placed.length,1,'A new plot line can use a nearby safe diagonal spot on the captured phone layout.');
+  const rect=placed[0].rect,withTail={...rect,height:rect.height+5};
+  assert(rect.x>=8&&rect.y>=8&&rect.x+rect.width<=385&&withTail.y+withTail.height<=709);
+  assert(options.avoid.every(other=>!overlaps(withTail,other)),'The bubble and short tail clear every body, label, HUD and control.');
+  assert.deepEqual(layoutSceneDialogue([item],{...options,avoid:[]})[0].rect,rect,'The selected diagonal offset stays fixed even when closer spots become clear.');
+  assert.equal(layoutSceneDialogue([item],{...options,avoid:[...options.avoid,rect]}).length,0,'A later warning hides the fixed bubble rather than choosing another safe candidate.');
+  item.clock=.13;assert.deepEqual(layoutSceneDialogue([item],options)[0].rect,rect,'The same offset resumes after the warning clears.');
+}
 let saves=0,restores=0,draws=0;
 const ctx={save(){saves++;},restore(){restores++;},measureText:t=>({width:Array.from(t).length*12}),beginPath(){},roundRect(){},fill(){},stroke(){},moveTo(){},lineTo(){},fillText(){draws++;}};
 bubble.clock=.3;drawSceneDialogue(ctx,[bubble],projection);assert.equal(saves,restores);assert(draws>0);

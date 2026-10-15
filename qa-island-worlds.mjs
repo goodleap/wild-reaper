@@ -52,29 +52,42 @@ function unlock(target) {
 function travel(target){const portal=gate(target);feet(portalDoor(portal));assert(g.enterPortal(portal.id));assert.equal(g.regionIndex,target);assert(g.regions.states.size<REGIONS.length);assert.equal(gate(Number(portal.id.split(':')[1])).state,'active');}
 
 for(const value of [-9,-1,0,1,2,3,600,NaN])assert(REGIONS[normalizeWorldIndex(value)]);
-assert.equal(regionFor(REGIONS.length).id,'forest');assert.equal(regionFor(-1).id,'volcano');
+assert.equal(regionFor(REGIONS.length).id,'forest');assert.equal(regionFor(-1).id,REGIONS.at(-1).id,'negative indices wrap through the full expanded catalogue');
 verifyWorld();
 const original={terrain:g.terrain,settlements:g.settlements,relicSites:g.relicSites,gateToTwo:gate(2)};
+const naturalConnectionCount=g.regions.unlockedConnections.size;
+assert.equal(naturalConnectionCount,worldNeighbors(0).length,'the authored forest starts with all of its natural exits available');
+for(const portal of g.regions.portals){assert(portal.natural);assert.equal(portal.state,'active');assert.equal(portal.bossId,undefined);assert(!g.enemies.some(e=>e.portalId===portal.id));}
+assert.equal(g.superSkills.pending,null,'natural exits do not manufacture a boss reward');
+const spawnAngel=g.settlements.sites.find(site=>site.type==='angel'&&site.anchorId.startsWith('spawn:'));assert(spawnAngel,'the original spawn haven remains present');
 const merchant=g.settlements.sites.find(s=>s.type==='merchant');merchant.state='spent';
 const hunt=g.relicSites.sites.find(s=>s.type==='hunt');hunt.state='cleared';hunt.progress=hunt.goal;
 const castle=g.settlements.sites.find(s=>s.type==='castle'),castleProgress={id:castle.id,rewardClaimed:true,visited:new Set([1,2])};g.dungeon.states.set(castle.id,castleProgress);
 g.discoveredMap.add(castle.id);
-unlock(1);travel(1);verifyWorld();assert.equal(g.regions.defeatedConnectionsCount,1);
-assert(!g.enemies.some(e=>e.portalId===gate(0).id),'newly initialized opposite end never respawns a defeated connection boss');
-unlock(2);travel(2);verifyWorld();assert.equal(g.regions.defeatedConnectionsCount,2);assert.equal(g.regions.endlessStartedAt,null);
-const oldForest=g.regions.states.get(0),remoteBoss=oldForest.enemies.find(e=>e.portalId===original.gateToTwo.id);assert(remoteBoss&&remoteBoss.hp>0);
-g.time=321;unlock(0);
+const naturalResources={kills:g.kills,bossKills:g.bossKills,gold:g.gold,crystals:g.crystals};
+travel(1);verifyWorld();assert.equal(g.regions.defeatedConnectionsCount,naturalConnectionCount);
+assert(!g.enemies.some(e=>e.portalId===gate(0).id),'the opposite end of a natural forest connection never receives a guardian');
+assert.deepEqual({kills:g.kills,bossKills:g.bossKills,gold:g.gold,crystals:g.crystals},naturalResources,'natural travel awards no kill or resource reward');
+// Keep both endpoints of a genuinely guarded connection in visited worlds.
+// Opening it from the other side must retire the cached boss without damage.
+const guardedOpposite=gate(2);assert.equal(guardedOpposite.state,'locked');assert(g.enemies.some(e=>e.id===guardedOpposite.bossId&&e.hp>0));
+travel(0);travel(2);verifyWorld();assert.equal(g.regions.defeatedConnectionsCount,naturalConnectionCount);assert.equal(g.regions.endlessStartedAt,null);
+const oldMarsh=g.regions.states.get(1),remoteBoss=oldMarsh.enemies.find(e=>e.portalId===guardedOpposite.id);assert(remoteBoss&&remoteBoss.hp>0);
+g.time=321;unlock(1);assert.equal(g.regions.defeatedConnectionsCount,naturalConnectionCount+1);
 assert.equal(g.regions.endlessUnlocked,false);assert.equal(g.regions.endlessStartedAt,null,'world clear progress never starts survival waves');
-assert.equal(original.gateToTwo.state,'active');assert(original.gateToTwo.rewardClaimed);
-assert(!oldForest.enemies.includes(remoteBoss),'opening an already visited opposite end despawns its dormant boss without another kill');
+assert.equal(guardedOpposite.state,'active');assert(guardedOpposite.rewardClaimed);
+assert(!oldMarsh.enemies.includes(remoteBoss),'opening an already visited opposite end despawns its dormant boss without another kill');
 assert(remoteBoss.hp>0,'opposite boss removal never routes through damage');
+travel(1);verifyWorld();
 travel(0);assert.equal(g.terrain,original.terrain);assert.equal(g.settlements,original.settlements);assert.equal(g.relicSites,original.relicSites);
 assert.equal(merchant.state,'spent');assert.equal(hunt.state,'cleared');assert.equal(g.dungeon.states.get(castle.id),castleProgress);assert(g.discoveredMap.has(castle.id));
+assert(g.settlements.sites.includes(spawnAngel),'returning restores the same original spawn guardian');
 assert(!g.enemies.some(e=>[gate(1).id,gate(2).id].includes(e.portalId)&&e.hp>0));
 const rewardState={kills:g.kills,bossKills:g.bossKills,gold:g.gold,crystals:g.crystals,skills:JSON.stringify(g.superSkills.owned)};
 for(const target of [2,1,0,1,2,0]){
-  travel(target);verifyWorld();assert.equal(g.superSkills.pending,null);assert.equal(g.regions.unlockedConnections.size,3);assert.equal(g.regions.states.size,2);
+  travel(target);verifyWorld();assert.equal(g.superSkills.pending,null);assert.equal(g.regions.unlockedConnections.size,naturalConnectionCount+1);assert.equal(g.regions.states.size,2);
   assert.deepEqual({kills:g.kills,bossKills:g.bossKills,gold:g.gold,crystals:g.crystals,skills:JSON.stringify(g.superSkills.owned)},rewardState,'return journeys preserve progress and cannot farm rewards');
-  for(const portal of g.regions.portals)assert.equal(g.settlements.sites.filter(site=>site.anchorId===portal.id).length,portal.state==='active'?1:0,'each active gate has exactly one persistent angel');
+  for(const portal of g.regions.portals)assert.equal(g.settlements.sites.filter(site=>site.anchorId===portal.id).length,0,'travel gates do not create healing guardians');
+  assert(!g.settlements.sites.some(site=>site.anchorId?.startsWith('portal:')||site.id?.startsWith('angel:portal:')),'restoring cached worlds never revives legacy portal guardians');
 }
-console.log('Island worlds: original route retained in expanded graph, planned dry landmarks, paired gateways, single connection rewards, no remote boss duplication, retained castle/merchant/relic progress, bounded snapshots and finite world populations passed.');
+console.log('Island worlds: natural forest exits and guarded connections, planned dry landmarks, paired gateways, single connection rewards, no remote boss duplication, retained castle/merchant/relic/spawn-haven progress, no portal healing, bounded snapshots and finite world populations passed.');

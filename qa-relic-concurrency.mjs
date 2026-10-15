@@ -43,13 +43,21 @@ for(const camp of [...camps].reverse()){
 assert.equal(g.companions.camps.length,0);assert.equal(g.companions.members.length,2);assert.equal(g.rescuePower,2,'each distinct rescue improves the hero once');
 
 // Scene suspension retains every objective instance, defender and partial HP.
-const travel=quiet(new Game()),sites=['stormcaller','warden'].map(kind=>travel.relicSites.sites.find(s=>s.kind===kind));
+for(const region of ['forest','marsh']){
+const travel=quiet(new Game({debug:region!=='forest',debugWorld:region,debugOptions:{testFacilities:false}})),homeIndex=travel.regionIndex,sites=['stormcaller','warden'].map(kind=>travel.relicSites.sites.find(s=>s.kind===kind));
 const savedCamps=sites.map(site=>open(travel,site)),arena=travel.relicSites.sites.find(s=>s.type==='hunt'),activity=open(travel,arena);
 const savedArray=travel.companions.camps,activities=travel.encounters.activities,guard=travel.enemies.find(e=>e.rescueId===savedCamps[1].id);guard.rescueSpawnGrace=0;travel._hurtEnemy(guard,1);const hp=guard.hp;
-const castle=travel.settlements.sites.find(s=>s.type==='castle'),outdoorBoss=travel.enemies.find(e=>e.type==='boss');outdoorBoss.guardActive=true;feet(travel,castle.door);assert(travel.settlements.interact(castle.id),'a boss does not globally lock a castle entrance');
+const castle=travel.settlements.sites.find(s=>s.type==='castle'),outdoorBoss=travel.enemies.find(e=>e.type==='boss')||travel._spawnEnemy('boss',1);outdoorBoss.guardActive=true;feet(travel,castle.door);assert(travel.settlements.interact(castle.id),'a boss does not globally lock a castle entrance');
 assert.equal(travel.companions.camps.length,0);assert.equal(travel.encounters,null);travel.companions.update(.05);assert.equal(savedArray.length,2);assert.equal(savedCamps[0].remainingGuards,savedCamps[0].guardTotal);
 feet(travel,travel.dungeon.active.entrance);assert(travel.dungeon.exit());assert.equal(travel.companions.camps,savedArray);assert.equal(travel.encounters.activities,activities);assert.equal(travel.enemies.find(e=>e.id===guard.id).hp,hp);
-const portal=travel.regions.portals[0];feet(travel,portalDoor(portal));const guardian=travel.enemies.find(e=>e.id===portal.bossId);lethal(travel,guardian);travel.regions.flushReward();assert(travel.chooseSuper(travel.getSuperChoices()[0].id));assert(travel.enterPortal(portal.id));assert.equal(travel.companions.camps.length,0);
-const back=travel.regions.portals.find(p=>p.nextRegionIndex===0);feet(travel,portalDoor(back));assert(travel.enterPortal(back.id));assert.equal(travel.companions.camps,savedArray);assert.equal(travel.encounters.activities,activities);assert.equal(travel.encounters.activities[0],activity);assert.equal(travel.enemies.find(e=>e.id===guard.id).hp,hp);
+// The unrelated encounter boss has served its entrance-coexistence check.
+// Keep it dormant so it cannot globally block the later travel assertion.
+outdoorBoss.guardActive=false;
+const portal=travel.regions.portals[0];feet(travel,portalDoor(portal));const guardian=travel.enemies.find(e=>e.id===portal.bossId);
+if(portal.natural){assert.equal(portal.state,'active');assert.equal(guardian,undefined);assert.equal(travel.superSkills.pending,null,'natural forest exits grant no boss reward');}
+else{assert(guardian,'guarded worlds retain an actual portal boss');lethal(travel,guardian);assert(travel.regions.flushReward());assert(travel.chooseSuper(travel.getSuperChoices()[0].id));assert(portal.rewardClaimed);}
+assert(travel.enterPortal(portal.id));assert.equal(travel.companions.camps.length,0);
+const back=travel.regions.portals.find(p=>p.nextRegionIndex===homeIndex);feet(travel,portalDoor(back));assert(travel.enterPortal(back.id));assert.equal(travel.companions.camps,savedArray);assert.equal(travel.encounters.activities,activities);assert.equal(travel.encounters.activities[0],activity);assert.equal(travel.enemies.find(e=>e.id===guard.id).hp,hp);
 assert(savedCamps.every(camp=>travel.companions.camps.includes(camp)));assert(sites.every(site=>site.state==='active'));
+}
 console.log('Relic concurrency: independent arenas/camps, boss coexistence, wave progress, kill attribution, isolated failure, unique rewards and scene/region round trips passed.');

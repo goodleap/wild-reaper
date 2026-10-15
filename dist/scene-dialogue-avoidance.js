@@ -51,6 +51,11 @@ export function sceneDialogueAvoidance(game,{offsetX=0,offsetY=0,width,height,is
     if(e.isTownNpc){
       label(e,e.y-53,e.name);rect(e.x-25,e.y-43,50,58);return;
     }
+    if(e.storyActor){
+      const shape=ACTOR_VISUALS.player,scale=(e.r||shape.radius)/shape.radius;
+      label(e,e.y-shape.top*scale-9,e.name);
+      rect(e.x-shape.halfWidth*scale-3,e.y-shape.top*scale-4,shape.halfWidth*scale*2+6,shape.top*scale+12);return;
+    }
     if(e.isCompanion||e.isCaptive){
       const shape=COMPANION_VISUALS[e.kind||e.heroId]||ACTOR_VISUALS.player;
       const scale=COMPANION_VISUALS[e.kind||e.heroId]?(e.r||shape.radius)/shape.radius:1.1;
@@ -116,6 +121,7 @@ export function sceneDialogueAvoidance(game,{offsetX=0,offsetY=0,width,height,is
   for(const e of game.abilities?.visualBursts||[])if(e.hostile&&e.age<e.life&&visible(e))circle(e.x,e.y+(e.groundOffset||0),e.parameters?.radius||e.radius||e.r||12);
   for(const e of game.enemyBullets||[])if(active(e)&&visible(e))circle(e.x,e.y,e.r||6);
   for(const e of game.effects||[])if(active(e)&&landingEffects.has(e.type)&&visible(e))circle(e.x,e.y,e.r);
+  for(const marker of game.realms?.getMarkers?.()||[])if(marker.kind==='tribulationWarning')circle(marker.x,marker.y,marker.r);
   for(const e of game.environment?.props||[])if(e.state==='armed'&&visible(e))circle(e.x,e.y,e.blastRadius||82);
   for(const list of [game.environment?.mechanisms?.props,game.environment?.worldHazards?.props])for(const e of list||[])
     if(['warn','windup','active'].includes(e.state)&&visible(e)&&!e.patch)circle(e.x,e.y,e.r);

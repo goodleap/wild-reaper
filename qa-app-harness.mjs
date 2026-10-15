@@ -97,6 +97,9 @@ export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=
   const navigator={userAgent:'QA frame integration'};
   const sandbox={...modules,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},matchMedia:query=>({matches:query==='(pointer: coarse)'&&coarse}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value))},requestAnimationFrame:requestFrame,cancelAnimationFrame:id=>frames.delete(id),setTimeout:setTimer,clearTimeout:id=>timers.delete(id),console:consoleImpl};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
+  // The harness loads the app after configuration directly. Mirror the boot
+  // module's successful control release before simulating user interaction.
+  for(const id of ['start-button','archive-button','help-button','sound-button'])nodes[id].disabled=false;
   const run=script=>vm.runInContext(script,sandbox);
   run('const shippedRenderGame=renderGame;let gameDraws=0,introDraws=0;renderGame=()=>{gameDraws++;};renderIntro=()=>{introDraws++;};');
   const tick=(delta=1000/60)=>{for(const [id,callback] of frames)if(callback===sandbox.frame)frames.delete(id);const before=scheduled;run(`frame(${now+=delta})`);assert.equal(scheduled,before+1,'every callback schedules its successor without a frame-rate limiter');drainTimers();};

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { movementProfile } from './dist/height-rules.js';
+import { canTakeUpgrade } from './dist/combat-catalog.js';
+import { defenseDamageMultiplier, resolveCharacterStats, skillStats } from './dist/combat-stats.js';
 
 let seed=628231;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -12,27 +14,32 @@ function arena(terrain=new Terrain({obstacles:[]})){
 }
 function advance(g,seconds){for(let i=0;i<Math.round(seconds/.025);i++){g.update(.025);g.events.length=0;}}
 
-// The first offer has ranged offense, automatic protection and one alternate
-// attack. All acquisitions retain the same crystal transaction and timing.
-for(const weapon of ['arrow','barrier','orbit','pulse','lightning']){
+// Every first offer preserves a real improvement for the equipped starter.
+// Ranged, protection and alternate attacks remain eligible rather than fixed
+// slots. Resample only the fixture to exercise each real acquisition path.
+for(const weapon of ['sword','arrow','barrier','orbit','pulse','lightning','fireball','frostbolt']){
   const g=arena();g.addCrystals(40);g.update(0);
-  const alternatives=['orbit','pulse','lightning'],roll=Math.random;
-  try {Math.random=()=>Math.max(0,alternatives.indexOf(weapon))/3+.01;g.getUpgradeChoices();}
-  finally {Math.random=roll;}
-  const ids=g.getUpgradeChoices().map(c=>c.id);
-  assert.equal(ids.length,3);assert.equal(new Set(ids).size,3);assert(ids.includes('arrow'));assert(ids.includes('barrier'));
-  assert(alternatives.includes(ids[2]));assert(ids.includes(weapon));
+  let choices;
+  for(let attempt=0;attempt<256;attempt++){
+    g._choices=null;choices=g.getUpgradeChoices();
+    assert.equal(choices.length,3);assert.equal(new Set(choices.map(choice=>choice.id)).size,3);
+    assert(choices.every(choice=>canTakeUpgrade(g.build,choice.id)),'all first-card choices are legal for the current build');
+    assert(choices.some(choice=>choice.category==='weapon'&&choice.ownerId===g.initialWeaponId),'the first offer retains an improvement to its actual initial weapon');
+    if(choices.some(choice=>choice.id===weapon))break;
+  }
+  assert(choices.some(choice=>choice.id===weapon),`${weapon} remains an eligible first choice`);
   const first=g.getUpgradeChoices();assert.equal(g.getUpgradeChoices(),first,'opening the panel cannot reroll it');
   assert(g.chooseUpgrade(weapon));assert.equal(g.crystals,0);assert.equal(g.crystalsNext,110);assert.equal(g.skillLevel,2);
-  assert.equal(g.player.level,1);assert((['arrow','orbit'].includes(weapon)?g.weapons:g.skills).some(w=>w.id===weapon));
-  assert(g.build.setEquipped('sword',false),'isolate the acquired ability from innate sword damage');
+  assert.equal(g.player.level,1);assert((['sword','arrow','orbit'].includes(weapon)?g.weapons:g.skills).some(w=>w.id===weapon));
+  if(weapon!=='sword')assert(g.build.setEquipped('sword',false),'isolate the acquired ability from innate sword damage');
   if(weapon==='barrier'){
-    assert(g.barrier.ready);g.player.invuln=0;assert(g._hurtPlayer(8));assert.equal(g.player.hp,100);assert.equal(g.barrier.remaining,22);
+    const hp=g.player.hp,capacity=skillStats(g,'barrier').capacity,damage=8*defenseDamageMultiplier(resolveCharacterStats(g).defense);
+    assert(g.barrier.ready);g.player.invuln=0;assert(g._hurtPlayer(8));assert.equal(g.player.hp,hp);assert(Math.abs(g.barrier.remaining-(capacity-damage))<1e-8,'armor precedes the newly acquired barrier');
     continue;
   }
   if(weapon==='arrow')g._shot=0;
   const target=g._spawnEnemy('brute',1);Object.assign(target,{x:75,y:0,speed:0,hp:1000,maxHp:1000});
-  advance(g,.25);
+  advance(g,['fireball','frostbolt'].includes(weapon)?1:.25);
   if(weapon==='orbit')assert(g.orbitals.length>=2);
   else assert(target.hp<1000,'newly chosen spells start promptly rather than waiting a full cooldown');
 }

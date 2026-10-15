@@ -7,7 +7,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
 export function majorFightActive(g) {
-  return !!g.dungeon?.active||g.regionGrace>0||g.enemies.some(e=>e.hp>0&&e.type==='boss'&&!e.debugBoss&&e.guardActive!==false);
+  return !!g.story?.active||!!g.realms?.active||!!g.dungeon?.active||g.regionGrace>0||g.enemies.some(e=>e.hp>0&&e.type==='boss'&&!e.debugBoss&&e.guardActive!==false);
 }
 
 export function bossApproaching(g) {
