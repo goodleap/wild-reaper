@@ -31,13 +31,41 @@ for(const hero of ['traveler','princess','elder'])for(const angle of [0,Math.PI/
   close(10000-victim.hp,stats.damage,'animation leaves one real contact at the original timing');
   const pose=sample(g,animator),hands=directionalHeroHands(hero,pose);
   assert.equal(pose.view,walking.view,'walking direction owns the lower body');assert.equal(pose.flip,walking.flip);
-  assert.equal(pose.action,'melee');assert.deepEqual(hands.right,pose.hand,'painter uses the actual sword hand anchor');
+  const hand=hands[pose.view==='front'?'left':'right'];
+  assert.equal(pose.action,'melee');assert.deepEqual(hand,pose.hand,'the actor right arm uses the actual sword hand anchor');
   const blade=swordSlashPose(visual,g,{actor:{entity:p,scale:1.1,shape:{halfWidth:29,top:35,foot:18},immersion:{sink:0}},bodyY:pose.bodyY*1.1});
-  close(p.x+hands.right.x*pose.flip*1.1,blade.x+Math.cos(blade.angle)*blade.grip,'world sword grip x');
-  close(p.y+(hands.right.y+pose.bodyY)*1.1,blade.y+Math.sin(blade.angle)*blade.grip,'world sword grip y');
+  close(p.x+hand.x*pose.flip*1.1,blade.x+Math.cos(blade.angle)*blade.grip,'world sword grip x');
+  close(p.y+(hand.y+pose.bodyY)*1.1,blade.y+Math.sin(blade.angle)*blade.grip,'world sword grip y');
   const before={hp:p.hp,speed:p.speed,cooldown:g.attacks.sword.cooldown,targetHp:victim.hp,effects:g.effects.length};
   for(let i=0;i<6;i++)sample(g,animator);
   assert.deepEqual({hp:p.hp,speed:p.speed,cooldown:g.attacks.sword.cooldown,targetHp:victim.hp,effects:g.effects.length},before,'render sampling never changes combat');
+}
+
+// Facing the camera, the actor's right shoulder is on canvas left. Keep that
+// arm attached throughout the real swing, including the cross-body windup.
+for(const hero of ['traveler','princess','elder']){
+  const g=arena(hero),p=g.player,animator=new HeroAnimator();
+  enemy(g,0,60);p.facing=p.moveFacing=Math.PI/2;g.attacks.updateSword(0);
+  const visual=g.effects.find(effect=>effect.type==='swordSlash'),stats=weaponStats(g,'sword');
+  let previous=0;
+  for(const age of [0,stats.windup,stats.hitTime,stats.duration*.8]){
+    g._clock=age;g.attacks.updateSword(age-previous);previous=age;
+    const pose=sample(g,animator),hands=directionalHeroHands(hero,pose);
+    assert.equal(pose.view,'front');assert.equal(pose.action,'melee');
+    assert.deepEqual(hands.left,pose.hand,'front right arm owns the real sword grip');
+    assert(hands.right.x>0,'the free hand stays on its own side');
+    const blade=swordSlashPose(visual,g,{actor:{entity:p,scale:1.1,shape:{halfWidth:29,top:35,foot:18},immersion:{sink:0}},bodyY:pose.bodyY*1.1});
+    close(p.x+hands.left.x*1.1,blade.x+Math.cos(blade.angle)*blade.grip,'front swing grip x');
+    close(p.y+(hands.left.y+pose.bodyY)*1.1,blade.y+Math.sin(blade.angle)*blade.grip,'front swing grip y');
+  }
+  const frontPose={view:'front',flip:1,actionStrength:1,aimAngle:Math.PI/2};
+  const cast=directionalHeroHands(hero,{...frontPose,action:'cast'});
+  assert(cast.left.x<0&&cast.right.x>0&&cast.left.y<cast.right.y,'front casting raises the actor right hand');
+  const ranged=directionalHeroHands(hero,{...frontPose,action:'ranged'});
+  assert(ranged.left.x<0&&ranged.right.x>0,'front ranged pose keeps hands on their own sides');
+  const aimLeft=directionalHeroHands(hero,{...frontPose,action:'ranged',aimAngle:Math.PI*.65});
+  const aimRight=directionalHeroHands(hero,{...frontPose,action:'ranged',aimAngle:Math.PI*.35});
+  for(const hand of ['left','right'])assert(aimRight[hand].x>ranged[hand].x&&ranged[hand].x>aimLeft[hand].x,'changing hands must not reverse diagonal aiming');
 }
 
 // One volley produces one ranged action at its true central projectile angle.

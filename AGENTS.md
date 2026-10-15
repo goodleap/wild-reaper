@@ -18,8 +18,8 @@ Game version numbers count commits in this code repository only; design-only com
 ## Delivery requirements
 
 - Work only in the authorized cloud environment; never read/download project resources or run Git on the user's device.
-- Unless the user explicitly limits delivery, a completed change includes the next code-repository version, GitHub source synchronization, and successful deployments to both Sites and GitHub Pages. Check the exact corresponding commits, not just the latest green run.
-- Before editing, reconcile the latest Sites source with GitHub; preserve other sessions' work. Never force-push to resolve a release conflict.
-- Open the existing Site identified by `.openai/hosting.json` through the Sites skill. Read its private `.cloud/skills/publish-project/SKILL.md` for the release entry point. If using a GitHub-only checkout, restore the existing Site first; do not assume this private directory is missing permanently.
-- Keep `.cloud/` in the private Sites source only; exclude it from GitHub exports and deployment assets. Do not copy the private procedure or credentials here.
+- GitHub `goodleap/wild-reaper` is the sole canonical source. Before editing, verify cloud command execution and fetch the latest `main`; inspect the checkout and preserve other sessions' work. Reconcile remote updates before pushing, and never force-push to resolve a release conflict.
+- Unless the user explicitly limits delivery, a completed change includes the next code-repository version, GitHub source synchronization, and a successful deployment to the existing GitHub Pages website. Verify the Pages run for the exact delivered commit, then check the deployed version and release assets; the latest green run alone is insufficient.
+- The former Site is a historical version outside the routine development and release workflow. Do not access, restore, synchronize, redeploy, delete, or change its permissions unless explicitly requested. Do not create a replacement Site.
+- Keep private `.cloud/` tools, credentials, and other private materials out of this repository and deployment assets. Follow the GitHub workflow documented in `README.md`.
 - Use scoped checks. A failed or unverified target means partial delivery; report the remaining work explicitly. Retry the existing release instead of creating another version for the same change.

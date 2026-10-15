@@ -19,8 +19,8 @@ if(!/^[1-9]\d*$/.test(count)||!Number.isSafeInteger(Number(count)))throw new Err
 // before hashing modules for this release. No runtime file is hand-maintained.
 execFileSync(process.execPath,[fileURLToPath(new URL('./build-content-config.mjs',import.meta.url))],{cwd:root,stdio:'pipe'});
 
-// GitHub main is canonical. Sites has a separate Git history, so its publisher
-// supplies the verified GitHub count including the pending release commit.
+// GitHub main is canonical. Releases count their full code-repository history;
+// an explicit count also supports release previews and isolated asset tests.
 const version=`v0.0.${Number(count)}`;
 const path=new URL('../dist/index.html',import.meta.url);
 const html=readFileSync(path,'utf8');

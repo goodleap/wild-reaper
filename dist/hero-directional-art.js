@@ -10,6 +10,9 @@ export const DIRECTIONAL_HERO_IDS=new Set([...HEROES].map(kind=>`${kind}-v2`));
 const BOX={head:[44,46,22,39],torso:[38,29,19,14],mantle:[44,34,22,14]};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const value=(n,fallback=0)=>Number.isFinite(n)?n:fallback;
+// Hand names describe canvas sides. Facing the camera, the actor's own right
+// arm is on canvas left; other views retain their existing action ownership.
+const frontAttack=pose=>pose.view==='front'&&['melee','ranged','cast'].includes(pose.action);
 // Prince paths preserve his original flat palette. The princess and elder
 // reuse their original materials through their dedicated directional drawers.
 const PALETTES={
@@ -65,22 +68,23 @@ function face(c,kind,view,state){
 // Any weapon can use them without introducing equipment into an appearance.
 export function directionalHeroHands(kind,pose={}){
   const side=pose.view==='side',swing=value(pose.armSwing),strength=clamp(value(pose.actionStrength),0,1),action=pose.action||'idle';
+  const front=frontAttack(pose),main=front?'left':'right',off=front?'right':'left',sign=front?-1:1;
   const hands=kind==='traveler'?{left:{x:-17,y:3-swing*.65},right:{x:17,y:3+swing*.65}}:kind==='princess'?{left:{x:side?-1.5-swing*.5:-14.5,y:7.5-swing*.65},right:{x:side?12+swing*.5:14.5,y:7.5+swing*.65}}:kind==='elder'?{left:{x:side?-1.5-swing*.5:-14.5,y:7.7-swing*.65},right:{x:side?12+swing*.5:14.5,y:7.7+swing*.65}}:side?{left:{x:2-swing*.8,y:7},right:{x:8+swing,y:8}}:{left:{x:-13+swing*.2,y:7-swing*.65},right:{x:13+swing*.2,y:7+swing*.65}};
   if(action==='melee'){
     const progress=clamp(value(pose.actionProgress),0,1),sweep=Math.sin(progress*Math.PI);
-    hands.right.x+=(side?9:7)*strength*sweep;hands.right.y-=7*strength+(1-sweep)*3*strength;
-    hands.left.x-=2*strength;hands.left.y-=2*strength;
+    hands[main].x+=sign*(side?9:7)*strength*sweep;hands[main].y-=7*strength+(1-sweep)*3*strength;
+    hands[off].x-=sign*2*strength;hands[off].y-=2*strength;
   }else if(action==='ranged'){
     const a=value(pose.aimAngle),flip=pose.flip===-1?-1:1,dx=Math.cos(a)*flip,dy=Math.sin(a)*.65;
-    hands.right={x:(side?5:7)+dx*11*strength,y:6+(dy*12-9)*strength};
-    hands.left={x:(side?-1:-8)+dx*8*strength,y:6+(dy*8-8)*strength};
+    hands[main]={x:sign*(side?5:7)+dx*11*strength,y:6+(dy*12-9)*strength};
+    hands[off]={x:sign*(side?-1:-8)+dx*8*strength,y:6+(dy*8-8)*strength};
   }else if(action==='cast'){
-    hands.right={x:(side?15:17),y:6-16*strength};hands.left={x:side?4:-13,y:6-10*strength};
+    hands[main]={x:sign*(side?15:17),y:6-16*strength};hands[off]={x:sign*(side?4:-13),y:6-10*strength};
   }else if(action==='hurt'){
     hands.right.x-=4*strength;hands.right.y-=5*strength;hands.left.x+=4*strength;hands.left.y-=2*strength;
   }
   if(kind==='elder'){hands.left.y+=.8;hands.right.y+=.8;}
-  if(action==='melee'&&Number.isFinite(pose.hand?.x)&&Number.isFinite(pose.hand?.y))hands.right={...pose.hand};
+  if(action==='melee'&&Number.isFinite(pose.hand?.x)&&Number.isFinite(pose.hand?.y))hands[main]={...pose.hand};
   return hands;
 }
 
@@ -119,28 +123,30 @@ export class DirectionalHeroArt {
 
   _elder(c,view,pose,flip,ratio){
     const body=value(pose.bodyY),hands=directionalHeroHands('elder',pose);
+    const front=frontAttack(pose),rear=front?1:-1;
     c.save();c.translate(0,body);this._part(c,'elder',view,'mantle',flip,ratio);c.restore();
     const feet=[{side:-1,...pose.leftFoot},{side:1,...pose.rightFoot}].sort((a,b)=>value(a.y)-value(b.y));
     for(const foot of feet)drawElderFoot(c,view,pose,foot);
     c.save();c.translate(0,body);
-    drawElderArm(c,view,pose,-1,hands.left,flip);
+    drawElderArm(c,view,pose,rear,hands[front?'right':'left'],flip);
     this._part(c,'elder',view,'torso',flip,ratio);
-    drawElderArm(c,view,pose,1,hands.right,flip);
+    drawElderArm(c,view,pose,-rear,hands[front?'left':'right'],flip);
     c.save();c.rotate(view==='side'?value(pose.lean)-.035:value(pose.shoulder));
     this._part(c,'elder',view,'head',flip,ratio);drawElderFace(c,view,pose.faceState||'normal');c.restore();
     c.restore();
   }
   _princess(c,view,pose,flip,ratio){
     const body=value(pose.bodyY),hands=directionalHeroHands('princess',pose);
+    const front=frontAttack(pose),rear=front?1:-1;
     if(view!=='back'){
       c.save();c.translate(0,body);this._part(c,'princess',view,'mantle',flip,ratio);c.restore();
     }
     const feet=[{side:-1,...pose.leftFoot},{side:1,...pose.rightFoot}].sort((a,b)=>value(a.y)-value(b.y));
     for(const foot of feet)drawPrincessFoot(c,view,pose,foot);
     c.save();c.translate(0,body);
-    drawPrincessArm(c,view,pose,-1,hands.left,flip);
+    drawPrincessArm(c,view,pose,rear,hands[front?'right':'left'],flip);
     this._part(c,'princess',view,'torso',flip,ratio);
-    drawPrincessArm(c,view,pose,1,hands.right,flip);
+    drawPrincessArm(c,view,pose,-rear,hands[front?'left':'right'],flip);
     if(view==='back')this._part(c,'princess',view,'mantle',flip,ratio);
     c.save();c.rotate(view==='side'?value(pose.lean):value(pose.shoulder));
     this._part(c,'princess',view,'head',flip,ratio);drawPrincessFace(c,view,pose.faceState||'normal');c.restore();
@@ -162,7 +168,8 @@ export class DirectionalHeroArt {
     }
     c.save();c.translate(0,body);
     const hands=directionalHeroHands('traveler',pose),active=value(pose.actionStrength)>.01||pose.action==='melee';
-    if(view==='back'||view==='front'||active)this._princeHand(c,pose,-1,hands.left,active);
+    const front=frontAttack(pose),rear=front?1:-1;
+    if(view==='back'||view==='front'||active)this._princeHand(c,pose,rear,hands[front?'right':'left'],active);
     this._part(c,'traveler',view,'torso',flip,ratio);
     if(view==='back'){
       this._princeHand(c,pose,1,hands.right,active);cape();
@@ -178,7 +185,7 @@ export class DirectionalHeroArt {
         const settled=1-clamp(value(pose.stride)/6.6,0,1);
         c.beginPath();c.moveTo(-8,1);c.quadraticCurveTo(-18+settled*2,4+settled*3,-24+settled*4,1+settled*8+cloth);c.lineTo(-21+settled*4,8+settled*5);c.quadraticCurveTo(-13,9+settled*3,-8,5);paint(c,p.sleeve);
       }
-      this._princeHand(c,pose,1,hands.right,active);
+      this._princeHand(c,pose,-rear,hands[front?'left':'right'],active);
     }
     c.restore();
   }
