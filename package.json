@@ -16,6 +16,7 @@
     "test:unit-counts": "node qa-unit-counts.mjs && node qa-unit-counts-ui.mjs",
     "test:clarity": "node qa-telegraph-clarity.mjs",
     "test:attack-depth": "node qa-attack-depth.mjs && node qa-ability-depth.mjs && node qa-attack-trail-depth.mjs && node qa-legacy-attack-depth.mjs",
-    "test:exploration": "node qa-monster-territories.mjs && node qa-expeditions.mjs && node qa-exploration-integration.mjs && node qa-scene-dialogue.mjs && node qa-scene-dialogue-visibility.mjs && node qa-scene-dialogue-avoidance.mjs && node qa-adventure-prepare.mjs"
+    "test:exploration": "node qa-monster-territories.mjs && node qa-expeditions.mjs && node qa-exploration-integration.mjs && node qa-scene-dialogue.mjs && node qa-scene-dialogue-visibility.mjs && node qa-scene-dialogue-avoidance.mjs && node qa-adventure-prepare.mjs",
+    "test:viewport": "node qa-camera-viewport.mjs && node qa-debug-viewport.mjs"
   }
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { harness } from './qa-app-harness.mjs';
 
 for(const search of ['', '?debug']){
-  const {nodes,listeners,document,window,run,tick,resize,pauseColumn,clockReads,flush}=harness(search);
+  const {nodes,listeners,document,window,run,tick,resize,pauseColumn,clockReads,flush}=harness(search,{coarse:true});
   const debugDetails=pauseColumn.children.filter(node=>node.id==='debug-performance');
   assert.equal(debugDetails.length,search?1:0,'performance detail is attached once in debug and absent on normal URLs');
   assert.equal(run('diagnostics===null'),!search,'ordinary URLs allocate no diagnostic capture');
@@ -10,7 +10,8 @@ for(const search of ['', '?debug']){
   nodes['start-button'].onclick();nodes['prepare-start-button'].onclick();await flush();
   run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
   assert.equal(nodes['game-canvas'].width,786,'phone rendering retains native 2x detail within the pixel budget');
-  assert.equal(run('game.viewWidth'),393);
+  assert.equal(run('game.viewWidth'),540,'phone camera uses the standard horizontal world span');
+  assert(Math.abs(run('game.viewHeight')-717*540/393)<1e-8,'portrait world height follows the CSS aspect ratio');
   tick();
   const liveBefore=run('gameDraws'),timeBefore=run('game.runTime');
   for(let i=0;i<120;i++)tick(1000/120);
