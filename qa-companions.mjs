@@ -45,7 +45,7 @@ assert.deepEqual(HEROES.map(h=>h.id),['traveler','princess','elder']);
 assert.deepEqual(COMPANIONS.map(h=>h.id).sort(),['dog','golem','owl','stormcaller','warden']);
 const original=new Game({hero:'stormcaller',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false});
 assert.equal(original.hero.id,'traveler');assert.equal(original.player.heroId,'traveler');
-assert.equal(original.player.hp,110);assert.equal(original.player.speed,220);assert.equal(original.player.skillCooldownMax,15);
+assert.equal(original.player.hp,110);assert.equal(original.player.speed,320);assert.equal(original.player.skillCooldownMax,15);
 assert.equal(original.levels.sword,1);assert.equal(original.levels.arrow,0);
 assert(Object.entries(original.levels).every(([id,level])=>level===(id==='sword'?1:0)));assert.equal(original.rescuePower,0);
 assert.equal(original.companions.active,null);assert.equal(original.companions.camp,null);

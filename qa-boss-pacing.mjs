@@ -61,25 +61,26 @@ if(process.argv[2]==='--sample'){
 }else{
   const sample=mode=>JSON.parse(execFileSync(process.execPath,[fileURLToPath(import.meta.url),'--sample',mode],{encoding:'utf8'}));
   const before=sample('prior'),after=sample('current');
+  const {getConfigSection}=await import('./dist/content-config.js');
+  const enemies=getConfigSection('enemies'),baseSpeed=enemies.definitions.boss.baseSpeed;
   for(const kind of Object.keys(prior)){
     assert(after[kind].interval<before[kind].interval*.92,`${kind} has materially less idle time across its whole attack sequence`);
     assert(after[kind].count>before[kind].count,`${kind} actually attacks more often`);
     assert(after[kind].first<=before[kind].first,`${kind} does not wait longer before engaging`);
-    assert(after[kind].speed/before[kind].speed>=1.4&&after[kind].speed/before[kind].speed<=1.45,`${kind} receives the shared movement increase once`);
+    assert.equal(after[kind].speed,baseSpeed,`${kind} receives the shared movement speed once`);
+    assert(after[kind].speed>before[kind].speed,`${kind} keeps the increased movement pace`);
   }
   const {Game}=await import('./dist/engine.js');
   const {Terrain,groundOffset}=await import('./dist/terrain.js');
   const {StageRun}=await import('./dist/stage-run.js');
   const {STAGES}=await import('./dist/stage-definitions.js');
   const {initBoss}=await import('./dist/bosses.js');
-  const {getConfigSection}=await import('./dist/content-config.js');
-  const enemies=getConfigSection('enemies');
   let seed=60931;Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
   const arena=difficulty=>new Game({difficulty,terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false});
   for(const difficulty of ['normal','casual']){
     const g=arena(difficulty);
     const ordinary=g._spawnEnemy('boss',1);
-    const expected=70*(g.easy?getConfigSection('difficulty').enemyGrowth.easySpeedMultiplier:1);
+    const expected=baseSpeed*(g.easy?getConfigSection('difficulty').enemyGrowth.easySpeedMultiplier:1);
     assert(Math.abs(ordinary.speed-expected)<1e-8,'ordinary spawns use the stronger base speed');
     const portal={id:`pacing-${difficulty}`,x:1200,y:0};g.regions._spawnGuardian(portal);
     assert.equal(g.enemies.find(e=>e.id===portal.bossId).speed,ordinary.speed,'world guardians do not revert or double the movement increase');
@@ -91,18 +92,18 @@ if(process.argv[2]==='--sample'){
         g._moveEntity=()=>({blocked:false});g._initializeRegionalBoss=(e,kind)=>initBoss(e,kind);
         const boss=run.spawnBoss();
         assert.equal(boss.bossKind,map.boss.kind);
-        assert(Math.abs(boss.speed/(49*map.boss.speed*(g.easy?.9:1))-70/49)<1e-8,'every stage keeps its authored multiplier and gains speed exactly once');
+        assert(Math.abs(boss.speed-baseSpeed*map.boss.speed*(g.easy?.9:1))<1e-8,'every stage keeps its authored multiplier and gains speed exactly once');
         assert.equal(boss.maxHp,g.easy?map.boss.easyHp:map.boss.hp,'normal stage health remains authored independently of debug health');
       }
     }
     const castle=arena(difficulty),site={id:`pacing-castle-${difficulty}`,door:{x:castle.player.x,y:castle.player.y+groundOffset(castle.player,true)}};
     assert(castle.dungeon.enter(site));
     const boss=castle.enemies.find(e=>e.dungeonBoss);
-    assert.equal(boss.speed,g.easy?62:70,'castle interiors update their separate speed override');
+    assert.equal(boss.speed,baseSpeed*(g.easy?62/70:1),'castle interiors retain their difficulty ratio on the shared speed base');
   }
   assert.equal(enemies.definitions.boss.baseHp,2300,'ordinary Boss health is unchanged');
   assert.equal(enemies.definitions.boss.damage,22,'ordinary Boss contact damage is unchanged');
-  const protectedTiming={ancient:{windup:1},bloom:{fanWindup:1,burstWindup:1.1,bulletSpeed:150},broodmother:{windup:1,leapDuration:.5},deepcaller:{windup:1.1,strikeInterval:.4,waveGap:110,waveDuration:2.8},frostcrown:{windup:1,chargeSpeed:290,chargeDuration:1.05,shatterDelay:1},furnace:{windup:1.1,marchDuration:2.2,eruptionDelay:1.1,flameDuration:1.8}};
+  const protectedTiming={ancient:{windup:1},bloom:{fanWindup:1,burstWindup:1.1,bulletSpeed:150},broodmother:{windup:1,leapDuration:.5},deepcaller:{windup:1.1,strikeInterval:.4,waveGap:110,waveDuration:2.8},frostcrown:{windup:1,chargeLength:220,shatterDelay:1},furnace:{windup:1.1,marchLength:220,eruptionDelay:1.1,flameDuration:1.8}};
   for(const [kind,values]of Object.entries(protectedTiming))for(const [key,value]of Object.entries(values))assert.equal(enemies.bosses[kind].parameters[key],value,`${kind} preserves ${key}`);
   console.log('Boss pacing: six real attack sequences, full warnings, stronger ordinary/world/stage/interior movement, preserved health and damage passed.');
   console.log(JSON.stringify(Object.fromEntries(Object.keys(prior).map(kind=>[kind,{previousInterval:+before[kind].interval.toFixed(2),currentInterval:+after[kind].interval.toFixed(2),attacksIn120Seconds:after[kind].count}]))));

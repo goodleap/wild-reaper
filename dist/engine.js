@@ -653,7 +653,7 @@ export class Game {
   }
   _refreshStats() {
     const resolved=resolveCharacterStats(this);
-    Object.assign(this.stats,resolved,{damage:resolved.damageMultiplier,moveSpeed:resolved.moveSpeed/220});
+    Object.assign(this.stats,resolved,{damage:resolved.damageMultiplier,moveSpeed:resolved.moveSpeed/HERO_DEFAULTS.baseMoveSpeed});
     this.player.speed=resolved.moveSpeed;this.player.attack=resolved.attack;this.player.defense=resolved.defense;
     this.player.skillCooldownMax=resolved.stormCooldown;
     this.player.skillCooldown=Math.min(this.player.skillCooldown,resolved.stormCooldown);

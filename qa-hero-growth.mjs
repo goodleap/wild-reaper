@@ -108,14 +108,17 @@ let stats=resolveCharacterStats(mixed);
 assert.equal(stats.maxHp,Math.round((100+40+50+36)*.9+20));
 near(stats.attack,32*(1+.5+.24+.16+.2)*.8+7,'flat attack stays after shared growth');
 near(stats.defense,(20+40+30+7)*1.5+8,'flat defense stays after shared growth');
-near(stats.moveSpeed,220*1.16*1.2+11,'flat movement is not amplified by upgrade ranks');
+near(stats.moveSpeed,320*1.16*1.2+11,'flat movement is not amplified by upgrade ranks');
 near(stats.magnet,105*1.7*1.25+13,'flat pickup is not amplified by upgrade ranks');
 near(weaponStats(mixed,'sword').damage,64*stats.attack/32,'real weapon uses the final role attack once');
 near(skillStats(mixed,'storm').damage,160*stats.attack/32,'real skill uses the final role attack once');
 mixed.adventure={damageMultiplier:()=>1.35};
 mixed.relics={damageMultiplier:()=>1.2,movementMultiplier:()=>1.08};mixed.debug=true;
 stats=resolveCharacterStats(mixed);
-near(stats.moveSpeed,(220*1.16*1.2+11)*1.08*3,'external speed applies after intrinsic role stat');
+near(stats.moveSpeed,(320*1.16*1.2+11)*1.08,'debug flag alone does not enable a disabled movement option');
+mixed.debugOptions={...mixed.debugOptions,fastMovement:true};
+stats=resolveCharacterStats(mixed);
+near(stats.moveSpeed,(320*1.16*1.2+11)*1.08*3,'external speed applies after intrinsic role stat');
 near(weaponStats(mixed,'sword').damage,64*stats.attack/32*1.35*1.2,'external damage applies after intrinsic role stat');
 
 // Legacy debug/tests set an effective HP cap directly. Its inverse setter must

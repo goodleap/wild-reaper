@@ -49,8 +49,9 @@ function debugSpawnPoint(game,{radius:r,minDistance,maxDistance,angle:preferredA
   const doors=(game.settlements?.sites||[]).filter(site=>!['angel','merchant'].includes(site.type)).map(site=>site.door).filter(Boolean);
   let point=null;
   for(let radius=minDistance;radius<=maxDistance&&!point;radius+=30) {
-    for(let i=0;i<32;i++) {
-      const angle=preferredAngle+i*Math.PI/16,candidate={x:from.x+Math.cos(angle)*radius,y:from.y+Math.sin(angle)*radius};
+    // Natural forest edges can leave safe gaps between the former 32 rays.
+    for(let i=0;i<64;i++) {
+      const angle=preferredAngle+i*Math.PI/32,candidate={x:from.x+Math.cos(angle)*radius,y:from.y+Math.sin(angle)*radius};
       if(!game.terrain.isFree(candidate.x,candidate.y,r+12)||game.terrain.island?.isDry(candidate.x,candidate.y,r+12)===false)continue;
       if(game.terrain.firstBlocker(from.x,from.y,candidate.x,candidate.y,r+5))continue;
       if(game.settlements?._hazardFree(candidate.x,candidate.y,r+14)===false)continue;

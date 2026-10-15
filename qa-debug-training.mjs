@@ -34,7 +34,7 @@ assert.deepEqual(Object.keys(defaults),DEBUG_OPTION_DEFS.map(def=>def.id));
 assert.deepEqual(normalizeDebugOptions({unknown:true,enemyWave:true,fullLoadout:'true'}),defaults,'only known booleans are accepted');
 assert.deepEqual(normalizeDebugOptions(Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,true])),false),disabledOptions);
 const normalWithOptions=factory({debugOptions:Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,true]))});
-assert.deepEqual(normalWithOptions.debugOptions,disabledOptions);assert.equal(normalWithOptions.gold,0);assert.equal(normalWithOptions.player.speed,220);
+assert.deepEqual(normalWithOptions.debugOptions,disabledOptions);assert.equal(normalWithOptions.gold,0);assert.equal(normalWithOptions.player.speed,320);
 assert.equal(normalWithOptions.player.skillCooldownMax,normalWithOptions.hero.skillCooldown);
 assert(!normalWithOptions.enemies.some(enemy=>enemy.trainingDummy||enemy.debugBoss||enemy.debugWave));
 assert.equal(normalWithOptions.build.getWeapon('arrow').acquired,false);
@@ -42,12 +42,12 @@ const inputOptions={...disabledOptions},plainDebug=factory({debug:true,debugOpti
 inputOptions.fastMovement=true;
 assert.equal(plainDebug.debugOptions.fastMovement,false,'run settings are a snapshot of prepared preferences');
 assert(Object.isFrozen(plainDebug.debugOptions));
-assert.equal(plainDebug.player.speed,220);assert.equal(plainDebug.player.skillCooldownMax,plainDebug.hero.skillCooldown);assert.equal(plainDebug.gold,0);
+assert.equal(plainDebug.player.speed,320);assert.equal(plainDebug.player.skillCooldownMax,plainDebug.hero.skillCooldown);assert.equal(plainDebug.gold,0);
 assert(!plainDebug.enemies.some(enemy=>enemy.trainingDummy||enemy.debugBoss||enemy.debugWave));
 for(const def of DEBUG_OPTION_DEFS) {
   const g=factory({debug:true,debugOptions:{...disabledOptions,[def.id]:true}});
   assert.equal(g.gold,def.id==='extraGold'?500:0,`${def.id}: gold is independent`);
-  assert.equal(g.player.speed,def.id==='fastMovement'?660:220,`${def.id}: movement is independent`);
+  assert.equal(g.player.speed,def.id==='fastMovement'?960:320,`${def.id}: movement is independent`);
   assert.equal(g.player.skillCooldownMax===0,def.id==='zeroStormCooldown',`${def.id}: zero cooldown is independent`);
   if(!['zeroStormCooldown','fullLoadout'].includes(def.id))assert.equal(g.player.skillCooldownMax,g.hero.skillCooldown);
   assert.equal(g.enemies.some(enemy=>enemy.trainingDummy),def.id==='testFacilities',`${def.id}: dummy is independent`);

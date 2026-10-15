@@ -201,4 +201,8 @@ assert(safeSpawns>0);
 const sealed=arena({allMonsters:true});sealed.terrain.isFree=()=>false;
 assert.deepEqual(updateDebugMonsterStream(sealed,.5),[],'a sealed map has no unsafe spawn fallback');
 assert.equal(sealed.enemies.length,0);
+const sealedBosses=arena();sealedBosses.terrain.isFree=()=>false;
+sealedBosses.debugOptions=Object.freeze(options({allBosses:true}));
+assert.deepEqual(spawnDebugBosses(sealedBosses),[],'denser boss placement still rejects sealed terrain');
+assert.equal(sealedBosses.enemies.length,0,'debug bosses never fall back to overlapping the player');
 console.log(`Debug rosters: 6 unique Boss combat kinds once at 100000 HP in ${WORLD_IDS.length} worlds, castle-kind coverage and unchanged objective owners; initial 64 with 16 per rapid batch, at least 128 in a real second, four spread offscreen sides, pause/interior isolation, 320-live cap recovery and ${safeSpawns} safe world spawns passed.`);

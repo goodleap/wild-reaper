@@ -29,7 +29,7 @@ function offer(g,id) {
 function shootOnce(g) {g.levels.arrow=1;g._shot=0;g.update(0);g._shot=Infinity;}
 
 assert.deepEqual(HEROES.map(h=>h.id),['traveler','princess','elder']);
-const expectedHeroes={traveler:{hp:110,speed:220,defense:8},princess:{hp:100,speed:246.4,defense:0},elder:{hp:85,speed:202.4,defense:0}};
+const expectedHeroes={traveler:{hp:110,speed:320,defense:8},princess:{hp:100,speed:358.4,defense:0},elder:{hp:85,speed:294.4,defense:0}};
 for(const hero of ['traveler','princess','elder','ranger','warden','stormcaller','unknown']) {
   const id=Object.hasOwn(expectedHeroes,hero)?hero:'traveler',expected=expectedHeroes[id];
   const g=arena({hero,fresh:true});

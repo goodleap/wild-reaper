@@ -42,7 +42,7 @@
       "r": 15,
       "maxHp": 130,
       "defense": 8,
-      "speed": 250,
+      "speed": 365,
       "groundOffset": 19.8
     },
     {
@@ -59,7 +59,7 @@
       "r": 15,
       "maxHp": 180,
       "defense": 18,
-      "speed": 250,
+      "speed": 365,
       "groundOffset": 19.8
     },
     {
@@ -76,7 +76,7 @@
       "r": 12,
       "maxHp": 100,
       "defense": 4,
-      "speed": 290,
+      "speed": 420,
       "groundOffset": 11
     },
     {
@@ -93,7 +93,7 @@
       "r": 10,
       "maxHp": 90,
       "defense": 3,
-      "speed": 270,
+      "speed": 395,
       "groundOffset": 13,
       "flying": true
     },
@@ -111,7 +111,7 @@
       "r": 21,
       "maxHp": 260,
       "defense": 26,
-      "speed": 215,
+      "speed": 315,
       "groundOffset": 22
     }
   ],

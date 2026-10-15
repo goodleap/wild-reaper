@@ -47,6 +47,8 @@ npm run check
 
 修改战斗距离时运行 `npm run test:distances`，覆盖主角索敌与实际射程、怪物四方向触发边界、Boss 分技能接近及预警。领域与对话范围另由 `npm run test:exploration` 覆盖。
 
+移速以游戏单位/秒计。`config/heroes.json` 的 `defaults.baseMoveSpeed` 是角色共享基准，新增角色通过 `statModifiers.moveSpeed` 设置相对倍率或固定修正；不要在角色代码中另写基准值。敌人及伙伴的基础速度分别在 `config/enemies.json`、`config/companions.json`，城堡首领复用敌人基础速度。修改后运行 `npm run test:movement`，验证实际位移、成长与减速、伙伴跟随以及首领与冲刺的行程。
+
 修改伙伴行为时运行 `npm run test:party`，检查重复招募与独立管理、真实囚牢出口寻路、群体战斗与远程撤退。直线预警与命中边界由 `npm run test:clarity` 覆盖。
 
 首页先加载并校验整包配置，再初始化游戏模块；加载失败使用同版本内置整包，每次页面会话固定一份只读配置。后续接入接口时，在初始化运行模块前为 `loadContentConfig` 指定数据源，保持返回结构与 `schemaVersion` 兼容；不要在对局中混换版本。当前仅加载站点静态文件，不涉及账号、后端服务或云存档。

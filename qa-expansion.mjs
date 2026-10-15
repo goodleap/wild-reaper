@@ -222,7 +222,7 @@ function warning(kind='fan',options={}) {
 }
 
 const fan=warning(),fanAim=structuredClone(fan.boss.bloomAttack);
-fan.g.player.y=100;advance(fan.g,.2);
+fan.g.player.y=50;advance(fan.g,.2);
 assert.equal(fan.boss.bloomAttack.angle,fanAim.angle,'the fan locks its angle when the warning begins');
 assert.equal(fan.boss.bloomAttack.x,fanAim.x);assert.equal(fan.boss.bloomAttack.y,fanAim.y);
 const fanFrozen=structuredClone(fan.boss.bloomAttack);fan.g.status='upgrade';advance(fan.g,1);
@@ -256,7 +256,7 @@ const afterBurst=burst.g.player.hp;advance(burst.g,.5);
 assert.equal(burst.g.player.hp,afterBurst,'the burst resolves only once during its visual effect');
 
 const dodgedBurst=warning('burst'),lockedCircles=structuredClone(dodgedBurst.boss.bloomAttack.circles);
-dodgedBurst.g.player.x=110;advance(dodgedBurst.g,.1);
+dodgedBurst.g.player.x=-50;dodgedBurst.g.player.y=90;advance(dodgedBurst.g,.1);
 assert.deepEqual(dodgedBurst.boss.bloomAttack.circles,lockedCircles,'the circles stay at their original positions after the player moves');
 advance(dodgedBurst.g,1.2);
 assert.equal(dodgedBurst.g.player.hp,dodgedBurst.g.player.maxHp,'leaving the marked circles avoids the burst');

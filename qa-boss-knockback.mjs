@@ -92,7 +92,7 @@ function actualBossMotion(g,e,label){
   close(e.x,before+standard,`${label} moves through the real Game update`);
   close(e.hp,hp-10,`${label} damage is independent of displacement`);
 }
-const regional=new Game();actualBossMotion(regional,regional.enemies.find(e=>e.portalId),'regional guardian');
+const regional=new Game({debug:true,debugWorld:'beach'});actualBossMotion(regional,regional.enemies.find(e=>e.portalId),'regional guardian');
 const stage=new Game({stageId:'forest-trial'});actualBossMotion(stage,stage.enemies.find(e=>e.stageBossRole==='optional'),'outer-island boss');
 const portal=stage.regions.portals[0],door=portalDoor(portal);place(stage,door.x,door.y);
 assert(stage.requestInteraction(portal.id));for(let frame=0;frame<32&&stage.sceneTransition.active;frame++)stage.update(.025);

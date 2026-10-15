@@ -16,7 +16,7 @@ assert.equal(snapshot(),start,'opening all tabs does not mutate game state or aw
 assert.equal(value(panel('attributes'),'attack'),'32');
 assert.equal(value(panel('attributes'),'defense'),'8');
 assert.equal(value(panel('attributes'),'damageReduction'),'7.41%');
-assert.equal(value(panel('attributes'),'moveSpeed'),'220');
+assert.equal(value(panel('attributes'),'moveSpeed'),'320');
 assert.equal(value(panel('attributes'),'damageBonus'),'+0%');
 assert.equal(value(panel('attributes'),'magnet'),'105');
 assert.match(panel('weapons'),/id="character-equip-sword"[^>]* disabled/,'last equipped weapon cannot be removed');
@@ -39,7 +39,7 @@ assert.equal(value(attr,'attack'),'58.88','attack includes role level, power and
 assert.equal(value(attr,'defense'),'18','role level contributes natural defense growth');
 assert.equal(value(attr,'damageReduction'),'15.25%');
 assert.equal(value(attr,'damageBonus'),'+68.75%','fury and low-health relic multiply');
-assert.equal(value(attr,'moveSpeed'),'175.82','current movement includes feather and terrain');
+assert.equal(value(attr,'moveSpeed'),'255.74','current movement includes feather and terrain');
 assert.equal(value(attr,'magnet'),'320','timed pickup buff overrides base pickup range');
 assert.equal(value(item(panel('weapons'),'arrow'),'damage'),'129.17','local arrow power and role/buff scale once');
 assert.equal(value(item(panel('weapons'),'orbit'),'damage'),'130.41','arrow-only power does not leak to orbit');

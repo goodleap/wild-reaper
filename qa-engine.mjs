@@ -92,7 +92,9 @@ death.update(.02,{});assert.equal(death.status,'dead');
 const waves=new Game({adventure:false});waves.time=19.99;waves.update(.02,{});
 assert.equal(waves.pressurePhase,'warning');assert.equal(waves.wave,1);assert.equal(waves.events.filter(e=>e.type==='wave').length,1);
 waves.events.length=0;waves.update(.02,{});assert(!waves.events.some(e=>e.type==='wave'));
-const boss=new Game({adventure:false});boss.crystalsNext=Infinity;assert.equal(boss.nextBossAt,120);
+// Timed Boss rewards need the isolated arena's locked route. The authored
+// forest now has naturally open exits, which do not award gate-unlock skills.
+const boss=new Game({adventure:false,terrain:new Terrain({obstacles:[]})});boss.crystalsNext=Infinity;assert.equal(boss.nextBossAt,120);
 boss.time=119.99;boss.player.invuln=1000;boss.update(.02,{});
 const firstBoss=boss.enemies.find(e=>e.type==='boss');
 assert(firstBoss&&boss.bossCount===1);assert(boss.nextBossAt>270);
@@ -102,7 +104,12 @@ assert.equal(boss.bossCount,1,'overdue boss waits for current boss');
 boss._hurtEnemy(firstBoss,firstBoss.hp+1);
 assert.equal(boss.bossKills,1);assert(boss.events.some(e=>e.type==='bossKill'));
 boss.update(.02,{});assert.equal(boss.bossCount,1,'a pending region reward holds the next Boss');
-boss.player.x=boss.portal.x;boss.player.y=portalDoor(boss.portal).y-groundOffset(boss.player,true);assert(boss.chooseSuper(boss.getSuperChoices()[0].id));assert(boss.enterPortal());
+assert.equal(boss.status,'super','a real timed Boss defeat opens its pending skill reward');
+const bossReward=boss.getSuperChoices()[0],rewardRegion=boss.regionIndex,nextRegion=boss.portal.nextRegionIndex;
+assert(bossReward,'the defeated Boss supplies a real reward choice');assert(boss.chooseSuper(bossReward.id));
+assert.equal(boss.portal.rewardClaimed,true);assert.equal(boss.regionIndex,rewardRegion,'claiming the reward alone does not change worlds');
+boss.player.x=boss.portal.x;boss.player.y=portalDoor(boss.portal).y-groundOffset(boss.player,true);assert(boss.enterPortal());
+assert.equal(boss.regionIndex,nextRegion,'the unlocked route changes to its actual neighboring world');
 for(let i=0;i<101;i++)boss.update(.02,{});
 assert.equal(boss.bossCount,2);assert.equal(boss.enemies.filter(e=>e.type==='boss').length,1);
 const secondBoss=boss.enemies.find(e=>e.type==='boss');

@@ -2,6 +2,7 @@ import { getConfigSection } from '../content-config.js';
 import { castleRoomTypes, cappedEncounterType } from '../encounter-definitions.js';
 import { Terrain, groundOffset } from '../terrain.js';
 import { initBoss } from '../bosses.js';
+import { enemyDefinition } from '../enemy-definitions.js';
 import { DUNGEON_RULES, castleProfileFor } from '../interior-profiles.js';
 import { featureForSite } from '../world-sites.js';
 import { seedFor, randomFor } from './interior-seed.js';
@@ -82,7 +83,7 @@ export function populateCastle(dungeon,state){
     state.rooms.set(state.bossRoom.id,{cellId:state.bossRoom.id,kind:'boss',total:1,started:false,cleared:false,rewarded:false,heal:false});
     const boss=g._spawnEnemy('boss',1);boss.dungeonId=state.id;boss.dungeonRoom=state.bossRoom.id;boss.dungeonBoss=true;boss.name=feature?.bossName||combatRules.boss.name;
     boss.bossIndex=feature?.bossIndex||(state.seed%2?2:1);initBoss(boss);
-    boss.hp=boss.maxHp=(g.easy?combatRules.boss.hp.easy:combatRules.boss.hp.normal)*difficulty*(feature?.bossHp||1);boss.damage=(g.easy?combatRules.boss.damage.easy:combatRules.boss.damage.normal)*(1+state.createdAt/combatRules.boss.damageGrowthPeriod);boss.speed=g.easy?combatRules.boss.speed.easy:combatRules.boss.speed.normal;boss.xp=combatRules.boss.xp+Math.floor(state.createdAt/combatRules.boss.xpGrowthPeriod);
+    boss.hp=boss.maxHp=(g.easy?combatRules.boss.hp.easy:combatRules.boss.hp.normal)*difficulty*(feature?.bossHp||1);boss.damage=(g.easy?combatRules.boss.damage.easy:combatRules.boss.damage.normal)*(1+state.createdAt/combatRules.boss.damageGrowthPeriod);boss.speed=enemyDefinition('boss').baseSpeed*(g.easy?combatRules.boss.speedMultiplier.easy:combatRules.boss.speedMultiplier.normal);boss.xp=combatRules.boss.xp+Math.floor(state.createdAt/combatRules.boss.xpGrowthPeriod);
     boss.dungeonHome={x:state.bossRoom.x,y:state.bossRoom.y+20};boss.x=boss.dungeonHome.x;boss.y=boss.dungeonHome.y-groundOffset(boss);boss.guardActive=false;boss._navTimer=0;g._moveEntity(boss,0,0);
     state.bossId=boss.id;state.enemies=g.enemies;
   }

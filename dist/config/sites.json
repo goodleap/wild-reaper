@@ -275,13 +275,13 @@
         "easy": 18,
         "normal": 25
       },
-      "speed": {
-        "easy": 62,
-        "normal": 70
-      },
       "damageGrowthPeriod": 600,
       "xp": 180,
-      "xpGrowthPeriod": 10
+      "xpGrowthPeriod": 10,
+      "speedMultiplier": {
+        "easy": 0.8857142857142857,
+        "normal": 1.0
+      }
     }
   },
   "dialogue": {

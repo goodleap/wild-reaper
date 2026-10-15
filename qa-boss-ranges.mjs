@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { initBoss, updateBoss, resolveBossPhase } from './dist/bosses.js';
 import { bossDefinition } from './dist/boss-definitions.js';
+import { enemyDefinition } from './dist/enemy-definitions.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Game } from './dist/engine.js';
 import { AbilityRuntime } from './dist/ability-runtime.js';
 
 const foot=e=>({x:e.x,y:e.y+groundOffset(e,!!e.heroId)});
 function fixture(kind){
-  const e={id:1,type:'boss',x:0,y:0,r:49,hp:5000,maxHp:5000,damage:30,speed:77,phase:0,guardActive:true};
+  const e={id:1,type:'boss',x:0,y:0,r:49,hp:5000,maxHp:5000,damage:30,speed:enemyDefinition('boss').baseSpeed*1.1,phase:0,guardActive:true};
   initBoss(e,kind);e.y=-groundOffset(e);
   const player={id:0,heroId:'traveler',x:0,y:0,r:14,hp:10000};
   const calls=[],game={status:'playing',player,enemies:[e],enemyBullets:[],_id:1,visible:true,moves:0,pursue:false,free:true,

@@ -17,7 +17,7 @@ const choose=(h,group,id)=>{
   h.fire(node(h,`${group}-${id}`),'change');
 };
 const near=(value,expected,message)=>assert(Math.abs(value-expected)<1e-9,`${message}: ${value} != ${expected}`);
-const expected={traveler:{hp:110,attack:32,speed:220,defense:8,magnet:105},princess:{hp:100,attack:32,speed:246.4,defense:0,magnet:126},elder:{hp:85,attack:28.16,speed:202.4,defense:0,magnet:105}};
+const expected={traveler:{hp:110,attack:32,speed:320,defense:8,magnet:105},princess:{hp:100,attack:32,speed:358.4,defense:0,magnet:126},elder:{hp:85,attack:28.16,speed:294.4,defense:0,magnet:105}};
 const value=(html,id)=>html.match(new RegExp(`data-stat="${id}"><dt>[^<]*</dt><dd>([^<]*)</dd>`))?.[1];
 const place=(game,point)=>{game.player.x=point.x;game.player.y=point.y-groundOffset(game.player,true);};
 
