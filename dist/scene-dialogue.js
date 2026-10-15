@@ -2,6 +2,7 @@ import { getConfigSection } from './content-config.js';
 import { companionDefinition } from './companion-catalog.js';
 import { groundOffset } from './terrain.js';
 import { mapIdentity } from './map-context.js';
+import { PlayerDialogue } from './player-dialogue.js';
 
 // Presentation state is kept outside the simulation. In particular, choosing a
 // line never consumes combat randomness or writes flags onto world objects.
@@ -9,15 +10,16 @@ const content=getConfigSection('sites').dialogue,lines=content.lines;
 export const DIALOGUE_RULES=content.rules;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const live=entity=>entity.hp==null||entity.hp>0;
-const heroName=game=>game.hero?.dialogueName||({traveler:'王子',princess:'公主',elder:'老登'}[game.hero?.appearanceId||game.hero?.id]||'王子');
+const heroName=game=>game.hero?.dialogueName||({traveler:'王子',princess:'公主',elder:'老登'}[game.hero?.heroId||String(game.hero?.id||game.hero?.appearanceId||'traveler').replace(/-v\d+$/,'')]||'王子');
 const offset=entity=>groundOffset(entity,!!(entity.heroId||entity.isCompanion||entity.isCaptive||entity.isTownNpc));
 const point=entity=>({x:entity.x,y:entity.y+offset(entity)});
-const identity=(kind,source)=>`${kind}:${source.id}`;
+const identity=(kind,source)=>kind==='player'?'player:hero':`${kind}:${source.id}`;
 const sceneIdentity=game=>`${mapIdentity(game)}:${game.dungeon?.active?.id||game.sceneKind||'world'}`;
 const enemyGroup=enemy=>enemy.territoryId||enemy.rescueId||enemy.settlementId||enemy.guardianId||(enemy.expeditionId!=null&&enemy.expeditionSegment!=null?`expedition:${enemy.expeditionId}:${enemy.expeditionSegment}`:null);
 
 function observationRange(s){
   const source=s.source;
+  if(s.kind==='player'||s.kind==='story')return Infinity;
   if(s.kind==='enemy')return source.guardActive===false?0:source.type==='boss'?Infinity:DIALOGUE_RULES.combatRange;
   if(s.kind==='site')return source.type==='merchant'?DIALOGUE_RULES.merchantFar:Math.max(DIALOGUE_RULES.angelNear,source.healing?source.guardRadius||0:0);
   if(s.kind==='companion')return source.rescuedFace>0?Infinity:DIALOGUE_RULES.supportRange;
@@ -34,6 +36,12 @@ function captiveEntity(source){
 
 export function dialogueSpeakers(game){
   const result=[];
+  if(game.player&&Number.isFinite(game.player.x)&&Number.isFinite(game.player.y))result.push(speaker('player',game.player));
+  const actors=game.story?.actors;
+  for(const actor of Array.isArray(actors)?actors:Object.values(actors||{}))if(actor&&live(actor)&&!actor.hidden&&actor.active!==false&&Number.isFinite(actor.x)&&Number.isFinite(actor.y)){
+    const entity=actor.kind==='angel'||actor.type==='angel'?{...actor,y:actor.y-19.8,isTownNpc:true,heroId:'traveler'}:actor;
+    result.push(speaker('story',actor,entity));
+  }
   for(const enemy of game.enemies||[])if(live(enemy)&&!enemy.trainingDummy)result.push(speaker('enemy',enemy));
   for(const member of game.companions?.members||[])if(member.state==='active'&&live(member))result.push(speaker('companion',member));
   if(game.dungeon?.active)return result;
@@ -48,8 +56,51 @@ export function dialogueSpeakers(game){
 
 export class SceneDialogue {
   constructor(){this.reset();}
-  reset(){this._game=null;this._scene=null;this._terrain=null;this._clock=0;this._memory=new Map();this._groups=new Map();this._active=[];this._queue=[];this._speakers=new Map();this._visible=new Set();this._presented=new Set();this._playing=false;this._combat=false;this._serial=0;}
+  reset(){this._game=null;this._scene=null;this._terrain=null;this._clock=0;this._memory=new Map();this._groups=new Map();this._active=[];this._queue=[];this._speakers=new Map();this._visible=new Set();this._presented=new Set();this._playing=false;this._combat=false;this._serial=0;this._external=[];this._externalIds=new Set();this._playerDialogue=new PlayerDialogue();}
   _record(id){if(!this._memory.has(id))this._memory.set(id,{once:new Set(),near:new Map(),rotations:new Map(),nextSupport:0});return this._memory.get(id);}
+  // The plot owns stable IDs. Acknowledgements mean actually drawn/fully read,
+  // never merely queued. Critical lines survive occlusion and queue timeouts.
+  enqueue(entry){
+    if(!entry||entry.id==null||typeof entry.text!=='string'||!entry.text.trim()||entry.text.length>34||/[\r\n<>]/.test(entry.text))return false;
+    const id=String(entry.id);if(this._externalIds.has(id))return false;
+    this._externalIds.add(id);this._external.push({...entry,id});return true;
+  }
+  _externalSpeaker(value){
+    if(!value||value==='player'||value==='hero'||value==='prince')return this._speakers.get('player:hero');
+    return this._speakers.get(String(value))||[...this._speakers.values()].find(s=>s.source.id===value||s.kind==='story'&&(s.source.heroId===value||s.source.kind===value));
+  }
+  _readExternal(){
+    const story=this._game.story;
+    const order=new Map((story?.dialogue||[]).map((entry,index)=>[String(entry.id),index]));
+    // The plot's array is its authoritative outstanding queue. An explicit
+    // removal cancels that ID; a reorder can bring a new instruction forward.
+    // This is different from timeout: retained background lines never expire.
+    const retain=item=>{
+      if(item.owner!==story||!story)return true;
+      if(order.has(item.externalId??item.id)){item.storyOrder=order.get(item.externalId??item.id);return true;}
+      if(item.hasPresented&&item.shownFor<DIALOGUE_RULES.minDuration&&this._visible.has(item.speaker?.id)&&this._clock-(item.lastPresentedAt??-Infinity)<=.2){item.storyOrder=-1;return true;}
+      item.onCancelled?.(item.externalId??item.id);return false;
+    };
+    this._active=this._active.filter(retain);this._queue=this._queue.filter(retain);this._external=this._external.filter(retain);
+    for(const [index,entry]of (story?.dialogue||[]).entries())this.enqueue({...entry,owner:story,storyOrder:index});
+    this._external.sort((a,b)=>a.owner===story&&b.owner===story?a.storyOrder-b.storyOrder:0);
+    for(const entry of [...this._external]){
+      const s=this._externalSpeaker(entry.speaker);if(!s)break;
+      const duration=Math.max(DIALOGUE_RULES.minDuration,Math.min(8,Number(entry.duration)||DIALOGUE_RULES.duration));
+      this._queue.push({id:++this._serial,externalId:entry.id,owner:entry.owner,storyOrder:entry.storyOrder,onCancelled:entry.onCancelled,speaker:s,text:entry.text.replaceAll('{hero}',heroName(this._game)),priority:120,key:`story:${entry.id}`,channel:'story',persistent:true,queuedAt:this._clock,clock:this._clock,remaining:duration,shownFor:0,hasPresented:false,
+        onPresented:()=>{entry.onPresented?.(entry.id);story?.onDialoguePresented?.(entry.id);},onFinished:()=>{entry.onFinished?.(entry.id);story?.onDialogueFinished?.(entry.id);}});
+      this._external.splice(this._external.indexOf(entry),1);
+    }
+  }
+  _sayPlayer(entry){
+    const s=this._speakers.get('player:hero');if(!s||!this._visible.has(s.id))return false;
+    const pending=[...this._active,...this._queue].filter(item=>item.speaker.id===s.id);
+    if(pending.some(item=>item.text===entry.text||item.key===entry.key)||entry.channel==='player'&&pending.some(item=>item.channel==='hint'))return false;
+    // Combat reactions are current observations, not an eventual backlog.
+    if(entry.channel==='player'&&pending.length)return false;
+    if(entry.channel==='hint')this._queue=this._queue.filter(item=>item.speaker.id!==s.id||item.channel==='story'||item.hasPresented&&item.shownFor<DIALOGUE_RULES.minDuration);
+    this._queue.push({id:++this._serial,speaker:s,...entry,queuedAt:this._clock,clock:this._clock,remaining:DIALOGUE_RULES.duration,shownFor:0,hasPresented:false});return true;
+  }
   _say(s,key,priority,record,onPresented=null){
     if(!this._visible.has(s.id))return false;
     const variants=lines[key];if(!variants)return false;
@@ -79,7 +130,7 @@ export class SceneDialogue {
   }
   observe(game,dt,{isVisible=()=>false}={}){
     const scene=sceneIdentity(game);
-    if(this._game!==game||this._scene!==scene||this._terrain!==game.terrain){this.reset();this._game=game;this._scene=scene;this._terrain=game.terrain;}
+    if(this._game!==game||this._scene!==scene||this._terrain!==game.terrain){const initial=this._game==null?this._external:[];this.reset();for(const entry of initial)this.enqueue(entry);this._game=game;this._scene=scene;this._terrain=game.terrain;}
     this._playing=game.status==='playing';if(!this._playing){this._presented.clear();return;}
     const elapsed=Math.max(0,Number.isFinite(dt)?dt:0);this._clock+=elapsed;
     const speakers=dialogueSpeakers(game),hero=point(game.player),visible=new Set(),pending=new Set([...this._active,...this._queue].map(item=>item.speaker.id));
@@ -98,23 +149,28 @@ export class SceneDialogue {
     // presented by the overlay counts toward its readable duration.
     const present=item=>{
       const current=this._speakers.get(item.speaker.id);
-      return current&&(current.kind!=='enemy'||current.source.guardActive!==false);
+      return item.channel==='story'||current&&(current.kind!=='enemy'||current.source.guardActive!==false);
     };
     for(const item of [...this._active,...this._queue])if(this._presented.has(item.id)){const shown=Math.min(item.remaining,elapsed);item.remaining-=shown;item.shownFor+=shown;item.lastPresentedAt=this._clock;}
     this._presented.clear();
+    for(const item of [...this._active,...this._queue])if(item.remaining<=0){item.onFinished?.();item.onFinished=null;}
     this._active=this._active.filter(item=>item.remaining>0&&present(item));
-    this._queue=this._queue.filter(item=>item.remaining>0&&present(item)&&(item.hasPresented&&item.shownFor<DIALOGUE_RULES.minDuration||this._clock-(item.lastPresentedAt??item.queuedAt)<DIALOGUE_RULES.queueDuration));
+    this._queue=this._queue.filter(item=>item.remaining>0&&present(item)&&(item.persistent||item.hasPresented&&item.shownFor<DIALOGUE_RULES.minDuration||this._clock-(item.lastPresentedAt??item.queuedAt)<DIALOGUE_RULES.queueDuration));
     // A hidden speaker gives its slot back immediately, retaining the same
     // line for a later visible frame. No text is rendered through an occluder.
     for(const item of [...this._active])if(!visible.has(item.speaker.id)){this._active.splice(this._active.indexOf(item),1);this._queue.push(item);}
     for(const item of [...this._active,...this._queue]){
-      item.speaker=this._speakers.get(item.speaker.id);item.clock=this._clock;
+      item.speaker=this._speakers.get(item.speaker.id)||item.speaker;item.clock=this._clock;
       if(!visible.has(item.speaker.id))item.wasHidden=true;
       else if(item.wasHidden){item.resumeAt=this._clock+.12;item.wasHidden=false;}
     }
+    this._readExternal();
+    const exclusive=!!game.story?.dialogueExclusive||this._external.length>0||[...this._active,...this._queue].some(item=>item.channel==='story');
+    this._playerDialogue.observe(game,elapsed,{exclusive,say:entry=>this._sayPlayer(entry)});
     const groupCandidates=new Map();
     for(const s of speakers){
       const e=s.source,record=this._record(s.id),d=s.distance,seen=visible.has(s.id);
+      if(s.kind==='player'||s.kind==='story'||exclusive)continue;
       if(s.kind==='site'){
         if(e.type==='angel'){
           this._near(s,'near','angel',d,Math.min(DIALOGUE_RULES.angelNear,e.guardRadius||DIALOGUE_RULES.angelNear),DIALOGUE_RULES.angelExit,35,record);
@@ -163,14 +219,19 @@ export class SceneDialogue {
     // A camera pan alone cannot re-arm a group: it must actually cease chasing.
     const activeGroups=new Set(speakers.filter(s=>s.kind==='enemy'&&s.source.guardActive!==false&&(!s.source.territoryState||['alert','chasing'].includes(s.source.territoryState))).map(s=>enemyGroup(s.source)));
     for(const [id,state]of this._groups)if(!activeGroups.has(id))state.active=false;
-    const limit=this._combat?DIALOGUE_RULES.combatVisible:DIALOGUE_RULES.maxVisible;
+    const limit=exclusive?1:this._combat?DIALOGUE_RULES.combatVisible:DIALOGUE_RULES.maxVisible;
     const protectedLine=item=>item.hasPresented&&item.shownFor<DIALOGUE_RULES.minDuration;
+    if(exclusive){this._active=this._active.filter(item=>item.channel==='story'||protectedLine(item));this._queue=this._queue.filter(item=>item.channel==='story'||protectedLine(item));}
     this._active.sort((a,b)=>Number(protectedLine(b))-Number(protectedLine(a))||b.priority-a.priority||a.id-b.id);
     while(this._active.length>limit)this._queue.push(this._active.pop());
     const pendingPriority=new Map();for(const item of this._queue)pendingPriority.set(item.speaker.id,Math.max(item.priority,pendingPriority.get(item.speaker.id)||0));
     const queuePriority=item=>protectedLine(item)?pendingPriority.get(item.speaker.id):item.priority;
-    this._queue.sort((a,b)=>queuePriority(b)-queuePriority(a)||Number(protectedLine(b))-Number(protectedLine(a))||a.id-b.id);
+    const storyOrder=(a,b)=>(a.storyOrder??Infinity)-(b.storyOrder??Infinity)||a.id-b.id;
+    this._queue.sort((a,b)=>queuePriority(b)-queuePriority(a)||Number(protectedLine(b))-Number(protectedLine(a))||(a.channel==='story'&&b.channel==='story'?storyOrder(a,b):a.id-b.id));
+    const firstStory=[...this._active,...this._queue].filter(item=>item.channel==='story').sort((a,b)=>Number(protectedLine(b))-Number(protectedLine(a))||storyOrder(a,b))[0];
+    for(const item of [...this._active])if(item.channel==='story'&&item!==firstStory&&!protectedLine(item)){this._active.splice(this._active.indexOf(item),1);this._queue.push(item);}
     for(const item of [...this._queue]){
+      if(item.channel==='story'&&item!==firstStory)continue;
       if(!visible.has(item.speaker.id))continue;
       const same=this._active.find(active=>active.speaker.id===item.speaker.id);
       if(same)continue;

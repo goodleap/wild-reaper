@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { CombatBuild } from './dist/combat-build.js';
-import { canTakeUpgrade } from './dist/combat-catalog.js';
+import { canTakeUpgrade, ALL_SKILL_DEFS, SKILL_DEFS } from './dist/combat-catalog.js';
 import { weaponStats, skillStats } from './dist/combat-stats.js';
 import { Game } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
@@ -11,6 +11,10 @@ function arena() {
 }
 function reward(g,id) {
   g.regions.rewardPortal={rewardClaimed:false};assert(g.superSkills.offer('region','forest'));g.status='super';
+  assert(g.getSuperChoices().every(choice=>!['domain','vortex'].includes(choice.skillId||choice.id)),'the actual player reward menu excludes Boss-only skills');
+  const before=g.build.serialize();
+  for(const forbidden of ['domain:binding','domain:erosion','vortex'])assert.equal(g.chooseSuper(forbidden),false);
+  assert.deepEqual(g.build.serialize(),before,'a forged Boss-only reward cannot mutate player ownership');
   assert(g.getSuperChoices().some(c=>c.id===id),`${id} must appear as a real reward`);
   assert(g.chooseSuper(id));assert.equal(g.status,'playing');
 }
@@ -23,17 +27,23 @@ for(const id of ['rapid','multishot','arrowPower','arrowRetention','arrowReach',
 assert(start.build.increment('arrow'));assert(start.build.isEquipped('arrow'));assert(canTakeUpgrade(start.build,'rapid'));assert(canTakeUpgrade(start.build,'arrowPower'));
 assert.equal(start.build.increment('arrow'),false,'the ranged weapon is acquired once');
 
-// Inspecting a branch reward must not mutate the current build. Accepting it
-// through the actual Boss menu occupies one domain slot with an exclusive path.
-const domain=arena(),untouched=domain.build.serialize();
-const preview=domain.build.previewUpgrade({id:'domain:binding',domainBranch:'binding'});
-assert(preview);assert.deepEqual(domain.build.serialize(),untouched);assert.equal(preview.getSkill('domain').branch,'binding');assert.equal(preview.getSkill('domain').baseRank,1);
-reward(domain,'domain:binding');
-assert.deepEqual(domain.skills.filter(s=>s.id==='domain').map(s=>[s.baseRank,s.branch]),[[1,'binding']]);
-const bound=domain.build.serialize();assert.equal(domain.build.awardDomain('erosion'),false);assert.deepEqual(domain.build.serialize(),bound);
-assert.equal(domain.build.previewUpgrade({id:'domain:erosion',domainBranch:'erosion'}),null);
-reward(domain,'domain');reward(domain,'domain');
-assert.equal(domain.build.getSkill('domain').baseRank,3);assert.equal(domain.build.awardDomain('binding'),false);assert.equal(domain.build.increment('super:domain'),false);
+// Current legal supers retain pure previews and actual Boss reward ownership.
+// Retired player domains stay available only to their authored Boss actors.
+const royal=arena(),untouched=royal.build.serialize(),preview=royal.build.previewUpgrade('swords');
+assert(preview);assert.deepEqual(royal.build.serialize(),untouched);assert.equal(preview.getSkill('swords').baseRank,1);
+assert.equal(royal.build.increment('super:swords'),false,'ordinary upgrades cannot acquire an unearned super skill');
+reward(royal,'swords');assert.equal(royal.build.getSkill('swords').baseRank,1);
+const earned=royal.build.serialize();
+for(const id of ['domain','vortex']) {
+  assert.equal(SKILL_DEFS[id],undefined);assert.deepEqual(ALL_SKILL_DEFS[id].allowedActors,['boss']);
+  assert.equal(royal.build.getSkill(id),null);assert.equal(canTakeUpgrade(royal.build,`super:${id}`),false);
+  assert.equal(royal.build.previewUpgrade(id),null);assert.equal(royal.build.increment(`super:${id}`),false);
+  assert.equal(royal.superSkills._cast(id,1),false,'Boss-exclusive ability cannot be cast by a player runtime');
+}
+assert.equal(royal.build.awardDomain('binding'),false);assert.equal(royal.build.previewUpgrade({id:'domain:erosion',domainBranch:'erosion'}),null);
+assert.deepEqual(royal.build.serialize(),earned,'rejected Boss-only grants cannot mutate the earned player build');
+reward(royal,'swords');reward(royal,'swords');assert.equal(royal.build.getSkill('swords').baseRank,3);
+assert.equal(royal.build.increment('super:swords'),false);assert.equal(royal.build.previewUpgrade('swords'),null,'the legal super cap is enforced in previews too');
 
 // A weapon reward can acquire its required weapon; it cannot override a prior
 // exclusive ricochet choice. Ordinary upgrades only strengthen an earned rune.
@@ -63,20 +73,20 @@ for(const [id,branch] of [['pulse','echoes'],['lightning','chain']]) {
   assert(refined.cooldown<first.cooldown);assert(refined.damage>first.damage);if(id==='lightning')assert.equal(refined.targetLimit,first.targetLimit+1);
 }
 
-// The new snapshot round-trips its build, while migration maps legacy skill
-// ownership to one domain and a weapon rune without mutating caller data.
-assert.equal(runic.build.serialize().version,2);
+// The current snapshot round-trips its build. Legacy field ownership migrates
+// to a legal player replacement plus weapon rune without mutating caller data.
+assert.equal(runic.build.serialize().version,3);
 assert.deepEqual(CombatBuild.fromSnapshot(structuredClone(runic.build.serialize())).serialize(),runic.build.serialize());
-assert.deepEqual(CombatBuild.fromSnapshot(structuredClone(domain.build.serialize())).serialize(),domain.build.serialize());
+assert.deepEqual(CombatBuild.fromSnapshot(structuredClone(royal.build.serialize())).serialize(),royal.build.serialize());
 const legacy=new CombatBuild().serialize();legacy.version=1;delete legacy.weapons.sword;delete legacy.skills.barrier;delete legacy.skills.domain;
 legacy.weapons.arrow={baseRank:1,modifiers:{rapid:0,multishot:0,arrowPower:0,arrowRetention:0,arrowReach:0},branch:null,evolved:false,equipped:true};
 for(const [id,rank] of [['thorns',1],['miasma',2],['runes',2]])legacy.skills[id]={baseRank:rank,modifiers:{},branch:null,evolved:false,equipped:true};
 const originalLegacy=structuredClone(legacy),migrated=CombatBuild.fromSnapshot(legacy);
-assert.deepEqual(legacy,originalLegacy);assert.equal(migrated.getSkill('domain').baseRank,2);assert.equal(migrated.getSkill('domain').branch,'erosion');
+assert.deepEqual(legacy,originalLegacy);assert.equal(migrated.getSkill('domain'),null);assert.equal(migrated.getSkill('vortex'),null);assert.equal(migrated.getSkill('frostbolt').baseRank,4,'legacy rank-two field converts to a rank-four legal replacement');
 assert.equal(migrated.getWeapon('arrow').branch,'pierce');assert.equal(migrated.getRank('arrowRune'),2);assert.equal(migrated.getSkill('runes'),null);
 assert.deepEqual(CombatBuild.fromSnapshot(migrated.serialize()).serialize(),migrated.serialize());
 const oldRicochet=structuredClone(legacy);oldRicochet.weapons.arrow.branch='ricochet';oldRicochet.weapons.arrow.modifiers.rapid=3;
 const migratedRicochet=CombatBuild.fromSnapshot(oldRicochet);assert.equal(migratedRicochet.getWeapon('arrow').branch,'ricochet');assert.equal(migratedRicochet.getRank('arrowRune'),0);assert.equal(migratedRicochet.getRank('arrowPower'),2);
 const impossible=structuredClone(runic.build.serialize());impossible.weapons.arrow.branch='ricochet';impossible.weapons.arrow.modifiers.rapid=3;
 assert.throws(()=>CombatBuild.fromSnapshot(impossible),/Unavailable combat build modifier: arrowRune/,'a rune cannot be smuggled onto a ricochet snapshot');
-console.log('v55 build: default sword, acquisition prerequisites, pure previews, exclusive domain and sword branches, weapon rune rewards/refinement, cadence growth and validated v1/v2 migration passed.');
+console.log('Build compatibility: default sword, acquisition prerequisites, pure legal-super previews, Boss-only ability isolation, exclusive sword branches, weapon rune rewards/refinement, cadence growth and validated legacy migration passed.');

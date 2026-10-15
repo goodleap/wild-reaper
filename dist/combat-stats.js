@@ -42,12 +42,18 @@ export function resolveCharacterStats(game) {
   const attack=applyHeroStat(hero,'attack',COMBAT_REFERENCE_ATTACK*(1+effectTotal(game,'power','damageBonus')+effectTotal(game,'endlessPower','damageBonus')+(game.rescuePower||0)*CONFIG.rescueDamageBonus+(p.level-1)*CONFIG.attackPerLevel));
   const attackMultiplier=attack/COMBAT_REFERENCE_ATTACK;
   const externalDamageMultiplier=(game.adventure?.damageMultiplier()??1)*(game.relics?.damageMultiplier()??1);
-  const moveGrowth=1+effectTotal(game,'speed','moveSpeedBonus'),externalMoveMultiplier=(game.relics?.movementMultiplier()??1)*(game.debugOptions?.fastMovement?3:1);
+  const temporary=game.story?.temporary;
+  const moveGrowth=1+effectTotal(game,'speed','moveSpeedBonus'),externalMoveMultiplier=(game.relics?.movementMultiplier()??1)*(game.debugOptions?.fastMovement?3:1)*(1+(temporary?.active?temporary.moveSpeedBonus:0));
   const moveMultiplier=moveGrowth*externalMoveMultiplier;
+  const defense=Math.max(0,applyHeroStat(hero,'defense',(game.build?.attributes?.defense??0)+Math.max(0,p.level-1)*CHARACTER_DEFENSE_PER_LEVEL+effectTotal(game,'toughness','defense')+effectTotal(game,'endlessToughness','defense')));
+  const ordinaryReduction=defenseReduction(defense),storyReduction=(temporary?.active?temporary.damageReductionBonus:0)+(game.story?.guardReduction||0);
+  // Story protection adds percentage points to the existing character damage
+  // reduction. A 99% ceiling retains nonzero risk and is shown in the panel.
+  const damageReduction=storyReduction>0?Math.min(temporary?.damageReductionCap??.99,ordinaryReduction+storyReduction):ordinaryReduction;
   return {
     attack,attackMultiplier,
     externalDamageMultiplier,damageMultiplier:attackMultiplier*externalDamageMultiplier,
-    defense:Math.max(0,applyHeroStat(hero,'defense',(game.build?.attributes?.defense??0)+Math.max(0,p.level-1)*CHARACTER_DEFENSE_PER_LEVEL+effectTotal(game,'toughness','defense')+effectTotal(game,'endlessToughness','defense'))),
+    defense,damageReduction,baseDamageReduction:ordinaryReduction,
     // Critical attributes remain neutral until a real source grants them.
     criticalChance:0,criticalMultiplier:1,
     maxHp:p.maxHp,currentHp:p.hp,

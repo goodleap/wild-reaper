@@ -134,9 +134,10 @@ assert.equal(platform.state,'cleared');assert.equal(platform.mechanism.state,'sp
 assert(runes.relicSites.sites.includes(platform),'the spent rune pedestal stays in the world');
 feet(runes,platform.door);assert.equal(runes.relicSites.interact(platform.id),false);assert.equal(runes.environment.mechanisms.activateRune(platform.mechanism),false);
 
-// Exercise the actual guarded portal flow, not a mock snapshot serializer.
-for(const type of ['hunt','rescue']) {
-  const traveler=new Game();traveler.player.xpNext=Infinity;traveler.crystalsNext=Infinity;
+// Exercise both natural forest travel and a real guarded world, rather than a
+// mock snapshot serializer or adding a synthetic boss to a natural exit.
+for(const type of ['hunt','rescue'])for(const region of ['forest','marsh']) {
+  const traveler=new Game({debug:region!=='forest',debugWorld:region,debugOptions:{testFacilities:false}}),homeIndex=traveler.regionIndex;traveler.player.xpNext=Infinity;traveler.crystalsNext=Infinity;
   const structure=begin(traveler,type),battle=type==='hunt'?traveler.encounters.active:traveler.companions.camp;
   if(type==='hunt')finishHuntWaves(traveler);
   finishWarnings(traveler);
@@ -144,12 +145,13 @@ for(const type of ['hunt','rescue']) {
   const remaining=traveler.enemies.filter(e=>e.hp>0&&ids.includes(e.id)),remainingIds=remaining.map(e=>e.id);
   const wounded=remaining[0];traveler._hurtEnemy(wounded,1);const wounds=wounded.hp;
   const gateway=traveler.portal;feet(traveler,portalDoor(gateway));
-  const guardian=traveler.enemies.find(e=>e.id===gateway.bossId);traveler._hurtEnemy(guardian,guardian.hp+1);
-  traveler.regions.flushReward();assert(traveler.chooseSuper(traveler.getSuperChoices()[0].id));
-  assert(traveler.enterPortal(gateway.id));assert.equal(traveler.regionIndex,1);
+  const guardian=traveler.enemies.find(e=>e.id===gateway.bossId);
+  if(gateway.natural){assert.equal(gateway.state,'active');assert.equal(guardian,undefined);assert.equal(traveler.superSkills.pending,null);}
+  else{assert(guardian);traveler._hurtEnemy(guardian,guardian.hp+1);assert(traveler.regions.flushReward());assert(traveler.chooseSuper(traveler.getSuperChoices()[0].id));assert(gateway.rewardClaimed);}
+  assert(traveler.enterPortal(gateway.id));assert.equal(traveler.regionIndex,gateway.nextRegionIndex);
   traveler.time+=120;traveler._clock+=120;
-  const returnGate=traveler.regions.portals.find(p=>p.direction==='back');feet(traveler,portalDoor(returnGate));
-  assert(traveler.enterPortal(returnGate.id));assert.equal(traveler.regionIndex,0);
+  const returnGate=traveler.regions.portals.find(p=>p.nextRegionIndex===homeIndex);feet(traveler,portalDoor(returnGate));
+  assert(traveler.enterPortal(returnGate.id));assert.equal(traveler.regionIndex,homeIndex);
   assert.equal(site(traveler,type),structure);assert.equal(structure.state,'active');assert.equal(structure.progress,1);
   assert.equal(type==='hunt'?traveler.encounters.active:traveler.companions.camp,battle);
   assert.deepEqual(traveler.enemies.filter(e=>e.hp>0&&ids.includes(e.id)).map(e=>e.id),remainingIds);

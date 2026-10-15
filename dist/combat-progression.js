@@ -17,7 +17,7 @@ export class CombatProgression {
 
   tryUpgrade() {
     const g=this.game;
-    if(g.status!=='playing'||g.crystals<g.crystalsNext)return false;
+    if(g.status!=='playing'||g.story?.suppressChoices||g.realms?.active||g.crystals<g.crystalsNext)return false;
     g.status='upgrade';g._choices=null;
     g._emit('skillUpgrade',{progressionTier:g.progressionTier});
     return true;

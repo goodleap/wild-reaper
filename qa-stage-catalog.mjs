@@ -5,7 +5,11 @@ import { StageRun } from './dist/stage-run.js';
 import { WORLD_IDS, regionFor } from './dist/world-definitions.js';
 import { initBoss, bossKindFor } from './dist/bosses.js';
 
-assert.deepEqual(STAGES.map(stage=>stage.themeId),WORLD_IDS,'every existing theme has a stage');
+const releasedStageThemes=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
+assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'all eight released stage themes retain their identities and order');
+assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageThemes.map(id=>`${id}-trial`),'adding exploration worlds never renames the released stages');
+assert(WORLD_IDS.includes('verdant-rift'),'the independent exploration world remains registered');
+assert.equal(getStageDefinition('verdant-rift-trial'),null,'an exploration world does not implicitly create an unauthored stage');
 assert.equal(getStageDefinition('removed-stage'),null);
 const allIds=[];
 for(const stage of STAGES){
@@ -25,6 +29,11 @@ for(const stage of STAGES){
   assert.equal(outer.connections[0].targetMapId,core.id);
   assert.equal(core.connections[0].targetMapId,outer.id);
   assert.equal(outer.connections[0].id,core.connections[0].id);
+  const runtime=fixture(stage.id).run;
+  assert.equal(runtime.id,stage.id);assert.equal(runtime.currentMapId,outer.id);assert.equal(runtime.currentIsland,outer);
+  assert.equal(runtime.island(core.id),core);assert.equal(runtime.completed,false);assert.equal(runtime.coreDefeated,false);
+  assert.deepEqual([...runtime.objectives.keys()],stage.islands.map(map=>map.id));
+  assert([...runtime.objectives.values()].every(objective=>!objective.defeated&&!objective.rewardClaimed),'each released stage starts with its own fresh playable objectives');
   for(const map of stage.islands){
     allIds.push(map.id);assert.equal(map.themeIndex,stage.themeIndex);assert.equal(map.themeId,stage.themeId);
     assert(Object.isFrozen(map)&&Object.isFrozen(map.boss)&&Object.isFrozen(map.connections));

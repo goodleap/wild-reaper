@@ -40,6 +40,7 @@ export class Dungeon {
       spawn:g._spawn,superPending:g.superSkills?.pending,companionCamps:c?.camps,companionGeneration:c?.generation,companionNextAt:c?.nextAt,enteredClock:g._clock};
   }
   _clearScene(){
+    this.game.realms?.cancel('scene-change');
     const g=this.game;g.attacks?.clearTrails();g.bullets=[];g.enemyBullets=[];g.effects=[];g.orbitals=[];g.storm=null;g._pulseEchoes=[];g._grid.clear();
     g.superSkills?.clearScene();g.barrier?.clearScene();g.abilities?.clearScene();
     for(const member of g.companions?.members||[])member._echoes=[];

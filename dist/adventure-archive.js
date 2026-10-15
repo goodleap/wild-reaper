@@ -2,7 +2,8 @@ import { ARCHIVE_PERSISTED_IDS, enemyArchiveId, companionArchiveId, ownedArchive
 import { UPGRADE_DEFS } from './combat-catalog.js';
 import { HEROES } from './heroes.js';
 
-export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive-v2';
+export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive-v3';
+const V2_ARCHIVE_KEY='wild-echoes-adventure-archive-v2';
 const PREVIOUS_ARCHIVE_KEY='wild-echoes-adventure-archive';
 const LEGACY_KEY='wild-echoes-endless-record';
 const ENTRY_IDS=new Set(ARCHIVE_PERSISTED_IDS);
@@ -16,7 +17,7 @@ const safeId=value=>typeof value==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.tes
 const emptyBest=()=>({time:0,kills:0,bossKills:0,level:0,wave:0});
 const emptyEntry=()=>({seen:true,defeats:0,acquisitions:0,maxLevel:0,branches:[],evolved:false,modifiers:{}});
 const emptyStageRecord=()=>({clears:0,bestTime:0});
-const emptyData=()=>({version:2,totals:{runs:0,time:0,kills:0,bossKills:0,maxLevel:0,maxWave:0},best:{normal:emptyBest(),casual:emptyBest()},entries:{},stages:{},legacy:null});
+const emptyData=()=>({version:3,totals:{runs:0,time:0,kills:0,bossKills:0,maxLevel:0,maxWave:0},best:{normal:emptyBest(),casual:emptyBest()},entries:{},stages:{},stories:{},legacy:null});
 const sanitizeBest=value=>({time:finite(value?.time),kills:integer(value?.kills),bossKills:integer(value?.bossKills),level:integer(value?.level,1e6),wave:integer(value?.wave,1e6)});
 function branchesOf(value){return [...new Set((Array.isArray(value)?value:[]).filter(safeId))].slice(0,12);}
 function modifiersOf(value){const result={};if(plain(value))for(const [id,cap] of MODIFIER_CAPS){const rank=integer(value[id],cap);if(rank)result[id]=rank;}return result;}
@@ -40,6 +41,11 @@ function sanitize(value){
       data.stages[id][difficulty]=clean;
     }
   }
+  if(plain(value.stories))for(const [id,record] of Object.entries(value.stories).slice(0,128)){
+    if(!safeId(id)||!plain(record))continue;
+    const clears=integer(record.clears);
+    if(clears)data.stories[id]={clears,bestTime:finite(record.bestTime),lastTime:finite(record.lastTime)};
+  }
   data.legacy=legacyOf(value.legacy);return data;
 }
 function defaultStorage(){try{return globalThis.localStorage??null;}catch{return null;}}
@@ -52,14 +58,14 @@ export class AdventureArchive {
     this.data=emptyData();this._runs=new WeakMap();this._active=null;this._dirty=false;this._readOnly=false;
     if(!this.storageOk)return;
     try{
-      // A separate generation prevents an already-open v1 tab from erasing
-      // stage records when its older checkpoint code writes the previous key.
+      // Separate generations prevent older open tabs from erasing chapter
+      // records when their checkpoint code writes its previous storage key.
       const current=storage.getItem(ARCHIVE_STORAGE_KEY);
-      const raw=current??storage.getItem(PREVIOUS_ARCHIVE_KEY);
+      const raw=current??storage.getItem(V2_ARCHIVE_KEY)??storage.getItem(PREVIOUS_ARCHIVE_KEY);
       let saved=null;try{saved=raw?JSON.parse(raw):null;}catch{}
-      if(saved?.version===1||saved?.version===2){this.data=sanitize(saved);this._dirty=current===null||saved.version===1;if(this._dirty)this.flush();return;}
+      if([1,2,3].includes(saved?.version)){this.data=sanitize(saved);this._dirty=current===null||saved.version!==3;if(this._dirty)this.flush();return;}
       // A newer release owns its save; an older tab must not overwrite it.
-      if(Number.isFinite(saved?.version)&&saved.version>2){this._readOnly=true;this.storageOk=false;return;}
+      if(Number.isFinite(saved?.version)&&saved.version>3){this._readOnly=true;this.storageOk=false;return;}
       let legacy=null;try{legacy=JSON.parse(storage.getItem(LEGACY_KEY));}catch{}
       this.data.legacy=legacyOf(legacy);this._dirty=!!this.data.legacy;
     }catch{this.storageOk=false;}
@@ -84,8 +90,9 @@ export class AdventureArchive {
     return this.data.entries[id];
   }
   _observeBuild(game,run){
-    if(!game.build)return;
-    for(const owned of ownedArchiveEntries(game.build)){
+    const build=game.canonicalBuild||game.build;
+    if(!build)return;
+    for(const owned of ownedArchiveEntries(build)){
       const entry=this._entry(run,owned.id);if(!entry)continue;
       if(!run.acquired.has(owned.id)){run.acquired.add(owned.id);entry.acquisitions=integer(entry.acquisitions+1);this._dirty=true;}
       const level=integer(owned.level,1e6);
@@ -127,8 +134,16 @@ export class AdventureArchive {
     return this.checkpoint(game);
   }
   _snapshot(game,run){return {time:finite(game.runTime??game.time),kills:integer(game.kills),bossKills:Math.max(integer(game.bossKills),run.defeatedBosses),level:integer(game.player?.level,1e6),wave:integer(game.wave,1e6)};}
+  recordStoryCompletion(game){
+    const run=this._eligible(game),story=game?.story;
+    if(!run||run.storyCompletion||!story?.completed||!safeId(story.id))return false;
+    const time=finite(story.completionTime??game.runTime??game.time),previous=this.data.stories[story.id];
+    const record={clears:integer((previous?.clears||0)+1),bestTime:previous?.clears?Math.min(previous.bestTime,time):time,lastTime:time};
+    this.data.stories[story.id]=record;run.storyCompletion={id:story.id,time};this._dirty=true;this.flush();return true;
+  }
   checkpoint(game,{force=false}={}){
     const run=this._eligible(game);if(!run)return false;
+    this.recordStoryCompletion(game);
     this._observeBuild(game,run);
     this._observeCompanions(game,run);
     const snapshot=this._snapshot(game,run),totals=this.data.totals,best=this.data.best[run.difficulty];

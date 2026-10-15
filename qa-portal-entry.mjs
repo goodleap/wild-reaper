@@ -48,6 +48,18 @@ function verifyWalls(g){
   }
 }
 
+// The current shared movement standard is 320 world units per second, with
+// the documented threefold debug modifier. Verify actual elapsed movement,
+// rather than only comparing two derived speed properties.
+for(const debug of [false,true]){
+  const runner=arena(debug),start=foot(runner),expectedSpeed=debug?960:320;
+  assert.equal(runner.player.speed,expectedSpeed);
+  for(let i=0;i<60;i++)runner.update(.05,{x:1,y:0});
+  const end=foot(runner);assert(Math.abs(runner.runTime-3)<1e-9);
+  assert(Math.abs(end.x-start.x-expectedSpeed*3)<1e-6,'three seconds of clear travel uses the current normal/debug speed');
+  assert(Math.abs(end.y-start.y)<1e-9);assert(runner.terrain.isFree(end.x,end.y,runner.player.r));
+}
+
 // Hint distance is intentionally broad, but keyboard/direct entry has the same
 // narrow front entrance as automatic contact. A remote E cannot skip the walk.
 const manual=arena(),manualGate=activate(manual),door=portalDoor(manualGate);
@@ -63,7 +75,7 @@ assert.equal(manual.regionIndex,1);
 // through the solid geometry, so neither E nor speed can tunnel into a gate.
 for(const debug of [false,true])for(const approach of ['left','right','back']){
   const g=arena(debug),p=activate(g),old=g.regionIndex;
-  if(debug)assert.equal(g.player.speed,660);
+  assert.equal(g.player.speed,debug?960:320);
   const side=approach==='left'?-1:1;
   place(g,approach==='back'?{x:p.x,y:p.y-100}:{x:p.x+side*100,y:p.y});
   for(let i=0;i<12;i++){
@@ -123,4 +135,4 @@ for(const target of [1,0,1,0,1,0]){
 const hut=world.settlements.sites.find(s=>s.type==='supply');place(world,hut.door);assert(world.interact(hut.id));
 assert.equal(world.dungeon.active.kind,'hut');assert.equal(structures(world).length,0);assert(!world.terrain._structures.some(o=>o.structureType==='portal'));
 place(world,world.dungeon.active.entrance);assert(world.dungeon.exit());assert.equal(world.terrain,originalTerrain);verifyWalls(world);
-console.log('Portal entrances: front walk/keyboard entry, solid side/rear walls, debug 660-speed and clamped frame sweeps, locked gates, front dry arrival, persistent independent owners and spawn sanctuary, bounded round trips and interior isolation passed.');
+console.log('Portal entrances: real three-second normal/debug travel, front walk/keyboard entry, solid side/rear walls, debug 960-speed and clamped frame sweeps, locked gates, front dry arrival, persistent independent owners and spawn sanctuary, bounded round trips and interior isolation passed.');

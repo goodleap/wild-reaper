@@ -19,5 +19,17 @@ export function validateDialogueConfig(sites){
       if(/[{}]/.test(line.replaceAll('{hero}','')))fail(`lines.${key}.placeholder`);
     }
   }
+  if(!dialogue.player||typeof dialogue.player!=='object'||Array.isArray(dialogue.player))fail('player');
+  {
+    const player=dialogue.player;
+    if(!player.rules||!player.voices)fail('player');
+    for(const key of ['globalCooldown','hurtCooldown','crisisCooldown','spellCooldown','battleCooldown','idleMin','idleMax','repeatCooldown','combatRange'])if(!Number.isFinite(player.rules[key])||player.rules[key]<=0||player.rules[key]>1500)fail(`player.rules.${key}`);
+    if(player.rules.idleMin>player.rules.idleMax)fail('player.rules.idleMin');
+    for(const hero of ['traveler','princess','elder'])for(const key of ['hurt','alert','surrounded','retreat','determined','encourage','storm','meteor','swords','forest','marsh','ruins','interior']){
+      const variants=player.voices[hero]?.[key];
+      if(!Array.isArray(variants)||!variants.length||variants.length>8)fail(`player.voices.${hero}.${key}`);
+      for(const line of variants)if(typeof line!=='string'||!line.trim()||line.length>34||/[\r\n<>{}]/.test(line))fail(`player.voices.${hero}.${key}`);
+    }
+  }
   return true;
 }

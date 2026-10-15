@@ -11,6 +11,11 @@ export function visitSceneUnits(game,visit){
   if(game.player)unit(game.player,true);
   // Recovering companions still have a body in the scene.
   for(const member of game.companions?.members||[])unit(member,true);
+  for(const actor of game.story?.actors||[]){
+    if(actor.hidden||actor.hp<=0)continue;
+    if(actor.kind==='angel'||actor.type==='angel')unit({...actor,y:actor.y-19.8,isTownNpc:true,townKind:'angel',heroId:'traveler',site:actor,name:actor.name||'天使',castFace:actor.castFace||0,facing:0},true);
+    else unit(actor,true);
+  }
   if(game.dungeon?.active)return count;
   for(const site of game.settlements?.sites||[]){
     if((site.type!=='merchant'&&site.type!=='angel')||site.state==='spent')continue;

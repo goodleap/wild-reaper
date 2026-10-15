@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { sceneDialogueAvoidance } from './dist/scene-dialogue-avoidance.js';
 import { layoutSceneDialogue } from './dist/scene-dialogue-renderer.js';
-import { actorShape } from './dist/actor-visuals.js';
+import { actorShape,ACTOR_VISUALS } from './dist/actor-visuals.js';
 
 const options={offsetX:40,offsetY:25,width:800,height:600,isVisible:e=>!e.hidden};
 const game=()=>({player:{x:400,y:400},enemies:[],companions:{members:[],camps:[]},settlements:{sites:[]},relicSites:{sites:[]},abilities:{effects:[],visualBursts:[]},effects:[],enemyBullets:[]});
@@ -55,6 +55,13 @@ friends.companions.members=[{id:2,kind:'dog',isCompanion:true,name:'猎犬',stat
 protectedPoint(friends,450,330-24-9,'companion nameplate uses its own shape');
 friends.companions.camps=[{id:'captivity',kind:'warden',name:'守卫',x:200,y:350,state:'trapped'}];
 protectedPoint(friends,200,350-19.8-35*1.1-9,'captive nameplate includes projected height');
+
+const story=game();story.story={actors:[{id:'story:princess',storyActor:true,name:'公主',heroId:'princess',x:300,y:300,r:15,hp:1},{id:'story:angel',storyActor:true,type:'angel',kind:'angel',x:500,y:350,r:15,hp:1}]};
+protectedPoint(story,300,300-ACTOR_VISUALS.player.top,'the story princess body has the full hero height');
+protectedPoint(story,500,350-19.8-53,'the story angel label uses her rendered town-actor anchor');
+const trial=game();trial.realms={getMarkers:()=>[{kind:'tribulationBoundary',x:200,y:200,r:200},{kind:'tribulationWarning',x:200,y:200,r:40}]};
+protectedPoint(trial,200,200,'player tribulation landing warning');
+assert(!covers(sceneDialogueAvoidance(trial,options),200,300),'the trial boundary itself does not suppress all dialogue');
 
 // A greeting can still fit above its own label/body. The helper must not turn
 // every nearby actor into a screen-sized blocker or reserve an entire cone box.

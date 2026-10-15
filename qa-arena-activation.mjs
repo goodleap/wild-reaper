@@ -91,15 +91,19 @@ assert.equal(crowded.site.state,'failed');assert.equal(crowded.g.encounters.acti
 
 // Exercise a real region round trip while a warning is pending. Global time
 // advances elsewhere, but this world's animation age and finite queue do not.
-const journey=new Game();journey.player.xpNext=Infinity;journey.crystalsNext=Infinity;
+for(const region of ['forest','marsh']){
+const journey=new Game({debug:region!=='forest',debugWorld:region,debugOptions:{testFacilities:false}}),homeIndex=journey.regionIndex;journey.player.xpNext=Infinity;journey.crystalsNext=Infinity;
 const home=journey.relicSites.sites.find(s=>s.type==='hunt');assert(home);feet(journey,home);assert(journey.relicSites.interact(home.id));
 advance(journey,.8);const saved=journey.encounters,progress=structuredClone(saved.active);
 assert(progress.spawnWarnings.length>0&&progress.spawnedCount===0);
-const gate=journey.portal;feet(journey,portalDoor(gate));const guardian=journey.enemies.find(e=>e.id===gate.bossId);journey._hurtEnemy(guardian,guardian.hp+1);
-journey.regions.flushReward();assert(journey.chooseSuper(journey.getSuperChoices()[0].id));assert(journey.enterPortal(gate.id));
+const gate=journey.portal;feet(journey,portalDoor(gate));const guardian=journey.enemies.find(e=>e.id===gate.bossId);
+if(gate.natural){assert.equal(gate.state,'active');assert.equal(guardian,undefined);assert.equal(journey.superSkills.pending,null);}
+else{assert(guardian,'guarded world uses a real guardian/reward transaction');journey._hurtEnemy(guardian,guardian.hp+1);assert(journey.regions.flushReward());assert(journey.chooseSuper(journey.getSuperChoices()[0].id));assert(gate.rewardClaimed);}
+assert(journey.enterPortal(gate.id));
 journey.time+=300;journey._clock+=300;
-const back=journey.regions.portals.find(p=>p.direction==='back');feet(journey,portalDoor(back));assert(journey.enterPortal(back.id));
+const back=journey.regions.portals.find(p=>p.nextRegionIndex===homeIndex);feet(journey,portalDoor(back));assert(journey.enterPortal(back.id));
 assert.equal(journey.encounters,saved);assert.deepEqual(saved.active,progress,'warning positions, phase and pending cohort survive a different-world visit');
 saved.update(.05);assert.equal(saved.active.spawnedCount,0,'returning does not catch up the absent simulation');
+}
 
 console.log('Arena activation: center contact, two-stage warmup, bounded perimeter waves, safe warnings, finite rewards, pause and world persistence passed.');

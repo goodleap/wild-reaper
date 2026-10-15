@@ -8,7 +8,7 @@ import { Terrain } from './dist/terrain.js';
 
 const config=JSON.parse(readFileSync(new URL('./dist/config/sites.json',import.meta.url),'utf8'));
 assert(validateDialogueConfig(config));
-for(const change of [s=>s.dialogue.rules.maxVisible=3,s=>s.dialogue.rules.combatVisible=4,s=>s.dialogue.rules.minDuration=10,s=>s.dialogue.rules.rescueReadyRange=400,s=>s.dialogue.rules.merchantFarExit=10,s=>s.dialogue.lines.angel=['{secret}'],s=>s.dialogue.lines.captive=[],s=>s.dialogue.lines.join=['<button>']]){
+for(const change of [s=>s.dialogue.rules.maxVisible=3,s=>s.dialogue.rules.combatVisible=4,s=>s.dialogue.rules.minDuration=10,s=>s.dialogue.rules.rescueReadyRange=400,s=>s.dialogue.rules.merchantFarExit=10,s=>s.dialogue.lines.angel=['{secret}'],s=>s.dialogue.lines.captive=[],s=>s.dialogue.lines.join=['<button>'],s=>delete s.dialogue.player,s=>s.dialogue.player.rules.idleMin=100,s=>s.dialogue.player.voices.elder.hurt=[]]){
   const invalid=structuredClone(config);change(invalid);assert.throws(()=>validateDialogueConfig(invalid),/Invalid sites.dialogue/);
 }
 const visible={isVisible:s=>!s.source.hidden};
@@ -58,14 +58,15 @@ const territory=game(),warnings=new SceneDialogue();territory.enemies=[enemy('sh
 for(const e of territory.enemies){e.guardActive=true;e.territoryState='chasing';}tick(warnings,territory);
 assert.equal(warnings.items(visible).length,1);assert(contents(warnings).includes('守住入口'));
 tick(warnings,territory,4);territory.enemies.forEach(e=>e.hidden=true);tick(warnings,territory,25);territory.enemies.forEach(e=>e.hidden=false);tick(warnings,territory);
-assert.equal(warnings.items(visible).length,0,'Camera visibility changes cannot re-arm the same active group.');
+assert.equal(warnings.items(visible).filter(item=>item.speaker.kind==='enemy').length,0,'Camera visibility changes cannot re-arm the same active group.');
 territory.enemies.forEach(e=>{e.guardActive=false;e.territoryState='returning';});tick(warnings,territory);
 territory.enemies.forEach(e=>{e.guardActive=true;e.territoryState='chasing';});tick(warnings,territory);
-assert.equal(warnings.items(visible).length,1,'A disengaged group may warn on a later intrusion after cooldown.');
+tick(warnings,territory,4);
+assert.equal(warnings.items(visible).filter(item=>item.speaker.kind==='enemy').length,1,'A disengaged group may warn on a later intrusion after cooldown and the current equal-priority line finishes.');
 const beasts=game(),growl=new SceneDialogue();beasts.enemies=[enemy('boar',1,150,{guardActive:true,territoryId:'boars',territoryState:'alert'})];tick(growl,beasts);assert.match(contents(growl),/哼哧/);
 
 const rescue=game('公主'),voices=new SceneDialogue();rescue.companions.camps=[{id:'camp:1',siteId:'ruin:1',kind:'warden',x:160,y:0,state:'trapped'}];rescue.relicSites.sites=[{id:'ruin:1',type:'rescue',kind:'warden',x:160,y:0,state:'ready'}];
-assert.equal(dialogueSpeakers(rescue).length,1,'An activated ruin and its camp describe one captive.');tick(voices,rescue);assert.match(contents(voices),/束缚/);
+assert.equal(dialogueSpeakers(rescue).filter(s=>s.kind!=='player').length,1,'An activated ruin and its camp describe one captive.');tick(voices,rescue);assert.match(contents(voices),/束缚/);
 rescue.companions.camps[0].state='ready';tick(voices,rescue,4);assert.match(contents(voices),/守卫倒下/);
 tick(voices,rescue,.05);tick(voices,rescue,4);assert.equal(voices.items(visible).length,0,'Ready-state and proximity handling cannot repeat the same rescue cue.');
 rescue.companions.camps=[];rescue.relicSites.sites[0].state='cleared';rescue.companions.members=[{id:1,kind:'warden',heroId:'warden',isCompanion:true,state:'active',x:150,y:-19.8,r:15,hp:100,rescuedFace:.65}];tick(voices,rescue);

@@ -12,7 +12,7 @@ const panel=archive=>archivePanelHTML(archive.data,{tab:'records',difficulty:'no
 // Existing v2 records retain their counters; a missing identity is not a prince.
 {
   const old={version:2,totals:{runs:8,time:900,kills:180},stages:{'forest-trial':{normal:{clears:3,bestTime:240}}}},storage=memory({[ARCHIVE_STORAGE_KEY]:JSON.stringify(old)}),archive=new AdventureArchive({storage});
-  assert.equal(archive.data.version,2);
+  assert.equal(archive.data.version,3);
   assert.deepEqual(record(archive),{clears:3,bestTime:240});
   assert.doesNotMatch(panel(archive),/帅气王子|美丽公主|年迈的老登/);
   const summary=win(archive,run('elder'),300);

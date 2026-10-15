@@ -9,6 +9,7 @@ import { COMPANION_VISUALS } from './dist/companion-art.js';
 import { getHero } from './dist/heroes.js';
 import { DungeonVision } from './dist/dungeon-vision.js';
 import { sceneEntityVisible, sceneItemVisible } from './dist/scene-rendering.js';
+import { cameraViewport } from './dist/camera-viewport.js';
 
 const collect=game=>{const units=[];const count=visitSceneUnits(game,(entity,isPlayer)=>units.push({entity,isPlayer}));assert.equal(count,units.length);return units;};
 assert.equal(visitSceneUnits(null,()=>assert.fail('no game has no units')),0);
@@ -60,8 +61,9 @@ assert.equal(collect({player,companions:{camps:[],camp}}).length,1,'an explicit 
 const source=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8');
 const visualSource=source.slice(source.indexOf('const HERO_VISUALS='),source.indexOf('function sortActors('));
 const cullSource=source.slice(source.indexOf('function actorInView('),source.indexOf('function actorShadowShapes('));
+const viewportSource=source.match(/^function sceneViewport\(.*$/m)?.[0];assert(viewportSource,'the actual renderer exports its viewport through the shared local helper');
 function projected(game,width=400,height=300){
-  const factory=new Function('game','width','height','ACTOR_VISUALS','COMPANION_VISUALS','getHero','actorShape',`${visualSource}\n${cullSource}\nreturn {actorVisual,actorInView};`);
+  const factory=new Function('game','width','height','ACTOR_VISUALS','COMPANION_VISUALS','getHero','actorShape',`const viewWidth=width,viewHeight=height;\n${viewportSource}\n${visualSource}\n${cullSource}\nreturn {actorVisual,actorInView};`);
   return factory(game,width,height,ACTOR_VISUALS,COMPANION_VISUALS,getHero,actorShape);
 }
 function visibleCounts(game,width=400,height=300){
@@ -79,6 +81,9 @@ const edgeCounts=visibleCounts(edge);
 assert.equal(edgeCounts.scene,3);assert.equal(edgeCounts.screen,2,'a partly visible silhouette/shadow counts while a distant unit does not');
 assert(edgeCounts.actors.some(a=>a.entity.id===2));
 assert.equal(visibleCounts(edge,300,300).screen,1,'resizing changes the screen total, never the scene total');
+const phone=cameraViewport({width:390,height:844,coarse:true}),phoneEdge={player,enemies:[enemy('slime',5,250)]};
+assert.equal(phone.width,540);assert.equal(visibleCounts(phoneEdge,phone.width,phone.height).screen,2,'mobile unit counts use the shared 540-unit world view');
+assert.equal(visibleCounts(phoneEdge,390,844).screen,1,'the fixture distinguishes the world view from raw canvas pixels');
 const obstacle={id:'wall',type:'log',variant:'castle-wall',x:0,y:-100,halfLength:350,angle:0,r:14,sortY:-100};
 const fogGame={player:{...player},enemies:[enemy('slime',21),{...enemy('slime',22),y:-170}],companions:{members:[active]},
   settlements:game.settlements,relicSites:game.relicSites};

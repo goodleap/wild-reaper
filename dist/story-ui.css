@@ -1,0 +1,19 @@
+/* Story/tribulation additions use existing preparation and character panels. */
+.story-availability{margin:5px 3px 0;color:#a7b797;font-size:11px;line-height:1.6}
+.context-action{position:absolute;left:calc(28px + var(--safe-left));bottom:calc(27px + var(--safe-bottom));z-index:4;display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:min(250px,48vw);min-height:52px;padding:11px 15px;border:1px solid #e4cf9277;border-radius:10px;background:#20352aee;color:#f0dfae;box-shadow:0 3px 16px #10190e55;text-align:left;touch-action:manipulation}
+.context-action>span{font-size:13px;font-weight:650}.context-action>small{font-size:10px;color:#b9c5a8;line-height:1.5}.context-action>small:empty{display:none}
+.context-action:focus-visible,.realm-ready:focus-visible{outline:2px solid #f4dfa5;outline-offset:3px}
+#character-hud .story-buff{border-color:#e6c78577;color:#efdaa1;background:#5b432533;gap:3px}
+#character-hud .story-buff .buff-name{font-size:9px}
+.realm-ready{position:absolute;left:calc(28px + var(--safe-left));bottom:calc(27px + var(--safe-bottom));z-index:4;display:block;pointer-events:auto;margin:0;min-height:44px;border:1px solid #bba7f27a;border-radius:6px;padding:5px 9px;background:#28233deb;color:#e1d5ff;font-size:10px;letter-spacing:.3px}
+.tribulation-progress{display:block;margin-top:7px;font-size:10px;color:#dfd0ff;letter-spacing:.4px}
+.realm-preparation{margin-top:20px;padding-top:14px;border-top:1px solid #cbb5f02b}.realm-preparation h3{color:#d3c0f2}.realm-materials{border:0;margin:13px 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}.realm-materials legend{font-size:11px;color:#b9b1ca;margin-bottom:10px}.realm-materials label{cursor:pointer;display:flex;align-items:center;gap:5px;color:#d4c8e9;border:1px solid #b5a0db44;border-radius:6px;padding:8px}.realm-materials input{accent-color:#b8a1ed}.realm-materials label:has(input:disabled){opacity:.4;cursor:default}.realm-preparation .secondary-button{min-height:42px;color:#e5d8ff}.realm-preparation .secondary-button:disabled{opacity:.5}
+@media(pointer:coarse){.context-action{left:calc(18px + var(--safe-left));bottom:calc(176px + var(--safe-bottom));max-width:min(210px,52vw);min-height:48px;padding:10px 12px}.context-action>small{max-width:185px}}
+@media(max-width:440px){.prepare-screen .adventure-modes{width:100%;display:flex;gap:3px}.prepare-screen .adventure-mode{flex:1;text-align:center}.prepare-screen .adventure-mode span{padding:10px 8px;font-size:11px}.context-action>span{font-size:12px}.context-action>small{font-size:9px}}
+@media(max-height:450px) and (pointer:coarse){.context-action{bottom:calc(125px + var(--safe-bottom));max-width:180px;padding:7px 10px}.context-action>small{display:none}}
+
+@media(pointer:coarse){.realm-ready{left:calc(18px + var(--safe-left));bottom:calc(176px + var(--safe-bottom))}}
+
+.story-recap p{white-space:pre-line;line-height:1.8;font-size:12px;color:#c4ceb7}
+
+#run-summary:has(.tribulation-progress:not(.hidden)) .timer-goal{display:none}

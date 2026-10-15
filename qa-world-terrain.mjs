@@ -8,7 +8,9 @@ import { blocksObstacle } from './dist/height-rules.js';
 
 let checked=0;
 const kinds={beach:['world-palm','world-reef','world-driftwood'],city:['world-building','world-city-wall'],mountain:['world-ridge','world-pine'],snow:['world-snowpine','world-ice'],volcano:['world-charred','world-basalt']};
-for(const region of WORLD_IDS.slice(3))for(const seed of [2,7]){
+const regions=Object.keys(kinds);
+assert(regions.every(region=>WORLD_IDS.includes(region)),'all five legacy biome catalogues remain available; authored forest maps have dedicated layout checks');
+for(const region of regions)for(const seed of [2,7]){
   const island=new Island({region,seed}),terrain=new Terrain({region,seed,island,cacheLimit:32});
   const snapshot=terrain.query(-2900,-2900,2900,2900);
   const scenery=snapshot.filter(prop=>!prop.water);
@@ -51,7 +53,7 @@ for(let line=-4;line<=4;line++)for(let other=-2200;other<=2200;other+=37)for(con
 // Legacy standalone terrain still spaces its sparse props. World layouts may
 // deliberately join roots or rock faces into continuous obstacles; their real
 // navigability is checked with all structure layers in qa-world-layout.mjs.
-for(const region of WORLD_IDS.slice(3)){
+for(const region of regions){
   const terrain=new Terrain({region,seed:4}),props=terrain.query(-1500,-1500,1500,1500);
   for(let i=0;i<props.length;i++)for(let j=i+1;j<props.length;j++){
     const a=props[i],b=props[j],f=groundFootprint(a,0),other=groundFootprint(b,0);
