@@ -8,7 +8,214 @@
       "weaponIds": ["sword"],
       "anchors": {"wakeArea": "01", "meetingArea": "02", "refugeArea": "03", "searchPassage": "01-02", "escapePassage": "02-03"},
       "steps": ["awakening", "search", "escape", "escort", "pill", "burst", "fading", "sanctuary", "judgment", "conversation", "complete"],
-      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 30, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 4, "maxEnemies": 44},
+      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 30, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 4, "judgmentWindup": 1},
+      "pursuit": {
+        "totalLimit": 80,
+        "leaderLimit": 2,
+        "activeRadius": 900,
+        "retireRadius": 1500,
+        "retireSeconds": 5,
+        "spawnMargin": 64,
+        "admissionSeconds": 0.7,
+        "profiles": {
+          "soldier": {
+            "type": "shieldguard",
+            "behavior": "chase",
+            "speed": 344,
+            "hp": 62,
+            "damage": 9,
+            "xp": 4
+          },
+          "guard": {
+            "type": "shieldguard",
+            "behavior": "native",
+            "speed": 304,
+            "hp": 145,
+            "damage": 12,
+            "xp": 8
+          },
+          "mage": {
+            "type": "frostmage",
+            "behavior": "native",
+            "speed": 300,
+            "hp": 75,
+            "damage": 7,
+            "xp": 8
+          },
+          "captain": {
+            "type": "boss",
+            "bossKind": "ancient",
+            "behavior": "native",
+            "leader": true,
+            "speed": 332,
+            "hp": 1450,
+            "damage": 20,
+            "xp": 30
+          }
+        },
+        "stages": {
+          "awakening": {
+            "target": 0
+          },
+          "search": {
+            "target": 3,
+            "batch": 3,
+            "interval": 3,
+            "roster": [
+              "soldier",
+              "guard",
+              "soldier"
+            ]
+          },
+          "escape": {
+            "target": 16,
+            "batch": 4,
+            "interval": 1.6,
+            "roster": [
+              "soldier",
+              "soldier",
+              "guard",
+              "soldier",
+              "mage"
+            ],
+            "leader": "captain",
+            "leaderInterval": 5,
+            "leaderCount": 1
+          },
+          "escort": {
+            "target": 20,
+            "batch": 5,
+            "interval": 1.6,
+            "roster": [
+              "soldier",
+              "soldier",
+              "guard",
+              "soldier",
+              "mage"
+            ],
+            "leader": "captain",
+            "leaderInterval": 5,
+            "leaderCount": 1
+          },
+          "pill": {
+            "target": 24,
+            "batch": 10,
+            "interval": 0.65,
+            "roster": [
+              "soldier",
+              "soldier",
+              "guard",
+              "soldier",
+              "mage"
+            ],
+            "leader": "captain",
+            "leaderInterval": 1.5,
+            "leaderCount": 2,
+            "ramp": {
+              "from": 24,
+              "to": 64,
+              "duration": 30,
+              "startedAt": "_medicineReceivedAt"
+            }
+          },
+          "burst": {
+            "target": 24,
+            "batch": 14,
+            "interval": 0.45,
+            "roster": [
+              "soldier",
+              "soldier",
+              "guard",
+              "soldier",
+              "mage"
+            ],
+            "leader": "captain",
+            "leaderInterval": 1.5,
+            "leaderCount": 2,
+            "ramp": {
+              "from": 24,
+              "to": 64,
+              "duration": 30,
+              "startedAt": "_medicineReceivedAt"
+            }
+          },
+          "fading": {
+            "target": 64,
+            "batch": 14,
+            "interval": 0.45,
+            "roster": [
+              "soldier",
+              "soldier",
+              "guard",
+              "soldier",
+              "mage"
+            ],
+            "leader": "captain",
+            "leaderInterval": 1.5,
+            "leaderCount": 2,
+            "ramp": {
+              "from": 24,
+              "to": 64,
+              "duration": 30,
+              "startedAt": "_medicineReceivedAt"
+            }
+          },
+          "sanctuary": {
+            "target": 72,
+            "batch": 16,
+            "interval": 0.4,
+            "roster": [
+              "soldier",
+              "soldier",
+              "guard",
+              "soldier",
+              "mage"
+            ],
+            "leader": "captain",
+            "leaderInterval": 1.5,
+            "leaderCount": 2,
+            "ramp": {
+              "from": 24,
+              "to": 64,
+              "duration": 30,
+              "startedAt": "_medicineReceivedAt"
+            }
+          },
+          "judgment": {
+            "target": 72,
+            "batch": 16,
+            "interval": 0.4,
+            "roster": [
+              "soldier",
+              "soldier",
+              "guard",
+              "soldier",
+              "mage"
+            ],
+            "leader": "captain",
+            "leaderCount": 2,
+            "leaderInterval": 1.5,
+            "ramp": {
+              "from": 24,
+              "to": 64,
+              "duration": 30,
+              "startedAt": "_medicineReceivedAt"
+            },
+            "endWindow": {
+              "startedAt": "_judgmentStartedAt",
+              "durationRule": "judgmentDuration",
+              "stopBeforeEndSeconds": 1
+            }
+          },
+          "conversation": {
+            "target": 0
+          },
+          "complete": {
+            "target": 0
+          }
+        }
+      },
+      "dialogueScopes": {"awakening": "chapter", "search": "stage", "escape": "stage", "escort": "stage", "pill": "stage", "burst": "stage", "fading": "stage", "sanctuary": "stage", "judgment": "stage", "conversation": "chapter"},
       "dialogue": {
         "awakening": [
           {"speaker": "player", "text": "我本是昭衡国王子。论剑术、论风度，谁敢与我争锋？"},

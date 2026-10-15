@@ -87,10 +87,10 @@ assert.equal(h.run('realmMaterials'),2);
 assert.match(node(h,'start-tribulation').textContent,/投入 2 张/);
 // A chapter's unread angel line directs the player back to the angel, rather
 // than mislabelling the destination as the following princess.
-h.run(`const pointerLabels=[],savedSceneLabel=fillSceneLabel,savedStory=game.story;
-  fillSceneLabel=text=>pointerLabels.push(text);game.story={active:true,step:'conversation',getObjectiveTarget:()=>({x:game.player.x+1000,y:game.player.y,label:'返回守望天使身边继续交谈'})};
-  drawObjectivePointers();fillSceneLabel=savedSceneLabel;game.story=savedStory;`);
-assert.match(h.run('pointerLabels[0]'),/^天使 ·/);
+h.run(`const pointerLabels=[],savedSceneLabel=ctx.fillText,savedStory=game.story;
+  ctx.fillText=text=>pointerLabels.push(text);game.story={active:true,step:'conversation',getGuide:()=>({target:{x:game.player.x+1000,y:game.player.y},waypoint:{x:game.player.x+1000,y:game.player.y},shortLabel:'天使',label:'返回守望天使身边继续交谈'})};
+  drawObjectivePointers();ctx.fillText=savedSceneLabel;game.story=savedStory;`);
+assert.equal(h.run('pointerLabels[0]'),'天使');
 assert.equal(h.run('pointerLabels.some(text=>text.startsWith("公主"))'),false);
 const css=fs.readFileSync(new URL('./dist/story-ui.css',import.meta.url),'utf8');
 assert.match(css,/@media\(pointer:coarse\).*?bottom:calc\(176px/s,'mobile action sits above the joystick');

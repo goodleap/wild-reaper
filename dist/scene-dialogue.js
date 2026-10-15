@@ -3,6 +3,7 @@ import { companionDefinition } from './companion-catalog.js';
 import { groundOffset } from './terrain.js';
 import { mapIdentity } from './map-context.js';
 import { PlayerDialogue } from './player-dialogue.js';
+import { hideDialogue, resumeDialogue } from './dialogue-display-state.js';
 
 // Presentation state is kept outside the simulation. In particular, choosing a
 // line never consumes combat randomness or writes flags onto world objects.
@@ -36,15 +37,16 @@ function captiveEntity(source){
 
 export function dialogueSpeakers(game){
   const result=[];
+  const worldContent=game.sceneContent?.allows('worldContent')!==false;
   if(game.player&&Number.isFinite(game.player.x)&&Number.isFinite(game.player.y))result.push(speaker('player',game.player));
   const actors=game.story?.actors;
   for(const actor of Array.isArray(actors)?actors:Object.values(actors||{}))if(actor&&live(actor)&&!actor.hidden&&actor.active!==false&&Number.isFinite(actor.x)&&Number.isFinite(actor.y)){
     const entity=actor.kind==='angel'||actor.type==='angel'?{...actor,y:actor.y-19.8,isTownNpc:true,heroId:'traveler'}:actor;
     result.push(speaker('story',actor,entity));
   }
-  for(const enemy of game.enemies||[])if(live(enemy)&&!enemy.trainingDummy)result.push(speaker('enemy',enemy));
-  for(const member of game.companions?.members||[])if(member.state==='active'&&live(member))result.push(speaker('companion',member));
-  if(game.dungeon?.active)return result;
+  for(const enemy of game.enemies||[])if(live(enemy)&&!enemy.trainingDummy&&(worldContent||enemy.storyId||enemy.storyEnemy))result.push(speaker('enemy',enemy));
+  for(const member of game.companions?.members||[])if(member.state==='active'&&live(member)&&(worldContent||member.storyId||member.storyActor))result.push(speaker('companion',member));
+  if(game.dungeon?.active||!worldContent)return result;
   for(const site of game.settlements?.sites||[])if(['merchant','angel'].includes(site.type)&&site.state!=='spent')
     result.push(speaker('site',site,{x:site.x,y:site.y-19.8,r:15,isTownNpc:true,townKind:site.type,heroId:'traveler',flying:!!site.flying,id:site.id}));
   const camps=game.companions?.camps||[],occupied=new Set(camps.map(camp=>camp.siteId).filter(Boolean));
@@ -161,8 +163,10 @@ export class SceneDialogue {
     for(const item of [...this._active])if(!visible.has(item.speaker.id)){this._active.splice(this._active.indexOf(item),1);this._queue.push(item);}
     for(const item of [...this._active,...this._queue]){
       item.speaker=this._speakers.get(item.speaker.id)||item.speaker;item.clock=this._clock;
-      if(!visible.has(item.speaker.id))item.wasHidden=true;
-      else if(item.wasHidden){item.resumeAt=this._clock+.12;item.wasHidden=false;}
+      const display=item.visibilityGate??={};
+      if(!visible.has(item.speaker.id)){item.wasHidden=true;hideDialogue(display,this._clock);}
+      else if(item.wasHidden)item.wasHidden=!resumeDialogue(display,this._clock);
+      else resumeDialogue(display,this._clock);
     }
     this._readExternal();
     const exclusive=!!game.story?.dialogueExclusive||this._external.length>0||[...this._active,...this._queue].some(item=>item.channel==='story');
@@ -246,8 +250,8 @@ export class SceneDialogue {
   items({isVisible=()=>false}={}){
     if(!this._playing||this._game?.status!=='playing'||this._scene!==sceneIdentity(this._game)||this._terrain!==this._game.terrain)return [];
     return this._active.filter(item=>{
-      if(!live(item.speaker.source)||!live(item.speaker.entity)||!this._visible.has(item.speaker.id)||!isVisible(item.speaker)){item.wasHidden=true;return false;}
-      return !item.wasHidden&&this._clock>=(item.resumeAt??0);
+      if(!live(item.speaker.source)||!live(item.speaker.entity)||!this._visible.has(item.speaker.id)||!isVisible(item.speaker)){item.wasHidden=true;hideDialogue(item.visibilityGate??={},this._clock);return false;}
+      return !item.wasHidden;
     });
   }
   present(placed=[]){

@@ -37,6 +37,7 @@ import { ExpeditionRun } from './expedition-run.js';
 import { MonsterTerritories } from './monster-territories.js';
 import { RiftExploration } from './rift-exploration.js';
 import { StoryRun } from './story-run.js';
+import { SceneContent } from './scene-content.js';
 import { RealmProgression } from './realm-progression.js';
 import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
@@ -88,6 +89,8 @@ export class Game {
     this.worldId=this.region.id;this.startWorldId=this.worldId;
     const seed=this.stage?.currentIsland.seed??this.regionIndex;
     this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:this.stage?.currentIsland})});
+    this.sceneContent=new SceneContent(this,{story:this.mode==='story'});
+    const worldContent=this.sceneContent.allows('worldContent');
     this._islandWorlds=!!this.terrain.island;
     this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
@@ -129,28 +132,28 @@ export class Game {
     this._refreshStats();this._refreshWeapons();
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     this._moveEntity(this.player,0,0,true);
-    if(!this._worldExploration&&!this.expedition)for(let i=0;i<EXPLORATION_SPAWN.initialCount;i++)this._spawnEnemy(EXPLORATION_SPAWN.initialType,adventure?undefined:EXPLORATION_SPAWN.testStartRadius+i*EXPLORATION_SPAWN.testRadiusStep);
+    if(worldContent&&!this._worldExploration&&!this.expedition)for(let i=0;i<EXPLORATION_SPAWN.initialCount;i++)this._spawnEnemy(EXPLORATION_SPAWN.initialType,adventure?undefined:EXPLORATION_SPAWN.testStartRadius+i*EXPLORATION_SPAWN.testRadiusStep);
     this.adventure=null;
-    this.encounters=encounters?new Encounters(this):null;
+    this.encounters=encounters?new Encounters(this,{generation:worldContent}):null;
     this.combat=new CombatResolution(this);this.attacks=new CombatAttacks(this);
     this.combatStatus=new CombatStatus(this);
     // Reserve the nearby debug entrance before environmental hazards choose
     // their positions. The ordinary world keeps its original generation order.
     if(this.debugOptions.testFacilities&&settlements)this.settlements=new Settlements(this);
-    this.environment=environment?new Environment(this):null;
+    this.environment=environment?new Environment(this,{generation:worldContent}):null;
     // Natural water is fixed before smaller supplies choose their habitat.
-    this.adventure=adventure?new Adventure(this):null;
-    this.relics=new Relics(this);this.barrier=new GuardianBarrier(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:elites});
-    this.companions=new Companions(this,{generation:companions});
+    this.adventure=adventure?new Adventure(this,{generation:worldContent}):null;
+    this.relics=new Relics(this);this.barrier=new GuardianBarrier(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:worldContent&&elites});
+    this.companions=new Companions(this,{generation:worldContent&&companions});
     this.superSkills=new SuperSkills(this);this.progression=new CombatProgression(this,{costForTier:crystalCost});this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
     this.abilities=new AbilityRuntime(this);this._abilityCooldowns={fireball:.4,frostbolt:.7};
-    this.settlements??=new Settlements(this,{generation:settlements});
+    this.settlements??=new Settlements(this,{generation:worldContent&&settlements});
     this.waveDirector=new WaveDirector(this);
-    this.discoveredMap=new Set();this.regions.initialize();
-    this.riftExploration=new RiftExploration(this);
-    this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
+    this.discoveredMap=new Set();if(worldContent)this.regions.initialize();
+    this.riftExploration=new RiftExploration(this,{generation:worldContent});
+    this.relicSites=new RelicSites(this,{generation:!!(worldContent&&adventure&&(encounters||companions))});
     if(this.mode!=='story')this.settlements.ensureAngels?.();
-    this.territories=new MonsterTerritories(this);
+    this.territories=new MonsterTerritories(this,worldContent?{}:{generation:false});
     this.expedition?.initialize();
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
@@ -162,7 +165,31 @@ export class Game {
   }
 
   onEnemyDefeated(enemy){this.story?.onEnemyDefeated?.(enemy);this.realms?.onEnemyDefeated(enemy);this.onArchiveDefeat?.(enemy);}
-  dispose(reason='exit') {this.story?.cleanup(reason);this.realms?.dispose();}
+  dispose(reason='exit') {this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();}
+
+  _createStoryExplorationContent() {
+    const desired={x:this.player.x,y:this.player.y},spawn=this.terrain.island?.layout?.spawn;
+    // Place authored world content from its usual origin, independently of
+    // where the chapter ended. Arrival is resolved against the completed world.
+    this.player.x=spawn?.x??0;this.player.y=spawn?spawn.y-groundOffset(this.player,true):0;
+    this.enemies=[];this._grid.clear();this.portal=null;
+    this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.riftExploration=null;
+    this.regions=new Regions(this);
+    this.companions.camps=[];this.companions.generation=this._features.companions;this.companions.nextAt=this.time+35;
+    this.elites.generation=this._features.elites;
+    if(this._features.encounters)this.encounters=new Encounters(this);
+    if(this._features.environment)this.environment=new Environment(this);
+    if(this._features.adventure)this.adventure=new Adventure(this);
+    this.settlements=new Settlements(this,{generation:this._features.settlements});
+    this.regions.initialize();this.riftExploration=new RiftExploration(this);
+    this.relicSites=new RelicSites(this,{generation:!!(this._features.adventure&&(this._features.encounters||this._features.companions))});
+    this.territories=new MonsterTerritories(this);this.settlements.ensureAngels();
+    this.player.x=desired.x;this.player.y=desired.y;
+    this.nextBossAt=this.time+BALANCE.firstBossAt;this._spawn=2;this.waveDirector.reset();
+    // A chapter's old attacks cannot immediately hit the restored residents.
+    this.attacks.clearScene();this.superSkills.clearScene();this.barrier.clearScene();this.abilities.clearScene();
+    this.bullets=[];this.enemyBullets=[];this.effects=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];
+  }
 
   _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
   _effect(x,y,type,life,r,color,text,extra={}) {
@@ -381,7 +408,7 @@ export class Game {
   canEnterPortal(id) { return !this.dungeon.active&&this.regions.canEnter(id); }
   getInteraction() {
     if(this.status!=='playing')return null;
-    if(this.story?.active)return null;
+    if(!this.sceneContent.allows('worldContent'))return null;
     if(this.dungeon.active)return this.dungeon.getInteraction();
     const candidates=[];
     const settlement=this.settlements.getInteraction();if(settlement)candidates.push(settlement);
@@ -441,7 +468,7 @@ export class Game {
     this.status='playing';this._trySkillUpgrade();return true;
   }
   _switchRegion(portal=this.portal) {
-    if(this.story?.active)return false;
+    if(!this.sceneContent.allows('worldContent'))return false;
     if(!portal||!Number.isInteger(portal.nextRegionIndex)||this.dungeon.active)return false;
     this.realms?.cancel('scene-change');
     const nextIsland=this.stage?this.stage.island(portal.nextMapId):null;
@@ -520,11 +547,11 @@ export class Game {
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
     this.relics.update(dt);
     this.barrier.update(dt);
-    if(!inDungeon&&!this.story?.active){this.expedition?.update(dt);if(this.status!=='playing')return;this.regions.update(dt);this.territories?.update(dt);this._updatePressure(dt);}
+    if(!inDungeon&&this.sceneContent.allows('worldContent')){this.expedition?.update(dt);if(this.status!=='playing')return;this.regions.update(dt);this.territories?.update(dt);this._updatePressure(dt);}
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debugOptions.zeroStormCooldown?0:Math.max(0,p.skillCooldown-dt);
     p.hurtFlash=Math.max(0,(p.hurtFlash||0)-dt);
     p.hurtFace=Math.max(0,(p.hurtFace||0)-dt);p.castFace=Math.max(0,(p.castFace||0)-dt);
-    this.environment?.update(dt);
+    if(this.sceneContent.allows('worldContent'))this.environment?.update(dt);
     if(this.status==='dead')return;
     if(this.storm) { this.storm.life-=dt; if(this.storm.life<=0) this.storm=null; }
     let ix=Number.isFinite(input.x)?input.x:0,iy=Number.isFinite(input.y)?input.y:0;
@@ -535,15 +562,16 @@ export class Game {
     this._moveEntity(p,ix*p.speed*movement*dt,iy*p.speed*movement*dt,true);
     updateLocomotion(p,oldX,oldY,dt);
     if(p.moving)p.moveFacing=Math.atan2(p.y-oldY,p.x-oldX);
-    if(!this.story?.active&&this.touchInteractions.update())return;
-    if(!this.story?.active)this.adventure?.update(dt);
-    this.companions.update(dt);
-    if(!inDungeon&&!this.story?.active){this.encounters?.update(dt);this.settlements.update(dt);this.relicSites?.update(dt);}
+    this.story?.updateActors?.(dt);
+    if(this.sceneContent.allows('worldContent')&&this.touchInteractions.update())return;
+    if(this.sceneContent.allows('worldContent'))this.adventure?.update(dt);
+    if(this.sceneContent.allows('worldContent'))this.companions.update(dt);
+    if(!inDungeon&&this.sceneContent.allows('worldContent')){this.encounters?.update(dt);this.settlements.update(dt);this.relicSites?.update(dt);}
     else if(inDungeon)this.dungeon.update(dt);
     const regen=resolveCharacterStats(this).regen;if(regen)p.hp=Math.min(p.maxHp,p.hp+regen*dt);
     if(!inDungeon)this._spawn-=dt;
     updateDebugMonsterStream(this,dt);
-    if(!this._worldExploration&&(!this.expedition||this.expedition.allowAmbient)&&!this.debugOptions.allMonsters&&!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
+    if(this.sceneContent.allows('worldContent')&&!this._worldExploration&&(!this.expedition||this.expedition.allowAmbient)&&!this.debugOptions.allMonsters&&!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
       const bossActive=this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false);
@@ -554,7 +582,7 @@ export class Game {
         if(enemy)this.elites.maybePromote(enemy);
       }
     }
-    if(!this._worldExploration&&!this.expedition&&!inDungeon&&!this.stage&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0)) {
+    if(this.sceneContent.allows('worldContent')&&!this._worldExploration&&!this.expedition&&!inDungeon&&!this.stage&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');

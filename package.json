@@ -21,12 +21,12 @@
     "test:distances": "node qa-player-distances.mjs && node qa-enemy-distances.mjs && node qa-boss-ranges.mjs",
     "test:maps": "node qa-world-layout.mjs && node qa-world-navigation.mjs && node qa-map-encounters.mjs && node qa-world-layout-art.mjs && node qa-expedition-layout.mjs",
     "test:movement": "node qa-movement.mjs && node qa-movement-enemies.mjs && node qa-movement-companions.mjs && node qa-hero-stats.mjs && node qa-hero-growth.mjs",
-    "test:party": "node qa-companion-recruitment.mjs && node qa-companion-navigation.mjs && node qa-party-tactics.mjs",
+    "test:party": "node qa-companion-recruitment.mjs && node qa-companion-navigation.mjs && node qa-navigation-follow-throttle.mjs && node qa-party-tactics.mjs",
     "test:rift": "node qa-rift-layout.mjs && node qa-rift-navigation.mjs && node qa-rift-exploration.mjs && node qa-rift-scenery.mjs && node qa-rift-placement.mjs && node qa-rift-art.mjs && node qa-rift-sliding.mjs && node qa-scenery-palette.mjs",
     "test:verdant": "node qa-authored-worlds.mjs && node qa-world-selection.mjs && node qa-verdant-layout.mjs && node qa-verdant-placement.mjs",
     "test:worlds": "node qa-config-worlds.mjs && node qa-world-configuration.mjs && node qa-world-connections.mjs && node qa-world-archive.mjs",
     "test:forest-maintenance": "npm run test:config && npm run test:rift && npm run test:verdant && npm run test:worlds && npm run test:maps && npm run test:party && npm run test:exploration && npm run test:viewport && npm run test:attack-depth && node scripts/height-terrain-qa.mjs && node scripts/height-integration-qa.mjs && node scripts/height-allies-qa.mjs",
-    "test:story": "node qa-player-dialogue.mjs && node qa-story-run.mjs && node qa-temporary-build.mjs && node qa-story-archive.mjs && node qa-story-ui.mjs && node qa-realm-progression.mjs && node qa-realm-integration.mjs",
+    "test:story": "node qa-player-dialogue.mjs && node qa-story-scene.mjs && node qa-story-following.mjs && node qa-story-pursuit.mjs && node qa-story-guidance.mjs && node qa-story-run.mjs && node qa-temporary-build.mjs && node qa-story-archive.mjs && node qa-story-ui.mjs && node qa-realm-progression.mjs && node qa-realm-integration.mjs",
     "test:focus": "node qa-focus-navigation.mjs"
   }
 }

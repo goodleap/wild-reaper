@@ -84,4 +84,40 @@ try{
   assert.equal(JSON.stringify(friends),before);
   for(const r of first)assert(Object.values(r).every(Number.isFinite)&&r.x>=0&&r.y>=0&&r.x+r.width<=options.width&&r.y+r.height<=options.height);
 }finally{Math.random=random;}
-console.log('Dialogue avoidance: live body/health/name anchors, legacy and specialist warnings, hostile ability/landing geometry, fog, clipping, compact free space and read-only deterministic presentation passed.');
+
+// A moving fighter leaves a narrow opening every half second. These openings
+// used to reveal the bubble for a few frames over and over during combat.
+const flicker={id:500,clock:0,priority:50,text:'别挡住退路！',remaining:3,speaker:{x:300,y:300,headOffset:58}};
+const projection={project:(x,y)=>({x,y}),width:640,height:480};
+const original=layoutSceneDialogue([flicker],projection)[0].rect;
+let flashes=0;
+for(let frame=1;frame<=360;frame++){
+  flicker.clock=frame/60;
+  const crossing=(frame-1)%30<3;
+  const result=layoutSceneDialogue([flicker],{...projection,avoid:crossing?[original]:[]});
+  flashes+=result.length;
+}
+assert.equal(flashes,0,'repeated short clear gaps cannot flash the same interrupted line');
+flicker.clock=6.1;assert.equal(layoutSceneDialogue([flicker],projection).length,0);
+flicker.clock=7.5;const resumed=layoutSceneDialogue([flicker],projection);
+assert.deepEqual(resumed[0].rect,original,'after stable recovery the offset stays exactly where it first appeared');
+assert.equal(flicker.remaining,3,'layout suppression cannot spend any readable duration');
+
+// Sub-pixel movement at a warning edge is handled as an actual collision plus
+// a clear margin on recovery. A stationary tight gap is eventually usable.
+const tight={id:501,clock:0,priority:50,text:'稳住阵脚。',remaining:3,speaker:{x:300,y:300,headOffset:58}};
+const tightRect=layoutSceneDialogue([tight],projection)[0].rect;
+const blocker=gap=>({x:tightRect.x+tightRect.width+gap,y:tightRect.y,width:12,height:tightRect.height});
+for(let frame=1;frame<=180;frame++){
+  tight.clock=frame/60;
+  assert.equal(layoutSceneDialogue([tight],{...projection,avoid:[blocker(frame%2?-.5:.5)]}).length,0,'one-pixel oscillation cannot re-show the line');
+}
+tight.clock=3.1;assert.equal(layoutSceneDialogue([tight],{...projection,avoid:[blocker(2)]}).length,0);
+tight.clock=4.6;assert.equal(layoutSceneDialogue([tight],{...projection,avoid:[blocker(2)]}).length,1,'a continuously safe tight gap does not suppress speech forever');
+
+const offedge={id:502,clock:0,priority:50,text:'跟紧。',remaining:3,speaker:{x:300,y:300,headOffset:58}};
+const edgeOriginal=layoutSceneDialogue([offedge],projection)[0].rect;
+offedge.clock=.02;assert.equal(layoutSceneDialogue([offedge],{...projection,project:(x,y)=>({x:x-700,y})}).length,0);
+offedge.clock=.04;assert.equal(layoutSceneDialogue([offedge],projection).length,0,'an offscreen anchor also enters the common recovery gate');
+offedge.clock=1.5;assert.deepEqual(layoutSceneDialogue([offedge],projection)[0].rect,edgeOriginal);
+console.log('Dialogue avoidance: bodies, warnings, compact safe placement, fixed offsets and 60fps combat/edge oscillations without repeated flashes passed.');

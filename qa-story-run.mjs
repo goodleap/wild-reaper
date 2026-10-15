@@ -43,7 +43,7 @@ for(const mutation of [s=>s.definitions[0].anchors.meetingArea='missing',s=>s.de
 // when its fixed bubble was later covered by the following princess.
 function dialogueChapter(){
   const g={hero:{id:'traveler',dialogueName:'王子'},status:'playing',mapId:'world:forest',terrain:{},player:{heroId:'traveler',x:300,y:300},enemies:[],companions:{members:[],camps:[]},settlements:{sites:[]},relicSites:{sites:[]}};
-  const chapter=Object.assign(Object.create(StoryRun.prototype),{game:g,id:'prologue',definition:STORY_DEFINITIONS[0],initialized:true,completed:false,disposed:false,dialogue:[],_lineId:0,_lineState:new Map(),actors:[{id:'story:angel',kind:'angel',type:'angel',x:460,y:300}]});
+  const chapter=Object.assign(Object.create(StoryRun.prototype),{game:g,id:'prologue',definition:STORY_DEFINITIONS[0],rules:STORY_DEFINITIONS[0].rules,_clock:0,initialized:true,completed:false,disposed:false,dialogue:[],_lineId:0,_lineState:new Map(),actors:[{id:'story:angel',kind:'angel',type:'angel',x:460,y:300}]});
   g.story=chapter;return g;
 }
 const dialogueVisible={isVisible:()=>true},dialogueLayout={project:(x,y)=>({x,y}),width:800,height:600};
@@ -66,13 +66,13 @@ for(const shown of [1,2.45]){
   read(3.6);assert(chapter._linesFinished('judgment'),'The normal full reading receipt completes the key line.');
 }
 const retainedChapter=dialogueChapter().story;
-for(const step of ['awakening','escort','pill','sanctuary','judgment','conversation'])retainedChapter._queue(step);
+for(const step of ['awakening','conversation'])retainedChapter._queue(step);
 const retainedIds=retainedChapter.dialogue.map(line=>line.id);
-for(const step of ['search','escape','burst','fading'])retainedChapter._queue(step);
+for(const step of ['search','escape','escort','pill','burst','fading','sanctuary'])retainedChapter._queue(step);
 for(const line of retainedChapter.dialogue)retainedChapter.onDialoguePresented(line.id);
 retainedChapter._enter('judgment');
-assert.deepEqual(retainedChapter.dialogue.slice(0,retainedIds.length).map(line=>line.id),retainedIds,'All key plot lines retain their order across the phase edge.');
-assert(retainedChapter.dialogue.every(line=>!['search','escape','burst','fading'].includes(retainedChapter._lineState.get(line.id).step)));
+assert.deepEqual(retainedChapter.dialogue.slice(0,retainedIds.length).map(line=>line.id),retainedIds,'Chapter-scoped background and conclusion retain their order across phase edges.');
+assert(retainedChapter.dialogue.every(line=>{const state=retainedChapter._lineState.get(line.id);return state.scope==='chapter'||state.step==='judgment';}));
 
 const game=new Game({mode:'story',hero:'elder',initialWeaponId:'arrow'}),story=game.story;
 assert.equal(game.hero.id,'traveler');assert.equal(game.initialWeaponId,'sword');
@@ -89,6 +89,10 @@ assert(!game.companions.members.includes(story.princess),'story companion has no
 for(const point of story.paths.escape.slice(0,Math.floor(story.paths.escape.length*.42)+1)){walk(game,point);if(story.getAction())break;}
 for(let i=0;i<100&&!story.getAction();i++)tick(game);
 assert.equal(story.getAction()?.id,'story:take-pill');
+const pendingPillLine=[...story._lineState.values()].find(line=>line.step==='pill');
+const wasPresented=pendingPillLine.presented;pendingPillLine.presented=false;
+assert.equal(story.getAction()?.id,'story:take-pill','the explained action remains usable when combat prevents its speech bubble from appearing');
+assert.match(story.getAction().detail,/30 秒/);pendingPillLine.presented=wasPresented;
 assert(story.useAction('story:take-pill'));assert.equal(story.step,'burst');
 assert.equal(story.getAction(),null,'successful medicine action disappears immediately');assert(!story.useAction('story:take-pill'));
 assert.equal(story.getBuff().speedPercent,100);assert.equal(story.getBuff().damageReduction,.99);
@@ -105,11 +109,14 @@ assert.equal(game.player.speed,320);assert(game.player.level>levelBefore,'script
 assert.equal(game.crystals,0);assert.equal(game.progressionTier,1,'no story upgrade cards, including no backlog');
 assert.deepEqual(canonical.serialize(),buildBefore);
 for(const point of story.paths.escape.slice(Math.floor(story.paths.escape.length*.42)))walk(game,point);
-for(let i=0;i<800&&story.step!=='judgment';i++)tick(game);
+for(let i=0;i<800&&story.step!=='judgment';i++)tick(game,{},false);
 assert.equal(story.step,'judgment');assert(story.angel);assert(story.guardReduction>0);
-for(let i=0;i<200&&!story._judgmentStartedAt;i++)tick(game);
+const castKillsBefore=game.kills,castDefeated=new Set();
+game.onArchiveDefeat=enemy=>{assert(!castDefeated.has(enemy.id),'An enemy cannot receive duplicate defeat credit across thunder pulses');castDefeated.add(enemy.id);};
+for(let i=0;i<200&&!story._judgmentStartedAt;i++)tick(game,{},false);
 assert(story._judgmentStartedAt);assert.equal(story.step,'judgment');
-const killsAfterStrike=game.kills,judgmentEvent=observedEvents.find(event=>event.type==='storyJudgment');
+assert.equal(story._linesFinished('judgment'),false,'Battle timing proceeds even when its speech bubble could not be presented');
+const judgmentEvent=observedEvents.find(event=>event.type==='storyJudgment');
 assert(judgmentEvent?.count>0,'the final pursuers receive a real rescue strike');assert.equal(judgmentEvent.damage,9999);
 let boltFrames=0;
 for(let i=0;i<60;i++) {
@@ -117,7 +124,7 @@ for(let i=0;i<60;i++) {
   const bolts=game.effects.filter(effect=>effect.storyJudgment);
   if(bolts.length)boltFrames++;
   assert(bolts.every(effect=>effect.type==='angelStrike'&&effect.maxLife===.18),'individual bolts retain their original duration');
-  assert.equal(game.kills,killsAfterStrike,'ongoing visual strikes cannot repeat kill credit');
+  assert.equal(game.kills,castKillsBefore+castDefeated.size,'New arrivals receive real damage without repeating credit for previous targets');
 }
 assert(boltFrames>20,'multiple ordinary bolt animations run throughout the full cast');
 for(let i=0;i<100&&story.step!=='conversation';i++)tick(game,{},false);

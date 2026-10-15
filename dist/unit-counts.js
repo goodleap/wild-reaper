@@ -6,17 +6,18 @@ import { companionDefinition } from './companion-catalog.js';
 export function visitSceneUnits(game,visit){
   if(!game)return 0;
   let count=0;
+  const worldContent=game.sceneContent?.allows('worldContent')!==false;
   const unit=(entity,isPlayer=false)=>{count++;visit(entity,isPlayer);};
-  for(const enemy of game.enemies||[])unit(enemy);
+  for(const enemy of game.enemies||[])if(worldContent||enemy.storyId||enemy.storyEnemy)unit(enemy);
   if(game.player)unit(game.player,true);
   // Recovering companions still have a body in the scene.
-  for(const member of game.companions?.members||[])unit(member,true);
+  for(const member of game.companions?.members||[])if(worldContent||member.storyId||member.storyActor)unit(member,true);
   for(const actor of game.story?.actors||[]){
     if(actor.hidden||actor.hp<=0)continue;
     if(actor.kind==='angel'||actor.type==='angel')unit({...actor,y:actor.y-19.8,isTownNpc:true,townKind:'angel',heroId:'traveler',site:actor,name:actor.name||'天使',castFace:actor.castFace||0,facing:0},true);
     else unit(actor,true);
   }
-  if(game.dungeon?.active)return count;
+  if(game.dungeon?.active||!worldContent)return count;
   for(const site of game.settlements?.sites||[]){
     if((site.type!=='merchant'&&site.type!=='angel')||site.state==='spent')continue;
     unit({x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,

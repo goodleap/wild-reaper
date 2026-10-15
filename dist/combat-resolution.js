@@ -126,6 +126,7 @@ export class CombatResolution {
     if(enemy.trainingDummy&&enemy.hp<=0){enemy.hp=enemy.maxHp;enemy.bleed=null;enemy.shock=null;return actual;}
     if(enemy.hp<=0) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy._weaponPush=null;
+      if(enemy.type==='boss'){enemy.slam=null;clearBossAttacks(enemy);}
       g._effect(enemy.x,enemy.y,'defeat',enemy.type==='boss'?.95:.5,enemy.r,color,undefined,{enemyType:enemy.type,source,boss:enemy.type==='boss',angle,strength,seed});
       g.kills++; g.onEnemyDefeated?.(enemy); g._emit('kill');
       // Kill XP is automatic. Loot is a separate skill/currency resource and
@@ -140,7 +141,6 @@ export class CombatResolution {
       }
       if(!enemy.storyEnemy){g.waveDirector?.onEnemyKilled(enemy);g.dungeon.onEnemyKilled(enemy);g.settlements.onEnemyKilled(enemy);}
       if(enemy.type==='boss'&&!enemy.storyEnemy) {
-        enemy.slam=null;clearBossAttacks(enemy);
         g._effect(enemy.x,enemy.y,'ring',1.1,170,'#f2d482');
         if(!enemy.dungeonBoss&&!enemy.dungeonId&&!enemy.debugBoss) {
           g.bossDefeated=true;g.bossKills++;g._emit('bossKill');

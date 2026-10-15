@@ -17,3 +17,7 @@
 .story-recap p{white-space:pre-line;line-height:1.8;font-size:12px;color:#c4ceb7}
 
 #run-summary:has(.tribulation-progress:not(.hidden)) .timer-goal{display:none}
+
+/* Keep the chapter objective readable within the existing progress HUD. */
+#run-summary.story-progress{flex-wrap:wrap;gap:3px 9px;max-width:min(440px,calc(100% - 120px - var(--safe-left) - var(--safe-right)))}
+#run-summary.story-progress .timer-goal{order:-1;flex-basis:100%;white-space:normal;overflow:visible;color:#e3f1d8;font:600 12px/1.5 "PingFang SC",system-ui,sans-serif;border-left:2px solid #bce6d2;padding-left:7px;text-shadow:0 1px 3px #10231d,0 0 6px #10231d}

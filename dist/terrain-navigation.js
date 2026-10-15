@@ -7,6 +7,11 @@ const RECENT=[];
 const LIMITS=Object.freeze({expanded:1800,frameExpanded:2400,frameSearches:2,cells:4096,edges:8192,routes:64,layers:6,terrains:3});
 const DIRECTIONS=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 const key=(x,y)=>`${x},${y}`;
+function searchSeed(id){
+  const numeric=Number(id||0);if(Number.isFinite(numeric))return Math.abs(numeric);
+  let hash=0;for(const char of String(id))hash=(Math.imul(hash,31)+char.charCodeAt(0))>>>0;
+  return hash;
+}
 function remember(map,id,value,limit){map.set(id,value);if(map.size>limit)map.delete(map.keys().next().value);return value;}
 function push(heap,node){
   let i=heap.length;heap.push(node);
@@ -157,14 +162,15 @@ export class TerrainNavigation {
       Object.defineProperty(entity,'_terrainRoute',{value:state,writable:true,configurable:true,enumerable:false});
     }
     const bodyRadius=Math.min(radius,entity.r??radius),targetMoved=state.target&&Math.hypot(state.target.x-target.x,state.target.y-target.y)>64;
+    // Direct travel needs no search budget or cooldown, even after discarding
+    // a detour. Check the complete body sweep and destination on every call.
+    if(this.clearSegment(start,target,bodyRadius,profile)&&this.terrain.isFree(target.x,target.y,bodyRadius,profile)){state.path=null;this.lastExpanded=0;return target;}
     const path=state.path;
     let fallback=null;
     if(path?.length){
       // Reaching the vicinity of a doorway is not the same as having passed
       // through it. Drop a turn only when the following segment is usable.
       while(path.length>1&&Math.hypot(path[0].x-start.x,path[0].y-start.y)<22&&this.clearSegment(start,path[1],bodyRadius,profile))path.shift();
-      // A moving target may become directly reachable after a corner.
-      if(this.clearSegment(start,target,bodyRadius,profile)&&this.terrain.isFree(target.x,target.y,bodyRadius,profile)){state.path=null;return target;}
       for(let i=Math.min(path.length-1,4);i>0;i--)if(this.clearSegment(start,path[i],bodyRadius,profile)){path.splice(0,i);break;}
       if(Math.hypot(path[0].x-start.x,path[0].y-start.y)>.05&&this.clearSegment(start,path[0],bodyRadius,profile))fallback=path[0];
       if(!fallback)state.path=null;
@@ -180,7 +186,8 @@ export class TerrainNavigation {
     this.frameExpanded+=this.lastExpanded;this.frameSearches+=this.searches-searches;this.framePlans+=this.plans-plans;
     // Large populations share a per-frame work budget. Cache hits still work
     // when it is spent; the remaining actors retry in staggered short turns.
-    state.nextSearch=time+(budget>0?.7+(Math.abs(entity.id||0)%5)*.06:.06+(Math.abs(entity.id||0)%4)*.015);
+    const seed=searchSeed(entity.id);
+    state.nextSearch=time+(budget>0?.7+(seed%5)*.06:.06+(seed%4)*.015);
     return replacement?.[0]??fallback??(budget>0?null:start);
   }
   get cacheSize(){let cells=0,edges=0,routes=0;for(const layer of this.layers.values()){cells+=layer.cells.size;edges+=layer.edges.size;routes+=layer.routes.size;}return {layers:this.layers.size,cells,edges,routes};}

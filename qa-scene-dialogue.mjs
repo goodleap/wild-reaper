@@ -104,10 +104,10 @@ const normal=layoutSceneDialogue([bubble],projection);assert.equal(normal.length
 const first=normal[0].rect;
 const redirected=layoutSceneDialogue([bubble],{...projection,avoid:[{x:295,y:first.y,width:10,height:first.height}]});assert.equal(redirected.length,0,'An existing bubble yields to a new warning without jumping to a different offset.');
 const fresh={...bubble,id:2};const firstSafe=layoutSceneDialogue([fresh],{...projection,avoid:[{x:295,y:first.y,width:10,height:first.height}]});assert.equal(firstSafe.length,1);assert.notDeepEqual(firstSafe[0].rect,first,'The initial placement still chooses a safe alternate position.');
-bubble.clock=.13;assert.deepEqual(layoutSceneDialogue([bubble],projection)[0].rect,first,'A briefly hidden line returns to its original relative position.');
+bubble.clock=.13;assert.equal(layoutSceneDialogue([bubble],projection).length,0,'A short gap cannot flash an interrupted bubble.');bubble.clock=1.5;assert.deepEqual(layoutSceneDialogue([bubble],projection)[0].rect,first,'A stable clear interval restores the original relative position.');
 const shifted=layoutSceneDialogue([bubble],{...projection,project:(x,y)=>({x:x+15,y:y+20})})[0].rect;assert.deepEqual(shifted,{...first,x:first.x+15,y:first.y+20},'Actor and camera motion translate an established bubble without relayout.');
 const nearEdge={...bubble,id:3,clock:0,speaker:{...bubble.speaker,x:first.width/2+9}},edgeRect=layoutSceneDialogue([nearEdge],projection)[0].rect;
-assert.equal(layoutSceneDialogue([nearEdge],{...projection,avoid:[edgeRect]}).length,0);nearEdge.clock=.13;assert.deepEqual(layoutSceneDialogue([nearEdge],projection)[0].rect,edgeRect,'A removed warning cannot permanently suppress a stationary bubble near an otherwise safe viewport edge.');
+assert.equal(layoutSceneDialogue([nearEdge],{...projection,avoid:[edgeRect]}).length,0);nearEdge.clock=.13;assert.equal(layoutSceneDialogue([nearEdge],projection).length,0);nearEdge.clock=1.5;assert.deepEqual(layoutSceneDialogue([nearEdge],projection)[0].rect,edgeRect,'A removed warning cannot permanently suppress a stationary bubble near an otherwise safe viewport edge.');
 assert.equal(layoutSceneDialogue([bubble],{...projection,avoid:[{x:0,y:0,width:640,height:480}]}).length,0,'A packed screen omits dialogue.');
 assert.equal(layoutSceneDialogue([{...bubble,speaker:{x:-10,y:200}}],projection).length,0,'Offscreen speakers never gain an edge indicator.');
 assert.equal(layoutSceneDialogue([{...bubble,text:'长'.repeat(100)}],projection).length,0,'Oversized prose cannot exceed the compact two-line layout.');
@@ -147,11 +147,11 @@ for(const sample of phoneCases){
   assert(options.avoid.every(other=>!overlaps(withTail,other)),'The bubble and short tail clear every body, label, HUD and control.');
   assert.deepEqual(layoutSceneDialogue([item],{...options,avoid:[]})[0].rect,rect,'The selected diagonal offset stays fixed even when closer spots become clear.');
   assert.equal(layoutSceneDialogue([item],{...options,avoid:[...options.avoid,rect]}).length,0,'A later warning hides the fixed bubble rather than choosing another safe candidate.');
-  item.clock=.13;assert.deepEqual(layoutSceneDialogue([item],options)[0].rect,rect,'The same offset resumes after the warning clears.');
+  item.clock=.13;assert.equal(layoutSceneDialogue([item],options).length,0);item.clock=1.5;assert.deepEqual(layoutSceneDialogue([item],options)[0].rect,rect,'The same offset resumes after the warning has stayed clear.');
 }
 let saves=0,restores=0,draws=0;
 const ctx={save(){saves++;},restore(){restores++;},measureText:t=>({width:Array.from(t).length*12}),beginPath(){},roundRect(){},fill(){},stroke(){},moveTo(){},lineTo(){},fillText(){draws++;}};
-bubble.clock=.3;drawSceneDialogue(ctx,[bubble],projection);assert.equal(saves,restores);assert(draws>0);
+bubble.clock=1.6;drawSceneDialogue(ctx,[bubble],projection);bubble.clock=3.7;drawSceneDialogue(ctx,[bubble],projection);assert.equal(saves,restores);assert(draws>0);
 assert.equal(DIALOGUE_RULES.maxVisible,2);
 
 // Layout rejection and occlusion cannot consume a line or its one-time cue.
@@ -162,16 +162,35 @@ assert.equal(unreadLine.remaining,DIALOGUE_RULES.duration);assert.equal(unreadLi
 unreadDialogue.present([{item:unreadLine}]);unreadDialogue.observe(unread,.016,visible);
 assert.equal(unreadLine.shownFor,.016);assert(unreadDialogue._record(unreadLine.speaker.id).once.has('alert'));
 unread.enemies[0].hidden=true;unreadDialogue.observe(unread,1,visible);assert.equal(unreadDialogue.items(visible).length,0);assert.equal(unreadLine.shownFor,.016,'Hidden time does not run down readable time.');
-unread.enemies[0].hidden=false;unreadDialogue.observe(unread,0,visible);assert.equal(unreadDialogue.items(visible).length,0,'Visibility recovery has a short stable interval.');unreadDialogue.observe(unread,.13,visible);
+unread.enemies[0].hidden=false;unreadDialogue.observe(unread,0,visible);assert.equal(unreadDialogue.items(visible).length,0,'Visibility recovery has a short stable interval.');unreadDialogue.observe(unread,.8,visible);
 assert.equal(unreadDialogue.items(visible)[0],unreadLine,'The same line survives a one-frame disappearance without consuming a second cue.');
 unreadDialogue.present([{item:unreadLine}]);unreadDialogue.observe(unread,1,visible);const afterOnce=unreadLine.shownFor;unreadDialogue.observe(unread,1,visible);assert.equal(unreadLine.shownFor,afterOnce,'A presentation report is consumed once, not reused when rendering stops.');
 unread.enemies[0].hp=0;assert.equal(unreadDialogue.items(visible).length,0,'Death suppresses speech even before another observer tick.');
 
 const phaseGame=game(),phaseVoices=new SceneDialogue();phaseGame.enemies=[enemy('boss',23,150,{guardActive:true,bossKind:'ancient'})];phaseVoices.observe(phaseGame,0,visible);
 const firstPhase=phaseVoices.items(visible)[0];phaseVoices.present([firstPhase]);phaseVoices.observe(phaseGame,.016,visible);
-phaseGame.enemies[0].hidden=true;phaseVoices.observe(phaseGame,.016,visible);phaseGame.enemies[0].hp=40;phaseGame.enemies[0].hidden=false;phaseVoices.observe(phaseGame,0,visible);phaseVoices.observe(phaseGame,.13,visible);
+phaseGame.enemies[0].hidden=true;phaseVoices.observe(phaseGame,.016,visible);phaseGame.enemies[0].hp=40;phaseGame.enemies[0].hidden=false;phaseVoices.observe(phaseGame,0,visible);phaseVoices.observe(phaseGame,.8,visible);
 assert([...phaseVoices._active,...phaseVoices._queue].includes(firstPhase),'A health-state change cannot delete a partly read line while it is temporarily hidden.');
 assert.equal(phaseVoices.items(visible)[0],firstPhase,'The interrupted first line resumes before its higher-priority phase follow-up.');
+
+// Exercise observer -> real layout -> presentation acknowledgements together.
+// A warning passing through the bubble every 0.5s must neither flash its text
+// nor falsely complete the line while it is hidden.
+const combatGame=game(),combatVoices=new SceneDialogue();combatGame.enemies=[enemy('boss',24,150,{guardActive:true,bossKind:'ancient'})];
+combatVoices.observe(combatGame,0,visible);const combatLine=combatVoices.items(visible)[0];
+const combatView={width:640,height:480,project:(x,y)=>({x:x+180,y:y+280})};
+const firstCombat=layoutSceneDialogue(combatVoices.items(visible),combatView);assert.equal(firstCombat.length,1);
+combatVoices.present(firstCombat);const combatRect=firstCombat[0].rect;
+for(let frame=1;frame<=360;frame++){
+  combatVoices.observe(combatGame,1/60,visible);
+  const placed=layoutSceneDialogue(combatVoices.items(visible),{...combatView,avoid:(frame-1)%30<3?[combatRect]:[]});
+  assert.equal(placed.length,0);combatVoices.present(placed);
+}
+assert(combatLine.shownFor<.04&&combatLine.remaining>DIALOGUE_RULES.duration-.04,'six hidden seconds do not count as six seconds read');
+for(let frame=0;frame<100;frame++){
+  combatVoices.observe(combatGame,1/60,visible);const placed=layoutSceneDialogue(combatVoices.items(visible),combatView);combatVoices.present(placed);
+}
+assert(combatLine.shownFor>.3,'the same line continues reading after sustained safe space returns');
 
 const farRescue=game(),farVoices=new SceneDialogue();farRescue.companions.camps=[{id:'far',kind:'warden',x:250,y:0,state:'trapped'}];tick(farVoices,farRescue);assert.match(contents(farVoices),/束缚/,'A visible captive can call from the expanded 260-unit approach range.');
 console.log('Scene dialogue QA passed: contextual names, real roles, rescue and support transitions, group warnings, priority, hysteresis, pause/scene identity, fail-closed visibility, no simulation/random mutations, compact collision-free overlays.');

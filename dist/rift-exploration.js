@@ -16,10 +16,10 @@ function legacyInteractions(layout){
 // Each finite authored map owns its doors, caves and rewards. Region snapshots
 // retain these instances; revisiting never replenishes a claimed objective.
 export class RiftExploration {
-  constructor(game){
+  constructor(game,{generation=true}={}){
     this.game=game;this.sites=[];
     const layout=game.terrain.island?.layout;
-    if(game.stage||game.expedition||layout?.kind!=='rift-forest')return;
+    if(!generation||game.stage||game.expedition||layout?.kind!=='rift-forest')return;
     this.layout=layout;this.shortcutOpen=false;
     this.namespace=layout.worldId?`${layout.worldId}:`:'';
     const spec=layout.interactions??legacyInteractions(layout);

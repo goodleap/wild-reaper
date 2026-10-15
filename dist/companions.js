@@ -3,7 +3,8 @@ import { rescueGuardType } from './encounter-definitions.js';
 import { groundOffset } from './terrain.js';
 import { terrainNavigation } from './terrain-navigation.js';
 import { placementAllowed } from './placement-rules.js';
-import { resetLocomotion, updateLocomotion } from './locomotion.js';
+import { resetLocomotion } from './locomotion.js';
+import { updateFollowMovement } from './follow-movement.js';
 import { defenseDamageMultiplier } from './combat-stats.js';
 import { movementProfile } from './height-rules.js';
 import { COMPANIONS, COMPANION_RULES, COMPANION_FOLLOW_RULES, companionDefinition as definition } from './companion-catalog.js';
@@ -285,30 +286,12 @@ export class Companions {
     }
     // Jobs approach their own objective. Finishing a job never forces a return
     // to the hero while the member is already inside its normal leash.
-    if(active._followMode!==mode){
-      active._followMode=mode;active._following=false;active._followSpeed=0;
-      active._navTimer=0;active._navObstacle=null;active._coastTarget=null;active._stuckFor=0;
-    }
-    const foot=this._foot(active),d=distance(foot,target),oldX=active.x,oldY=active.y;
     const stop=mode==='combat'?(combat.stop??0):mode==='task'?rules.taskStop:def.followDistance;
     const start=mode==='combat'?(combat.start??0):mode==='task'?rules.taskStart:stop+rules.restartGap;
-    const direct=!g.terrain.firstBlocker(foot.x,foot.y,target.x,target.y,active.r,movementProfile(active));
     // Leader movement inside this band does not issue a move order. A follower
     // that does fall behind walks toward the current position, not a trail or
     // an angular slot, then keeps whichever clear position it reaches.
-    if(combat?.hold||active._following&&d<=stop&&direct)active._following=false;
-    else if(!active._following&&(d>start||!direct)){active._following=true;active._navTimer=0;}
-    if(active._following&&dt>0) {
-      const desiredSpeed=Math.min(Math.max(def.speed,g.player.speed*(active.kind==='golem'?rules.golemCatchup:rules.catchup)),Math.max(40,(d-stop)*7));
-      const acceleration=rules.acceleration*dt,previousSpeed=active._followSpeed||0;
-      active._followSpeed=Math.max(previousSpeed-acceleration,Math.min(previousSpeed+acceleration,desiredSpeed));
-      active.speed=active._followSpeed;
-      g._moveEnemy(active,dt,target);
-      const moved=Math.hypot(active.x-oldX,active.y-oldY);
-      if(moved>.001)active.facing=Math.atan2(active.y-oldY,active.x-oldX);
-      active._stuckFor=moved<.3&&d>stop+20?active._stuckFor+dt:0;
-    }else {active._stuckFor=0;active._followSpeed=0;}
-    updateLocomotion(active,oldX,oldY,dt);
+    updateFollowMovement(g,active,{target,mode,stop,start,baseSpeed:def.speed,catchup:active.kind==='golem'?rules.golemCatchup:rules.catchup,hold:combat?.hold,from:this._foot(active)},dt);
     // Only unseen stranded allies can recover; visible followers use the same
     // terrain steering as before, without snapping to a formation position.
     if((distance(this._foot(active),p)>rules.strandedDistance||active._stuckFor>rules.strandedTime)&&!g._inView(active,40)) {
