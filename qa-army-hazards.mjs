@@ -3,7 +3,7 @@ import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
 import { ANGEL_RULES } from './dist/settlements.js';
-import { defenseDamageMultiplier } from './dist/combat-stats.js';
+import { defenseDamageMultiplier, resolveCharacterStats } from './dist/combat-stats.js';
 
 function arena(){
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,settlements:false});
@@ -15,6 +15,7 @@ const place=(entity,x,y=0)=>{entity.x=x;entity.y=y-groundOffset(entity,!!entity.
 const recruit=(g,kind,x=0)=>g.companions.recruit(kind,{x,y:0});
 const close=(actual,expected,message)=>assert(Math.abs(actual-expected)<1e-8,message||`${actual} differs from ${expected}`);
 const expectedLoss=(entity,amount)=>amount*defenseDamageMultiplier(entity.defense||0);
+const heroLoss=(game,amount)=>amount*defenseDamageMultiplier(resolveCharacterStats(game).defense);
 const wall=()=>new Terrain({obstacles:[{id:'qa-wall',type:'log',x:48,y:0,r:8,halfLength:100,angle:Math.PI/2,structureType:'castle-wall'}]});
 
 // One explosion resolves through every friendly's ordinary defense/recovery
@@ -23,7 +24,7 @@ const blast=arena(),dog=recruit(blast,'dog',20),owl=recruit(blast,'owl',-20),beh
 blast.terrain=wall();
 const enemy=blast._spawnEnemy('slime',1);Object.assign(enemy,{x:80,y:-groundOffset(enemy),hp:1000,maxHp:1000});
 blast.environment._explode({x:0,y:0,state:'armed',blastRadius:100});
-close(blast.player.hp,88,'the hero receives one explosion hit');
+close(blast.player.hp,blast.player.maxHp-heroLoss(blast,12),'the hero receives one explosion hit through current defense');
 close(dog.hp,dog.maxHp-expectedLoss(dog,12));close(owl.hp,owl.maxHp-expectedLoss(owl,12),'an airborne blast also reaches the low-flying owl');
 assert.equal(behind.hp,behind.maxHp,'a tall wall shields a companion from the explosion');assert.equal(enemy.hp,1000,'the same wall shields the enemy');
 
@@ -32,11 +33,11 @@ assert.equal(behind.hp,behind.maxHp,'a tall wall shields a companion from the ex
 const poison=arena(),hound=recruit(poison,'dog',20),scout=recruit(poison,'owl',-20),late=recruit(poison,'stormcaller',200),gas=poison.environment.mechanisms;
 gas.props=[0,1].map(id=>({id:`gas:${id}`,type:'gas',x:0,y:0,r:70,state:'active',remaining:10}));
 gas._gasDamage(0);
-close(poison.player.hp,94);close(hound.hp,hound.maxHp-expectedLoss(hound,6));close(scout.hp,scout.maxHp-expectedLoss(scout,6),'poison gas is not a ground-only hazard');assert.equal(late.hp,late.maxHp);
+close(poison.player.hp,poison.player.maxHp-heroLoss(poison,6));close(hound.hp,hound.maxHp-expectedLoss(hound,6));close(scout.hp,scout.maxHp-expectedLoss(scout,6),'poison gas is not a ground-only hazard');assert.equal(late.hp,late.maxHp);
 place(late,0);for(const entity of [poison.player,hound,scout,late])entity.invuln=0;
-gas._gasDamage(.5);close(poison.player.hp,94);close(hound.hp,hound.maxHp-expectedLoss(hound,6));close(late.hp,late.maxHp-expectedLoss(late,6),'a late entrant does not borrow another body’s cooldown');
+gas._gasDamage(.5);close(poison.player.hp,poison.player.maxHp-heroLoss(poison,6));close(hound.hp,hound.maxHp-expectedLoss(hound,6));close(late.hp,late.maxHp-expectedLoss(late,6),'a late entrant does not borrow another body’s cooldown');
 for(const entity of [poison.player,hound,scout,late])entity.invuln=0;
-gas._gasDamage(.5);close(poison.player.hp,88);close(hound.hp,hound.maxHp-expectedLoss(hound,12));close(late.hp,late.maxHp-expectedLoss(late,6));
+gas._gasDamage(.5);close(poison.player.hp,poison.player.maxHp-heroLoss(poison,12));close(hound.hp,hound.maxHp-expectedLoss(hound,12));close(late.hp,late.maxHp-expectedLoss(late,6));
 const beforePause=[poison.player,hound,scout,late].map(entity=>entity.hp),cooldowns=[...gas._gasAllyCooldowns.values()];poison.status='paused';gas.update(.05);
 assert.deepEqual([poison.player,hound,scout,late].map(entity=>entity.hp),beforePause);assert.deepEqual([...gas._gasAllyCooldowns.values()],cooldowns);poison.status='playing';
 poison.companions.dismiss(late.id);gas._gasDamage(0);assert(!gas._gasAllyCooldowns.has(late),'departed members do not accumulate in hazard clocks');

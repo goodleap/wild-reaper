@@ -2,6 +2,7 @@ import { getConfigSection } from '../content-config.js';
 import { friendlyFoot, selectFriendlyTarget, clearFriendlyPath, damageFriendly, isFriendlyActive } from '../friendly-combat.js';
 import { circleImpact } from '../combat-attacks.js';
 import { isGrounded } from '../height-rules.js';
+import { retreatRangedEnemy } from '../combat-tactics.js';
 
 export const SPECIALIST_RULES=getConfigSection('enemies').specialistRules;
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -87,7 +88,10 @@ export function updateSpecialist(game,e,dt){
   }
   const distance=footDistance(e,target);
   if(!canStart(game,e,target,rule))return false;
-  if(s.cooldown>0)return distance<=rule.holdRange;
+  if(s.cooldown>0){
+    if(['rootbinder','prismguard','tidepriest','stoneape','frostmage'].includes(e.type)&&retreatRangedEnemy(game,e,target,dt,rule.range))return true;
+    return distance<=rule.holdRange;
+  }
   if(rule.minRange&&distance<rule.minRange)return false;
   s.aimX=target.x;s.aimY=target.y;
   if(rule.predictTime){

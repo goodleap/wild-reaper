@@ -2,6 +2,7 @@ import { ABILITY_RULES as RULES, getAbilityDefinition, abilityAllowed, abilityAc
 import { friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from './friendly-combat.js';
 import { isGrounded } from './height-rules.js';
 import { recordHeroAction } from './hero-animation.js';
+import { beamCapsule, capsuleHitsCircle } from './attack-capsule.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const point=e=>({x:e.x,y:e.y});
@@ -232,7 +233,7 @@ export class AbilityRuntime {
       const dx=target.x-center.x,dy=target.y-center.y,d=Math.hypot(dx,dy);let inside=false;
       if(effect.shape==='cone')inside=d<=p.range+(target.r||0)&&Math.abs(angleDifference(Math.atan2(dy,dx),effect.angle))<=p.spread+(target.r||0)/Math.max(20,d);
       else if(effect.shape==='beam'){
-        const along=dx*Math.cos(effect.angle)+dy*Math.sin(effect.angle),across=-dx*Math.sin(effect.angle)+dy*Math.cos(effect.angle);inside=along>=0&&along<=p.range&&Math.abs(across)<=p.radius+(target.r||0);
+        inside=capsuleHitsCircle(beamCapsule(center.x,center.y,effect.angle,p.range,p.radius),target.x,target.y,target.r||0);
       }else inside=d<=radius+(target.r||0);
       if(!inside||!this.clearPath(projected(effect,center),target,effect.profile))continue;
       if(repeat)effect.lastHit.set(target,this.clock);else effect.hit.add(target);

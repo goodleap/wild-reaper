@@ -7,6 +7,7 @@ import { RELICS } from './relics.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive } from './event-scheduling.js';
 import { SETTLEMENT_RULES, ANGEL_RULES, SETTLEMENT_DEFINITIONS as SITE_DEFS, settlementType } from './site-definitions.js';
 import { updateAngels } from './sites/angel-guardian.js';
+import { enemyGroupProvoked } from './combat-tactics.js';
 import { settlementInteraction, activateSettlement, getShopItems, buyShopItem } from './sites/settlement-content.js';
 export { SETTLEMENT_RULES, ANGEL_RULES } from './site-definitions.js';
 import { worldSettlementDefinition, WORLD_HUT_NAMES } from './world-sites.js';
@@ -200,7 +201,7 @@ export class Settlements {
     this._updateAngels(dt,p);
     for(const site of this.sites)if(site.state==='active')for(const enemy of g.enemies) {
       if(enemy.hp<=0||enemy.settlementId!==site.id)continue;
-      const foot={x:enemy.x,y:enemy.y+groundOffset(enemy)},near=!majorFight&&distance(p,site.door)<OBJECTIVE_RULES.houseEngage&&distance(foot,site.door)<OBJECTIVE_RULES.houseEngage;
+      const foot={x:enemy.x,y:enemy.y+groundOffset(enemy)},near=enemyGroupProvoked(g,enemy,site.door,OBJECTIVE_RULES.houseEngage)||!majorFight&&distance(p,site.door)<OBJECTIVE_RULES.houseEngage&&distance(foot,site.door)<OBJECTIVE_RULES.houseEngage;
       enemy.guardActive=near;enemy.guardReturnTarget=!near&&distance(foot,enemy.settlementHome)>12?enemy.settlementHome:null;
     }
   }

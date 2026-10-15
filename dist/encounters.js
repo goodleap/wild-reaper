@@ -4,6 +4,7 @@ import { enemyDefinition } from './enemy-definitions.js';
 import { groundOffset } from './terrain.js';
 import { canStartObjective, objectivePointSafe } from './event-scheduling.js';
 import { placementAllowed } from './placement-rules.js';
+import { enemyGroupProvoked } from './combat-tactics.js';
 
 const TAU=Math.PI*2;
 const encounterContent=getConfigSection('encounters');
@@ -180,7 +181,7 @@ export class Encounters {
         enemy.guardActive=false;enemy.guardReturnTarget=null;enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
         return true;
       }
-      const foot=this._foot(enemy,false),engaged=distance(this._foot(),active)<active.r+RULES.hunt.playerEngagePadding&&distance(foot,active)<active.r+RULES.hunt.guardEngagePadding;
+      const foot=this._foot(enemy,false),engaged=enemyGroupProvoked(g,enemy,active,active.r+RULES.hunt.guardEngagePadding)||distance(this._foot(),active)<active.r+RULES.hunt.playerEngagePadding&&distance(foot,active)<active.r+RULES.hunt.guardEngagePadding;
       enemy.guardActive=engaged;enemy.guardReturnTarget=null;
       if(engaged)g._moveEnemy(enemy,dt);
       else {

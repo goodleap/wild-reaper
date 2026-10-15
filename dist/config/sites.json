@@ -287,6 +287,7 @@
   "dialogue": {
     "rules": {
       "duration": 3.6,
+      "minDuration": 2,
       "queueDuration": 4.5,
       "maxVisible": 2,
       "combatVisible": 1,
@@ -300,9 +301,9 @@
       "merchantNearExit": 210,
       "merchantFar": 230,
       "merchantFarExit": 290,
-      "captiveNear": 180,
-      "captiveExit": 240,
-      "rescueReadyRange": 180,
+      "captiveNear": 260,
+      "captiveExit": 320,
+      "rescueReadyRange": 260,
       "supportRange": 330
     },
     "lines": {

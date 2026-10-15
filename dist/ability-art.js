@@ -1,6 +1,7 @@
 import { AbilityVisuals, TAU, clamp, abilityColor, circle, polygon, segment } from './ability-visuals.js';
 import { drawSpecialistBossGround } from './enemy-art/specialist-bosses.js';
 import { visitAttackDepthBands } from './attack-depth.js';
+import { beamCapsule, capsulePath } from './attack-capsule.js';
 
 const art=new AbilityVisuals();
 const depthItems=new WeakMap();
@@ -66,8 +67,8 @@ function shape(ctx,e,r){
   const p=e.parameters,x=e.x,y=e.y+(e.groundOffset||0);
   ctx.beginPath();
   if(e.shape==='beam'||e.shape==='projectile'){
-    const length=e.shape==='projectile'?Math.min(90,p.range):p.range,ux=Math.cos(e.angle),uy=Math.sin(e.angle),rx=-uy*r,ry=ux*r;
-    ctx.moveTo(x+rx,y+ry);ctx.lineTo(x+ux*length+rx,y+uy*length+ry);ctx.lineTo(x+ux*length-rx,y+uy*length-ry);ctx.lineTo(x-rx,y-ry);ctx.closePath();
+    const length=e.shape==='projectile'?Math.min(90,p.range):p.range;
+    capsulePath(ctx,beamCapsule(x,y,e.angle,length,r));
   }else if(e.shape==='cone'){
     ctx.moveTo(x,y);ctx.arc(x,y,p.range,e.angle-p.spread,e.angle+p.spread);ctx.closePath();
   }else if(e.shape==='wave'){
@@ -126,7 +127,7 @@ function drawSpecialGround(ctx,game,options){
       let pathVisible=false;
       for(let i=0;i<=samples&&!pathVisible;i++)pathVisible=visible(options,{x:a.x+(x2-a.x)*i/samples,y:a.y+(y2-a.y)*i/samples,r});
       if(!pathVisible)continue;
-      ctx.beginPath();ctx.moveTo(a.x-uy*r,a.y+ux*r);ctx.lineTo(x2-uy*r,y2+ux*r);ctx.lineTo(x2+uy*r,y2-ux*r);ctx.lineTo(a.x+uy*r,a.y-ux*r);ctx.closePath();ctx.globalAlpha=.045+progress*.065;ctx.fill();ctx.globalAlpha=.58+progress*.3;ctx.lineWidth=1.4+progress*.5;ctx.stroke();
+      ctx.beginPath();capsulePath(ctx,{x:a.x,y:a.y,x2,y2,r});ctx.globalAlpha=.045+progress*.065;ctx.fill();ctx.globalAlpha=.58+progress*.3;ctx.lineWidth=1.4+progress*.5;ctx.stroke();
     }
   }
 }

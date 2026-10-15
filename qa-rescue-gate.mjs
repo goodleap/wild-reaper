@@ -51,8 +51,8 @@ assert(guards.every(e=>e.rescueSpawnGrace===0&&e.guardActive===true));
 for(const enemy of guards)g._hurtEnemy(enemy,enemy.hp+1);
 assert.equal(camp.state,'ready');assert.equal(site.state,'active');assert.equal(site.gateOpen,true);assert(!atGate());
 assert.equal(g.rescuePower,0,'opening the gate is not yet the rescue reward');
-for(const point of [{x:site.x,y:site.y-60},{x:site.x+61,y:site.y},{x:site.x,y:site.y+62}]) {
-  feet(g,point);assert.equal(g.companions._join(),false,'nearby players outside the walls cannot rescue through them');
+for(const point of [{x:site.x,y:site.y-80},{x:site.x+100,y:site.y},{x:site.x,y:site.y+101}]) {
+  feet(g,point);assert.equal(g.companions._join(),false,'a remaining wall or excess distance prevents rescue');
 }
 const throughDoor=g.terrain.moveCircle(site.x,site.door.y+25,0,-95,15);
 assert(!throughDoor.blocked,'the player can walk through the opened door');
@@ -66,4 +66,4 @@ blocked.g.terrain.setStructures([{id:'qa-block-spawns',type:'log',x:blocked.site
 assert.equal(blocked.g.relicSites.interact(blocked.site.id),false);
 assert.equal(blocked.g.companions.camp,null);assert.equal(blocked.g.enemies.length,0);assert.equal(blocked.site.state,'ready');
 assert.equal(blocked.g.effects.filter(e=>e.type==='rescueWarning').length,0);
-console.log('Rescue gates: solid masonry, owner-preserved collisions, safe complete formations, harmless paused warnings, pre-rescue gate opening and unique interior rescue passed.');
+console.log('Rescue gates: solid masonry, owner-preserved collisions, safe complete formations, harmless paused warnings, pre-rescue gate opening and wall-safe unique rescue passed.');

@@ -130,8 +130,11 @@ for(const expedition of EXPEDITIONS){
   assert(node(h,'stage-picker').classList.contains('hidden'));assert(!node(h,'world-mode-note').classList.contains('hidden'));
   choose(h,'mode','dungeon');choose(h,'dungeon',expedition.id);
   const card=node(h,`dungeon-${expedition.id}`).parentElement.textContent;
-  for(const text of [expedition.name,expedition.objective,expedition.rewardLabel])assert(card.includes(text));
-  for(const id of node(h,`dungeon-${expedition.id}`).getAttribute('aria-describedby').split(' '))assert(node(h,id).textContent.length>0);
+  assert.equal(card,expedition.name,'destination cards keep only their preview and name');
+  const details=node(h,'stage-description');
+  for(const text of [expedition.summary,expedition.objective,expedition.rewardLabel])assert(details.textContent.includes(text));
+  assert.equal(details.parentElement.tagName,'DETAILS');assert(!details.parentElement.hasAttribute('open'),'destination details start folded');
+  assert.equal(node(h,'stage-picker').getAttribute('aria-describedby'),details.id);
   choose(h,'mode','world');choose(h,'mode','dungeon');
   assert(node(h,`dungeon-${expedition.id}`).checked);assert(node(h,'hero-princess-v2').checked);assert(node(h,'weapon-orbit').checked);
   assert.equal(node(h,'prepare-start-label').textContent,'进入副本');
@@ -143,7 +146,7 @@ for(const expedition of EXPEDITIONS){
   assert.equal(h.run('game.dungeonId'),expedition.id);assert.equal(h.run('game.initialWeaponId'),'orbit');
   const loaded=harness('',{storage});click(loaded,'start-button');assert(node(loaded,`dungeon-${expedition.id}`).checked);
 }
-console.log('Preparation modes: world default, all three expedition starts/restarts, shared hero/starter, semantic card copy, legacy appearance/difficulty migration and removed preview passed.');
+console.log('Preparation modes: world default, all three expedition starts/restarts, shared hero/starter, compact cards with accessible folded details, legacy appearance/difficulty migration and removed preview passed.');
 
 for(const dungeonId of ['missing',{},['moon']]){
   const h=harness('',{storage:new Map([['wild-echoes-setup',JSON.stringify({mode:'dungeon',dungeonId,difficulty:'casual'})]])});

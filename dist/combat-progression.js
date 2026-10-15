@@ -83,6 +83,16 @@ export class CombatProgression {
       evolutionName:id==='orbit'?EVOLUTIONS.orbit.name:undefined,evolves:id==='orbit'&&rank===4};
   }
 
+  _withPrimaryWeapon(choices,pool) {
+    const primary=this.game.initialWeaponId;
+    const related=choice=>choice.category==='weapon'&&choice.ownerId===primary;
+    if(!choices.length||choices.some(related))return choices;
+    const available=pool.filter(related);if(!available.length)return choices;
+    // Every other category still has a chance, including upgrades to secondary
+    // weapons. The cached panel keeps this randomly chosen slot stable.
+    choices[Math.min(choices.length-1,Math.floor(Math.random()*choices.length))]=randomEntry(available);return choices;
+  }
+
   getChoices() {
     const g=this.game;
     if(g._choices)return g._choices;
@@ -92,14 +102,15 @@ export class CombatProgression {
 
     // Present both exclusive branches together and keep the third card as a
     // deferral. A successful purchase advances the cursor; inspection does not.
-    g._branchOfferWeapon=null;
-    for(let i=0;i<BRANCH_WEAPONS.length;i++) {
+    g._branchOfferWeapon=isBranchReady(g,g.initialWeaponId)?g.initialWeaponId:null;
+    for(let i=0;!g._branchOfferWeapon&&i<BRANCH_WEAPONS.length;i++) {
       const owner=BRANCH_WEAPONS[((g._branchOfferCursor||0)+i)%BRANCH_WEAPONS.length];
       if(isBranchReady(g,owner)){g._branchOfferWeapon=owner;break;}
     }
     const opening=g.progressionTier===1&&!g._branchOfferWeapon&&ACQUISITIONS.every(id=>!g.build.getRank(id));
     const ordinary=opening?['arrow','barrier',randomEntry(['orbit','pulse','lightning','fireball','frostbolt'])].map(id=>pool.find(choice=>choice.id===id)).filter(Boolean):this._ordinary(pool,g._branchOfferWeapon?1:3);
-    let choices=ordinary.map(choice=>this._choice(choice));
+    const offers=g._branchOfferWeapon===g.initialWeaponId?ordinary:this._withPrimaryWeapon(ordinary,pool);
+    let choices=offers.map(choice=>this._choice(choice));
     if(g._branchOfferWeapon) {
       const owner=g._branchOfferWeapon;
       const level=owner==='arrow'?(g.build.getWeapon('arrow')?.level||1)+1:5;

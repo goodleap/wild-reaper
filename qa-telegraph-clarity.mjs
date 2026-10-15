@@ -42,7 +42,10 @@ try{
       assert.deepEqual(strokes(draw(g,{dense:true,reduced:true})),s,`${id} keeps the same hazard geometry at high density`);
       const path=s[0].path;
       if(['zone','field','ring'].includes(e.shape))assert.deepEqual(path,[{name:'arc',args:[e.x,e.y+e.groundOffset,e.parameters.radius,0,Math.PI*2]}],`${id} shows its exact radius with no countdown arcs or ticks`);
-      if(e.shape==='beam')assert.deepEqual(path.slice(0,4).map(p=>p.args),[[100,132+e.parameters.radius],[100+e.parameters.range,132+e.parameters.radius],[100+e.parameters.range,132-e.parameters.radius],[100,132-e.parameters.radius]]);
+      if(e.shape==='beam'){
+        const caps=path.filter(p=>p.name==='arc');assert.equal(caps.length,2,'beam warning has two rounded ends');
+        assert.deepEqual(caps.map(p=>p.args.slice(0,3)),[[100+e.parameters.range-e.parameters.radius,132,e.parameters.radius],[100+e.parameters.radius,132,e.parameters.radius]]);
+      }
       if(e.shape==='cone'){const arc=path.find(p=>p.name==='arc');assert.deepEqual(arc.args,[100,132,e.parameters.range,-e.parameters.spread,e.parameters.spread]);}
     }
   }

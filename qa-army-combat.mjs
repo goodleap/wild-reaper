@@ -3,6 +3,7 @@ import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { friendlyTargets, friendlyFoot, selectFriendlyTarget, damageFriendly } from './dist/friendly-combat.js';
 import { resolveBloomBoss } from './dist/bosses.js';
+import { defenseDamageMultiplier, resolveCharacterStats } from './dist/combat-stats.js';
 const wall={id:'army-wall',type:'log',structureType:'castle-wall',x:60,y:0,r:9,halfLength:260,angle:Math.PI/2};
 function arena(obstacles=[]){
   const game=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false});
@@ -61,7 +62,7 @@ const bloom=arena(),bloomBoss=enemy(bloom,0,0,'boss'),bloomVictim=ally(bloom,60)
 resolveBloomBoss(bloom,bloomBoss);assert.equal(bloomVictim.hp,183,'overlapping bloom eruption damages each ally only once');
 
 const protectedHero=arena();protectedHero.companions.protectionMultiplier=()=>.75;
-assert(damageFriendly(protectedHero,protectedHero.player,20));assert.equal(protectedHero.player.hp,protectedHero.player.maxHp-15,'warden mitigation applies exactly once to player');
+assert(damageFriendly(protectedHero,protectedHero.player,20));assert.equal(protectedHero.player.hp,protectedHero.player.maxHp-20*defenseDamageMultiplier(resolveCharacterStats(protectedHero).defense)*.75,'warden mitigation applies exactly once after the hero defense');
 const custom={x:10,y:4,r:14,isCompanion:true,groundOffset:12};assert.deepEqual(friendlyFoot(custom),{x:10,y:16},'natural-size companions use their own foot anchor');
 const pursuit=arena(),hunter=enemy(pursuit),rearAlly=ally(pursuit,-50);pursuit._moveEnemy(hunter,.05);
 assert(hunter.x<0,'actual terrain navigation moves toward selected companion instead of hero');

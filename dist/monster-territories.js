@@ -2,6 +2,7 @@ import { getConfigSection } from './content-config.js';
 import { groundOffset } from './terrain.js';
 import { ordinaryEnemyType } from './encounter-definitions.js';
 import { enemyDefinition } from './enemy-definitions.js';
+import { activateCombatGroup } from './combat-tactics.js';
 
 const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -103,15 +104,16 @@ export class MonsterTerritories {
     if(enemy.affix){enemy.affix.phase='idle';enemy.affix.life=0;}
   }
   _activate(enemy,group) {
+    const newlyActive=enemy.territoryState!=='chasing';
     enemy.territoryState='chasing';enemy.guardActive=true;enemy.guardReturnTarget=null;enemy._territoryAway=0;
-    enemy._navTimer=0;enemy._coastTarget=null;
+    if(newlyActive){enemy._navTimer=0;enemy._coastTarget=null;}
     if(enemy.worldBoss&&!enemy._worldBossAnnounced){enemy._worldBossAnnounced=true;this.game.bossCount++;this.game.bossSpawned=true;this.game.bossDefeated=false;this.game._emit('boss');}
     if(!group.announced){group.announced=true;this.game._emit('territoryAlert',{territoryId:group.id,enemyId:enemy.id});}
   }
   awaken(enemy) {
     const group=this.byId.get(enemy.territoryId);if(!group||enemy.hp<=0)return false;
-    enemy._territoryProvokedUntil=this.game._clock+TERRITORY_RULES.provokedDuration;
-    this._activate(enemy,group);this._rally(group,enemy);return true;
+    activateCombatGroup(group.members,member=>{member._territoryProvokedUntil=this.game._clock+TERRITORY_RULES.provokedDuration;this._activate(member,group);});
+    return true;
   }
   _rally(group,source) {
     for(const enemy of group.members)if(enemy.hp>0&&enemy.territoryState==='idle') {

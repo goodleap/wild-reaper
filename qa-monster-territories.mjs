@@ -32,7 +32,7 @@ assert.equal(g.events.filter(e=>e.type==='territoryAlert'&&e.territoryId===first
 const second=other,victim=second.members[0];place(g,{x:second.x+second.radius+30,y:second.y});
 const beforeHp=victim.hp;g._hurtEnemy(victim,1,0,g.player,'raw');
 assert.equal(victim.hp,beforeHp-1);assert.equal(victim.territoryState,'chasing');assert.equal(victim.guardActive,true);
-assert(second.members.some(e=>e.territoryState==='alert'));
+assert(second.members.every(e=>e.territoryState==='chasing'&&e.guardActive),'a real hit immediately activates every living member of that group');
 // A pure target query must not awaken another idle member/group.
 const untouched=territories.groups.find(group=>group!==first&&group!==second);g.combat.canTarget(untouched.members[0]);assert(untouched.members.every(e=>e.territoryState==='idle'));
 

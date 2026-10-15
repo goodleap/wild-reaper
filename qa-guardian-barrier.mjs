@@ -6,7 +6,9 @@ import { RELIC_RULES } from './dist/relics.js';
 
 const near=(actual,expected,label)=>assert(Math.abs(actual-expected)<1e-8,`${label}: expected ${expected}, received ${actual}`);
 function arena({barrier=true}={}) {
-  const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false});
+  // The princess has neutral health/defense, keeping these absorption examples
+  // independent of the prince's permanent health and armor bonuses.
+  const g=new Game({hero:'princess',terrain:new Terrain({obstacles:[]}),adventure:false});
   g.enemies=[];g.effects=[];g.events=[];
   g._spawn=Infinity;g._shot=Infinity;g._sword=Infinity;g._pulse=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;
   if(barrier){assert(g.build.increment('barrier'));g._refreshStats();g._refreshWeapons();}

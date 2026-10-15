@@ -1,5 +1,6 @@
 const intersects=(a,b)=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
 const inside=(r,w,h)=>r.x>=8&&r.y>=8&&r.x+r.width<=w-8&&r.y+r.height<=h-8;
+const placements=new WeakMap();
 
 function wrap(text,measure,maxWidth){
   const rows=[];let row='';
@@ -20,13 +21,20 @@ export function layoutSceneDialogue(items,{project,width,height,avoid=[],measure
     if(result.length>=2)break;
     const s=item.speaker,anchor=project(s.x,s.y-(s.headOffset||58));
     if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||anchor.x<0||anchor.x>width||anchor.y<0||anchor.y>height)continue;
-    const rows=wrap(item.text,measure,Math.min(204,width-40));if(!rows)continue;
-    const w=Math.max(48,...rows.map(measure))+20,h=rows.length*18+14;
-    // Keep the bubble near its speaker. A packed screen drops incidental text
-    // instead of moving it over the hero, a telegraph, the HUD, or touch input.
-    const spots=[{x:anchor.x-w/2,y:anchor.y-h-12},{x:anchor.x-w-12,y:anchor.y-h-12},{x:anchor.x+12,y:anchor.y-h-12},{x:anchor.x-w/2,y:anchor.y-h-38}];
+    let saved=placements.get(item),rows=saved?.rows??wrap(item.text,measure,Math.min(204,width-40));if(!rows)continue;
+    const w=saved?.width??Math.max(48,...rows.map(measure))+20,h=saved?.height??rows.length*18+14;
+    // Choose a safe spot once. Subsequent frames preserve the offset from the
+    // speaker; a new warning hides this bubble instead of pushing it sideways.
+    const spots=saved?[{x:anchor.x+saved.dx,y:anchor.y+saved.dy}]:[{x:anchor.x-w/2,y:anchor.y-h-12},{x:anchor.x-w-12,y:anchor.y-h-12},{x:anchor.x+12,y:anchor.y-h-12},{x:anchor.x-w/2,y:anchor.y-h-38}];
     const rect=spots.map(p=>({...p,width:w,height:h})).find(rect=>inside({...rect,height:h+5},width,height)&&occupied.every(other=>!intersects({...rect,height:h+5},other)));
-    if(!rect)continue;
+    if(!rect){if(saved){saved.blockedAt=item.clock??0;saved.edgeBlocked=!inside({...spots[0],width:w,height:h+5},width,height);}continue;}
+    if(saved?.blockedAt!=null){
+      // The extra edge skirt and brief clear interval prevent a one-pixel
+      // camera oscillation from flashing text repeatedly along the viewport.
+      if(saved.edgeBlocked&&(rect.x<14||rect.y<14||rect.x+w>width-14||rect.y+h+5>height-14)){saved.blockedAt=item.clock??0;continue;}
+      if((item.clock??0)-saved.blockedAt<.12)continue;saved.blockedAt=null;saved.edgeBlocked=false;
+    }
+    if(!saved){saved={dx:rect.x-anchor.x,dy:rect.y-anchor.y,width:w,height:h,rows};placements.set(item,saved);}
     occupied.push({...rect,x:rect.x-5,y:rect.y-5,width:rect.width+10,height:rect.height+10});
     result.push({item,rect,rows,anchor});
   }

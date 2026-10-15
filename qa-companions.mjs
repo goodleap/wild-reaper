@@ -75,7 +75,8 @@ assert(Math.abs(access._damageMultiplier()-before.damage-.08)<1e-12);
 assert.equal(xpTotal(access),before.xp);assert.equal(access.player.level,before.level);assert.equal(access.status,'playing','rescue growth never interrupts play with an upgrade choice');
 access._hurtEnemy(defeated,100);access.companions.onEnemyKilled(defeated);access.update(0);
 assert.equal(access.rescuePower,1);assert.equal(access.companions.rescuedCount,1);
-assert.equal(access.companions.spawn('stormcaller',700,19.8),null,'duplicate companion kinds cannot be recruited');
+const duplicateCamp=access.companions.spawn('stormcaller',700,19.8);assert(duplicateCamp,'another same-kind rescue remains available while the party has capacity');
+access.companions._clearCamp(false,duplicateCamp);
 
 // The small permanent benefit changes actual weapon damage, survives departure,
 // and combines additively with ordinary +25% damage upgrades.

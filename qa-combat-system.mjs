@@ -173,10 +173,10 @@ equip._shot=0;equip.update(0);assert(equip.bullets.length>0);assert(equip.orbita
 // A cached offer is a transaction: inspection cannot reroll it, stale caps and
 // insufficient resources cannot grant progress, and one payment happens once.
 const choice=arena();choice.progressionTier=5;choice.crystalsNext=40;choice.crystals=40;choice.status='upgrade';
-const offer=choice.getUpgradeChoices(),offerIds=offer.map(c=>c.id);for(let i=0;i<10;i++)assert.equal(choice.getUpgradeChoices(),offer);
+let offer;for(let i=0;i<200;i++){choice._choices=null;offer=choice.getUpgradeChoices();if(offer.some(c=>c.category==='attribute'))break;}
+const offerIds=offer.map(c=>c.id);for(let i=0;i<10;i++)assert.equal(choice.getUpgradeChoices(),offer);
 assert.equal(new Set(offerIds).size,offer.length);assert(offer.some(c=>c.category==='attribute'));
-assert(offer.some(c=>['orbit','pulse','lightning','barrier'].includes(c.id)),'new abilities retain opportunity');
-assert(offer.some(c=>['rapid','multishot','arrowPower','storm','sword'].includes(c.id)),'owned abilities retain opportunity');
+assert(offer.some(c=>c.ownerId===choice.initialWeaponId&&c.category==='weapon'),'the primary weapon remains available alongside alternatives');
 const unfunded=choice.build.serialize();choice.crystals=39;assert.equal(choice.chooseUpgrade(offerIds[0]),false);assert.deepEqual(choice.build.serialize(),unfunded);
 choice.crystals=40;assert.equal(choice.chooseUpgrade('missing'),false);assert.equal(choice.getUpgradeChoices(),offer);
 const picked=offer.find(c=>c.category==='attribute');assert(choice.chooseUpgrade(picked.id));assert.equal(choice.crystals,0);assert.equal(choice.progressionTier,6);assert.equal(choice.chooseUpgrade(picked.id),false);

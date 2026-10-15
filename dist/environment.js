@@ -53,7 +53,7 @@ export class Environment {
     // several terrain cells, so neither lookup nor painting uses a cell radius.
     this._macroWaters=game.terrain?.island?.layout?.lakes??[];
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
-    this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();
+    this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();this._contactFeet=new WeakMap();
     if(generation)this._refresh(true);
     this.mechanisms=new RegionalMechanisms(this,{generation});
     this.worldHazards=new WorldHazards(this,{generation});
@@ -283,6 +283,23 @@ export class Environment {
     if(g.status!=='playing')return;
     for(const next of this.props)if(next!==prop&&distance(next,prop)<=r+(next.r||17))this._arm(next,'chain');
   }
+  _contactMushrooms(dt){
+    const g=this.game,props=this.props.filter(prop=>prop.state==='idle'&&prop.type==='mushroom');
+    for(const entity of [...friendlyTargets(g),...g.enemies]){
+      if(entity.hp<=0||!isGrounded(entity)||entity.isCompanion&&!isFriendlyActive(g,entity)){this._contactFeet.delete(entity);continue;}
+      const point=this._foot(entity),previous=this._contactFeet.get(entity);
+      // Sweep real movement between updates, but never arm a trail of props
+      // during debug teleports or a return to a saved scene.
+      const from=previous&&distance(previous,point)<=Math.max(96,(entity.speed||0)*dt*3)?previous:point;
+      for(const prop of props){
+        if(prop.state!=='idle'||segmentDistance(prop.x,prop.y,from.x,from.y,point.x,point.y)>(prop.r||17)+(entity.r||15))continue;
+        const dx=point.x-from.x,dy=point.y-from.y,length=dx*dx+dy*dy;
+        const t=length?Math.max(0,Math.min(1,((prop.x-from.x)*dx+(prop.y-from.y)*dy)/length)):0;
+        if(!g.terrain.firstBlocker(prop.x,prop.y,from.x+dx*t,from.y+dy*t,0,'ground'))this._arm(prop,'contact');
+      }
+      this._contactFeet.set(entity,point);
+    }
+  }
   update(dt){
     const g=this.game;if(g.status!=='playing')return;
     dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
@@ -296,6 +313,7 @@ export class Environment {
     for(const prop of ready){if(g.status!=='playing')break;this._explode(prop);}
     this.props=this.props.filter(o=>o.state!=='spent');
     if(g.status!=='playing')return;
+    this._contactMushrooms(dt);
     if(this.generation){this._refreshClock-=dt;if(this._refreshClock<=0){this._refreshClock=.5;this._refresh();}}
     this.mechanisms.update(dt);
     if(g.status==='playing')this.worldHazards.update(dt);

@@ -5,6 +5,7 @@ import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } fro
 import { queueAttackKnockback } from './weapon-knockback.js';
 import { emitDamageNumber } from './damage-numbers.js';
 import { specialistDamageMultiplier } from './enemies/specialists.js';
+import { provokeEnemyGroup } from './combat-tactics.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const feedbackSeed=(x,y,time,id=0)=>(Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
@@ -98,6 +99,8 @@ export class CombatResolution {
     const g=this.game;
     if(!this.canTarget(enemy,origin,{source})||!Number.isFinite(amount)||amount<=0)return 0;
     if(g.regions?.canDamage(enemy)===false)return 0;
+    provokeEnemyGroup(g,enemy);
+    if(['player','ally'].includes(attackSource(source).owner)||origin===g.player||origin?.isCompanion)g.companions?.alert?.(enemy);
     // A shield absorbing a valid hit still alerts its defender. Visibility
     // and origin checks above remain pure and reject blocked strikes first.
     if(enemy.dungeonId)g.dungeon.awaken?.(enemy);
@@ -156,6 +159,7 @@ export class CombatResolution {
   damagePlayer(amount,origin=null) {
     const g=this.game;
     const p=g.player;if(p.invuln>0||g.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
+    g.companions?.alert?.(origin);
     amount*=defenseDamageMultiplier(resolveCharacterStats(g).defense);
     amount*=g.companions?.protectionMultiplier?.(p)??1;
     amount=g.relics?.modifyIncomingDamage(amount)??amount;

@@ -430,7 +430,7 @@ export class Game {
     const furyTime=this.adventure?.furyTime||0,magnetTime=this.adventure?.magnetTime||0;
     // Clear only transient attacks. Persistent sites and surviving objective
     // guards remain in a suspended per-region snapshot for return journeys.
-    for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
+    for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._groupProvokedUntil=0;enemy._navTimer=0;enemy._navObstacle=null;}
     this.territories?.suspend();
     this.superSkills.clearScene();this.barrier.clearScene();this.abilities.clearScene();this.regions.saveWorld();
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];

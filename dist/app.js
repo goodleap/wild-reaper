@@ -18,7 +18,7 @@ import { getStormGeometry, lightningPath, stormBrightness, stormImpactBrightness
 import { MonsterArt } from './monster-art.js';
 import { HumanoidArt } from './humanoid-art.js';
 import { CompanionArt, COMPANION_VISUALS } from './companion-art.js';
-import { companionDefinition } from './companion-catalog.js';
+import { companionDefinition, COMPANION_RULES } from './companion-catalog.js';
 import { armyPanelHTML } from './army-panel.js';
 import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
@@ -261,23 +261,15 @@ function preparationChoice({id,name,group,color,art,role}){
   const label=document.createElement('label'),radio=document.createElement('input'),content=document.createElement('span'),portrait=document.createElement('canvas'),title=document.createElement('strong');
   label.className=`preparation-choice ${group}-option`;label.style.setProperty('--choice-color',color);
   radio.id=`${group}-${id}`;radio.type='radio';radio.name=group;radio.value=id;radio.setAttribute('aria-label',name);
-  content.className='preparation-choice-content';portrait.width=group==='stage'?320:256;portrait.height=group==='stage'?200:group==='hero'?256:224;if(group!=='hero')portrait.setAttribute(group==='stage'?'data-world-archive-art':'data-archive-art',art);portrait.setAttribute('aria-hidden','true');
+  content.className='preparation-choice-content';portrait.width=group==='stage'?320:256;portrait.height=group==='stage'?120:group==='hero'?256:224;if(group!=='hero')portrait.setAttribute(group==='stage'?'data-world-archive-art':'data-archive-art',art);portrait.setAttribute('aria-hidden','true');
   title.textContent=name;content.append(portrait,title);
   if(role){const note=document.createElement('small');note.textContent=role;content.append(note);}
   label.append(radio,content);return {label,radio,portrait};
-}
-function addDestinationDetails(label,summary,objective,reward){
-  const content=label.querySelector('.preparation-choice-content'),radio=label.querySelector('input'),descriptions=[];
-  for(const [text,className] of [[summary,'destination-play'],[`目标 · ${objective}`,'destination-goal'],[`奖励 · ${reward}`,'destination-reward']]){
-    const line=document.createElement('span');line.id=`${radio.id}-${className}`;line.className=className;line.textContent=text;content.append(line);descriptions.push(line.id);
-  }
-  radio.setAttribute('aria-describedby',descriptions.join(' '));
 }
 for(const expedition of EXPEDITIONS){
   const {label,radio,portrait}=preparationChoice({id:expedition.id,name:expedition.name,group:'stage',color:expedition.color||'#b9d99b',art:''});
   portrait.removeAttribute('data-world-archive-art');dungeonPortraits.set(expedition.id,portrait);
   radio.id=`dungeon-${expedition.id}`;radio.name='destination';label.setAttribute('data-expedition',expedition.id);
-  addDestinationDetails(label,expedition.summary,expedition.objective,expedition.rewardLabel);
   $('stage-options').append(label);dungeonRadios.set(expedition.id,radio);
   radio.addEventListener('change',()=>{if(radio.checked){selectedDungeonId=expedition.id;saveSetup();refreshStageSetup();revealSelectedStage();}});
   radio.addEventListener('focus',()=>{if(prepareOpen)revealStage(radio.parentElement);});
@@ -285,7 +277,6 @@ for(const expedition of EXPEDITIONS){
 for(const stage of STAGES){
   const {label,radio}=preparationChoice({id:stage.id,name:stage.shortName,group:'stage',color:stage.color,art:`world:${stage.themeId}`});
   radio.name='destination';radio.setAttribute('aria-label',stage.name);
-  addDestinationDetails(label,'探索外岛，准备核心岛决战','击败核心首领，抵达出口','灵晶、领主秘藏与通关记录');
   $('stage-options').append(label);stageRadios.set(stage.id,radio);
   radio.addEventListener('change',()=>{if(radio.checked){selectedDungeonId=null;selectedStageId=stage.id;saveSetup();refreshStageSetup();revealSelectedStage();}});
   radio.addEventListener('focus',()=>{if(prepareOpen)revealStage(radio.parentElement);});
@@ -309,7 +300,7 @@ function refreshPreparationSummary(){
 function refreshHeroSetup(){
   const hero=getHero(selectedHeroId),appearance=getHeroAppearance(hero.id,selectedAppearanceId);selectedHeroId=hero.id;selectedAppearanceId=appearance.id;
   for(const [id,radio] of heroRadios)radio.checked=id===selectedAppearanceId;
-  $('hero-selection-name').textContent=appearance.name;$('hero-description').textContent=hero.summary;
+  $('hero-selection-name').textContent=appearance.name;
   $('hero-traits').replaceChildren(...hero.traits.map(trait=>{const item=document.createElement('span');item.textContent=trait;return item;}));
   $('hero-attributes').replaceChildren(...hero.details.map(detail=>{const item=document.createElement('li');item.textContent=detail;return item;}));
   refreshPreparationSummary();
@@ -319,7 +310,7 @@ function drawHeroChoices(){
     const portrait=heroPortraits.get(hero.id),artContext=portrait.getContext('2d');
     artContext.clearRect(0,0,portrait.width,portrait.height);artContext.save();artContext.translate(128,152);artContext.scale(3.5,3.5);
     artContext.fillStyle='#0b1a1655';artContext.beginPath();artContext.ellipse(0,20,16,5,0,0,TAU);artContext.fill();
-    humanoidArt.draw(artContext,hero.appearanceId||hero.id,{pose:{},entity:{id:0,heroId:hero.heroId,appearanceId:hero.appearanceId,facing:Math.PI/2},time:2,reduced:true,pixelRatio:3.5});artContext.restore();
+    humanoidArt.draw(artContext,hero.appearanceId||hero.id,{pose:{},entity:{id:0,heroId:hero.heroId,appearanceId:hero.appearanceId,facing:hero.heroId==='traveler'?0:Math.PI/2},time:2,reduced:true,pixelRatio:3.5});artContext.restore();
   }
 }
 function revealHeroChoice(id=selectedAppearanceId){
@@ -340,7 +331,7 @@ function refreshStageSetup(){
   for(const [id,radio] of dungeonRadios)radio.checked=id===selectedDungeonId;
   $('stage-title').textContent=(expedition||stage).name;
   $('stage-kind').textContent=expedition?{arena:'怪潮生存',x:'横向推进',y:'纵向推进'}[expedition.axis]:'岛屿试炼';
-  $('stage-description').textContent=(expedition||stage).summary;
+  $('stage-description').textContent=[(expedition||stage).summary,`目标 · ${expedition?.objective||'击败核心首领，抵达出口'}`,`奖励 · ${expedition?.rewardLabel||'灵晶、领主秘藏与通关记录'}`].join('\n');
   $('stage-picker').style.setProperty('--stage-color',(expedition||stage).color||'#b9d99b');refreshPreparationSummary();
 }
 function updateStageScroll(){
@@ -693,7 +684,7 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='bossWindup')||game.enemies.some(enemy=>(bossWindingUp(enemy))&&sceneVisible(enemy)))return;
   else if(pendingEvolutions.length&&(Date.now()>=toastUntil||toastPriority<2)){const evolution=pendingEvolutions.shift();notify(`${evolution.name} · ${evolution.weaponId==='orbit'?'武器已进化':'技能分支已解锁'}`,2);}
   else if(events.some(event=>event.type==='companionJoined')){const joined=events.find(event=>event.type==='companionJoined');notify(`${joined.name}加入军团 · 每 30 秒支付维持费`,2);}
-  else if(events.some(event=>event.type==='rescueReady'))notify('围困怪物已清除 · 靠近受困者完成解救',2);
+  else if(events.some(event=>event.type==='rescueReady'))notify(armyFull()?`围困怪物已清除 · ${readyRescueLabel()}`:'围困怪物已清除 · 靠近受困者完成解救',2);
   else if(events.some(event=>event.type==='rescueExpired'))notify('营救机会已错过 · 继续寻找其他旅人',1);
   else if(events.some(event=>event.type==='companionUpkeepWarning'))notify('军团维持费不足 · 请及时补充金币',2);
   else if(events.some(event=>event.type==='companionRecoveryBlocked')){const event=events.find(event=>event.type==='companionRecoveryBlocked');notify(`${event.name}等待救治 · 需要 ${event.cost} 金币`,2);}
@@ -739,6 +730,8 @@ function endGame(){
 }
 function updateBuffHUD(){const adventure=game?.adventure,fury=adventure?.furyTime||0,magnet=adventure?.magnetTime||0;show('buff-status',!runEnded&&(fury>0||magnet>0));show('fury-buff',fury>0);show('magnet-buff',magnet>0);$('fury-time').textContent=Math.ceil(fury);$('magnet-time').textContent=Math.ceil(magnet);}
 function rescueCamps(){return game?.companions?.camps||(game?.companions?.camp?[game.companions.camp]:[]);}
+function armyFull(){return (game?.companions?.members.length||0)>=COMPANION_RULES.maxMembers;}
+function readyRescueLabel(){return armyFull()?`队伍已满 · ${COMPANION_RULES.maxMembers}/${COMPANION_RULES.maxMembers}`:'靠近解救';}
 function activeEncounters(){return game?.encounters?.activities||(game?.encounters?.active?[game.encounters.active]:[]);}
 function updateEncounterHUD(){
   const foot={x:game?.player.x||0,y:(game?.player.y||0)+ACTOR_VISUALS.player.foot*1.1};
@@ -752,7 +745,7 @@ function updateEncounterHUD(){
   $('encounter-status').classList.toggle('treasure-event',!camp&&!hunt);$('encounter-status').classList.toggle('rescue-event',!!camp);$('encounter-status').classList.toggle('rescue-ready',camp?.state==='ready');$('encounter-status').classList.toggle('urgent',active.life<=10);
   $('encounter-icon').textContent=camp?(camp.kind==='stormcaller'?'ϟ':'◈'):hunt?'◎':'◇';
   $('encounter-name').textContent=camp?`营救${camp.name}`:hunt?'林间狩猎':'追逐宝物精';
-  $('encounter-goal').textContent=camp?(camp.state==='ready'?'围困已解除 · 靠近解救':`清除围困怪物 · ${Math.max(0,camp.guardTotal-camp.remainingGuards)} / ${camp.guardTotal}`):hunt?`${inside?'擂台击败':'进入擂台'} · ${active.progress} / ${active.goal}`:'击败金色宝物精 · 夺取补给';
+  $('encounter-goal').textContent=camp?(camp.state==='ready'?(armyFull()?readyRescueLabel():'围困已解除 · 靠近解救'):`清除围困怪物 · ${Math.max(0,camp.guardTotal-camp.remainingGuards)} / ${camp.guardTotal}`):hunt?`${inside?'擂台击败':'进入擂台'} · ${active.progress} / ${active.goal}`:'击败金色宝物精 · 夺取补给';
   $('encounter-time').textContent=active.siteId?'遗迹':`${Math.max(0,Math.ceil(active.life))}秒`;
 }
 function updateCompanionHUD(){
@@ -1072,7 +1065,8 @@ function renderSceneDialogue(offsetX,offsetY,terrainProps,sceneProps){
   avoid.push(minimapBounds(width,height,hudInsets));
   if(coarse)avoid.push({x:0,y:height-160,width:170,height:160},{x:width-160,y:height-170,width:160,height:170});
   avoid.push(...sceneDialogueAvoidance(game,{offsetX,offsetY,width:viewWidth,height:viewHeight,isVisible:sceneVisible}).map(projectRect));
-  drawSceneDialogue(ctx,items,{project:(x,y)=>({x:(x+offsetX)*worldZoom,y:(y+offsetY)*worldZoom}),width,height,avoid});
+  const placed=drawSceneDialogue(ctx,items,{project:(x,y)=>({x:(x+offsetX)*worldZoom,y:(y+offsetY)*worldZoom}),width,height,avoid});
+  sceneDialogue.present(placed);
 }
 function flightCrossesProp(actor,prop){
   const half=prop.type==='log'?(prop.halfLength||0):0,dx=Math.cos(prop.angle||0),dy=Math.sin(prop.angle||0);
@@ -1410,7 +1404,7 @@ function drawObjectivePointers(){
   const treasure=game.adventure?.treasure,targets=[];
   const distance=entity=>Math.hypot(entity.x-game.player.x,entity.y-game.player.y-ACTOR_VISUALS.player.foot*1.1);
   for(const member of game.companions?.members||[]){const target=member.state==='active'&&(member.kind==='dog'?member.treasureTarget:member.scoutCount>=5||member.scoutTarget?.boss?member.scoutTarget:null);if(target)targets.push({entity:target,label:member.kind==='dog'?'寻宝犬发现':member.scoutTarget?.boss?'首领警戒':'敌群警戒',color:member.kind==='dog'?'#edca91':'#c2dceb',priority:1});}
-  for(const camp of rescueCamps())targets.push({entity:camp,label:camp.state==='ready'?'解救':'营救',color:camp.state==='ready'?'#c8e8ae':'#e8c994',priority:distance(camp)<(camp.state==='ready'?100:240)?0:1});
+  for(const camp of rescueCamps())targets.push({entity:camp,label:camp.state==='ready'?(armyFull()?'队伍已满':'解救'):'营救',color:camp.state==='ready'?'#c8e8ae':'#e8c994',priority:distance(camp)<(camp.state==='ready'?100:240)?0:1});
   for(const encounter of activeEncounters())targets.push({entity:encounter,label:encounter.type==='hunt'?'猎区':'宝物精',color:encounter.type==='hunt'?'#bbd6b0':'#e8cf83',priority:distance(encounter)<(encounter.type==='hunt'?encounter.r:330)?0:1});
   if(treasure&&treasure.state!=='opened')targets.push({entity:treasure,label:'宝箱',color:'#e8cf83',priority:treasure.state==='active'&&distance(treasure)<600?0:2});
   for(const gate of game.regions?.portals||[])if(gate.discovered)targets.push({entity:gate,label:gate.kind==='victory'?'通关门':gate.state==='locked'?'封印门':'传送门',color:gate.kind==='victory'?'#f1d38c':gate.state==='locked'?'#ceaa83':'#b5dccf',priority:gate.kind==='victory'?1:2});
@@ -1449,7 +1443,7 @@ function drawRescueGround(){
   ctx.globalAlpha=.65;ctx.beginPath();ctx.ellipse(0,0,33,17,0,0,TAU);ctx.stroke();
   if(!ready){for(let i=0;i<camp.guardTotal;i++){const a=-Math.PI/2+i*TAU/camp.guardTotal;diamond(Math.cos(a)*65,Math.sin(a)*65,3.5,i<camp.guardTotal-camp.remainingGuards?'#cfdeb1':'#987d53');}}
   else{ctx.globalAlpha=reduced?.5:.45+Math.sin(clock*3)*.15;ctx.beginPath();ctx.arc(0,0,40,0,TAU);ctx.stroke();}
-  ctx.globalAlpha=.9;ctx.textAlign='center';ctx.font='600 10px "PingFang SC",system-ui,sans-serif';ctx.fillStyle=color;ctx.fillText(ready?'靠近解救':`围困者 ${camp.remainingGuards} / ${camp.guardTotal}`,0,83);ctx.restore();
+  ctx.globalAlpha=.9;ctx.textAlign='center';ctx.font='600 10px "PingFang SC",system-ui,sans-serif';ctx.fillStyle=color;ctx.fillText(ready?readyRescueLabel():`围困者 ${camp.remainingGuards} / ${camp.guardTotal}`,0,83);ctx.restore();
   }
 }
 function drawCompanion(actor){

@@ -13,9 +13,17 @@ assert.equal(h.run('game.companions.members.length'),4,'DOM string identifier di
 h.listeners['character-tab-status:keydown']({key:'ArrowRight',preventDefault(){},stopPropagation(){}});assert.equal(h.run('characterTab'),'attributes','tab navigation wraps across all five tabs');
 h.listeners['character-tab-attributes:keydown']({key:'End',preventDefault(){},stopPropagation(){}});assert.equal(h.run('characterTab'),'status');
 h.run('closeCharacter();debugArmyAction(false);');assert.equal(h.run('game.companions.members.length'),0);assert(h.nodes['companion-status'].classList.contains('hidden'));
+h.run('game.companions.recruit("warden",{sourceId:"ui:one"});game.companions.recruit("warden",{sourceId:"ui:two"});game.companions.members[0].hp=43;game.companions.members[1].hp=71;openCharacter("army");');
+const duplicateIds=JSON.parse(h.run('JSON.stringify(game.companions.members.map(m=>m.id))'));
+assert.equal(duplicateIds.length,2);assert.notEqual(...duplicateIds);
+for(const id of duplicateIds)assert(h.nodes['character-content'].innerHTML.includes(`data-dismiss-companion="${id}"`));
+const duplicateButton={getAttribute:()=>String(duplicateIds[1])};
+h.listeners['character-content:click']({target:{closest:selector=>selector.includes('data-dismiss-companion')?duplicateButton:null}});
+assert.equal(h.run('game.companions.members.length'),1);assert.equal(h.run('game.companions.members[0].id'),duplicateIds[0]);assert.equal(h.run('game.companions.members[0].hp'),43,'dismissing one same-kind companion leaves the other instance intact');
+h.run('closeCharacter();debugArmyAction(false);');
 assert.match(armyPanelHTML({status:'playing',companions:{members:[{id:12,kind:'dog',name:'<img src=x>',hp:4,maxHp:100,state:'active'}]}}),/&lt;img src=x&gt;/);
 const normal=harness();normal.run('startGame();');await normal.flush();normal.run('debugArmyAction(true);');assert.equal(normal.run('game.companions.members.length'),0,'debug action is unavailable in ordinary runs');
-const full=harness('?debug=full');full.run('startGame();');await full.flush();full.run('');assert.equal(full.run('game.companions.members.length'),5);assert.equal(full.run('archive.data.entries["companion:golem"].acquisitions'),1);
+const full=harness('?debug',{storage:new Map([['wild-echoes-debug-options',JSON.stringify({fullLoadout:true})]])});full.run('startGame();');await full.flush();full.run('debugArmyAction(true);');assert.equal(full.run('game.companions.members.length'),5);assert.equal(full.run('archive.data.entries["companion:golem"].acquisitions'),1);
 for(const kind of ['dog','owl','golem']){full.run(`{const site=game.relicSites.sites.find(s=>s.kind==='${kind}');game.player.x=site.x;game.player.y=site.y+100;shippedRenderGame();}`);}
 full.run(`{const mage=game.companions.members.find(m=>m.kind==='stormcaller');mage.invuln=0;game.companions.takeDamage(mage,10000);updateCompanionHUD();openCharacter('army');}`);
 assert.match(full.nodes['companion-time'].textContent,/5 · 9◉\/30s/,'recovering companions are excluded from the displayed wage total');

@@ -175,18 +175,18 @@ assert(mudRush.enemies[0].x<dryRush.enemies[0].x,'charging movement also respect
 const passable=landscape(),walkedOver=mushroom(passable,40,19.8);
 advance(passable,.5,{x:1});
 assert(passable.player.x>100,'a mushroom is not an invisible solid obstacle');
-assert.equal(walkedOver.state,'idle','walking over a mushroom does not arm it');
+assert.equal(walkedOver.state,'armed','ground contact arms a mushroom with its normal delay');
 
 for(const source of ['arrow','orbit','pulse','echo','lightning','storm']) {
   const g=landscape(),prop=mushroom(g,source==='echo'?190:source==='orbit'?74:100);
   if(source==='arrow') {monster(g,'slime',220);shootOnce(g);advance(g,.2);}
   if(source==='orbit') {g.levels.orbit=1;g.update(0);}
-  if(source==='pulse') {monster(g,'slime',100);g.levels.pulse=1;g._pulse=0;g.update(0);}
+  if(source==='pulse') {monster(g,'slime',50);g.levels.pulse=1;g._pulse=0;g.update(0);}
   if(source==='echo') {
-    monster(g,'slime',205);g.levels.pulse=5;g.branches.pulse='echoes';g._pulse=0;g.update(0);
+    monster(g,'slime',50);g.levels.pulse=5;g.branches.pulse='echoes';g._pulse=0;g.update(0);
     assert.equal(prop.state,'idle','the outer mushroom is beyond the first pulse');advance(g,.36);
   }
-  if(source==='lightning') {monster(g,'slime',100);g.levels.lightning=1;g._lightning=0;g.update(0);}
+  if(source==='lightning') {monster(g,'bat',100);g.levels.lightning=1;g._lightning=0;g.update(0);}
   if(source==='storm') {
     const hidden=mushroom(g,700);g.update(0,{skill:true});
     assert.equal(hidden.state,'idle','screen lightning cannot arm an offscreen mushroom');

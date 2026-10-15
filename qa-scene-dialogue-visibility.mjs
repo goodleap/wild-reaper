@@ -3,7 +3,8 @@ import { Terrain } from './dist/terrain.js';
 import { DungeonVision } from './dist/dungeon-vision.js';
 import { sceneGroundAnchor } from './dist/scene-rendering.js';
 import { sceneDialogueVisible } from './dist/scene-dialogue-visibility.js';
-import { SceneDialogue,DIALOGUE_RULES } from './dist/scene-dialogue.js';
+import { SceneDialogue,DIALOGUE_RULES,dialogueSpeakers } from './dist/scene-dialogue.js';
+import { RelicSites } from './dist/relic-sites.js';
 
 const viewport={width:800,height:700};
 const wall=(id,x,y,halfLength,angle=0)=>({id,type:'log',variant:'castle-wall',x,y,halfLength,angle,r:14});
@@ -88,7 +89,22 @@ assert.equal(dialogue.items(check).length,1);assert.equal(dialogue.items(check)[
 const expedition=world([],0),expeditionDialogue=new SceneDialogue();
 expedition.enemies=[1,2].map(id=>({id,type:'shieldguard',x:150+id*10,y:0,r:21,hp:100,guardActive:true,expeditionId:'ship',expeditionSegment:0}));
 const admitted={isVisible:()=>true};expeditionDialogue.observe(expedition,0,admitted);assert.equal(expeditionDialogue.items(admitted).length,1);
+expeditionDialogue.present(expeditionDialogue.items(admitted));
 expeditionDialogue.observe(expedition,4,admitted);assert.equal(expeditionDialogue.items(admitted).length,0);
 expedition.enemies=[{...expedition.enemies[0],id:3,expeditionSegment:1}];expeditionDialogue.observe(expedition,0,admitted);assert.equal(expeditionDialogue.items(admitted).length,1);
+
+// Prison bars are sight-blocking collision for combat, but the open-air
+// enclosure must not permanently mute its own visibly captive occupant.
+const prison=world([],0,180),cell={id:'cell:one',type:'rescue',kind:'warden',x:0,y:0,state:'active',gateOpen:false};
+prison.relicSites=new RelicSites(prison,{generation:false});prison.relicSites.sites=[cell];prison.relicSites._setStructures();
+prison.companions.camps=[{id:'camp:one',siteId:cell.id,kind:'warden',x:0,y:0,state:'trapped'}];
+const captive=dialogueSpeakers(prison).find(s=>s.kind==='captive');assert(captive);
+assert(prison.terrain.firstBlocker(0,180,0,0,0,'sight'),'The gate remains a real sight/combat barrier.');
+for(const [x,y]of [[0,180],[150,0],[-150,0],[0,-150]]){prison.player.x=x;prison.player.y=y-19.8;assert(isVisible(prison,captive),`Own open-air prison permits the captive call from ${x},${y}`);}
+prison.player.x=0;prison.player.y=180-19.8;
+prison.terrain.setStructures([wall('other-prison-wall',0,100,60)],'test');assert.equal(isVisible(prison,captive),false,'Ignoring the first own bar never ignores a different wall farther along the ray.');
+prison.terrain.setStructures([{id:'foreground-tree',type:'tree',x:0,y:100,r:20,scale:1}],'test');assert.equal(isVisible(prison,captive),false,'Trees outside the prison still suppress dialogue.');
+prison.terrain.setStructures([],'test');assert.equal(isVisible(prison,captive,{sceneProps:[{type:'tree',x:0,y:60,r:14,scale:1}]}),false,'A foreground canopy still hides a captive despite its own-wall exception.');
+const outsider={...captive,kind:'enemy',entity:{...captive.entity,type:'slime',hp:100}};assert.equal(isVisible(prison,outsider),false,'An unrelated speaker cannot borrow the captive prison exception.');
 
 console.log('Dialogue visibility QA passed: actual dungeon fog/doors, outdoor LOS and height bands, foreground roofs/canopies/long walls, depth ties, hidden/invalid/offscreen/transition states, finite-population LOS pruning, distant merchant, segmented group warnings.');

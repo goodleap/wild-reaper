@@ -8,7 +8,7 @@ import { Terrain } from './dist/terrain.js';
 
 const config=JSON.parse(readFileSync(new URL('./dist/config/sites.json',import.meta.url),'utf8'));
 assert(validateDialogueConfig(config));
-for(const change of [s=>s.dialogue.rules.maxVisible=3,s=>s.dialogue.rules.combatVisible=4,s=>s.dialogue.rules.merchantFarExit=10,s=>s.dialogue.lines.angel=['{secret}'],s=>s.dialogue.lines.captive=[],s=>s.dialogue.lines.join=['<button>']]){
+for(const change of [s=>s.dialogue.rules.maxVisible=3,s=>s.dialogue.rules.combatVisible=4,s=>s.dialogue.rules.minDuration=10,s=>s.dialogue.rules.rescueReadyRange=400,s=>s.dialogue.rules.merchantFarExit=10,s=>s.dialogue.lines.angel=['{secret}'],s=>s.dialogue.lines.captive=[],s=>s.dialogue.lines.join=['<button>']]){
   const invalid=structuredClone(config);change(invalid);assert.throws(()=>validateDialogueConfig(invalid),/Invalid sites.dialogue/);
 }
 const visible={isVisible:s=>!s.source.hidden};
@@ -18,7 +18,9 @@ function game(name='王子'){
 const site=(type,x=150,id=type)=>({id,type,x,y:0,state:'ready',guardRadius:190});
 const enemy=(type,id=1,x=150,extra={})=>({id,type,x,y:0,r:type==='boss'?49:18,hp:100,maxHp:100,guardActive:false,...extra});
 const contents=d=>d.items(visible).map(item=>item.text).join(' ');
-const tick=(d,g,dt=0)=>d.observe(g,dt,visible);
+// Present the preceding frame before advancing its visible time, as app.js
+// does after drawing its successfully placed overlays.
+const tick=(d,g,dt=0)=>{d.present(d.items(visible));d.observe(g,dt,visible);};
 
 // Names are dialogue-specific, not the longer role-selection labels.
 for(const name of ['王子','公主','老登']){
@@ -46,10 +48,11 @@ assert.equal(silence.items(visible).length,0);assert.equal(silence.items().lengt
 const priority=game(),scheduler=new SceneDialogue();priority.settlements.sites=[site('angel'),site('merchant',DIALOGUE_RULES.merchantFar)];tick(scheduler,priority);
 assert.equal(scheduler.items(visible).length,2);
 const boss=enemy('boss',9,210,{guardActive:true,bossKind:'ancient'});priority.enemies=[boss];tick(scheduler,priority,.1);
-assert.equal(scheduler.items(visible).length,1);assert.equal(scheduler.items(visible)[0].speaker.source,boss,'A boss preempts both incidental greetings.');
+assert.equal(scheduler.items(visible).length,1);assert.notEqual(scheduler.items(visible)[0].speaker.source,boss,'Combat reduces clutter without stealing the first readable seconds.');
+tick(scheduler,priority,2);assert.equal(scheduler.items(visible)[0].speaker.source,boss,'A boss takes priority after the displayed line reaches its minimum readable time.');
 boss.hp=40;tick(scheduler,priority,1);tick(scheduler,priority,3);
 assert(contents(scheduler).includes('还没结束'),'The actual low-health state receives one follow-up line.');
-boss.hp=0;tick(scheduler,priority);assert.equal(scheduler.items(visible).length,0,'Dead speakers leave no floating line.');
+boss.hp=0;tick(scheduler,priority);assert(scheduler.items(visible).every(item=>item.speaker.source!==boss),'Dead speakers leave no floating line; interrupted greetings may resume.');
 
 const territory=game(),warnings=new SceneDialogue();territory.enemies=[enemy('shieldguard',1,150,{territoryId:'group:a',territoryState:'idle'}),enemy('frostmage',2,170,{territoryId:'group:a',territoryState:'idle'})];tick(warnings,territory);assert.equal(warnings.items(visible).length,0);
 for(const e of territory.enemies){e.guardActive=true;e.territoryState='chasing';}tick(warnings,territory);
@@ -76,7 +79,7 @@ for(const kind of ['dog','owl','golem']){
 const paused=game(),pauseDialogue=new SceneDialogue();paused.settlements.sites=[site('angel')];tick(pauseDialogue,paused);
 const remaining=pauseDialogue.items(visible)[0].remaining;paused.status='shop';tick(pauseDialogue,paused,100);assert.equal(pauseDialogue.items(visible).length,0);
 paused.status='playing';tick(pauseDialogue,paused);assert.equal(pauseDialogue.items(visible)[0].remaining,remaining);
-paused.mapId='world:moon';paused.settlements.sites=[];tick(pauseDialogue,paused);assert.equal(pauseDialogue.items(visible).length,0,'Changing scenes clears old speech immediately.');
+paused.mapId='world:moon';assert.equal(pauseDialogue.items(visible).length,0,'A changed map cannot draw stale speech before the next observer tick.');paused.settlements.sites=[];tick(pauseDialogue,paused);assert.equal(pauseDialogue.items(visible).length,0,'Changing scenes clears old speech immediately.');
 const immutable=game(),presentation=new SceneDialogue();immutable.settlements.sites=[Object.freeze(site('angel'))];immutable.enemies=[Object.freeze(enemy('slime',4,700))];
 const before=JSON.stringify(immutable),random=Math.random;Math.random=()=>{throw new Error('Dialogue must not consume combat randomness');};
 try{tick(presentation,immutable);tick(presentation,immutable,.1);}finally{Math.random=random;}
@@ -98,12 +101,38 @@ const bubble={id:1,speaker:{x:300,y:300,headOffset:58},text:'公主，这里有�
 const projection={project:(x,y)=>({x,y}),width:640,height:480};
 const normal=layoutSceneDialogue([bubble],projection);assert.equal(normal.length,1);
 const first=normal[0].rect;
-const redirected=layoutSceneDialogue([bubble],{...projection,avoid:[{x:295,y:first.y,width:10,height:first.height}]});assert.equal(redirected.length,1);assert.notDeepEqual(redirected[0].rect,first,'Bubbles move to an available nearby position instead of covering an exclusion.');
+const redirected=layoutSceneDialogue([bubble],{...projection,avoid:[{x:295,y:first.y,width:10,height:first.height}]});assert.equal(redirected.length,0,'An existing bubble yields to a new warning without jumping to a different offset.');
+const fresh={...bubble,id:2};const firstSafe=layoutSceneDialogue([fresh],{...projection,avoid:[{x:295,y:first.y,width:10,height:first.height}]});assert.equal(firstSafe.length,1);assert.notDeepEqual(firstSafe[0].rect,first,'The initial placement still chooses a safe alternate position.');
+bubble.clock=.13;assert.deepEqual(layoutSceneDialogue([bubble],projection)[0].rect,first,'A briefly hidden line returns to its original relative position.');
+const shifted=layoutSceneDialogue([bubble],{...projection,project:(x,y)=>({x:x+15,y:y+20})})[0].rect;assert.deepEqual(shifted,{...first,x:first.x+15,y:first.y+20},'Actor and camera motion translate an established bubble without relayout.');
+const nearEdge={...bubble,id:3,clock:0,speaker:{...bubble.speaker,x:first.width/2+9}},edgeRect=layoutSceneDialogue([nearEdge],projection)[0].rect;
+assert.equal(layoutSceneDialogue([nearEdge],{...projection,avoid:[edgeRect]}).length,0);nearEdge.clock=.13;assert.deepEqual(layoutSceneDialogue([nearEdge],projection)[0].rect,edgeRect,'A removed warning cannot permanently suppress a stationary bubble near an otherwise safe viewport edge.');
 assert.equal(layoutSceneDialogue([bubble],{...projection,avoid:[{x:0,y:0,width:640,height:480}]}).length,0,'A packed screen omits dialogue.');
 assert.equal(layoutSceneDialogue([{...bubble,speaker:{x:-10,y:200}}],projection).length,0,'Offscreen speakers never gain an edge indicator.');
 assert.equal(layoutSceneDialogue([{...bubble,text:'长'.repeat(100)}],projection).length,0,'Oversized prose cannot exceed the compact two-line layout.');
 let saves=0,restores=0,draws=0;
 const ctx={save(){saves++;},restore(){restores++;},measureText:t=>({width:Array.from(t).length*12}),beginPath(){},roundRect(){},fill(){},stroke(){},moveTo(){},lineTo(){},fillText(){draws++;}};
-drawSceneDialogue(ctx,[bubble],projection);assert.equal(saves,restores);assert(draws>0);
+bubble.clock=.3;drawSceneDialogue(ctx,[bubble],projection);assert.equal(saves,restores);assert(draws>0);
 assert.equal(DIALOGUE_RULES.maxVisible,2);
+
+// Layout rejection and occlusion cannot consume a line or its one-time cue.
+const unread=game(),unreadDialogue=new SceneDialogue();unread.enemies=[enemy('boss',22,150,{guardActive:true,bossKind:'ancient'})];unreadDialogue.observe(unread,0,visible);
+const unreadLine=unreadDialogue.items(visible)[0];
+for(let i=0;i<60;i++)unreadDialogue.observe(unread,.05,visible);
+assert.equal(unreadLine.remaining,DIALOGUE_RULES.duration);assert.equal(unreadLine.hasPresented,false);assert(!unreadDialogue._record(unreadLine.speaker.id).once.has('alert'),'A never-drawn boss cue is not consumed.');
+unreadDialogue.present([{item:unreadLine}]);unreadDialogue.observe(unread,.016,visible);
+assert.equal(unreadLine.shownFor,.016);assert(unreadDialogue._record(unreadLine.speaker.id).once.has('alert'));
+unread.enemies[0].hidden=true;unreadDialogue.observe(unread,1,visible);assert.equal(unreadDialogue.items(visible).length,0);assert.equal(unreadLine.shownFor,.016,'Hidden time does not run down readable time.');
+unread.enemies[0].hidden=false;unreadDialogue.observe(unread,0,visible);assert.equal(unreadDialogue.items(visible).length,0,'Visibility recovery has a short stable interval.');unreadDialogue.observe(unread,.13,visible);
+assert.equal(unreadDialogue.items(visible)[0],unreadLine,'The same line survives a one-frame disappearance without consuming a second cue.');
+unreadDialogue.present([{item:unreadLine}]);unreadDialogue.observe(unread,1,visible);const afterOnce=unreadLine.shownFor;unreadDialogue.observe(unread,1,visible);assert.equal(unreadLine.shownFor,afterOnce,'A presentation report is consumed once, not reused when rendering stops.');
+unread.enemies[0].hp=0;assert.equal(unreadDialogue.items(visible).length,0,'Death suppresses speech even before another observer tick.');
+
+const phaseGame=game(),phaseVoices=new SceneDialogue();phaseGame.enemies=[enemy('boss',23,150,{guardActive:true,bossKind:'ancient'})];phaseVoices.observe(phaseGame,0,visible);
+const firstPhase=phaseVoices.items(visible)[0];phaseVoices.present([firstPhase]);phaseVoices.observe(phaseGame,.016,visible);
+phaseGame.enemies[0].hidden=true;phaseVoices.observe(phaseGame,.016,visible);phaseGame.enemies[0].hp=40;phaseGame.enemies[0].hidden=false;phaseVoices.observe(phaseGame,0,visible);phaseVoices.observe(phaseGame,.13,visible);
+assert([...phaseVoices._active,...phaseVoices._queue].includes(firstPhase),'A health-state change cannot delete a partly read line while it is temporarily hidden.');
+assert.equal(phaseVoices.items(visible)[0],firstPhase,'The interrupted first line resumes before its higher-priority phase follow-up.');
+
+const farRescue=game(),farVoices=new SceneDialogue();farRescue.companions.camps=[{id:'far',kind:'warden',x:250,y:0,state:'trapped'}];tick(farVoices,farRescue);assert.match(contents(farVoices),/束缚/,'A visible captive can call from the expanded 260-unit approach range.');
 console.log('Scene dialogue QA passed: contextual names, real roles, rescue and support transitions, group warnings, priority, hysteresis, pause/scene identity, fail-closed visibility, no simulation/random mutations, compact collision-free overlays.');

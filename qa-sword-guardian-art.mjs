@@ -71,14 +71,14 @@ try{
   for(const ready of [false,true])for(const active of [false,true])for(const remaining of [0,3,30])for(const life of [.001,.2,2]){
     const barrier=Object.freeze({ready,active,remaining,capacity:30,life,cooldown:0}),snapshot=JSON.stringify(barrier),ctx=recorder();
     drawGuardianBarrier(ctx,{...game,barrier},player);assert.equal(ctx.depth,0);assert.equal(ctx.globalAlpha,1);assert.equal(JSON.stringify(barrier),snapshot);
-    assert(ctx.calls.length<110,'only a player-sized shell with fixed facets');if(!ready&&!active)assert.equal(ctx.calls.length,0);
+    assert(ctx.calls.length<110,'only a player-sized shell with fixed facets');if(!active)assert.equal(ctx.calls.length,0,'a ready barrier adds no floating decoration');
   }
   for(const type of ['barrierTrigger','barrierBreak'])for(const reduced of [false,true])for(const dense of [false,true])for(const progress of [0,.2,.7,.999]){
     const e=Object.freeze({type,x:18,y:-41,maxLife:.3,life:.3*(1-progress)}),ctx=recorder();
     assert(drawBarrierEffect(ctx,e,game,{reduced,dense}));assert.equal(ctx.depth,0);assert(ctx.calls.length<150);
     const again=recorder();drawBarrierEffect(again,e,{_clock:9000},{reduced,dense});assert.deepEqual(ctx.calls,again.calls);
   }
-  const idle={...game,barrier:{ready:true}},a=recorder(),b=recorder();drawGuardianBarrier(a,idle,player,{reduced:true});drawGuardianBarrier(b,{...idle,_clock:100},player,{reduced:true});assert.deepEqual(a.calls,b.calls,'reduced idle marker does not bob');
+  const idle={...game,barrier:{ready:true}},a=recorder(),b=recorder();drawGuardianBarrier(a,idle,player,{reduced:true});drawGuardianBarrier(b,{...idle,_clock:100},player,{reduced:true});assert.deepEqual(a.calls,[]);assert.deepEqual(b.calls,[],'standby remains visually clear at any clock');
   for(const render of [drawSwordSlash,drawBarrierEffect]){
     const unknown=recorder();assert.equal(render(unknown,{type:'meteor'}),false);assert.equal(unknown.calls.length,0);
     for(const life of [0,-1,NaN])for(const type of render===drawSwordSlash?['swordSlash']:['barrierTrigger','barrierBreak']){

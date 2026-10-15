@@ -1,4 +1,5 @@
 import { mapIdentity, mapSeed } from './map-context.js';
+import { getConfigSection } from './content-config.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
 import { advanceRelicActivation } from './relic-activation.js';
@@ -6,6 +7,7 @@ import { relicInteraction, activateRelicSite, updateRelicContent } from './sites
 import { RELIC_SITE_RULES, ARMY_SITE_RULES, RESCUE_BUILDING, relicSiteProfile, relicSiteEntries, relicSiteEnabled, createRelicMechanism } from './site-definitions.js';
 
 const TAU=Math.PI*2;
+const RESCUE_RADIUS=getConfigSection('companions').rescueRules.rescueRadius;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 export { RELIC_SITE_RULES, ARMY_SITE_RULES, RESCUE_BUILDING } from './site-definitions.js';
@@ -38,6 +40,13 @@ export class RelicSites {
     if(site.appearance==='golemaltar')return distance(point,site)<=60-r*.25;
     const b=RESCUE_BUILDING;
     return Math.abs(point.x-site.x)<=b.halfWidth-b.wallRadius-r&&point.y>=site.y+b.back+b.wallRadius+r&&point.y<=site.y+b.front-b.wallRadius-r;
+  }
+  canRescue(siteId,point,r=0) {
+    const site=this.sites.find(s=>s.id===siteId&&s.type==='rescue');
+    if(site?.state!=='active'||!site.gateOpen)return false;
+    // An open doorway is enough: the hero need not cross an invisible inner
+    // rectangle, but a side wall or other obstruction still prevents rescue.
+    return !this.game.terrain.firstBlocker(point.x,point.y,site.x,site.y,r,'ground');
   }
   _valid(site) {
     const g=this.game,profile=relicSiteProfile(site),clearance=profile.clearance;
@@ -82,12 +91,12 @@ export class RelicSites {
   }
   _member(kind){return this.game.companions?.members?.find(member=>member.kind===kind)||null;}
   _golemFor(site) {
-    const g=this.game,member=g.companions?.combatants?.().find(ally=>ally.kind==='golem');
-    if(!member)return null;
-    const foot={x:member.x,y:member.y+groundOffset(member,true)},point={x:site.x,y:site.y+140};
-    if(distance(foot,point)>ARMY_SITE_RULES.smashReach)return null;
-    if(g.terrain.firstBlocker?.(foot.x,foot.y,point.x,point.y,member.r||20))return null;
-    return member;
+    const g=this.game,point={x:site.x,y:site.y+140};
+    return g.companions?.combatants?.().find(member=>{
+      if(member.kind!=='golem'||site.state==='opening'&&member.id!==site.workerId)return false;
+      const foot={x:member.x,y:member.y+groundOffset(member,true)};
+      return distance(foot,point)<=ARMY_SITE_RULES.smashReach&&!g.terrain.firstBlocker?.(foot.x,foot.y,point.x,point.y,member.r||20);
+    })||null;
   }
   getInteraction() {
     const g=this.game;if(g.status!=='playing'||g.dungeon?.active)return null;
@@ -96,7 +105,8 @@ export class RelicSites {
       // Open altars activate where their central pedestal is drawn; closed
       // structures continue to use their front door. Ignore legacy altar doors
       // retained in an already generated region snapshot.
-      const profile=relicSiteProfile(site),anchor=profile.anchor==='center'||site.type==='stonevault'&&site.gateOpen?site:site.door,d=distance(p,anchor);if(d>site.interactRadius||d>=best)continue;
+      const profile=relicSiteProfile(site),ready=site.type==='rescue'&&g.companions?.campFor(site.id)?.state==='ready';
+      const anchor=ready||profile.anchor==='center'||site.type==='stonevault'&&site.gateOpen?site:site.door,d=distance(p,anchor);if(d>(ready?RESCUE_RADIUS:site.interactRadius)||d>=best)continue;
       const {enabled,label,description}=relicInteraction(this,site);
       nearest={id:site.id,siteId:site.id,type:'relic',relicType:site.type,category:'relic',label,description,x:anchor.x,y:anchor.y,enabled,...(profile.touchRadius?{touchRadius:profile.touchRadius}:{})};best=d;
     }

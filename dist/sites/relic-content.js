@@ -1,5 +1,6 @@
 import { getConfigSection } from '../content-config.js';
 import { ARMY_SITE_RULES } from '../site-definitions.js';
+import { COMPANION_RULES } from '../companion-catalog.js';
 import { beginRelicActivation } from '../relic-activation.js';
 const hunt=getConfigSection('encounters').eventRules;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -10,8 +11,8 @@ export function relicInteraction(relics,site){
       if(site.state==='cleared'){label='遗迹已完成';description=site.type==='rune'?'符文能量已耗尽，石台保留':'建筑与通路保留，奖励不再刷新';}
       else if(site.state==='failed'){label='遗迹挑战已结束';description='守卫已散去，遗迹留在原地';}
       else if(site.type==='dogcamp'){
-        label=relics._member('dog')?'小狗已在队伍中':`招募寻宝小狗 · ${ARMY_SITE_RULES.dogCost} 金币`;
-        enabled=enabled&&!relics._member('dog')&&g.gold>=ARMY_SITE_RULES.dogCost;
+        label=`招募寻宝小狗 · ${ARMY_SITE_RULES.dogCost} 金币`;
+        enabled=enabled&&g.gold>=ARMY_SITE_RULES.dogCost;
         description='提供路粮，小狗会带路寻找附近宝藏';
       } else if(site.type==='stonevault'){
         if(site.gateOpen){enabled=site.state==='opened';label='走入宝库领取珍藏';description=`${ARMY_SITE_RULES.vaultGold} 金币 / ${ARMY_SITE_RULES.vaultCrystals} 灵晶`;}
@@ -23,14 +24,17 @@ export function relicInteraction(relics,site){
         description=site.type==='rune'?'符文正在自动轰击附近怪物':'离开后进度保留，返回可继续挑战';
       } else if(site.type==='hunt') {label='走进中央纹章开启狩猎';description=`击败 ${hunt.hunt.relicGoal} 名遗迹守卫 · ${hunt.rewards.relicHunt.crystals} 灵晶 / ${hunt.rewards.relicHunt.gold} 金币`;}
       else if(site.type==='rune') {label=`激活${site.name}`;description=site.featureId==='icealtar'?'一次性寒霜支援 · 自动攻击并减速附近怪物':'一次性 12 秒符文支援 · 自动攻击附近怪物';}
-      else {label=site.kind==='golem'?'触碰古坛唤醒岩灵':site.kind==='owl'?'驱散守卫解救猫头鹰':'挑战囚牢守卫';description=`击败 ${site.goal} 名守卫，招募伙伴`;
-        if(relics._member(site.kind)){enabled=false;label=site.kind==='golem'?'岩灵已在队伍中':'该伙伴已在队伍中';description='每种伙伴最多一名，无需重复解救或唤醒';}}
+      else {label=site.kind==='golem'?'触碰古坛唤醒岩灵':site.kind==='owl'?'驱散守卫解救猫头鹰':'挑战囚牢守卫';description=`击败 ${site.goal} 名守卫，招募伙伴`;}
+  if(['rescue','dogcamp'].includes(site.type)&&['ready','active'].includes(site.state)&&(g.companions?.members.length||0)>=COMPANION_RULES.maxMembers){
+    enabled=false;label=`队伍已满 · ${COMPANION_RULES.maxMembers}/${COMPANION_RULES.maxMembers}`;
+    description='休整中的伙伴也占名额；在伙伴面板遣散一名后可继续招募';
+  }
   return {enabled,label,description};
 }
 
 function activateDogcamp(relics,site){
   const g=relics.game;
-      if(g.gold<ARMY_SITE_RULES.dogCost||relics._member('dog'))return false;
+      if(g.gold<ARMY_SITE_RULES.dogCost)return false;
       const member=g.companions?.recruit('dog',{x:site.x,y:site.y,sourceId:site.id});if(!member)return false;
       g.gold-=ARMY_SITE_RULES.dogCost;site.state='cleared';site.discovered=true;beginRelicActivation(site);return true;
 }

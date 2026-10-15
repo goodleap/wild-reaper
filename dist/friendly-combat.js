@@ -53,7 +53,8 @@ export function selectFriendlyTarget(game,enemy){
     if(!clearFriendlyPath(game,enemy,ally))continue;
     best=score;target=ally;
   }
-  enemy._friendlyTarget=target;return target;
+  // This is a live cache, not part of an enemy's serializable combat state.
+  Object.defineProperty(enemy,'_friendlyTarget',{value:target,writable:true,configurable:true,enumerable:false});return target;
 }
 
 export function damageFriendly(game,target,amount,source){

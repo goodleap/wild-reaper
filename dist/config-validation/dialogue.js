@@ -5,10 +5,11 @@ export function validateDialogueConfig(sites){
   const rules=dialogue.rules;if(!rules||typeof rules!=='object'||Array.isArray(rules))fail('rules');
   for(const key of ['duration','queueDuration','greetingCooldown','supportCooldown','groupCooldown'])if(!Number.isFinite(rules[key])||rules[key]<.2||rules[key]>120)fail(`rules.${key}`);
   if(rules.duration>8||rules.queueDuration>8)fail('rules.duration');
+  if(!Number.isFinite(rules.minDuration)||rules.minDuration<.5||rules.minDuration>rules.duration)fail('rules.minDuration');
   if(!Number.isInteger(rules.maxVisible)||rules.maxVisible<1||rules.maxVisible>2)fail('rules.maxVisible');
   if(!Number.isInteger(rules.combatVisible)||rules.combatVisible<1||rules.combatVisible>rules.maxVisible)fail('rules.combatVisible');
   for(const key of ['combatRange','angelNear','angelExit','merchantNear','merchantNearExit','merchantFar','merchantFarExit','captiveNear','captiveExit','rescueReadyRange','supportRange'])if(!Number.isFinite(rules[key])||rules[key]<20||rules[key]>1500)fail(`rules.${key}`);
-  for(const [near,far]of [['angelNear','angelExit'],['merchantNear','merchantNearExit'],['merchantFar','merchantFarExit'],['captiveNear','captiveExit'],['merchantNear','merchantFar']])if(rules[near]>=rules[far])fail(`rules.${near}`);
+  for(const [near,far]of [['angelNear','angelExit'],['merchantNear','merchantNearExit'],['merchantFar','merchantFarExit'],['captiveNear','captiveExit'],['rescueReadyRange','captiveExit'],['merchantNear','merchantFar']])if(rules[near]>=rules[far])fail(`rules.${near}`);
   const lines=dialogue.lines;if(!lines||typeof lines!=='object'||Array.isArray(lines))fail('lines');
   for(const key of requiredLines)if(!Array.isArray(lines[key])||!lines[key].length)fail(`lines.${key}`);
   for(const [key,variants]of Object.entries(lines)){

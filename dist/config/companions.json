@@ -120,7 +120,7 @@
     "campDuration": 70,
     "interval": 45,
     "guards": 6,
-    "rescueRadius": 65,
+    "rescueRadius": 100,
     "spawnGrace": 0.8,
     "spawnDistance": 150,
     "siteGuards": 9,

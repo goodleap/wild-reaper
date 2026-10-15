@@ -1,5 +1,5 @@
-// Player-sized defensive artwork: one quiet ready marker, crisp translucent
-// shell facets while active, and a bounded set of short-lived fragments.
+// Player-sized defensive artwork: crisp translucent shell facets while active,
+// and a bounded set of short-lived fragments on activation and breakage.
 const TAU=Math.PI*2;
 const clamp=(value,min=0,max=1)=>Math.max(min,Math.min(max,value));
 const ease=value=>1-(1-clamp(value))**3;
@@ -25,8 +25,8 @@ function facet(ctx,side,y,alpha){
 }
 
 export function drawGuardianBarrier(ctx,game,player=game?.player,options={}){
-  const state=game?.barrier;if(!state||!player||(!state.ready&&!state.active))return false;
-  const {reduced=false,dense=false}=options;
+  const state=game?.barrier;if(!state?.active||!player)return false;
+  const {dense=false}=options;
   ctx.save();ctx.translate(player.x,player.y);ctx.lineJoin='round';ctx.lineCap='round';ctx.shadowBlur=0;
   if(state.active){
     const ratio=clamp(finite(state.remaining,0)/Math.max(1,finite(state.capacity,1)));
@@ -44,12 +44,6 @@ export function drawGuardianBarrier(ctx,game,player=game?.player,options={}){
     // Remaining capacity changes the tiny basal sigils, never a floating bar.
     ctx.strokeStyle='#c0e5cc';ctx.lineWidth=1;ctx.globalAlpha=fade*.7;
     ctx.beginPath();for(let i=0;i<3;i++)if(ratio>(i+.15)/3){const x=(i-1)*7;ctx.moveTo(x-2,23-Math.abs(x)*.12);ctx.lineTo(x,25-Math.abs(x)*.12);ctx.lineTo(x+2,23-Math.abs(x)*.12);}ctx.stroke();
-  }else{
-    const bob=reduced?0:Math.sin(finite(game._clock,0)*2.3)*.65;
-    ctx.translate(26,-24+bob);ctx.globalAlpha=.9;ctx.fillStyle='#293f38';ctx.strokeStyle='#a8cfa9';ctx.lineWidth=1;
-    ctx.beginPath();leaf(ctx,0,0,6.5);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#d8eeb9';ctx.beginPath();leaf(ctx,0,-.4,3.4);ctx.fill();
-    ctx.strokeStyle='#e7f7cf';ctx.lineWidth=.75;ctx.beginPath();ctx.moveTo(0,-3);ctx.lineTo(0,2.5);ctx.stroke();
   }
   ctx.restore();return true;
 }

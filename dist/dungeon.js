@@ -1,4 +1,5 @@
 import { groundOffset } from './terrain.js';
+import { enemyGroupProvoked } from './combat-tactics.js';
 import { Adventure } from './adventure.js';
 import { clearBossAttacks } from './bosses.js';
 import { resetLocomotion } from './locomotion.js';
@@ -43,7 +44,7 @@ export class Dungeon {
     g.superSkills?.clearScene();g.barrier?.clearScene();g.abilities?.clearScene();
     for(const member of g.companions?.members||[])member._echoes=[];
     // No old warning may resolve at an unrelated position after a boundary.
-    for(const enemy of g.enemies){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;clearBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
+    for(const enemy of g.enemies){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;enemy._groupProvokedUntil=0;clearBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
   }
   _placePlayer(point,arrival=null){
     const g=this.game,p=g.player;p.x=point.x;p.y=point.y-groundOffset(p,true);g._moveEntity(p,0,0,true);p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;resetLocomotion(p);
@@ -165,7 +166,7 @@ export class Dungeon {
     // Crossing a doorway or actually taking damage wakes one pack. Merely
     // querying a sleeping target through an open door never starts combat.
     // A started pack can pursue briefly, then walks home on a genuine retreat.
-    enemy.guardActive=room?!!(playerCell?.id===room.cellId||(room.started&&visible)):!!(sameRoom||visible);
+    enemy.guardActive=enemyGroupProvoked(g,enemy,enemy.dungeonHome,420)||(room?!!(playerCell?.id===room.cellId||(room.started&&visible)):!!(sameRoom||visible));
     if(!enemy.guardActive){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;clearBossAttacks(enemy);if(enemy.dungeonHome&&distance(point,enemy.dungeonHome)>6)g._moveEnemy(enemy,dt,enemy.dungeonHome);return true;}
     return false;
   }

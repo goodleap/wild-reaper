@@ -74,8 +74,10 @@ for(const [type,expected] of [['tidepriest',290],['frostmage',280],['windhunter'
   assert.equal(f.game.abilities.effects[0].parameters.range,300);
   f.game.player.x=299;f.game.abilities.update(SPECIALIST_RULES.prismguard.windup-.001);assert.equal(f.game.player.hp,1000);
   f.game.abilities.update(.002);assert(f.game.player.hp<1000,'beam reaches past acquisition distance after its warning');
-  const outside=fixture('prismguard');positionTarget(outside,249);updateSpecialist(outside.game,outside.enemy,0);outside.game.player.x=301;
-  outside.game.abilities.update(2);assert.equal(outside.game.player.hp,1000,'beam ends at its effect distance');
+  const touching=fixture('prismguard');positionTarget(touching,249);updateSpecialist(touching.game,touching.enemy,0);touching.game.player.x=300+touching.game.player.r-.01;
+  touching.game.abilities.update(2);assert(touching.game.player.hp<1000,'a body overlapping the rounded beam tip is hit');
+  const outside=fixture('prismguard');positionTarget(outside,249);updateSpecialist(outside.game,outside.enemy,0);outside.game.player.x=300+outside.game.player.r+.01;
+  outside.game.abilities.update(2);assert.equal(outside.game.player.hp,1000,'a body wholly beyond the beam endpoint is safe');
 }
 {
   const f=fixture('flamelizard');positionTarget(f,179);updateSpecialist(f.game,f.enemy,0);

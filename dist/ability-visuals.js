@@ -3,6 +3,7 @@ import { RoyalSwordArt } from './royal-sword-art.js';
 import { SuperArt } from './super-art.js';
 import { CombatArt } from './combat-art.js';
 import { friendlyFoot } from './friendly-combat.js';
+import { beamCapsule, capsulePath } from './attack-capsule.js';
 
 // Presentation owns only cached geometry. All phases and collision footprints
 // come from AbilityRuntime; painting never changes the combat simulation.
@@ -170,7 +171,7 @@ export class AbilityVisuals{
   }
   drawBeamBody(ctx,e,options={}){
     const p=e.parameters,fade=clamp(e.remaining/p.duration),y=e.y+(e.groundOffset||0);
-    ctx.save();ctx.translate(e.x,y);ctx.rotate(e.angle);ctx.beginPath();ctx.rect(0,-p.radius,p.range,p.radius*2);ctx.clip();
+    ctx.save();ctx.translate(e.x,y);ctx.rotate(e.angle);ctx.beginPath();capsulePath(ctx,beamCapsule(0,0,0,p.range,p.radius));ctx.clip();
     ctx.globalAlpha=fade*.3;ctx.fillStyle=e.hostile?'#d695bb':'#bca4ee';ctx.fillRect(0,-p.radius,p.range,p.radius*2);
     ctx.globalAlpha=fade*.7;ctx.strokeStyle='#c3a5ee';ctx.lineWidth=p.radius*1.05;ctx.beginPath();segment(ctx,0,0,p.range,0);ctx.stroke();ctx.globalAlpha=fade;ctx.strokeStyle='#f7eaff';ctx.lineWidth=Math.max(2,p.radius*.23);ctx.stroke();ctx.restore();
   }

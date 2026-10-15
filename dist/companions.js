@@ -9,17 +9,28 @@ import { movementProfile } from './height-rules.js';
 import { COMPANIONS, COMPANION_RULES, COMPANION_FOLLOW_RULES, companionDefinition as definition } from './companion-catalog.js';
 export { COMPANIONS } from './companion-catalog.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive, objectivePointSafe } from './event-scheduling.js';
+import { activateCombatGroup, retreatPoint, enemyGroupProvoked } from './combat-tactics.js';
 
 const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const content=getConfigSection('companions'),skills=content.skills;
 export const RESCUE_RULES=Object.freeze({...content.rescueRules,bonus:getConfigSection('combat').stats.rescueDamageBonus});
+export const PARTY_COMBAT_RULES=Object.freeze({leash:420,returnDistance:500,retarget:.25,alertDuration:6});
+
+// Keep live target lookup out of actor snapshots and invalidate removed enemies.
+function bindCombatTarget(game,member){
+  if(Object.getOwnPropertyDescriptor(member,'_combatTarget')?.get)return;
+  member._combatTargetId=member._combatTarget?.id??null;
+  Object.defineProperty(member,'_combatTarget',{configurable:true,enumerable:false,
+    get(){return game.enemies.find(enemy=>enemy.id===this._combatTargetId)||null;},
+    set(enemy){this._combatTargetId=enemy?.id??null;}});
+}
 
 // Rescue is an optional world objective. Guards can only be credited by an
 // actual lethal hit; expiration, range culling and scene replacement pay nothing.
 export class Companions {
   constructor(game,{generation=true}={}) {
-    this.game=game;this.generation=generation;this.camps=[];this.members=[];this._rescueSources=new Set();
+    this.game=game;this.generation=generation;this.camps=[];this.members=[];this._rescueSources=new Set();this._combatThreats=new Map();
     this.nextPayrollAt=(game.runTime??game.time)+COMPANION_RULES.payrollInterval;this.graceUntil=0;this.unpaidCost=0;
     this.rescuedCount=0;this.nextAt=game.time+RESCUE_RULES.firstAt;this._nextKind='stormcaller';
   }
@@ -80,7 +91,7 @@ export class Companions {
     const site=siteId&&g.relicSites?.sites.find(s=>s.id===siteId&&s.type==='rescue'&&s.state==='ready');
     const guards=site?.guardCount??(siteId?RESCUE_RULES.siteGuards:RESCUE_RULES.guards);
     if(siteId&&!site)return null;
-    if(!def||g.status!=='playing'||g.dungeon?.active||this.members.some(member=>member.kind===kind)||this.camps.some(camp=>siteId?camp.siteId===siteId:!camp.siteId)||(!siteId&&!this._canStart())||g.enemies.length+guards>180)return null;
+    if(!def||g.status!=='playing'||g.dungeon?.active||this.members.length>=COMPANION_RULES.maxMembers||this.camps.some(camp=>siteId?camp.siteId===siteId:!camp.siteId)||(!siteId&&!this._canStart())||g.enemies.length+guards>180)return null;
     // A physical prison surrounds its NPC, so only its usable interior needs
     // clearance here. Random camps retain their original open-circle check.
     const point=site?(g.terrain.isFree(site.x,site.y,26)&&this._hazardFree(site.x,site.y,24)?{x:site.x,y:site.y}:null):this._point(x,y);if(!point)return null;
@@ -129,10 +140,10 @@ export class Companions {
   combatants() {return this.members.filter(member=>member.state==='active'&&member.hp>0);}
   recruit(kind,{x,y,sourceId=null,rescueBonus=false}={}) {
     const g=this.game,def=definition(kind);
-    if(!def||g.status!=='playing'||this.members.length>=COMPANION_RULES.maxMembers||this.members.some(member=>member.kind===kind))return null;
+    if(!def||g.status!=='playing'||this.members.length>=COMPANION_RULES.maxMembers)return null;
     const point=Number.isFinite(x)&&Number.isFinite(y)?{x,y}:this._foot();
     const member={...def,id:++g._id,kind,heroId:kind,isCompanion:true,x:point.x,y:point.y-def.groundOffset,hp:def.maxHp,state:'active',flying:!!def.flying,invuln:0,remaining:Infinity,maxDuration:Infinity,facing:g.player.facing,moving:false,_attack:COMPANION_RULES.initialAttackDelay,_echoes:[],_stuckFor:0,_scan:0,sourceId};
-    this._resetFollowing(member);this.members.push(member);g._friendlySnapshot=null;
+    bindCombatTarget(g,member);this._resetFollowing(member);this.members.push(member);g._friendlySnapshot=null;
     if(!Number.isFinite(x)||!Number.isFinite(y)||!g.terrain.isFree(point.x,point.y,member.r,movementProfile(member)))this._safeReturn(member);
     member.rescuedFace=.65;
     if(this.members.length===1){this.nextPayrollAt=(g.runTime??g.time)+COMPANION_RULES.payrollInterval;this.graceUntil=0;this.unpaidCost=0;}
@@ -150,13 +161,54 @@ export class Companions {
     return true;
   }
   protectionMultiplier(target) {
-    const defender=this.members.find(member=>member.kind==='warden'&&member.state==='active'&&member.hp>0);
-    if(!defender||!target||distance(this._foot(defender),this._foot(target))>COMPANION_RULES.guardRadius)return 1;
-    return this.game.combat.clearPath(defender,target,{profile:'sight'})?COMPANION_RULES.guardMultiplier:1;
+    if(!target)return 1;
+    return this.members.some(member=>member.kind==='warden'&&member.state==='active'&&member.hp>0&&distance(this._foot(member),this._foot(target))<=COMPANION_RULES.guardRadius&&this.game.combat.clearPath(member,target,{profile:'sight'}))?COMPANION_RULES.guardMultiplier:1;
+  }
+  alert(threat=null){
+    const g=this.game;if(g.status!=='playing')return;
+    const enemy=g.enemies.includes(threat)?threat:g.enemies.find(e=>e.id===threat?.ownerId);
+    if(enemy&&distance(this._foot(enemy),this._foot())>PARTY_COMBAT_RULES.leash)return;
+    if(enemy)this._combatThreats.set(enemy.id,g._clock+PARTY_COMBAT_RULES.alertDuration);
+    for(const [id,until]of this._combatThreats)if(until<=g._clock||!g.enemies.some(e=>e.id===id&&e.hp>0))this._combatThreats.delete(id);
+    activateCombatGroup(this.members,member=>{member._combatAlertUntil=g._clock+PARTY_COMBAT_RULES.alertDuration;member._combatRetargetAt=0;});
+  }
+  _combatRule(member){
+    const rule=skills[member.kind];
+    return member.kind==='stormcaller'?{range:rule.range,source:'companionLightning',air:true}:member.kind==='warden'?{range:rule.radius,source:'companionPulse',air:false}:member.kind==='golem'?{range:rule.radius,source:'companionGolem',air:false}:null;
+  }
+  _combatPlan(member){
+    const g=this.game,rule=this._combatRule(member),leader=this._foot(),from=this._foot(member),now=g._clock||0;
+    bindCombatTarget(g,member);
+    if(!rule||member.state!=='active'||distance(from,leader)>PARTY_COMBAT_RULES.returnDistance){member._combatTarget=null;return null;}
+    // Lightning measures range between sprite anchors; ground attacks use feet.
+    // Share its actual cast gate so a height difference cannot strand a caster.
+    const ready=enemy=>member.kind==='stormcaller'?g.combat.canTarget(enemy,member,{range:rule.range,requireView:true,checkPath:true,source:rule.source}):distance(this._foot(enemy),from)<=rule.range&&g.combat.clearPath(member,enemy,{source:rule.source});
+    const eligible=enemy=>enemy&&distance(this._foot(enemy),leader)<=PARTY_COMBAT_RULES.leash&&g.combat.canTarget(enemy,member,{requireView:true,source:rule.source,canHitFlying:rule.air})&&
+      (enemy.guardActive!==false||now<(member._combatAlertUntil||0)&&now<(this._combatThreats.get(enemy.id)||0)||ready(enemy));
+    if(!eligible(member._combatTarget)||now>=(member._combatRetargetAt||0)){
+      const previous=member._combatTarget;let best=null,score=Infinity;
+      for(const enemy of g.enemies){
+        if(!eligible(enemy))continue;
+        const d=distance(from,this._foot(enemy));
+        const value=d*(enemy===previous?.85:1)*(ready(enemy)?.75:1);
+        if(value<score){score=value;best=enemy;}
+      }
+      member._combatTarget=best;member._combatRetargetAt=now+PARTY_COMBAT_RULES.retarget+(member.id%4)*.017;
+    }
+    const enemy=member._combatTarget;if(!enemy)return null;
+    if(g.abilities?.isFrozen(member))return {hold:true};
+    const target=this._foot(enemy);
+    if(member.kind==='stormcaller'&&member._attack>0){
+      const retreat=retreatPoint(g,member,enemy,{minimum:105,preferred:155,center:leader,leash:PARTY_COMBAT_RULES.leash});
+      if(retreat)return {target:retreat,stop:5,start:10};
+    }
+    if(ready(enemy))return {hold:true};
+    return {target,stop:rule.range*.82,start:rule.range*.88};
   }
   takeDamage(member,amount,source='enemy',origin=null) {
     const g=this.game;
     if(g.status!=='playing'||!this.members.includes(member)||member.state!=='active'||member.invuln>0||!Number.isFinite(amount)||amount<=0)return false;
+    this.alert(origin);
     amount*=defenseDamageMultiplier(member.defense||0)*this.protectionMultiplier(member);
     amount=g.abilities?.absorbDamage(member,amount,origin)??amount;
     member.hp=Math.max(0,member.hp-amount);
@@ -165,11 +217,13 @@ export class Companions {
     if(member.hp<=0){g._friendlySnapshot=null;member.state='recovering';member.recovery=COMPANION_RULES.recoveryDuration;member._recoveryBlocked=false;member._echoes=[];member._attack=.8;member.workTarget=null;member._meleeTarget=null;member.scoutTarget=null;member.treasureTarget=null;g._emit('companionRecovering',{name:member.name,kind:member.kind,cost:definition(member.kind).recoveryCost});}
     return true;
   }
-  _join(camp=this.camps.find(item=>item.state==='ready'&&distance(this._foot(),item)<=RESCUE_RULES.rescueRadius)) {
+  _join(camp) {
     const g=this.game;
-    if(!camp||camp.state!=='ready'||g.status!=='playing'||distance(this._foot(),camp)>RESCUE_RULES.rescueRadius)return false;
-    if(camp.siteId&&!g.relicSites?.insideRescue(camp.siteId,this._foot(),g.player.r))return false;
-    if(!this.camps.includes(camp)||this.members.length>=COMPANION_RULES.maxMembers||this.members.some(member=>member.kind===camp.kind))return false;
+    if(g.status!=='playing'||this.members.length>=COMPANION_RULES.maxMembers)return false;
+    const foot=this._foot(),eligible=item=>item?.state==='ready'&&this.camps.includes(item)&&distance(foot,item)<=RESCUE_RULES.rescueRadius&&
+      (item.siteId?g.relicSites?.canRescue(item.siteId,foot,g.player.r):!g.terrain.firstBlocker(foot.x,foot.y,item.x,item.y,g.player.r,'ground'));
+    if(!camp)camp=this.camps.filter(eligible).sort((a,b)=>distance(foot,a)-distance(foot,b))[0];
+    if(!eligible(camp))return false;
     if(camp.siteId&&!g.relicSites?.complete(camp.siteId,true))return false;
     this.camps.splice(this.camps.indexOf(camp),1);
     return !!this.recruit(camp.kind,{x:camp.x,y:camp.y,sourceId:camp.siteId||camp.id,rescueBonus:true});
@@ -187,7 +241,7 @@ export class Companions {
     for(const radius of [preferred,preferred+24,Math.max(84,preferred*.72),76,52])for(let i=0;i<16;i++) {
       const angle=fromAngle+i*TAU/16,x=p.x+Math.cos(angle)*radius,y=p.y+Math.sin(angle)*radius;
       if(!g.terrain.isFree(x,y,active.r+3,movementProfile(active))||!this._hazardFree(x,y,active.r))continue;
-      if(g.terrain.firstBlocker(p.x,p.y,x,y,0,movementProfile(active)))continue;
+      if(g.terrain.firstBlocker(p.x,p.y,x,y,active.r+3,movementProfile(active)))continue;
       if(g.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.y+groundOffset(e)-y)<e.r+active.r+12))continue;
       if(this.members.some(other=>other!==active&&distance(this._foot(other),{x,y})<other.r+active.r+(radius>76?24:8)))continue;
       active.x=x;active.y=y-groundOffset(active,true);this._resetFollowing(active);
@@ -220,15 +274,14 @@ export class Companions {
   }
   _follow(active,dt) {
     const g=this.game,p=this._foot(),def=definition(active.kind),rules=COMPANION_FOLLOW_RULES;
-    let target=p,mode='leader';
+    let target=p,mode='leader',combat=null;
     if(active.state==='active'&&active.workTarget&&distance(p,active.workTarget)<rules.workLeash){target=active.workTarget;mode='task';}
     else if(active.state==='active'&&active.kind==='dog'&&active.treasureTarget&&(g.runTime??g.time)<active._leadUntil){
       const dx=active.treasureTarget.x-p.x,dy=active.treasureTarget.y-p.y,length=Math.hypot(dx,dy)||1,lead=Math.min(rules.dogLeadDistance,length);
       const point={x:p.x+dx/length*lead,y:p.y+dy/length*lead};
       if(g.terrain.isFree(point.x,point.y,active.r+5,movementProfile(active))){target=point;mode='task';}
-    }else if(active.state==='active'&&active._meleeTarget?.hp>0&&distance(p,this._foot(active._meleeTarget))<rules.meleeLeash){
-      const ef=this._foot(active._meleeTarget),af=this._foot(active),dx=af.x-ef.x,dy=af.y-ef.y,length=Math.hypot(dx,dy)||1;
-      target={x:ef.x+dx/length*rules.meleeStandOff,y:ef.y+dy/length*rules.meleeStandOff};mode='task';
+    }else if((combat=this._combatPlan(active))){
+      target=combat.target||this._foot(active);mode='combat';
     }
     // Jobs approach their own objective. Finishing a job never forces a return
     // to the hero while the member is already inside its normal leash.
@@ -237,13 +290,14 @@ export class Companions {
       active._navTimer=0;active._navObstacle=null;active._coastTarget=null;active._stuckFor=0;
     }
     const foot=this._foot(active),d=distance(foot,target),oldX=active.x,oldY=active.y;
-    const stop=mode==='task'?rules.taskStop:def.followDistance;
-    const start=mode==='task'?rules.taskStart:stop+rules.restartGap;
+    const stop=mode==='combat'?(combat.stop??0):mode==='task'?rules.taskStop:def.followDistance;
+    const start=mode==='combat'?(combat.start??0):mode==='task'?rules.taskStart:stop+rules.restartGap;
+    const direct=!g.terrain.firstBlocker(foot.x,foot.y,target.x,target.y,active.r,movementProfile(active));
     // Leader movement inside this band does not issue a move order. A follower
     // that does fall behind walks toward the current position, not a trail or
     // an angular slot, then keeps whichever clear position it reaches.
-    if(active._following&&d<=stop)active._following=false;
-    else if(!active._following&&d>start){active._following=true;active._navTimer=0;}
+    if(combat?.hold||active._following&&d<=stop&&direct)active._following=false;
+    else if(!active._following&&(d>start||!direct)){active._following=true;active._navTimer=0;}
     if(active._following&&dt>0) {
       const desiredSpeed=Math.min(Math.max(def.speed,g.player.speed*(active.kind==='golem'?rules.golemCatchup:rules.catchup)),Math.max(40,(d-stop)*7));
       const acceleration=rules.acceleration*dt,previousSpeed=active._followSpeed||0;
@@ -273,7 +327,7 @@ export class Companions {
       return true;
     }
     const p=this._foot(),foot={x:enemy.x,y:enemy.y+groundOffset(enemy)};
-    const active=distance(p,camp)<camp.engageRadius&&distance(foot,camp)<(camp.siteId?RESCUE_RULES.siteEngageRadius:RESCUE_RULES.campGuardRadius)&&(!!camp.siteId||!majorFightActive(g));
+    const active=enemyGroupProvoked(g,enemy,camp,camp.siteId?RESCUE_RULES.siteEngageRadius:RESCUE_RULES.campGuardRadius)||distance(p,camp)<camp.engageRadius&&distance(foot,camp)<(camp.siteId?RESCUE_RULES.siteEngageRadius:RESCUE_RULES.campGuardRadius)&&(!!camp.siteId||!majorFightActive(g));
     enemy.guardActive=active;enemy.guardReturnTarget=null;
     if(!active) {
       enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;
@@ -377,7 +431,7 @@ export class Companions {
     const g=this.game,excluded=new Set();let origin=active,hits=0;
     const rule=skills.stormcaller,damage=rule.damage*(1+Math.floor(g.time/rule.growthPeriod)*rule.growth);
     for(let i=0;i<rule.hits;i++) {
-      const enemy=g._nearest(origin.x,origin.y,i?rule.chainRange:rule.range,excluded,origin,{source:'companionLightning'});if(!enemy)break;
+      const preferred=i===0&&active._combatTarget,enemy=preferred&&g.combat.canTarget(preferred,active,{range:rule.range,requireView:true,checkPath:true,source:'companionLightning'})?preferred:g._nearest(origin.x,origin.y,i?rule.chainRange:rule.range,excluded,origin,{source:'companionLightning'});if(!enemy)break;
       if(!hits)active.castFacing=Math.atan2(enemy.y-active.y,enemy.x-active.x);
       excluded.add(enemy.id);hits++;
       g._effect(origin.x,origin.y,'lightning',.22,0,'#d5d0fb',undefined,{x2:enemy.x,y2:enemy.y,renderGroundY:origin.y+groundOffset(origin,origin===active),renderEndGroundY:enemy.y+groundOffset(enemy),evolved:true,branch:'chain',chainIndex:i,ally:true});
@@ -401,11 +455,10 @@ export class Companions {
   }
   _castGolem(active) {
     const g=this.game,foot=this._foot(active),rule=skills.golem;
-    active._meleeTarget=g._nearest(active.x,active.y,rule.targetRange,new Set(),active,{source:'companionGolem',canHitFlying:false})||null;
     const targets=g._nearby(foot.x,foot.y,rule.queryRange).filter(e=>g.combat.canTarget(e,active,{checkPath:true,source:'companionGolem',canHitFlying:false})&&distance(this._foot(e),foot)<rule.radius+e.r);
     if(!targets.length)return false;
     targets.sort((a,b)=>(b.type==='boss')-(a.type==='boss')||distance(a,active)-distance(b,active));
-    const target=targets[0],angle=Math.atan2(target.y-active.y,target.x-active.x);active.castFacing=angle;active.facing=angle;active.castFace=.48;
+    const target=targets.includes(active._combatTarget)?active._combatTarget:targets[0],angle=Math.atan2(target.y-active.y,target.x-active.x);active.castFacing=angle;active.facing=angle;active.castFace=.48;
     g._effect(foot.x+Math.cos(angle)*44,foot.y+Math.sin(angle)*44,'ring',.42,85,'#d6c9a7',undefined,{quake:true,groundY:foot.y,evolved:false,ally:true,seed:active.id});
     for(const enemy of targets){
       const delta=Math.atan2(Math.sin(Math.atan2(enemy.y-active.y,enemy.x-active.x)-angle),Math.cos(Math.atan2(enemy.y-active.y,enemy.x-active.x)-angle));
@@ -431,8 +484,8 @@ export class Companions {
     }
   }
   onSceneChange(arrival=null) {
-    this.game._friendlySnapshot=null;const p=this._foot();
-    for(const active of this.members){active._echoes=[];active.workTarget=null;active._meleeTarget=null;active.scoutTarget=null;active.treasureTarget=null;active.scoutCount=0;active.cue='';active._scan=0;active.x=p.x;active.y=p.y-active.groundOffset;this._resetFollowing(active);}
+    this.game._friendlySnapshot=null;this._combatThreats.clear();const p=this._foot();
+    for(const active of this.members){active._echoes=[];active.workTarget=null;active._meleeTarget=null;active._combatTarget=null;active._combatAlertUntil=0;active._combatRetargetAt=0;active.scoutTarget=null;active.treasureTarget=null;active.scoutCount=0;active.cue='';active._scan=0;active.x=p.x;active.y=p.y-active.groundOffset;this._resetFollowing(active);}
     const placed=[],members=arrival?[...this.members].sort((a,b)=>b.r-a.r):this.members;
     for(const active of members){if(!arrival||!this._placeAtDoor(active,arrival,placed))this._safeReturn(active);placed.push(active);}
   }
