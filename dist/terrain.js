@@ -1,4 +1,5 @@
-import { RiftCollision, riftPointInPolygon } from './rift-collision.js';
+import { RiftCollision } from './rift-collision.js';
+import { createRiftScenery } from './worlds/rift-scenery.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
@@ -55,6 +56,7 @@ export function rockShadowParts(prop){
 export function sceneryVisual(prop){
   const s=prop.scale||1;
   if(prop.type==='tree'){
+    if(prop.riftShrub)return Object.freeze({halfWidth:56*s,top:59*s,bottom:17*s,canopyX:0,canopyY:-28*s,canopyRx:50*s,canopyRy:28*s,shadowWidth:36*s,shadowLength:24*s});
     const themed=WORLD_TREE_PROFILES[prop.variant];
     if(themed)return Object.freeze({halfWidth:(Math.abs(themed.x)+themed.rx+8)*s,top:(-themed.y+themed.ry+8)*s,bottom:24*s,canopyX:themed.x*s,canopyY:themed.y*s,canopyRx:themed.rx*s,canopyRy:themed.ry*s,shadowWidth:themed.rx*.58*s,shadowLength:(-themed.y+themed.ry)*.43*s});
     const p=(prop.variant==='dead-tree'?DEAD_TREE_PROFILES:TREE_PROFILES)[prop.treeForm||0],cw=prop.crownWidth||1,ch=prop.crownHeight||1;
@@ -127,17 +129,7 @@ export class Terrain {
     const layout=island?.layout;
     this.rift=layout?.kind==='rift-forest'?new RiftCollision(layout):null;this._riftGates=new Map();
     const props=(layout?.obstacles||[]).map((o,i)=>obstacle({...o,visual:sceneryVisual(o)},i));
-    if(this.rift)for(const [index,patch] of layout.patches.entries()){
-      const minX=Math.min(...patch.points.map(p=>p.x)),maxX=Math.max(...patch.points.map(p=>p.x)),minY=Math.min(...patch.points.map(p=>p.y)),maxY=Math.max(...patch.points.map(p=>p.y)),placed=[];
-      // A few small, separated trunks make sparse woodland readable while
-      // preserving every authored road and landmark reservation.
-      for(let attempt=0;attempt<120&&placed.length<5;attempt++){
-        const x=minX+hash(index*131+attempt*17,this.seed+27)*(maxX-minX),y=minY+hash(index*73+attempt*31,this.seed+43)*(maxY-minY);
-        if(!riftPointInPolygon({x,y},patch.points)||!this.rift.circleFree(x,y,55,'ground')||this.island.isReserved(x,y,26)||placed.some(p=>Math.hypot(x-p.x,y-p.y)<90))continue;
-        const tree={id:`rift-sparse:${index}:${placed.length}`,type:'tree',x,y,r:12,scale:.72,treeForm:placed.length%4,seed:hash(index,attempt),riftPalette:true,layoutPatch:patch.id};
-        placed.push(tree);props.push(obstacle({...tree,visual:sceneryVisual(tree)}));
-      }
-    }
+    if(this.rift)for(const prop of createRiftScenery(layout,this.rift,island))props.push(obstacle({...prop,visual:sceneryVisual(prop)}));
     for(const water of this.rift?[]:layout?.lakes||[])if(water.deep)props.push(Object.freeze({id:water.id,type:'water',region:this.region,x:water.x,y:water.y,r:0,scale:1,seed:water.seed,sortY:water.y,heightBand:'low',visual:false,water,points:getWaterContours(water).outer,bounds:waterBounds(water)}));
     for(const prop of props)for(let x=Math.floor(prop.bounds.minX/CELL);x<=Math.floor(prop.bounds.maxX/CELL);x++)for(let y=Math.floor(prop.bounds.minY/CELL);y<=Math.floor(prop.bounds.maxY/CELL);y++){const key=`${x},${y}`;if(!this._layoutIndex.has(key))this._layoutIndex.set(key,[]);this._layoutIndex.get(key).push(prop);}
     for(const passage of layout?.passages||[])if(passage.gateId)this.setRiftGate(passage.gateId,false);
@@ -169,16 +161,7 @@ export class Terrain {
       const index=items.length,seed=roll(index+7),size=.8+roll(index+13)*.36;
       add({id:`${this.region}:${key}:${index}`,region:this.region,zone:zone.id,type,variant,x:tx*CELL+x,y:ty*CELL+y,r:type==='tree'?19*size:type==='rock'?34*size:18,scale:size,seed,angle:0,treeForm:index%5,rockForm:index%3,logForm:index%3,...extra});
     };
-    if(this.rift){
-      // Sparse interior scenery supplies familiar depth without defining the
-      // impassable forests. Their continuous outlines own all large barriers.
-      for(let i=0;i<3;i++){
-        const x=(tx+roll(i+21))*CELL,y=(ty+roll(i+31))*CELL;
-        if(!this.rift.circleFree(x,y,80,'ground')||this.island.isReserved(x,y,50))continue;
-        place(i===2?'rock':'tree',i===2?'world-rock':undefined,x-tx*CELL,y-ty*CELL,{r:i===2?24:18,scale:i===2?.8:.78,riftPalette:true});
-      }
-      return items;
-    }
+    if(this.rift)return items;
     this.world.terrain.generate({tx,ty,key,region:this.region,hash,roll,zone,add,place,treeProfiles:TREE_PROFILES,cell:CELL,settings:this.world.terrain});
     if(this.island?.layout){
       // Sparse legacy scenery does not compete with the contiguous woodland

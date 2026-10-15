@@ -36,6 +36,12 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   assert.equal(node(h,'world-preview').getAttribute('role'),'img');
   assert.match(node(h,'world-preview').getAttribute('aria-label'),/中央湖泊.*双桥/);
   assert.equal(node(h,'world-preview').width/node(h,'world-preview').height,4/3,'world preview contains the complete authored map');
+  const worldCard=node(h,'world-rift-forest').parentElement;
+  assert.equal(worldCard.textContent,'裂谷林海','world cards keep only the preview and name');
+  assert(node(h,'world-rift-forest').checked,'the available world is selected');
+  assert.equal(worldCard.parentElement.id,'world-options','world cards have their own browsing rail');
+  assert.equal(worldCard.querySelectorAll('details').length,0,'details do not expand inside a card');
+  assert.equal(node(h,'world-mode-note').querySelector('details').parentElement.id,'world-mode-note','world details sit beneath the rail');
   assert.match(node(h,'prepare-summary').textContent,/裂谷林海.*帅气王子/);
   assert.equal(h.run('createRiftLayout().areas.length'),18,'preview reads the fixed world layout without starting a Game');
   assert(!node(h,'world-mode-note').querySelector('details').hasAttribute('open'),'world explanation remains folded');
@@ -44,6 +50,7 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   assert.equal(h.run('introDraws'),prepareDraws,'the preparation background retains its frame');
   assert.equal(h.run('clock'),prepareClock,'preparation does not keep the title scene animation running');
   assert.equal(node(h,'stage-options').children.length,STAGES.length+EXPEDITIONS.length);assert.equal(node(h,'weapon-options').children.length,3);
+  for(const canvas of node(h,'stage-options').querySelectorAll('canvas'))assert.equal(canvas.width/canvas.height,4/3,'all dungeon previews use the same map frame');
   assert.equal(prepare.querySelectorAll('canvas[data-world-archive-art]').length,STAGES.length);
   assert.equal(prepare.querySelectorAll('canvas[data-archive-art]').length,3);
   assert(h.drawImages()>0,'real theme portrait helpers draw into the mocked canvas');
@@ -94,7 +101,7 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   node(h,'stage-volcano-trial').focus();assert.equal(h.run('selectedStageId'),before);
   choose(h,'stage','volcano-trial');assert.equal(h.run('selectedStageId'),'volcano-trial');
   assert(rail.scrollLeft+rail.clientWidth>=rail.children.at(-1).offsetLeft+rail.children.at(-1).offsetWidth);
-  for(const id of ['arena','prepare-screen','prepare-body','stage-options','weapon-options']){
+  for(const id of ['arena','prepare-screen','prepare-body','stage-options','world-options','weapon-options']){
     assert(!h.listeners[`${id}:touchstart`]&&!h.listeners[`${id}:touchmove`],`${id} has no broad default-preventing touch handler`);
     assert(!h.fire(node(h,id),'touchstart').defaultPrevented);assert(!h.fire(node(h,id),'touchmove').defaultPrevented);
   }

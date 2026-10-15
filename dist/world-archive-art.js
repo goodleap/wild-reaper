@@ -127,7 +127,10 @@ export class WorldArchiveArt{
       }
       this.cache.delete(key);this.cache.set(key,portrait);
       while(this.cache.size>CACHE_LIMIT)this.cache.delete(this.cache.keys().next().value);
-      ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(portrait,0,0,canvas.width,canvas.height);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const scale=Math.min(canvas.width/WIDTH,canvas.height/HEIGHT),width=WIDTH*scale,height=HEIGHT*scale;
+      ctx.fillStyle='#14261e';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(portrait,(canvas.width-width)/2,(canvas.height-height)/2,width,height);
     }
   }
 }

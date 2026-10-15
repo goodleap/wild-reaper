@@ -21,6 +21,6 @@
     "test:distances": "node qa-player-distances.mjs && node qa-enemy-distances.mjs && node qa-boss-ranges.mjs",
     "test:maps": "node qa-world-layout.mjs && node qa-world-navigation.mjs && node qa-map-encounters.mjs && node qa-world-layout-art.mjs && node qa-expedition-layout.mjs",
     "test:party": "node qa-companion-recruitment.mjs && node qa-companion-navigation.mjs && node qa-party-tactics.mjs",
-    "test:rift": "node qa-rift-layout.mjs && node qa-rift-navigation.mjs && node qa-rift-exploration.mjs && node qa-rift-art.mjs"
+    "test:rift": "node qa-rift-layout.mjs && node qa-rift-navigation.mjs && node qa-rift-exploration.mjs && node qa-rift-scenery.mjs && node qa-rift-placement.mjs && node qa-rift-art.mjs"
   }
 }

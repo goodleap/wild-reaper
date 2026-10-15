@@ -10,7 +10,9 @@ import {getWaterContours,waterBounds,waterIntersectsCircle,waterIntersectsCapsul
 
 const CELL=520;
 function world(region,seed){
-  const island=new Island({region,seed}),terrain=new Terrain({region,seed,island,cacheLimit:32});
+  // Forest expedition islands still use coast/pool generation. The authored
+  // first world is covered separately by qa-rift-placement.mjs.
+  const island=new Island({region,seed,...(region==='forest'?{map:{id:`coastal-forest:${seed}`,themeId:region,seed}}:{})}),terrain=new Terrain({region,seed,island,cacheLimit:32});
   const g={terrain,region:{id:region},regionIndex:seed,player:{x:0,y:-19.8,r:15},viewWidth:960,viewHeight:720,enemies:[],time:0};
   // Suppress only the initial screen refresh: procedural placement queries
   // below must operate before any water enters the visible-object cache.

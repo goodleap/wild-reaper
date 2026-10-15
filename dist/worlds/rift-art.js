@@ -1,5 +1,8 @@
-// The authored valley uses the very same polygons for art, collision and maps.
-// These small raster tiles are presentation only; no scenery is generated here.
+import { SceneryArt } from '../scenery-art.js';
+import { RiftCollision } from '../rift-collision.js';
+// The authored valley uses the same polygons for art, collision and maps.
+// Detailed floor and deep forest are rasterized only in visible, bounded tiles.
+// The complete trees and shrubs at the forest edge use the world depth queue.
 export const RIFT_PALETTE=Object.freeze({ground:'#f3e4b9',groundShade:'#dfd2a9',grass:'#b4ca88',grassLight:'#c7d79e',forest:'#244337',forestDark:'#172f29',forestLight:'#335647',cliff:'#68615a',cliffLight:'#91877b',cliffDark:'#454540',water:'#226a96',waterDeep:'#1d5982',waterEdge:'#438eb4',bridge:'#bb894c',bridgeLight:'#e2b879',bridgeDark:'#644b32'});
 const TAU=Math.PI*2,TILE=384,BLEED=2,PIXEL_LIMIT=6*1024*1024,FONT='"PingFang SC",system-ui,sans-serif';
 const preparedLayouts=new WeakMap();
@@ -10,8 +13,27 @@ function rings(c,boundaries){c.beginPath();for(const boundary of boundaries)trac
 function bounds(points){return points.reduce((b,p)=>{p=point(p);b.minX=Math.min(b.minX,p.x);b.minY=Math.min(b.minY,p.y);b.maxX=Math.max(b.maxX,p.x);b.maxY=Math.max(b.maxY,p.y);return b;},{minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity});}
 const overlaps=(a,b,margin=0)=>!b||a.maxX+margin>=b.minX&&a.minX-margin<=b.maxX&&a.maxY+margin>=b.minY&&a.minY-margin<=b.maxY;
 function prepared(layout){let data=preparedLayouts.get(layout);if(data)return data;const records=items=>(items||[]).map(value=>({value,bounds:bounds(value.points||[])}));data={areas:records(layout.areas),patches:records(layout.patches),lakes:records(layout.lakes),bridges:records((layout.passages||[]).filter(p=>p.kind==='bridge').map(p=>{if(!p.deck?.length)return p;const [a,b]=p.deck,angle=Math.atan2(b.y-a.y,b.x-a.x),nx=-Math.sin(angle)*p.width/2,ny=Math.cos(angle)*p.width/2;return {...p,waypoints:p.deck,points:[{x:a.x+nx,y:a.y+ny},{x:b.x+nx,y:b.y+ny},{x:b.x-nx,y:b.y-ny},{x:a.x-nx,y:a.y-ny}]};}))};
-  const rocky=new Set(['03','06','09','11','13','14','17']);data.banks=[];
-  for(const boundary of layout.solidBoundaries||layout.boundaries||[]){const points=boundary.points||boundary;for(let i=0;i<points.length;i++){const a=point(points[i]),b=point(points[(i+1)%points.length]),x=(a.x+b.x)/2,y=(a.y+b.y)/2;let nearest=null,distance=Infinity;for(const area of layout.areas||[]){const d=(area.center.x-x)**2+(area.center.y-y)**2;if(d<distance){distance=d;nearest=area;}}data.banks.push({a,b,bounds:bounds([a,b]),forest:!rocky.has(nearest?.id),seed:data.banks.length});}}
+  data.collision=new RiftCollision(layout);
+  data.undergrowth=[];
+  for(const boundary of layout.solidBoundaries||layout.boundaries){const ring=boundary.points||boundary;let carry=0;
+    for(let i=0;i<ring.length;i++){const a=point(ring[i]),b=point(ring[(i+1)%ring.length]),dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);if(!length)continue;
+      for(let d=carry;d<length;d+=29){const x=a.x+dx*d/length,y=a.y+dy*d/length,n=hash(x+12,y-7),nx=-dy/length,ny=dx/length,side=data.collision.high.inside(x+nx*3,y+ny*3)?-1:1,px=x+nx*side*(8+n*8),py=y+ny*side*(8+n*8);
+        if(data.collision.high.inside(px,py)||data.bridges.some(p=>overlaps(p.bounds,{minX:px,minY:py,maxX:px,maxY:py},65)))continue;
+        let nearest=null,best=Infinity;for(const area of layout.areas){const d=(area.center.x-x)**2+(area.center.y-y)**2;if(d<best){best=d;nearest=area;}}
+        data.undergrowth.push({x:px,y:py,n,stone:['quarry','ravine','pass'].includes(nearest?.kind)});
+      }carry=(carry-length)%29;if(carry<0)carry+=29;
+    }
+  }
+  data.shores=[];
+  for(const lake of layout.lakes||[])for(const ring of [lake.points,...(lake.holes||[]).map(h=>h.points||h)]){
+    let carry=0;
+    for(let i=0;i<ring.length;i++){const a=point(ring[i]),b=point(ring[(i+1)%ring.length]),dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);if(!length)continue;
+      for(let d=carry;d<length;d+=33){const x=a.x+dx*d/length,y=a.y+dy*d/length,n=hash(x+4,y+17),nx=-dy/length,ny=dx/length;let side=0;
+        for(const sign of [-1,1])if(data.collision.ground.inside(x+nx*sign*17,y+ny*sign*17)){side=sign;break;}
+        if(side&&!data.bridges.some(p=>overlaps(p.bounds,{minX:x,minY:y,maxX:x,maxY:y},26)))data.shores.push({x,y,n,nx:nx*side,ny:ny*side});
+      }carry=(carry-length)%33;if(carry<0)carry+=33;
+    }
+  }
   preparedLayouts.set(layout,data);return data;}
 function lakePath(c,lake){trace(c,lake.points);for(const hole of lake.holes||[])trace(c,hole.points||hole,false);}
 function strokeLine(c,ax,ay,bx,by,color,width){c.beginPath();c.moveTo(ax,ay);c.lineTo(bx,by);c.strokeStyle=color;c.lineWidth=width;c.stroke();}
@@ -30,35 +52,49 @@ function bridge(c,p,{overview=false}={}){
 }
 function base(c,layout,{viewBounds,overview=false}={}){
   const p=RIFT_PALETTE,data=prepared(layout),b=viewBounds||layout.bounds;c.fillStyle=p.forest;c.fillRect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);
-  // The long banks occupy blocked land. The walkable union is painted last,
-  // so neither a decorative edge nor an overlapping region moves a doorway.
-  paintBanks(c,layout,viewBounds,false);
-  for(const {value:lake,bounds:b}of data.lakes){if(!overlaps(b,viewBounds,10))continue;lakePath(c,lake);c.fillStyle=p.water;c.fill('evenodd');c.strokeStyle=p.waterEdge;c.lineWidth=overview?16:7;c.stroke();}
+  // A subdued soil seam sits below full vegetation silhouettes. It is not a
+  // painted cliff strip; the landform's material comes from actual scenery.
+  if(overview){rings(c,layout.solidBoundaries||layout.boundaries||[]);c.strokeStyle='#364a32';c.lineWidth=20;c.stroke();}
+  for(const {value:lake,bounds:b}of data.lakes){if(!overlaps(b,viewBounds,10))continue;lakePath(c,lake);c.fillStyle=p.water;c.fill('evenodd');if(!overview){c.save();lakePath(c,lake);c.clip('evenodd');c.strokeStyle='#5b98a324';c.lineWidth=70;c.stroke();c.strokeStyle='#81b1ad39';c.lineWidth=30;c.stroke();c.strokeStyle='#add0be75';c.lineWidth=6;c.stroke();c.restore();}else{c.strokeStyle=p.waterEdge;c.lineWidth=16;c.stroke();}}
   rings(c,layout.boundaries||[]);c.fillStyle=p.ground;c.fill('evenodd');
   c.save();rings(c,layout.boundaries||[]);c.clip('evenodd');
-  c.strokeStyle=p.grass;c.lineWidth=32;c.stroke();c.strokeStyle='#d7dca2';c.lineWidth=10;c.stroke();
-  for(const {value:area,bounds:b}of data.areas){if(!overlaps(b,viewBounds))continue;if(area.kind==='quarry'||area.id==='03'){trace(c,area.points);c.fillStyle='#ede0bd';c.fill();}else if(area.kind==='ruins'||area.id==='11'||area.id==='17'){trace(c,area.points);c.fillStyle='#e4ddbd';c.fill();}}
-  for(const {value:patch,bounds:b}of data.patches){if(!overlaps(b,viewBounds))continue;trace(c,patch.points);c.fillStyle=p.grass;c.fill();if(!overview){c.strokeStyle=p.grassLight;c.lineWidth=4;c.stroke();}}
+  c.strokeStyle=overview?p.grass:'#9caf6b66';c.lineWidth=overview?26:14;c.stroke();
+  for(const {value:area,bounds:b}of data.areas){if(!overlaps(b,viewBounds))continue;const quarry=area.kind==='quarry',ruin=['ruins','fortress','pass'].includes(area.kind);if(!quarry&&!ruin)continue;
+    if(overview){trace(c,area.points);c.fillStyle=quarry?'#ede0bd':'#e4ddbd';c.fill();}
+    else{const radius=Math.max(b.maxX-b.minX,b.maxY-b.minY)*.58,g=c.createRadialGradient(area.center.x,area.center.y,20,area.center.x,area.center.y,radius);g.addColorStop(0,quarry?'#c5bea744':'#c6ccb75c');g.addColorStop(.65,quarry?'#d4c8a82c':'#cbd2b33b');g.addColorStop(1,'#ddd4b300');c.fillStyle=g;c.fillRect(area.center.x-radius,area.center.y-radius,radius*2,radius*2);}}
+  for(const {value:patch,bounds:b}of data.patches){if(!overlaps(b,viewBounds,12))continue;trace(c,patch.points);if(!overview){c.strokeStyle='#b4ca8844';c.lineWidth=18;c.stroke();}c.fillStyle=p.grass;c.fill();}
   c.restore();
   for(const {value:p,bounds:b}of data.bridges)if(overlaps(b,viewBounds,10))bridge(c,p,{overview});
 }
-function leafMass(c,x,y,r,seed){
-  const p=RIFT_PALETTE;c.fillStyle=p.forestDark;c.beginPath();c.ellipse(x,y+7,r*.94,r*.69,0,0,TAU);c.fill();
-  for(let i=0;i<5;i++){const a=i*TAU/5,xx=x+Math.cos(a)*r*.34,yy=y+Math.sin(a)*r*.22;c.fillStyle=i<2?p.forestLight:i<4?'#2b4e3e':p.forest;c.beginPath();c.ellipse(xx,yy,r*(.51+hash(seed,i)*.16),r*.4,-.2,0,TAU);c.fill();}
-  for(let i=0;i<6;i++){const xx=x+(hash(seed+i,18)-.5)*r*1.2,yy=y+(hash(i,seed)-.5)*r*.7;strokeLine(c,xx,yy,xx+4,yy-2,'#55715566',1.2);}
-}
-function paintBanks(c,layout,view,detail){
-  const p=RIFT_PALETTE,data=prepared(layout);rings(c,layout.solidBoundaries||layout.boundaries||[]);c.strokeStyle=p.forestDark;c.lineWidth=122;c.stroke();c.strokeStyle=p.cliff;c.lineWidth=98;c.stroke();c.strokeStyle=p.cliffDark;c.lineWidth=12;c.stroke();
-  for(const {a,b,bounds:box,forest,seed}of data.banks){if(!overlaps(box,view,90))continue;const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len;
-    if(forest){strokeLine(c,a.x,a.y,b.x,b.y,p.forestDark,124);strokeLine(c,a.x,a.y,b.x,b.y,p.forestLight,92);strokeLine(c,a.x,a.y,b.x,b.y,p.forest,65);}
-    if(!detail)continue;
-    for(let d=0;d<len;){const n=hash(seed,d),step=24+n*25,x=a.x+dx*d/len,y=a.y+dy*d/len;if(!view||x>=view.minX-70&&x<=view.maxX+70&&y>=view.minY-70&&y<=view.maxY+70){
-      if(forest){for(const side of [-1,1])leafMass(c,x+nx*side*(29+n*9),y+ny*side*(29+n*9),35+n*13,seed+d);}
-      else for(const side of [-1,1]){const wide=31+n*17,ex=x+dx*Math.min(step,len-d)/len,ey=y+dy*Math.min(step,len-d)/len;c.beginPath();c.moveTo(x+nx*side*7,y+ny*side*7);c.lineTo(ex+nx*side*(8+n*5),ey+ny*side*(8+n*5));c.lineTo(ex+nx*side*wide,ey+ny*side*wide);c.lineTo(x+nx*side*(wide-4)+dx/len*8,y+ny*side*(wide-4)+dy/len*8);c.closePath();c.fillStyle=['#847c6d','#6f6a5e','#918674','#777369'][Math.floor(n*4)];c.fill();strokeLine(c,x+nx*side*10,y+ny*side*10,x+nx*side*wide+dx/len*8,y+ny*side*wide+dy/len*8,'#3d453c88',1.7);strokeLine(c,x+nx*side*(wide-3)+dx/len*8,y+ny*side*(wide-3)+dy/len*8,ex+nx*side*wide,ey+ny*side*wide,'#c2b39777',1.2);}
-    }d+=step;}
+// Deep thickets are full painted scenery, not ellipses clipped to the path.
+// Anchors are evaluated against the same indexed mask as movement. Near-edge
+// scenery is reserved for the depth-sorted props; far crowns are cheap stamps.
+function blockedScenery(c,layout,view,scenery){
+  const data=prepared(layout),mask=data.collision.high,rocky=new Set(['03','06','09','11','13','14','17']);
+  for(let gy=Math.floor((view.minY-150)/62);gy<=Math.floor((view.maxY+150)/62);gy++)for(let gx=Math.floor((view.minX-150)/71);gx<=Math.floor((view.maxX+150)/71);gx++){
+    const n=hash(gx+13,gy+11),m=hash(gy-33,gx+4),x=(gx+.15+n*.7)*71,y=(gy+.1+m*.8)*62;
+    if(mask.inside(x,y))continue;const edge=mask.nearest(x,y,100),distance=edge?.distance??Infinity;if(distance<52)continue;
+    let nearest=null,best=Infinity;for(const area of layout.areas){const d=(area.center.x-x)**2+(area.center.y-y)**2;if(d<best){best=d;nearest=area;}}
+    const stony=rocky.has(nearest?.id),seed=gx*37+gy*59;
+    if(stony&&n<.81){scenery.drawRock(c,{x,y:y+16,r:36+n*24,rockForm:[0,1,2,4][Math.floor(m*4)],riftPalette:true});if(n>.55)scenery.drawShrub(c,{x:x-18,y:y+27,scale:.55+n*.22,seed});}
+    else scenery.drawCanopy(c,{x,y,scale:.81+n*.35,treeForm:Math.floor(m*5),riftPalette:true});
   }
 }
-function groundDetails(c,layout,view){
+function undergrowth(c,layout,view,scenery){
+  for(const {x,y,n,stone}of prepared(layout).undergrowth){if(x<view.minX-65||x>view.maxX+65||y<view.minY-25||y>view.maxY+65)continue;
+    if(stone&&n<.7)scenery.drawRock(c,{x,y,r:9+n*10,rockForm:n<.36?3:1,riftPalette:true});
+    else scenery.drawShrub(c,{x,y,scale:.34+n*.24,seed:x*.13+y*.37});
+  }
+}
+function shoreDetails(c,layout,view){
+  for(const {x,y,n,nx,ny}of prepared(layout).shores){if(x<view.minX-35||x>view.maxX+35||y<view.minY-35||y>view.maxY+55)continue;
+    const xx=x+nx*7,yy=y+ny*7;
+    // Small warm stones and short reeds bridge water, wet earth and grass.
+    if(n<.33){for(let i=0;i<3;i++){const px=xx+(hash(x+i,y)-.5)*21,py=yy+(hash(y+i,x)-.5)*10;c.beginPath();c.moveTo(px-3,py);c.quadraticCurveTo(px-4,py-4,px,py-4.5);c.quadraticCurveTo(px+5,py-3,px+4,py+1);c.quadraticCurveTo(px,py+3,px-3,py);c.fillStyle=i%2?'#8b967f':'#b5b79b';c.fill();strokeLine(c,px-1,py-3,px+3,py-2,'#e1d9b178',.8);}}
+    else if(n>.53){for(let i=0;i<5;i++){const px=xx+(i-2)*3,py=yy+(i%2)*2,h=7+hash(i+x,y)*17;c.strokeStyle=i%2?'#7e9d5b':'#507651';c.lineWidth=1.2;c.beginPath();c.moveTo(px,py);c.quadraticCurveTo(px+(i-2)*.9,py-h*.55,px+(i-2)*2,py-h);c.stroke();if(i===1||i===3)strokeLine(c,px+(i-2)*2,py-h,px+(i-2)*2+.5,py-h+5,'#78684a',2.3);}}
+  }
+}
+function groundDetails(c,layout,view,scenery){
   const p=RIFT_PALETTE,data=prepared(layout);
   c.save();rings(c,layout.boundaries||[]);c.clip('evenodd');
   for(let gy=Math.floor(view.minY/39)-1;gy<=Math.floor(view.maxY/39)+1;gy++)for(let gx=Math.floor(view.minX/39)-1;gx<=Math.floor(view.maxX/39)+1;gx++){
@@ -84,15 +120,9 @@ function groundDetails(c,layout,view){
       const n=hash(gx+71,gy),x=(gx+n)*61,y=(gy+hash(gy,gx+31))*50;strokeLine(c,x,y,x+11+n*22,y-1,'#8ac6cc30',1);strokeLine(c,x+4,y+4,x+10+n*10,y+3,'#103e6c33',1.5);
     }c.restore();
   }
-  // Dense crowns and rock facets stay strictly outside the walkable union.
-  // The outer rectangle makes this an inverse mask without another collision
-  // approximation or thousands of individual obstacle props.
-  c.save();c.beginPath();c.rect(view.minX-4,view.minY-4,view.maxX-view.minX+8,view.maxY-view.minY+8);for(const boundary of layout.solidBoundaries||layout.boundaries||[])trace(c,boundary.points||boundary,false);c.clip('evenodd');
-  for(let gy=Math.floor((view.minY-58)/67);gy<=Math.floor((view.maxY+58)/67);gy++)for(let gx=Math.floor((view.minX-58)/75);gx<=Math.floor((view.maxX+58)/75);gx++){
-    const n=hash(gx+13,gy+11),x=(gx+.15+n*.7)*75,y=(gy+.1+hash(gy,gx)*.8)*67;leafMass(c,x,y,28+n*15,gx*37+gy*59);
-  }
-  paintBanks(c,layout,view,true);
-  c.restore();
+  blockedScenery(c,layout,view,scenery);
+  undergrowth(c,layout,view,scenery);
+  shoreDetails(c,layout,view);
   for(const {value:p,bounds:b}of data.bridges)if(overlaps(b,view,10))bridge(c,p);
 }
 
@@ -108,10 +138,10 @@ export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,
 }
 
 export class RiftArt {
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;}
-  get cacheStats(){return {entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
+  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.scenery=new SceneryArt(makeCanvas);this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;}
+  get cacheStats(){const sprites=this.scenery.cacheStats;return {entries:this.cache.size+sprites.entries,pixels:this.pixels+sprites.pixels,bytes:this.pixels*4+sprites.bytes,limitBytes:PIXEL_LIMIT*4+sprites.limitBytes,builds:this.builds+sprites.builds};}
   _tile(layout,tx,ty){let id=this.ids.get(layout);if(!id){id=++this.nextId;this.ids.set(layout,id);}const key=`${id}:${tx}:${ty}`;let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
-    const canvas=this.makeCanvas(),side=TILE+BLEED*2;canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';base(c,layout,{viewBounds:view});groundDetails(c,layout,view);
+    const canvas=this.makeCanvas(),side=TILE+BLEED*2;canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);
     image={canvas,pixels:side*side};while(this.pixels+image.pixels>PIXEL_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);}this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
   }
   drawGround(c,island,{camX=0,camY=0,width=1100,height=700}={}){const layout=island?.layout;if(layout?.kind!=='rift-forest')return false;const left=camX-width/2,top=camY-height/2;c.save();for(let ty=Math.floor(top/TILE);ty<=Math.floor((top+height)/TILE);ty++)for(let tx=Math.floor(left/TILE);tx<=Math.floor((left+width)/TILE);tx++){const image=this._tile(layout,tx,ty);c.drawImage(image.canvas,BLEED,BLEED,TILE,TILE,tx*TILE-left,ty*TILE-top,TILE,TILE);}c.restore();return true;}

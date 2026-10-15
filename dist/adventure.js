@@ -3,6 +3,7 @@ import { mapSeed } from './map-context.js';
 import { treasureGuardianType } from './encounter-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
+import { terrainNavigation } from './terrain-navigation.js';
 import { WORLD_IDS } from './world-definitions.js';
 const economy=getConfigSection('economy'),pickups=economy.pickups,treasureRules=economy.treasure;
 
@@ -28,7 +29,8 @@ export class Adventure {
     this.props=[];this.pickups=[];this.treasure=null;
     this.furyTime=0;this.magnetTime=0;this.buffDuration=pickups.buffDuration;
     this._id=0;this._treasureCount=0;this._nextTreasureAt=(game.time||0)+treasureRules.firstAt;
-    this._supplyClock=0;this._consumed=new ConsumedSupplies();
+    this._supplyClock=0;this._supplyQueue=[];this._consumed=new ConsumedSupplies();
+    this._reachablePoints=new Map();this._reachableLegs=new Map();this._placementRevision=-1;
     if(generation)this._refreshSupplies(true);
   }
   _hash(x,y=0){const index=WORLD_IDS.indexOf(this.region),offset=index===1?419:index===2?811:index>2?index*431:0;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
@@ -38,6 +40,37 @@ export class Adventure {
   _foot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<g.viewHeight*.5+margin;}
   _free(x,y,r=36){return this.game.terrain.isFree(x,y,r)&&this.game.terrain.island?.isDry(x,y,r)!==false;}
+  _reachable(x,y){
+    const g=this.game,terrain=g.terrain,r=g.player.r;
+    // Pickups are non-solid: standing at their center is a valid interaction
+    // position, but the player's whole ground footprint must fit there.
+    if(!terrain.isFree(x,y,r,'ground'))return false;
+    if(!terrain.rift)return true;
+    const revision=`${terrain.structureRevision}:${r}`;
+    if(this._placementRevision!==revision){this._placementRevision=revision;this._reachablePoints.clear();this._reachableLegs.clear();}
+    const key=`${x},${y}`;
+    if(this._reachablePoints.has(key))return this._reachablePoints.get(key);
+    const navigation=terrainNavigation(terrain),origin=this._foot(),target={x,y};
+    // The player's present ground position is already reached. Starting here
+    // also avoids repeatedly replaying a whole-world trip from the camp.
+    const route=navigation.rift.route(origin,target,r,'ground');let reachable=!!route,from=origin;
+    // The authored graph proves the large detour; each leg must also fit
+    // between real props and structures, including its final pickup position.
+    for(const to of route||[]){
+      const legKey=`${from.x},${from.y}:${to.x},${to.y}`;
+      let clear=this._reachableLegs.get(legKey);
+      if(clear===undefined){
+        const path=navigation.findLocal(from,to,r,'ground');clear=!!path?.length&&distance(path.at(-1),to)<=.01;
+        this._reachableLegs.set(legKey,clear);
+        if(this._reachableLegs.size>512)this._reachableLegs.delete(this._reachableLegs.keys().next().value);
+      }
+      if(!clear){reachable=false;break;}
+      from=to;
+    }
+    this._reachablePoints.set(key,reachable);
+    if(this._reachablePoints.size>256)this._reachablePoints.delete(this._reachablePoints.keys().next().value);
+    return reachable;
+  }
   _environmentFree(x,y,r=0){
     if(this.game.terrain.island?.isReserved(x,y,r))return false;
     if(this.game.regions?.isSafePoint(x,y,r)===false)return false;
@@ -49,11 +82,19 @@ export class Adventure {
     if(environment.props.some(o=>o.state!=='spent'&&Math.hypot(o.x-x,o.y-y)<(o.blastRadius||82)+r+8))return false;
     return true;
   }
-  _safePoint(x,y,r=28,{generated=false}={}){
+  _safePoint(x,y,r=28,{generated=false,accept=()=>true,radialSearch=true}={}){
     // Dropped rewards retain the movement-safe placement used during combat;
     // generated supplies and treasure also require a suitable static surface.
-    const free=(px,py)=>generated?placementAllowed(this.game,'loot',{x:px,y:py,r}):this._free(px,py,r);
+    const free=(px,py)=>(generated?placementAllowed(this.game,'loot',{x:px,y:py,r}):this._free(px,py,r))&&accept(px,py)&&this._reachable(px,py);
     if(free(x,y))return {x,y};
+    if(generated&&this.game.terrain.rift){
+      const near=this.game.terrain.rift.mask('ground').nearest(x,y,144+r);
+      if(near){
+        const point={x:near.x+near.edge.nx*(r+.05),y:near.y+near.edge.ny*(r+.05)};
+        if(distance(point,{x,y})<=144&&free(point.x,point.y))return point;
+      }
+    }
+    if(!radialSearch)return null;
     for(let radius=24;radius<=144;radius+=24)for(let i=0;i<12;i++){
       const a=i*TAU/12,nx=x+Math.cos(a)*radius,ny=y+Math.sin(a)*radius;
       if(free(nx,ny))return {x:nx,y:ny};
@@ -67,8 +108,15 @@ export class Adventure {
     const id=`supply:${tx},${ty}`;
     if(this._consumed.has(id))return null;
     const x=starter?220:tx*CELL+145+this._hash(tx+131,ty+197)*225,y=starter?160:ty*CELL+145+this._hash(tx+199,ty+83)*225;
-    const point=this._safePoint(x,y,38,{generated:true});
-    if(!point||Math.hypot(point.x,point.y)<145||!this._environmentFree(point.x,point.y,18))return null;
+    const accept=(px,py)=>Math.hypot(px,py)>=145&&this._environmentFree(px,py,18);
+    let point=this._safePoint(x,y,38,{generated:true,...(this.game.terrain.rift?{accept}:{})});
+    // In a partitioned world a cell's first random point often falls in the
+    // forest. Retry within that same cell, retaining its chance, ID and loot.
+    if(!point&&this.game.terrain.rift)for(let i=0;i<8&&!point;i++){
+      const nx=(tx+this._hash(tx+419+i*37,ty+563))*CELL,ny=(ty+this._hash(tx+641,ty+827+i*41))*CELL;
+      point=this._safePoint(nx,ny,38,{generated:true,accept,radialSearch:false});
+    }
+    if(!point||!accept(point.x,point.y))return null;
     return {id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:pickups.supplyHp,maxHp:pickups.supplyHp,hit:0,seed,drop:starter?'herb':TYPES[Math.floor(this._hash(tx+233,ty+271)*TYPES.length)]};
   }
   _refreshSupplies(initial=false){
@@ -81,19 +129,41 @@ export class Adventure {
       if(clearing.kind!=='secret')continue;
       const id=`supply:layout:${clearing.id}`;
       if(this._consumed.has(id)||present.has(id)||Math.abs(clearing.x-p.x)>halfW||Math.abs(clearing.y-p.y)>halfH)continue;
-      if(!placementAllowed(g,'loot',{x:clearing.x,y:clearing.y,r:22})||g.environment?.isHazardFree?.(clearing.x,clearing.y,25)===false)continue;
+      if(!placementAllowed(g,'loot',{x:clearing.x,y:clearing.y,r:22})||!this._reachable(clearing.x,clearing.y)||g.environment?.isHazardFree?.(clearing.x,clearing.y,25)===false)continue;
       const point={x:clearing.x,y:clearing.y},seed=this._hash(index+791,313);
       candidates.push({id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:pickups.supplyHp,maxHp:pickups.supplyHp,hit:0,seed,drop:TYPES[index%TYPES.length]});
     }
+    const cells=[];
     for(let tx=Math.floor((p.x-halfW)/CELL);tx<=Math.floor((p.x+halfW)/CELL);tx++)
-      for(let ty=Math.floor((p.y-halfH)/CELL);ty<=Math.floor((p.y+halfH)/CELL);ty++){
+      for(let ty=Math.floor((p.y-halfH)/CELL);ty<=Math.floor((p.y+halfH)/CELL);ty++)cells.push({tx,ty});
+    if(initial||!g.terrain.rift){
+      for(const {tx,ty} of cells){
+        if(present.has(`supply:${tx},${ty}`))continue;
         const o=this._supplyAt(tx,ty);
-        if(!o||present.has(o.id)||(!initial&&this._visible(o.x,o.y,48)))continue;
-        if(this.treasure&&distance(o,this.treasure)<110)continue;
+        if(!o||(!initial&&this._visible(o.x,o.y,48))||this.treasure&&distance(o,this.treasure)<110)continue;
         candidates.push(o);
       }
+      candidates.sort((a,b)=>distance(a,p)-distance(b,p));
+      this.props.push(...candidates.slice(0,Math.max(0,MAX_SUPPLIES-this.props.length)));
+      this._supplyQueue=[];return;
+    }
     candidates.sort((a,b)=>distance(a,p)-distance(b,p));
     this.props.push(...candidates.slice(0,Math.max(0,MAX_SUPPLIES-this.props.length)));
+    this._supplyQueue=cells.sort((a,b)=>Math.hypot((a.tx+.5)*CELL-p.x,(a.ty+.5)*CELL-p.y)-Math.hypot((b.tx+.5)*CELL-p.x,(b.ty+.5)*CELL-p.y));
+    this._drainSupplies();
+  }
+  _drainSupplies(){
+    // Fill the initial viewport once; during play process nearby cells first,
+    // with one cold cell query per frame rather than a world-size burst.
+    const present=new Set(this.props.map(o=>o.id));let examined=0;
+    while(this._supplyQueue.length&&examined<1&&this.props.length<MAX_SUPPLIES){
+      const {tx,ty}=this._supplyQueue.shift();
+      if(present.has(`supply:${tx},${ty}`)||this._consumed.has(`supply:${tx},${ty}`))continue;
+      examined++;const o=this._supplyAt(tx,ty);
+      if(!o||this._visible(o.x,o.y,48))continue;
+      if(this.treasure&&distance(o,this.treasure)<110)continue;
+      this.props.push(o);present.add(o.id);
+    }
   }
   nearestSupply(range=280){
     const p=this.game.player;let nearest=null,best=range;
@@ -145,13 +215,18 @@ export class Adventure {
       // An explicit request for hazardous/wet ground is rejected in place;
       // nearby retries only resolve the remaining footprint/solid clearance.
       if(!this._environmentFree(x,y,40))return null;
-      point=this._safePoint(x,y,90,{generated:true});
+      point=this._safePoint(x,y,g.terrain.rift?27:90,{generated:true});
     }
     else{
       const start=this._hash(this._treasureCount+1,Math.floor(g.time))*TAU;
       for(let i=0;i<24;i++){
         const a=start+i*TAU/24,r=g.terrain.island?Math.max(420,1/Math.max(Math.abs(Math.cos(a))/(g.viewWidth*.5+100),Math.abs(Math.sin(a))/(g.viewHeight*.5+100)))+(i%3)*50:420+(i%3)*50,candidate={x:p.x+Math.cos(a)*r,y:p.y+Math.sin(a)*r};
-        if((!g.terrain.island||!this._visible(candidate.x,candidate.y,70))&&placementAllowed(g,'loot',{...candidate,r:90})&&this._environmentFree(candidate.x,candidate.y,40)&&!this.props.some(o=>distance(o,candidate)<100)){point=candidate;break;}
+        const accept=(x,y)=>(!g.terrain.island||!this._visible(x,y,70))&&this._environmentFree(x,y,40)&&!this.props.some(o=>distance(o,{x,y})<100);
+        // Keep legacy worlds' exact candidate distribution. The authored
+        // forest may slide a candidate to its nearby clearing or road edge.
+        point=g.terrain.rift?this._safePoint(candidate.x,candidate.y,27,{generated:true,accept}):
+          placementAllowed(g,'loot',{...candidate,r:90})&&accept(candidate.x,candidate.y)&&this._reachable(candidate.x,candidate.y)?candidate:null;
+        if(point)break;
       }
     }
     if(!point||!this._environmentFree(point.x,point.y,40))return null;
@@ -219,7 +294,7 @@ export class Adventure {
     for(const prop of this.props)prop.hit=Math.max(0,prop.hit-dt);
     this._updateTreasure(dt);
     if(this.generation){
-      this._supplyClock-=dt;if(this._supplyClock<=0){this._supplyClock=.5;this._refreshSupplies();}
+      this._supplyClock-=dt;if(this._supplyClock<=0){this._supplyClock=.5;this._refreshSupplies();}else this._drainSupplies();
       if(!this.treasure&&this.game.time>=this._nextTreasureAt&&!this.spawnTreasure())this._nextTreasureAt=this.game.time+5;
     }
     const p=this._foot();

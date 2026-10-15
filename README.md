@@ -29,7 +29,7 @@ npm test
 
 修改地图布局后运行 `npm run test:maps`，检查八世界实际入口与探索空地的可达性、连续障碍绕行、领域及奖励持久化、水域查询、地表缓存和三个副本通路；渲染仍需在云端浏览器检查手机 540 视野与桌面画面。固定地形、地表绘制和小地图共用 `Island.layout`，不要分别生成不一致的碰撞和外观。
 
-固定森林地图的离线源在 `scripts/build-rift-map.py`；只在需要重烘焙几何时安装构建依赖 Shapely，运行该脚本后执行 `npm run build:config`。浏览器只读取 `config/worlds.json` 的 `forest.authored` 数据，不加载 Python 或生成工具。修改这张地图还需运行 `npm run test:rift`，验证入口封闭后的隔离性、桥梁与水域边界、伙伴绕行、捷径及跨场景状态。
+固定森林地图的离线源在 `scripts/build-rift-map.py`，自然轮廓处理在 `scripts/natural_contours.py`；只在需要重烘焙几何时安装构建依赖 Shapely，运行该脚本后执行 `npm run build:config`。浏览器只读取 `config/worlds.json` 的 `forest.authored` 数据，不加载 Python 或生成工具。修改这张地图还需运行 `npm run test:rift`，验证入口封闭后的隔离性、桥梁与水域边界、伙伴绕行、捷径及跨场景状态，以及景物预留空间、补给和宝箱的实际可达性。
 
 ## 内容配置
 

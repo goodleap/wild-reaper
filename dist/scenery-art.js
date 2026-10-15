@@ -104,7 +104,25 @@ export class SceneryArt {
     for(let i=0;i<leaves;i++){const x=-rx+r()*rx*2,y=-ry+r()*ry*2,lit=x/rx-y/ry>.15,l=2.5+r()*5;leaf(c,x,y,l,1+r()*1.4,-.8+r()*1.4,lit?['#adc07173','#8fa45a99','#c0d18548'][i%3]:['#6a8b4760','#20493080','#9aaa5650'][i%3]);if(i%11===0)stroke(c,[[x-3,y+3],[x+4,y-2]],'#173c2950',.8);}
     c.restore();for(let i=0;i<outline.length;i+=2){const [x,y]=outline[i];leaf(c,x,y,4.5,1.4,Math.atan2(y,x),'#496d3a');}
   });}
-  drawTree(c,prop,canopyAlpha=1){const v=Number.isInteger(prop.treeForm)?prop.treeForm:this._variant(prop.seed),p=TREE_PROFILES[v],s=prop.scale||1,trunk=this._trunk(v),crown=prop.riftPalette?this._riftImage(this._canopy(v),'tree',v):this._canopy(v),cw=prop.crownWidth||1,ch=prop.crownHeight||1;c.save();c.translate(prop.x,prop.y);c.scale(s,s);c.drawImage(trunk.canvas,-trunk.w/2,-trunk.h+28,trunk.w,trunk.h);c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));
+  // Dense forest tiles reuse the same five painted crowns as the depth-sorted
+  // trees. Keeping the complete silhouette avoids a straight clipped forest edge.
+  drawCanopy(c,{x,y,scale=1,treeForm=0,riftPalette=false,alpha=1}){const image=riftPalette?this._riftImage(this._canopy(treeForm),'tree',treeForm):this._canopy(treeForm);c.save();c.globalAlpha*=alpha;c.drawImage(image.canvas,x-image.w*scale/2,y-image.h*scale/2,image.w*scale,image.h*scale);c.restore();}
+  _shrub(v){return this._image(`shrub:${v}`,112,76,2,c=>{
+    c.translate(56,59);const r=rng(1841+v*137);
+    // A low, irregular thicket: woody shoots, overlapping leaf sprays and a
+    // few fern fronds. The painted footprint stays close to its ground anchor.
+    for(let i=0;i<9;i++){const x=(i-4)*9,yy=-9-r()*24;stroke(c,[[x*.32,1],[x*.65,yy*.5],[x,yy]],'#475939',1.4);stroke(c,[[x*.65,yy*.5],[x+7,yy-4]],'#7b7950',.7);}
+    for(let i=0;i<11;i++){const x=(i-5)*7.5+(r()-.5)*8,y=-9-Math.sin(i*Math.PI/10)*(13+r()*10),rx=11+r()*8,ry=9+r()*6;lobedPath(c,x,y,rx,ry,741+v*13+i,15);c.fillStyle=['#304d34','#45613b','#3d5b37','#526b3f'][i%4];c.fill();
+      for(let j=0;j<19;j++){const a=r()*TAU,rr=Math.sqrt(r()),xx=x+Math.cos(a)*rx*.86*rr,yy=y+Math.sin(a)*ry*.76*rr;leaf(c,xx,yy,4+r()*6,1.3+r()*1.8,-.8+r()*1.7,['#799653','#93aa65','#608747','#b4c080','#567a43'][(j+i)%5]);}
+    }
+    // Lower sprays close the woody center so the thicket reads as one low
+    // rooted volume instead of a row of little floating crowns.
+    for(let i=0;i<3;i++){const x=(i-1)*22,y=-5+(i%2)*3;lobedPath(c,x,y,24,10,911+v*7+i,17);c.fillStyle=i%2?'#43633a':'#4d713e';c.fill();for(let j=0;j<22;j++){const xx=x+(r()-.5)*38,yy=y+(r()-.5)*13;leaf(c,xx,yy,4+r()*4,1.4+r()*1.4,-.5+r(),['#8eaa61','#6d944e','#a5bb75','#577d43'][(i+j)%4]);}}
+    for(const side of [-1,1])for(let j=0;j<3;j++){const x=side*(21+j*7),y=4-j*2,tx=x+side*(9+j*3),ty=y-12-j*3;stroke(c,[[x,y],[tx,ty]],'#486c3c',1);for(let k=1;k<5;k++){const t=k/5,xx=x+(tx-x)*t,yy=y+(ty-y)*t;leaf(c,xx-3,yy-2,7-k*.7,1.7,.55,'#7b9c55');leaf(c,xx+3,yy-1,7-k*.7,1.7,-.5,'#9eb66d');}}
+    for(let i=0;i<8;i++)tuft(c,-31+r()*62,4+r()*6,.9+r()*.6,v*17+i,.9);
+  });}
+  drawShrub(c,prop,alpha=1){const image=this._shrub(this._variant(prop.seed,4)),s=prop.scale||1;c.save();c.globalAlpha*=alpha;c.drawImage(image.canvas,prop.x-56*s,prop.y-59*s,112*s,76*s);c.restore();}
+  drawTree(c,prop,canopyAlpha=1){if(prop.riftShrub){this.drawShrub(c,prop,canopyAlpha);return;}const v=Number.isInteger(prop.treeForm)?prop.treeForm:this._variant(prop.seed),p=TREE_PROFILES[v],s=prop.scale||1,trunk=this._trunk(v),crown=prop.riftPalette?this._riftImage(this._canopy(v),'tree',v):this._canopy(v),cw=prop.crownWidth||1,ch=prop.crownHeight||1;c.save();c.translate(prop.x,prop.y);c.scale(s,s);c.drawImage(trunk.canvas,-trunk.w/2,-trunk.h+28,trunk.w,trunk.h);c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));
     c.drawImage(crown.canvas,p.x-crown.w*cw/2,p.y-crown.h*ch/2,crown.w*cw,crown.h*ch);c.restore();}
   _rock(v){return this._image(`rock:${v}`,96,120,2,c=>{c.translate(48,72);if(v===3){paintRockFragments(c);return;}const r=rng(148+v*27);
     const forms=[

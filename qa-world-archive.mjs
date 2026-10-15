@@ -43,12 +43,13 @@ assert.equal(allArtKeys.size,WORLD_ARCHIVE_WORLDS.length+WORLD_ARCHIVE_LOCATIONS
 assert.equal(worldArchiveSelection({category:'unknown',selectedId:'stonevault'}).selected.id,'forest');
 assert.equal(worldArchiveSelection({category:'relics',selectedId:'forest'}).selected.id,'castle');
 assert.match(archivePanelHTML({}, {tab:'world',worldCategory:'relics',worldSelectedId:'stonevault'}),/进入宝库获得/);
-assert.match(worldArchiveHTML(),/双向通道/);
+assert.match(worldArchiveHTML(),/关卡模式：[\s\S]*往返[\s\S]*自由探索：[\s\S]*跨世界通道/,'the guide distinguishes trial travel from world connections');
 assert.match(worldArchiveHTML(),/具体位置留待每局冒险中探索/);
 
 // Exercise every portrait through the real gameplay painters. The canvas fake
 // checks finite geometry/state and cache lifetime, without claiming browser QA.
 let draws=0;
+const imageDraws=[];
 const contexts=[];
 function context(){
   const stack=[],state={globalAlpha:1,lineWidth:1};
@@ -57,7 +58,7 @@ function context(){
     if(key==='save')return()=>stack.push({...object});
     if(key==='restore')return()=>{assert(stack.length,'balanced canvas state');Object.assign(object,stack.pop());};
     if(key==='createLinearGradient'||key==='createRadialGradient')return()=>({addColorStop(){}});
-    return (...args)=>{for(const value of args)if(typeof value==='number')assert(Number.isFinite(value),`${String(key)} argument must be finite`);if(key==='drawImage')draws++;};
+    return (...args)=>{for(const value of args)if(typeof value==='number')assert(Number.isFinite(value),`${String(key)} argument must be finite`);if(key==='drawImage'){draws++;imageDraws.push(args);}};
   }});
   contexts.push({stack,state});return ctx;
 }
@@ -71,6 +72,11 @@ for(const category of WORLD_ARCHIVE_CATEGORIES){
   assert.equal(art.cacheStats.builds,warmed,'same category/detail repaint reuses completed portraits');
   assert(art.cacheStats.bytes<=art.cacheStats.limitBytes,'portrait storage is bounded');
 }
+const compact=Object.assign(makeCanvas(),{width:320,height:240,dataset:{worldArchiveArt:'world:forest'}});
+art.draw({querySelectorAll:()=>[compact]});
+const [portrait,x,y,width,height]=imageDraws.at(-1);
+assert.equal(width/portrait.width,height/portrait.height,'compact cards retain scenery proportions');
+assert(x>=0&&y>=0&&x+width<=compact.width&&y+height<=compact.height,'the complete portrait remains inside the compact card');
 assert(draws>200,'all world and location gameplay painters are exercised');
 for(const {stack} of contexts)assert.equal(stack.length,0,'all painter transforms restore');
 const css=fs.readFileSync(new URL('./dist/archive.css',import.meta.url),'utf8');

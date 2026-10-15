@@ -6,7 +6,7 @@ import { WorldMap, landmarkState } from './dist/world-map.js';
 
 function context(record=false){
   const values={globalAlpha:.72},stack=[],calls=[];
-  const c=new Proxy(values,{get(target,key){if(key in target)return target[key];if(key==='save')return()=>stack.push({...target});if(key==='restore')return()=>{assert(stack.length,'balanced drawing context');const prior=stack.pop();for(const key of Object.keys(target))delete target[key];Object.assign(target,prior);};return(...args)=>{for(const arg of args)if(typeof arg==='number')assert(Number.isFinite(arg),`${String(key)} needs finite coordinates`);if(record)calls.push({key,args,style:target.fillStyle});};}});
+  const c=new Proxy(values,{get(target,key){if(key in target)return target[key];if(key==='save')return()=>stack.push({...target});if(key==='restore')return()=>{assert(stack.length,'balanced drawing context');const prior=stack.pop();for(const key of Object.keys(target))delete target[key];Object.assign(target,prior);};if(key==='createLinearGradient'||key==='createRadialGradient')return()=>({addColorStop(){}});return(...args)=>{for(const arg of args)if(typeof arg==='number')assert(Number.isFinite(arg),`${String(key)} needs finite coordinates`);if(record)calls.push({key,args,style:target.fillStyle});};}});
   return {c,calls,stack};
 }
 const layout=createRiftLayout(),island={region:'forest',layout},before=JSON.stringify(layout),mapped=context(true);
@@ -22,6 +22,7 @@ assert(!mapped.calls.some(call=>call.key==='fillText'),'small previews and the m
 const full=context(true);drawWorldLayoutMap(full.c,island,{scale:.1,labels:true});assert.equal(full.calls.filter(call=>call.key==='fillText').length,18,'expanded map names each authored area');
 const canvases=[],factory=()=>{const canvas={width:0,height:0,getContext:()=>context().c};canvases.push(canvas);return canvas;},art=new RiftArt(factory),screen=context();
 art.drawGround(screen.c,island,{camX:layout.spawn.x,camY:layout.spawn.y,width:540,height:985});const builds=art.cacheStats.builds;
+assert(art.scenery.cacheStats.entries>0,'deep forest reuses complete painted scenery sprites');
 for(let frame=0;frame<60;frame++)art.drawGround(screen.c,island,{camX:layout.spawn.x+frame*.01,camY:layout.spawn.y,width:540,height:985});
 assert.equal(art.cacheStats.builds,builds,'warm phone frames reuse bounded world tiles');
 for(let i=0;i<100;i++)art.drawGround(screen.c,island,{camX:-3300+i*67,camY:Math.sin(i*.4)*2300,width:540,height:985});

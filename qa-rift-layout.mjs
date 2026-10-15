@@ -56,13 +56,18 @@ function seal(passage){return seals.get(passage.id);}
 function measureSeal(terrain,layout,passage){
   const candidates=[];
   for(let i=1;i<passage.waypoints.length;i++){
-    const a=passage.waypoints[i-1],b=passage.waypoints[i],length=distance(a,b),nx=-(b.y-a.y)/length,ny=(b.x-a.x)/length;
+    const a=passage.waypoints[i-1],b=passage.waypoints[i],length=distance(a,b),normal=Math.atan2(b.y-a.y,b.x-a.x)+Math.PI/2;
     for(let d=12;d<length-12;d+=12){
       const p={x:a.x+(b.x-a.x)*d/length,y:a.y+(b.y-a.y)*d/length};
       if(layout.areas.some(area=>inPolygon(p,area.points))||!terrain.isFree(p.x,p.y,RADIUS))continue;
-      const boundary=sign=>{for(let n=4;n<=passage.width+160;n+=4)if(!terrain.isFree(p.x+nx*n*sign,p.y+ny*n*sign,0))return n;return Infinity;};
-      const left=boundary(-1),right=boundary(1);if(!Number.isFinite(left+right))continue;
-      candidates.push({width:left+right,id:`qa-seal:${passage.id}`,type:'log',x:p.x+nx*(right-left)/2,y:p.y+ny*(right-left)/2,angle:Math.atan2(ny,nx),halfLength:(left+right)/2+24,r:16});
+      // A curved trail can meet two region shores diagonally. The shortest
+      // physical neck need not be perpendicular to its centerline tangent.
+      for(const turn of [0,-Math.PI/8,Math.PI/8,-Math.PI/4,Math.PI/4]){
+        const angle=normal+turn,nx=Math.cos(angle),ny=Math.sin(angle);
+        const boundary=sign=>{for(let n=4;n<=passage.width+160;n+=4)if(!terrain.isFree(p.x+nx*n*sign,p.y+ny*n*sign,0))return n;return Infinity;};
+        const left=boundary(-1),right=boundary(1);if(!Number.isFinite(left+right))continue;
+        candidates.push({width:left+right,id:`qa-seal:${passage.id}`,type:'log',x:p.x+nx*(right-left)/2,y:p.y+ny*(right-left)/2,angle,halfLength:(left+right)/2+24,r:16});
+      }
     }
   }
   assert(candidates.length,`Passage ${passage.id} must have a real neck outside its connected regions`);

@@ -263,7 +263,7 @@ function preparationChoice({id,name,group,color,art,role}){
   const label=document.createElement('label'),radio=document.createElement('input'),content=document.createElement('span'),portrait=document.createElement('canvas'),title=document.createElement('strong');
   label.className=`preparation-choice ${group}-option`;label.style.setProperty('--choice-color',color);
   radio.id=`${group}-${id}`;radio.type='radio';radio.name=group;radio.value=id;radio.setAttribute('aria-label',name);
-  content.className='preparation-choice-content';portrait.width=group==='stage'?320:256;portrait.height=group==='stage'?120:group==='hero'?256:224;if(group!=='hero')portrait.setAttribute(group==='stage'?'data-world-archive-art':'data-archive-art',art);portrait.setAttribute('aria-hidden','true');
+  content.className='preparation-choice-content';portrait.width=group==='stage'?320:256;portrait.height=group==='stage'?240:group==='hero'?256:224;if(group!=='hero')portrait.setAttribute(group==='stage'?'data-world-archive-art':'data-archive-art',art);portrait.setAttribute('aria-hidden','true');
   title.textContent=name;content.append(portrait,title);
   if(role){const note=document.createElement('small');note.textContent=role;content.append(note);}
   label.append(radio,content);return {label,radio,portrait};

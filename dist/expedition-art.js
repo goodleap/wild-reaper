@@ -165,23 +165,25 @@ export function drawExpeditionProp(c,prop){
 
 // Static, deliberately simpler versions for preparation cards.
 export function drawExpeditionPreview(c,id,width,height){
-  c.save();c.clearRect(0,0,width,height);c.scale(width/280,height/150);
+  c.save();c.clearRect(0,0,width,height);
+  c.fillStyle=id==='ship'?'#294c58':id==='moon'?'#263442':'#253c36';c.fillRect(0,0,width,height);
+  // Keep the full scene and its proportions in the shared 4:3 card frame.
+  const scale=Math.min(width/280,height/210);
+  c.translate((width-280*scale)/2,(height-210*scale)/2);c.scale(scale,scale);c.translate(0,30);
   if(id==='ship'){
-    c.fillStyle='#294c58';c.fillRect(0,0,280,150);
-    for(let y=22;y<150;y+=29)line(c,8,y,272,y-3,'#91b2ab35',2);
+    for(let y=-7;y<180;y+=29)line(c,8,y,272,y-3,'#91b2ab35',2);
     polygon(c,[[30,49],[222,49],[261,78],[222,111],[30,111],[19,79]],'#a18353','#cfb17a');
     for(let y=58;y<108;y+=9)line(c,33,y,224,y,'#715739',1);
     for(const x of [89,174]){line(c,x,88,x,24,'#4a3d31',5);polygon(c,[[x-22,32],[x+22,32],[x+18,63],[x-18,65]],'#ddd0a4','#a89972');}
     line(c,34,110,220,110,'#584633',5);
   }else if(id==='moon'){
-    c.fillStyle='#263442';c.fillRect(0,0,280,150);
-    for(let i=0;i<27;i++){c.fillStyle=i%3?'#d8dccc':'#9eaec0';c.fillRect(hash(i,3)*280,hash(i,8)*65,1,1);}
+    for(let i=0;i<27;i++){c.fillStyle=i%3?'#d8dccc':'#9eaec0';c.fillRect(hash(i,3)*280,hash(i,8)*95-30,1,1);}
     oval(c,221,25,12,12,'#779ba5');oval(c,217,22,7,10,'#a5b9a5');
-    polygon(c,[[0,76],[41,59],[87,78],[133,58],[188,68],[231,53],[280,72],[280,150],[0,150]],'#7f8991');
+    polygon(c,[[0,76],[41,59],[87,78],[133,58],[188,68],[231,53],[280,72],[280,180],[0,180]],'#7f8991');
     for(const [x,y,r]of [[32,109,20],[87,84,11],[199,121,29],[246,85,15]])crater(c,x,y,r);
     line(c,140,124,140,73,'#b5c0ba',2);oval(c,140,72,4,3,'#def0d4');oval(c,140,129,18,7,'#b1cbb055');
   }else{
-    c.fillStyle='#253c36';c.fillRect(0,0,280,150);oval(c,140,93,82,45,'#596748');oval(c,140,95,37,20,'#8d7e55');
+    oval(c,140,93,82,45,'#596748');oval(c,140,95,37,20,'#8d7e55');
     for(let i=0;i<9;i++){const a=i*TAU/9,x=140+Math.cos(a)*111,y=83+Math.sin(a)*53;oval(c,x,y,8,6,'#a0b576');oval(c,x-2,y-2,1.3,1.3,'#e1ddac');}
     polygon(c,[[140,64],[151,92],[140,103],[129,92]],'#f0cc87');
   }

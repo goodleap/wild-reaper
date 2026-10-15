@@ -21,7 +21,9 @@ for(const stage of STAGES){
   assert.equal(h.nodes['stage-options'].children.length,STAGES.length+EXPEDITIONS.length);selectMode(h,'dungeon');
   selectStage(h,stage.id);
   assert.equal(h.nodes['stage-title'].textContent,stage.name);
-  assert.equal(h.nodes['stage-description'].textContent,stage.summary);
+  assert(h.nodes['stage-description'].textContent.includes(stage.summary),'selected stage details include its own summary');
+  assert.equal(h.nodes['stage-description'].parentElement.tagName,'DETAILS','extended stage information stays in the disclosure');
+  assert(!h.nodes['stage-description'].parentElement.hasAttribute('open'),'stage details start collapsed');
   assert.equal(h.nodes['stage-kind'].textContent,'岛屿试炼');
   assert.equal(STAGES.filter(item=>h.document.getElementById(`stage-${item.id}`).checked).length,1);
   assert.equal(h.document.getElementById(`stage-${stage.id}`).getAttribute('aria-label'),stage.name);

@@ -60,6 +60,25 @@ function waterOverlaps(s,m){
   // Perimeter checks alone miss a small pond entirely beneath a large site.
   return getWaterContours(m).outer.some(p=>inside(s.points,p.x,p.y));
 }
+function maskAllows(mask,s){
+  if(!s.points)return s.ax===s.bx&&s.ay===s.by?mask.circleFree(s.ax,s.ay,s.r):!mask.firstBlocker(s.ax,s.ay,s.bx,s.by,s.r);
+  if(edgesSome(s,(a,b)=>mask.firstBlocker(a.x,a.y,b.x,b.y,s.padding)))return false;
+  // A footprint can surround a solid island without crossing its own edges.
+  const b=shapeBounds(s);
+  return !mask.query(b.minX,b.minY,b.maxX,b.maxY).some(edge=>inside(s.points,edge.a.x,edge.a.y));
+}
+function bakedWaterOverlaps(s,rings){
+  if(!rings?.length)return false;
+  // The baked rings already subtract bridge decks. Even/odd containment also
+  // preserves dry islands, unlike treating each outline as a filled polygon.
+  const wet=(x,y)=>rings.reduce((result,ring)=>result!==inside(ring.points,x,y),false);
+  if(s.points?s.points.some(p=>wet(p.x,p.y)):wet(s.ax,s.ay)||wet(s.bx,s.by))return true;
+  for(const ring of rings)for(let i=0;i<ring.points.length;i++){
+    const a=ring.points[i],b=ring.points[(i+1)%ring.points.length];
+    if(capsuleOverlaps(s,{ax:a.x,ay:a.y,bx:b.x,by:b.y,r:0}))return true;
+  }
+  return false;
+}
 function coastInset(island,p){const shallow=Number.isFinite(island?.shallowWidth)?island.shallowWidth:COAST_RULES.shallowWidth,beach=Number.isFinite(island?.beachWidth)?island.beachWidth:COAST_RULES.beachWidth;return (p.surface==='inland'?shallow+beach:p.surface==='dry'?shallow:0)+p.coastSetback;}
 function allowsSurface(island,p,s){
   if(!island)return true;
@@ -101,10 +120,14 @@ export function placementAllowed(game,kind,shape,options={}){
   if(!allowsSurface(island,p,s)||(options.checkReserved&&reservedOverlaps(island,s)))return false;
   const b=shapeBounds(s);
   if(options.checkTerrain!==false&&terrain){
+    // query() contains individual props, not the continuous forest/rock mask.
+    // Use its solid layer here; water remains governed by the habitat policy.
+    if(terrain.rift&&!maskAllows(terrain.rift.mask('air'),s))return false;
     if(typeof terrain.query==='function'){
       // Visible roots extend a little past solid collision bounds; query that
       // skirt before comparing complete, measured ground footprints.
       for(const obstacle of terrain.query(b.minX-48,b.minY-48,b.maxX+48,b.maxY+48)){
+        if(obstacle.collision===false)continue;
         const f=groundFootprint(obstacle,0);if(f&&capsuleOverlaps(s,f))return false;
       }
     }else if(typeof terrain.isFree==='function'){
@@ -114,6 +137,7 @@ export function placementAllowed(game,kind,shape,options={}){
   }
   if(options.checkWater!==false&&p.water==='avoid'){
     const waterShape=s.points?{...s,padding:s.padding+p.waterGap}:{...s,r:s.r+p.waterGap},waterBounds=shapeBounds(waterShape);
+    if(terrain?.rift&&bakedWaterOverlaps(waterShape,island?.layout?.lakes))return false;
     const environment=options.environment??game.environment;
     const waters=typeof environment?.watersInBounds==='function'?environment.watersInBounds(waterBounds):environment?.muds||[];
     for(const water of waters)if(waterOverlaps(waterShape,water))return false;

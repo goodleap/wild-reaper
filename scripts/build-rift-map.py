@@ -2,10 +2,14 @@
 """Bake the fixed forest map. Requires Shapely only in the build environment."""
 import json
 import math
+import sys
 from pathlib import Path
 from shapely.geometry import Polygon, LineString, Point
 from shapely.ops import unary_union
 from shapely.geometry.polygon import orient
+
+sys.dont_write_bytecode = True
+from natural_contours import natural_ring, natural_route
 
 ROOT = Path(__file__).resolve().parent.parent
 SX, SY = 7200 / 1400, 5400 / 945
@@ -25,7 +29,7 @@ def rings(shape):
         result.extend({"points": coords(hole), "hole": True} for hole in poly.interiors)
     return result
 def polygon(raw):
-    poly = Polygon([xy(p) for p in raw])
+    poly = Polygon(natural_ring([xy(p) for p in raw]))
     assert poly.is_valid
     return poly
 
@@ -89,11 +93,16 @@ passages, corridor_polys = [], []
 for id, source, target, width, kind, raw in LINKS:
     raw=list(raw);raw[0]=next(room[2] for room in ROOMS if room[0]==source)
     if target:raw[-1]=next(room[2] for room in ROOMS if room[0]==target)
-    line = LineString([xy(p) for p in raw])
-    poly = line.buffer(width / 2, quad_segs=4)
+    anchors = [xy(p) for p in raw]
+    # Artificial crossings and the locked shortcut retain their exact axes.
+    # Natural trails keep all authored anchors, including both region centers.
+    route = natural_route(anchors) if kind in ("trail", "secret") else anchors
+    line = LineString(route)
+    poly = line.buffer(width / 2, quad_segs=8)
     corridor_polys.append(poly)
     passage = {"id": id, "from": source, "to": target, "width": width, "kind": kind,
-               "points": coords(poly.exterior), "waypoints": [point(p) for p in raw]}
+               "points": coords(poly.exterior),
+               "waypoints": [{"x":round(x,2),"y":round(y,2)} for x,y in route]}
     if id == "08-13":
         gx, gy = xy((1074,365)); dx,dy=xy((1103,300)); dx-=gx;dy-=gy;length=math.hypot(dx,dy)
         nx,ny=-dy/length,dx/length
@@ -152,9 +161,10 @@ plan["portal:1"]["arrivalDirection"]={"x":0,"y":1}
 plan["portal:2"]["arrivalDirection"]={"x":0,"y":-1}
 plan["portal:3"]["arrivalDirection"]={"x":.4,"y":-.9165}
 for key, p in plan.items():
-    assert walkable.contains(Point(p["x"],p["y"])), key
+    assert walkable.covers(Point(p["x"],p["y"]).buffer(28)), f"Site standing space: {key}"
 for key, p in landmarks.items():
-    assert walkable.contains(Point(p["x"],p["y"])), key
+    radius = 55 if p.get("kind") == "boss" else 28
+    assert walkable.covers(Point(p["x"],p["y"]).buffer(radius)), f"Landmark standing space: {key}"
 
 encounters = []
 for id, raw, kind, tier, radius in [

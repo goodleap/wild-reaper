@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { Island } from './dist/islands.js';
 import { Terrain } from './dist/terrain.js';
+import { RiftCollision } from './dist/rift-collision.js';
 import { COAST_RULES, PLACEMENT_POLICIES, surfaceAt, surfaceAllows, placementAllowed, groundFootprint, footprintBounds } from './dist/placement-rules.js';
-const island=new Island(),edge=island._edges[0];
+// The finite forest has no sea shore; use an explicit coastal map fixture.
+const island=new Island({map:{id:'placement-coast',themeId:'forest'}}),edge=island._edges[0];
 const coast=(inset,r=0)=>({x:(edge.a.x+edge.b.x)/2+edge.nx*inset,y:(edge.a.y+edge.b.y)/2+edge.ny*inset,r});
 for(const [d,label] of [[-20,'sea'],[50,'shallow'],[115,'beach'],[150,'beach'],[190,'inland']]){const p=coast(d);assert.equal(surfaceAt(island,p.x,p.y),label);}
 assert.equal(COAST_RULES.inlandInset,COAST_RULES.shallowWidth+COAST_RULES.beachWidth);
@@ -52,4 +54,20 @@ for(let i=0;i<128&&!bay;i++)for(let j=3;j<48&&!bay;j++){
 }
 assert(bay);assert(!surfaceAllows(marsh,aquatic,{ax:bay.p.x,ay:bay.p.y,bx:bay.q.x,by:bay.q.y,r:4}));
 assert(!surfaceAllows(marsh,aquatic,{points:[bay.p,bay.q,{x:0,y:0}],padding:4}),'complete polygon edges cannot bridge a concave sea bay');
+
+const box=(x,y,w,h)=>[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}],outer=box(-500,-500,1000,1000),solidHole=box(-80,-30,60,60),lake=box(100,-60,120,120),dryIsland=box(140,-20,40,40);
+const maskedTerrain=new Terrain({obstacles:[]}),masked={terrain:maskedTerrain,island:{containsCapsule:()=>true,layout:{lakes:[{points:lake},{points:dryIsland,hole:true}]}}};
+maskedTerrain.rift=new RiftCollision({boundaries:[outer,solidHole,lake,dryIsland],solidBoundaries:[outer,solidHole]});
+assert.equal(placementAllowed(masked,'loot',{x:-50,y:0,r:8}),false,'continuous solids participate even when the prop query is empty');
+assert.equal(placementAllowed(masked,'structure',{x:-50,y:0,width:100,height:100}),false,'a large site cannot enclose a solid hole');
+assert.equal(placementAllowed(masked,'loot',{ax:-120,ay:0,bx:10,by:0,r:3}),false,'a capsule cannot bridge a solid hole');
+assert.equal(placementAllowed(masked,'loot',{x:-50,y:0,r:8},{checkTerrain:false}),true,'the terrain opt-out retains its explicit meaning');
+assert.equal(placementAllowed(masked,'loot',{x:120,y:0,r:3}),false,'baked lakes are water even without an Environment cache');
+assert.equal(placementAllowed(masked,aquatic,{x:120,y:0,r:3}),true,'water-permitted habitats do not become ground movement profiles');
+assert.equal(placementAllowed(masked,'loot',{x:120,y:0,r:3},{checkWater:false}),true,'the water opt-out does not disable solid checks');
+assert.equal(placementAllowed(masked,'loot',{x:120,y:0,r:3},{checkTerrain:false}),false,'ignoring props does not ignore water');
+assert.equal(placementAllowed(masked,'loot',{x:160,y:0,r:3}),true,'dry islands remain usable');
+assert.equal(placementAllowed(masked,'structure',{x:160,y:0,width:190,height:190}),false,'a large site cannot enclose an entire lake');
+const decorative={terrain:{query:()=>[{type:'tree',x:0,y:0,r:30,collision:false}]}};
+assert.equal(placementAllowed(decorative,'loot',{x:0,y:0,r:10}),true,'visual edge foliage cannot add a second collision footprint');
 console.log(JSON.stringify({placementRules:'passed',policies:Object.keys(PLACEMENT_POLICIES).length,shapes:4,stableWaterQueries:queries,coastBands:4}));

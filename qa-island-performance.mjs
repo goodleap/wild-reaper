@@ -39,10 +39,18 @@ function recording(){
 }
 const noop=()=>{},nullContext=new Proxy({}, {get:(_,key)=>key==='createLinearGradient'?()=>({addColorStop:noop}):noop,set:()=>true});
 const paint=(art,island,options)=>{const r=recording();art.draw(r.ctx,island,options,()=>r.calls.push(['land']));assert.equal(r.stack.length,0);return r.calls;};
+// The default forest is now the authored inland world, which uses RiftArt.
+// An explicit map keeps this suite on the coastal IslandArt path still used
+// by forest trials; other world themes retain their ordinary coast fixtures.
+function coastalIsland({region='forest',seed=0}={}){
+  const island=new Island({region,seed,...(region==='forest'?{map:{id:`coastal-performance:${seed}`,themeId:region,seed}}:{})});
+  assert(island.points.length>107&&island.shallowWidth>0&&island.beachWidth>0,'the fixture exercises a complete island coast and sand band');
+  return island;
+}
 
 const cached=new IslandArt(),direct=new DirectIslandArt();let compared=0;
 for(const region of ['forest','marsh','ruins'])for(const seed of [0,29,91]){
-  const island=new Island({region,seed});
+  const island=coastalIsland({region,seed});
   for(const [index,width,height] of [[0,393,852],[35,1512,900],[71,1800,1169],[107,720,410]]){
     const shore=island.contour(75)[index];
     const options={camX:shore.x,camY:shore.y,width,height,time:3.25};
@@ -59,7 +67,7 @@ for(const region of ['forest','marsh','ruins'])for(const seed of [0,29,91]){
 }
 
 // Warm-frame classification is constant even at a large desktop viewport.
-const island=new Island({seed:84}),art=new IslandArt(),options={camX:island.points[0].x-180,camY:0,width:1800,height:1169,time:3};
+const island=coastalIsland({seed:84}),art=new IslandArt(),options={camX:island.points[0].x-180,camY:0,width:1800,height:1169,time:3};
 const counts={contains:0,isDry:0,nearest:0};
 for(const [name,key] of [['contains','contains'],['isDry','isDry'],['_nearest','nearest']]){
   const original=island[name].bind(island);island[name]=(...args)=>{counts[key]++;return original(...args);};
@@ -77,7 +85,7 @@ const warmNearest=counts.nearest/60;
 // A desktop can have a 4K CSS viewport. Both sample passes must fit at once;
 // otherwise bounded eviction would silently rebuild the same chunks each frame.
 for(const index of [0,64]){
-  const large=new Island({seed:19}),largeArt=new IslandArt(),point=large.points[index];
+  const large=coastalIsland({seed:19}),largeArt=new IslandArt(),point=large.points[index];
   const largeView={camX:point.x,camY:point.y,width:3840,height:2160};
   largeArt.draw(nullContext,large,largeView);const builds=largeArt.detailStats(large).builds;
   const original=large.isDry.bind(large);let queries=0;large.isDry=(...args)=>{queries++;return original(...args);};
@@ -93,9 +101,9 @@ const before=paint(art,island,options);
 for(let i=0;i<island.points.length;i+=3){const p=island.points[i];art.draw(nullContext,island,{...options,camX:p.x,camY:p.y,width:1100,height:700});const stats=art.detailStats(island);assert(stats.chunks<=stats.limit);assert(stats.samples<=stats.limit*(256+16));}
 assert(art.detailStats(island).builds>art.detailStats(island).limit,'exploration actually exercises eviction');
 assert.deepEqual(paint(art,island,options),before,'revisiting evicted chunks restores identical scenery');
-const other=new Island({region:'marsh',seed:84}),otherOptions={...options,camX:other.points[0].x-180};
+const other=coastalIsland({region:'marsh',seed:84}),otherOptions={...options,camX:other.points[0].x-180};
 assert.deepEqual(paint(art,other,otherOptions),paint(direct,other,otherOptions),'different worlds cannot share an incompatible sample cache');
 assert(art.cache instanceof WeakMap,'finished islands are not retained by a global strong cache');
-const inland=new Island({seed:7}),inlandArt=new IslandArt();inlandArt.draw(nullContext,inland,{camX:0,camY:0,width:1100,height:700});
+const inland=coastalIsland({seed:7}),inlandArt=new IslandArt();inlandArt.draw(nullContext,inland,{camX:0,camY:0,width:1100,height:700});
 assert.equal(inlandArt.detailStats(inland).chunks,0,'inland rendering creates no coast sample chunks');
 console.log(`Island performance: ${compared} coast/viewport cases preserve exact paint; warm frames use ${warmNearest} edge scans; bounded exploration cache, animation and revisits passed.`);

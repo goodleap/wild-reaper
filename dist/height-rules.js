@@ -16,6 +16,7 @@ export function movementProfile(entity){return entity&&!isGrounded(entity)?'air'
 export function obstacleHeight(obstacle){
   if(obstacle?.heightBand==='low'||obstacle?.heightBand==='high')return obstacle.heightBand;
   if(!obstacle)return 'high';
+  if(obstacle.riftShrub)return 'low';
   // Collision capsules also represent foundations, closed gates and room
   // walls. Their geometric type must not make them behave like fallen logs.
   if(obstacle.structureId||obstacle.structureType||obstacle.type==='tree'||obstacle.variant==='pillar'||['world-building','world-ridge'].includes(obstacle.variant)||/-(wall|gate)$/.test(obstacle.variant||''))return 'high';
@@ -32,6 +33,8 @@ export function obstacleHeight(obstacle){
 }
 
 export function blocksObstacle(obstacle,profile='ground'){
+  // Boundary scenery uses the continuous terrain volume as its collision.
+  if(obstacle?.collision===false)return false;
   if(profile==='overhead')return false;
   if(profile==='air'||profile==='projectile'||profile==='sight')return obstacleHeight(obstacle)==='high';
   return true;

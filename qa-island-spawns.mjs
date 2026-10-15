@@ -8,7 +8,10 @@ import { regionFor } from './dist/world-definitions.js';
 let seed=89021;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
 const foot=e=>({x:e.x,y:e.y+groundOffset(e,!!e.heroId)});
 function arena(region='forest',fixed=false) {
-  const island=new Island({region,seed:['forest','marsh','ruins'].indexOf(region)});
+  const mapSeed=['forest','marsh','ruins'].indexOf(region);
+  // This suite exercises ocean shores; the authored forest's enclosing
+  // rectangle and internal lakes are covered by the rift suites instead.
+  const island=new Island({region,seed:mapSeed,...(region==='forest'?{map:{id:'coast-spawn-fixture',themeId:region,seed:mapSeed}}:{})});
   const terrain=new Terrain({region,island,...(fixed?{obstacles:[]}:{})});
   const g=new Game({terrain,adventure:false});
   g.enemies=[];g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.invuln=1e9;
