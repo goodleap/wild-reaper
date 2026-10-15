@@ -79,9 +79,9 @@ const archiveControl=(h,attribute,value)=>{
   assert.equal(data(h).totals.runs,1);assert.equal(data(h).totals.time,12);assert.equal(data(h).totals.kills,7,'death then repeated home never double counts');
   const loaded=harness('',{storage});assert.equal(data(loaded).totals.kills,7,'reload reads the persisted archive');assert.equal(data(loaded).totals.runs,1);
 
-  nodes['difficulty-casual'].checked=true;await start(h);run('game.runTime=3;game.kills=2;');click(h,'pause-button');click(h,'quit-button');
+  await start(h);run('game.runTime=3;game.kills=2;');click(h,'pause-button');click(h,'quit-button');
   assert.equal(data(h).totals.runs,2);assert.equal(data(h).totals.time,15);assert.equal(data(h).totals.kills,9);
-  assert.equal(data(h).best.casual.time,3);assert.equal(data(h).best.normal.time,12,'best records are separated by selected difficulty');
+  assert.equal(data(h).best.casual.time,0);assert.equal(data(h).best.normal.time,12,'new adventures keep the baseline without creating a removed difficulty choice');
 }
 
 // Actual combat-resolution hook remains independent of the capped sound/VFX

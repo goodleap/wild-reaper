@@ -26,8 +26,8 @@ const place=(game,point)=>{game.player.x=point.x;game.player.y=point.y-groundOff
 for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   const h=harness(),stats=expected[hero.id];
   click(h,'start-button');
-  assert.equal(node(h,'hero-options').children.length,6);
-  choose(h,'hero',hero.id);choose(h,'weapon',weaponId);
+  assert.equal(node(h,'hero-options').children.length,3);
+  choose(h,'hero',hero.appearanceId);choose(h,'weapon',weaponId);
   assert.equal(node(h,'hero-selection-name').textContent,hero.name);
   assert.match(node(h,'prepare-summary').textContent,new RegExp(hero.name));
   assert.equal(node(h,'hero-attributes').children.length,hero.details.length);
@@ -39,8 +39,8 @@ for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   assert.equal(node(h,'hero-attributes').closest('details')?.tagName,'DETAILS','full numerical traits stay in expandable details');
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0);
   click(h,'prepare-back-button');assert.equal(h.run('game'),null);
-  click(h,'start-button');assert.equal(node(h,`hero-${hero.id}`).checked,true);
-  assert.equal(h.run('archive.data.totals.runs'),0,'changing or previewing roles never creates runs');
+  click(h,'start-button');assert.equal(node(h,`hero-${hero.appearanceId}`).checked,true);
+  assert.equal(h.run('archive.data.totals.runs'),0,'browsing roles never creates runs');
   click(h,'prepare-start-button');await h.flush();
   assert.equal(h.run('game.hero.id'),hero.id);assert.equal(h.run('game.player.heroId'),hero.id);
   assert.equal(h.run('game.initialWeaponId'),weaponId);
@@ -60,12 +60,12 @@ for(const hero of HEROES)for(const weaponId of ['sword','orbit','arrow']){
   assert.equal(h.run('game.hero.id'),hero.id);assert.equal(h.run('game.initialWeaponId'),weaponId);
   assert.equal(h.run('archive.data.totals.runs'),2);
   const loaded=harness('',{storage:h.storage});click(loaded,'start-button');
-  assert.equal(node(loaded,`hero-${hero.id}`).checked,true);assert.equal(node(loaded,`weapon-${weaponId}`).checked,true);
+  assert.equal(node(loaded,`hero-${hero.appearanceId}`).checked,true);assert.equal(node(loaded,`weapon-${weaponId}`).checked,true);
 }
 
 for(const heroId of [undefined,null,'warden','stormcaller','ranger','unknown','__proto__',['princess'],{}]){
   const saved={mode:'free',weaponId:'arrow',heroId},h=harness('',{storage:new Map([['wild-echoes-setup',JSON.stringify(saved)]])});
-  click(h,'start-button');assert.equal(node(h,'hero-traveler').checked,true);
+  click(h,'start-button');assert.equal(node(h,'hero-traveler-v2').checked,true);
   click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.hero.id'),'traveler');
   assert.equal(h.run('game.initialWeaponId'),'arrow','legacy role fallback does not erase a valid starter');
 }
@@ -105,4 +105,4 @@ for(const hero of HEROES)for(const debug of [false,true]){
   near(game.player.speed,expected[hero.id].speed*(debug?3:1),'debug preserves role movement ratio');
   assert.equal(game.player.skillCooldownMax,debug?0:15);
 }
-console.log('Hero selection: all nine real role/starter combinations, old selection fallback, preview/back/restart/storage, effective inspector, castle/island persistence and shared ground/water geometry passed (VM DOM / mocked Canvas).');
+console.log('Hero selection: all nine real role/starter combinations, old selection fallback, static portraits/back/restart/storage, effective inspector, castle/island persistence and shared ground/water geometry passed (VM DOM / mocked Canvas).');

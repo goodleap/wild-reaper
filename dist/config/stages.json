@@ -465,5 +465,273 @@
         "crystals": 69
       }
     }
+  ],
+  "expeditions": [
+    {
+      "id": "survival",
+      "name": "荒野守夜",
+      "shortName": "生存怪潮",
+      "summary": "守住荒野营地，迎战四周袭来的怪潮。",
+      "objective": "坚持 150 秒，再前往东侧撤离点。",
+      "rewardLabel": "通关获得 60 金币 · 75 晶石",
+      "themeId": "forest",
+      "axis": "arena",
+      "color": "#b6ce92",
+      "duration": 150,
+      "reward": {
+        "gold": 60,
+        "crystals": 75
+      },
+      "bounds": {
+        "minX": -1260,
+        "maxX": 1260,
+        "minY": -980,
+        "maxY": 980
+      },
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "exit": {
+        "x": 1100,
+        "y": 0,
+        "r": 62
+      },
+      "obstacles": [],
+      "segments": []
+    },
+    {
+      "id": "ship",
+      "name": "破浪甲板",
+      "shortName": "船上突破",
+      "summary": "沿甲板向船首突破，清除三处登船敌群。",
+      "objective": "依次清理三段甲板，抵达船首撤离点。",
+      "rewardLabel": "通关获得 70 金币 · 85 晶石",
+      "themeId": "beach",
+      "axis": "x",
+      "color": "#e0bd86",
+      "reward": {
+        "gold": 70,
+        "crystals": 85
+      },
+      "bounds": {
+        "minX": -1220,
+        "maxX": 1480,
+        "minY": -330,
+        "maxY": 330
+      },
+      "start": {
+        "x": -1080,
+        "y": 0
+      },
+      "exit": {
+        "x": 1370,
+        "y": 0,
+        "r": 62
+      },
+      "obstacles": [
+        {
+          "x": -820,
+          "y": -190,
+          "r": 30,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -820,
+          "y": 170,
+          "r": 30,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -90,
+          "y": -185,
+          "r": 34,
+          "variant": "expedition-mast"
+        },
+        {
+          "x": 450,
+          "y": 180,
+          "r": 32,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 750,
+          "y": -190,
+          "r": 34,
+          "variant": "expedition-mast"
+        },
+        {
+          "x": 1180,
+          "y": 180,
+          "r": 30,
+          "variant": "expedition-cargo"
+        }
+      ],
+      "segments": [
+        {
+          "name": "后甲板",
+          "center": {
+            "x": -550,
+            "y": 0
+          },
+          "gate": -180,
+          "triggerRadius": 410,
+          "healthMultiplier": 1,
+          "enemies": {
+            "slime": 8,
+            "beetle": 4,
+            "bat": 2
+          }
+        },
+        {
+          "name": "主桅甲板",
+          "center": {
+            "x": 220,
+            "y": 0
+          },
+          "gate": 570,
+          "triggerRadius": 410,
+          "healthMultiplier": 1.15,
+          "enemies": {
+            "beetle": 8,
+            "slime": 5,
+            "tidepriest": 2,
+            "brute": 2
+          }
+        },
+        {
+          "name": "船首",
+          "center": {
+            "x": 950,
+            "y": 0
+          },
+          "gate": 1290,
+          "triggerRadius": 410,
+          "healthMultiplier": 1.35,
+          "enemies": {
+            "beetle": 8,
+            "bat": 5,
+            "brute": 3,
+            "tidepriest": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "moon",
+      "name": "寂静月面",
+      "shortName": "月面推进",
+      "summary": "穿过陨坑与灰色荒原，向北方的信标推进。",
+      "objective": "清除三处月面敌群，抵达北方信标。",
+      "rewardLabel": "通关获得 80 金币 · 95 晶石",
+      "themeId": "mountain",
+      "axis": "y",
+      "color": "#bac8e4",
+      "reward": {
+        "gold": 80,
+        "crystals": 95
+      },
+      "bounds": {
+        "minX": -450,
+        "maxX": 450,
+        "minY": -2300,
+        "maxY": 350
+      },
+      "start": {
+        "x": 0,
+        "y": 180
+      },
+      "exit": {
+        "x": 0,
+        "y": -2160,
+        "r": 62
+      },
+      "obstacles": [
+        {
+          "x": -245,
+          "y": -70,
+          "r": 44,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 265,
+          "y": -470,
+          "r": 50,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -260,
+          "y": -810,
+          "r": 48,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 240,
+          "y": -1160,
+          "r": 42,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -260,
+          "y": -1520,
+          "r": 52,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 250,
+          "y": -1820,
+          "r": 46,
+          "variant": "expedition-moonrock"
+        }
+      ],
+      "segments": [
+        {
+          "name": "登陆区",
+          "center": {
+            "x": 0,
+            "y": -260
+          },
+          "gate": -610,
+          "triggerRadius": 390,
+          "healthMultiplier": 1,
+          "enemies": {
+            "beetle": 8,
+            "bat": 4,
+            "slime": 3
+          }
+        },
+        {
+          "name": "陨坑带",
+          "center": {
+            "x": 0,
+            "y": -930
+          },
+          "gate": -1280,
+          "triggerRadius": 390,
+          "healthMultiplier": 1.2,
+          "enemies": {
+            "beetle": 8,
+            "spiderling": 6,
+            "stoneape": 2
+          }
+        },
+        {
+          "name": "信标前哨",
+          "center": {
+            "x": 0,
+            "y": -1650
+          },
+          "gate": -1960,
+          "triggerRadius": 390,
+          "healthMultiplier": 1.4,
+          "enemies": {
+            "beetle": 8,
+            "prismguard": 3,
+            "stoneape": 3,
+            "bat": 6
+          }
+        }
+      ]
+    }
   ]
 }

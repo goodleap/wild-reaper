@@ -1,3 +1,5 @@
+import { validateDialogueConfig } from './config-validation/dialogue.js';
+import { validateTerritories } from './config-validation/territories.js';
 import { validateCombat } from './config-validation/combat.js';
 import { validateWorlds } from './config-validation/worlds.js';
 import { validateContent } from './config-validation/content.js';
@@ -42,7 +44,7 @@ export function validateContentPack(pack) {
   if(typeof pack.contentVersion!=='string'||!/^[-a-zA-Z0-9._]{1,80}$/.test(pack.contentVersion))throw new Error('Invalid content version');
   const sections=pack.sections;
   if(!sections||Array.isArray(sections)||Object.keys(sections).length!==CONTENT_SECTION_IDS.length||CONTENT_SECTION_IDS.some(id=>!sections[id]||typeof sections[id]!=='object'||Array.isArray(sections[id])))throw new Error('Incomplete content pack');
-  validateCombat(sections);validateAbilities(sections);validateEnemies(sections);validateWorlds(sections);validateContent(sections);
+  validateCombat(sections);validateAbilities(sections);validateEnemies(sections);validateWorlds(sections);validateContent(sections);validateTerritories(sections);validateDialogueConfig(sections.sites);
   return pack;
 }
 export function freezeContent(value) {

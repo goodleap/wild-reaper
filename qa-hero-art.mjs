@@ -41,7 +41,7 @@ export function travelerTrace(Art=HumanoidArt){
 const TRAVELER_V82='85863809ebd40e96d9ffc8cd4c53eb92dd2559c394fb8255c1af0c47cf449d3c';
 if(process.argv.includes('--traveler-trace'))console.log(travelerTrace());
 else {
-  assert.equal(travelerTrace(),TRAVELER_V82,'the prince must retain the complete existing player artwork');
+  assert.equal(travelerTrace(),TRAVELER_V82,'the shared renderer retains its original humanoid fixture');
   const kinds=['traveler','princess','elder','warden','stormcaller','merchant','angel'];
   const {art,canvases}=artwork();
   function draw(kind,options={}){const out=recorder(),before=out.paintState();assert(art.draw(out.c,kind,options));assert.deepEqual(out.paintState(),before);assert.equal(out.stack.length,0);return out;}

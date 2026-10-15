@@ -283,5 +283,187 @@
       "xp": 180,
       "xpGrowthPeriod": 10
     }
+  },
+  "dialogue": {
+    "rules": {
+      "duration": 3.6,
+      "queueDuration": 4.5,
+      "maxVisible": 2,
+      "combatVisible": 1,
+      "greetingCooldown": 28,
+      "supportCooldown": 24,
+      "groupCooldown": 20,
+      "combatRange": 480,
+      "angelNear": 190,
+      "angelExit": 270,
+      "merchantNear": 125,
+      "merchantNearExit": 190,
+      "merchantFar": 360,
+      "merchantFarExit": 440,
+      "captiveNear": 250,
+      "captiveExit": 330,
+      "rescueReadyRange": 290,
+      "supportRange": 330
+    },
+    "lines": {
+      "angel": [
+        "{hero}，这里有我守着。",
+        "靠近些，{hero}。让光照到你。"
+      ],
+      "angelHeal": [
+        "别急，先把伤养好。",
+        "伤口会愈合的。"
+      ],
+      "merchantFar": [
+        "{hero}，来看看！",
+        "路还长，备些行装吧。"
+      ],
+      "merchantNear": [
+        "{hero}，看看有没有用得上的。",
+        "挑好了再走，不着急。"
+      ],
+      "captive": [
+        "这边……帮我解开束缚！",
+        "有人来了……我在这里！"
+      ],
+      "rescueReady": [
+        "守卫倒下了！我在这里。",
+        "终于可以离开了。"
+      ],
+      "recruit": [
+        "要一起走吗，{hero}？",
+        "前面的路，我也熟悉。"
+      ],
+      "join": [
+        "{hero}，接下来的路一起走。",
+        "跟上了，{hero}。"
+      ],
+      "stormcallerSupport": [
+        "雷光会为我们开路。",
+        "小心，我要引雷了。"
+      ],
+      "wardenSupport": [
+        "{hero}，我来掩护。",
+        "靠近些，我护着你。"
+      ],
+      "golemJoin": [
+        "一起……走。",
+        "我……跟着你。"
+      ],
+      "golemSupport": [
+        "我来……开路。",
+        "退后……"
+      ],
+      "dogHelp": [
+        "呜……呜……"
+      ],
+      "dogJoin": [
+        "汪！"
+      ],
+      "dogSupport": [
+        "汪汪！"
+      ],
+      "owlHelp": [
+        "咕……"
+      ],
+      "owlJoin": [
+        "咕咕。"
+      ],
+      "owlSupport": [
+        "咕——！"
+      ],
+      "golemHelp": [
+        "束缚……解开……"
+      ],
+      "enemyAlert": [
+        "有入侵者！",
+        "守住这里！"
+      ],
+      "rootbinder": [
+        "林地不容践踏。"
+      ],
+      "prismguard": [
+        "止步。"
+      ],
+      "tidepriest": [
+        "退离潮汐的祭地！"
+      ],
+      "shieldguard": [
+        "守住入口！"
+      ],
+      "frostmage": [
+        "你越界了。"
+      ],
+      "brute": [
+        "低吼……"
+      ],
+      "boar": [
+        "哼哧——！"
+      ],
+      "stoneape": [
+        "吼——！"
+      ],
+      "boglurker": [
+        "咕噜……"
+      ],
+      "beetle": [
+        "嘶……"
+      ],
+      "bat": [
+        "吱——！"
+      ],
+      "windhunter": [
+        "尖啸——！"
+      ],
+      "flamelizard": [
+        "嘶嘶……"
+      ],
+      "slime": [
+        "咕叽……"
+      ],
+      "spore": [
+        "噗……"
+      ],
+      "spiderling": [
+        "嘶……"
+      ],
+      "ancient": [
+        "止步。这片荒野由我守着。",
+        "闯入者，退回去。"
+      ],
+      "ancientHurt": [
+        "还没结束！"
+      ],
+      "bloom": [
+        "别惊扰沉睡的菌床。"
+      ],
+      "bloomHurt": [
+        "孢子……醒来吧！"
+      ],
+      "broodmother": [
+        "嘶——！"
+      ],
+      "broodmotherHurt": [
+        "尖锐的嘶鸣——！"
+      ],
+      "deepcaller": [
+        "低沉的咕鸣……"
+      ],
+      "deepcallerHurt": [
+        "轰鸣——！"
+      ],
+      "frostcrown": [
+        "长鸣——！"
+      ],
+      "frostcrownHurt": [
+        "愤怒的长鸣——！"
+      ],
+      "furnace": [
+        "擅入者，止步。"
+      ],
+      "furnaceHurt": [
+        "炉火……未熄。"
+      ]
+    }
   }
 }

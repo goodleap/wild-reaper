@@ -10,6 +10,7 @@ import { drawOrbitBlade } from './prop-art.js';
 import { HumanoidArt } from './humanoid-art.js';
 import { CompanionArt, COMPANION_VISUALS } from './companion-art.js';
 import { STAGES } from './stage-definitions.js';
+import { EXPEDITIONS } from './expedition-definitions.js';
 import { HEROES, getHero } from './heroes.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -74,15 +75,16 @@ function codexHTML(data,category,selectedId){
 }
 function stat(label,value,unit=''){return `<div class="archive-stat"><span>${escape(label)}</span><strong>${value}${unit?`<small>${escape(unit)}</small>`:''}</strong></div>`;}
 function stageRecordsHTML(data,difficulty){
-  return `<section class="archive-stage-records"><h3>关卡通关</h3><div class="archive-stage-grid">${STAGES.map(stage=>{
+  const destinations=difficulty==='casual'?STAGES:[...EXPEDITIONS,...STAGES];
+  return `<section class="archive-stage-records"><h3>关卡通关</h3><div class="archive-stage-grid">${destinations.map(stage=>{
     const record=data.stages?.[stage.id]?.[difficulty]||{},clears=record.clears||0;
     const bestHero=clears?recordedHeroName(record.bestHeroId):'',lastHero=clears?recordedHeroName(record.lastHeroId):'';
     return `<div class="archive-stage-record" data-stage-record="${escape(stage.id)}" style="--stage-color:${escape(stage.color)}"><strong>${escape(stage.name)}</strong><span>通关 <b>${number(clears)}</b> 次</span><span>最快 <b>${clears?duration(record.bestTime):'尚未通关'}</b>${bestHero?`<small class="archive-stage-hero">${escape(bestHero)}</small>`:''}</span>${lastHero&&lastHero!==bestHero?`<span class="archive-stage-latest">最近通关 · ${escape(lastHero)}</span>`:''}</div>`;
-  }).join('')}</div><p class="archive-small-note">各关卡、难度分别记录；进入通关门才计为胜利。</p></section>`;
+  }).join('')}</div><p class="archive-small-note">各副本分别记录；完成目标并进入出口才计为胜利。</p></section>`;
 }
 function recordsHTML(data,difficulty){
   const totals=data.totals||{},best=data.best?.[difficulty]||{},legacy=data.legacy;
-  return `<div class="archive-records"><h3>一路走来</h3><div class="archive-stats-grid">${stat('冒险次数',number(totals.runs))}${stat('累计存活',duration(totals.time))}${stat('累计击败',number(totals.kills))}${stat('首领击败',number(totals.bossKills))}${stat('图鉴发现',`${knownCount(data)}<small> / ${ARCHIVE_ENTRIES.length}</small>`)}${stat('最高角色等级',number(totals.maxLevel))}</div><div class="archive-records-heading"><h3>挑战记录</h3><div class="archive-difficulties" aria-label="纪录难度"><button type="button" data-archive-difficulty="normal" aria-pressed="${difficulty==='normal'}">标准试炼</button><button type="button" data-archive-difficulty="casual" aria-pressed="${difficulty==='casual'}">轻松漫游</button></div></div>${stageRecordsHTML(data,difficulty)}<h3>单局最佳</h3><div class="archive-stats-grid archive-best-grid">${stat('最长存活',duration(best.time))}${stat('最多击败',number(best.kills))}${stat('最多首领',number(best.bossKills))}${stat('最高等级',number(best.level))}${stat('最高波次',number(best.wave))}</div><p class="archive-small-note">不同难度分别记录最佳成绩；各项纪录可能来自不同对局。</p>${legacy&&(legacy.time||legacy.kills||legacy.bossKills)?`<div class="archive-legacy"><h4>早期纪录</h4><p>最长存活 ${duration(legacy.time)} · 最多击败 ${number(legacy.kills)}${legacy.bossKills?` · 最多首领 ${number(legacy.bossKills)}`:''}</p><span>早期版本未区分难度与调试，单独保留，不计入新的累计统计。</span></div>`:''}</div>`;
+  return `<div class="archive-records"><h3>一路走来</h3><div class="archive-stats-grid">${stat('冒险次数',number(totals.runs))}${stat('累计存活',duration(totals.time))}${stat('累计击败',number(totals.kills))}${stat('首领击败',number(totals.bossKills))}${stat('图鉴发现',`${knownCount(data)}<small> / ${ARCHIVE_ENTRIES.length}</small>`)}${stat('最高角色等级',number(totals.maxLevel))}</div><div class="archive-records-heading"><h3>挑战记录</h3><div class="archive-difficulties" aria-label="记录范围"><button type="button" data-archive-difficulty="normal" aria-pressed="${difficulty==='normal'}">当前记录</button><button type="button" data-archive-difficulty="casual" aria-pressed="${difficulty==='casual'}">旧版轻松记录</button></div></div>${stageRecordsHTML(data,difficulty)}<h3>单局最佳</h3><div class="archive-stats-grid archive-best-grid">${stat('最长存活',duration(best.time))}${stat('最多击败',number(best.kills))}${stat('最多首领',number(best.bossKills))}${stat('最高等级',number(best.level))}${stat('最高波次',number(best.wave))}</div><p class="archive-small-note">当前冒险不再选择难度；旧版轻松记录单独保留，各项纪录可能来自不同对局。</p>${legacy&&(legacy.time||legacy.kills||legacy.bossKills)?`<div class="archive-legacy"><h4>早期纪录</h4><p>最长存活 ${duration(legacy.time)} · 最多击败 ${number(legacy.kills)}${legacy.bossKills?` · 最多首领 ${number(legacy.bossKills)}`:''}</p><span>早期版本未区分难度与调试，单独保留，不计入新的累计统计。</span></div>`:''}</div>`;
 }
 function milestonesHTML(data){
   const items=archiveMilestones(data),completed=items.filter(item=>item.complete).length;

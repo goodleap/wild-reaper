@@ -3,6 +3,7 @@ import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Island } from './dist/islands.js';
 import { Environment } from './dist/environment.js';
+import { regionFor } from './dist/world-definitions.js';
 
 let seed=89021;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
 const foot=e=>({x:e.x,y:e.y+groundOffset(e,!!e.heroId)});
@@ -96,16 +97,16 @@ chase._moveEnemy(pursuer,.025);assert(pursuer._coastTarget,'bay obstruction choo
 for(let i=0;i<1000;i++)chase._moveEnemy(pursuer,.025);
 assert(Math.hypot(pursuer.x-pair.b.x,pursuer.y+groundOffset(pursuer)-pair.b.y)<100,'coastal navigation reaches the opposite bay');
 
-// Progress ceilings also survive an indoor terrain swap. Endless growth starts
-// from the objective unlock, rather than charging backlogged exploration time.
-const pacing=arena();pacing._features.adventure=true;pacing.time=700;
+// World populations have regional strength; waiting, opening routes, or an
+// indoor terrain swap never converts exploration into a survival wave run.
+const pacing=new Game({mode:'world',encounters:false,companions:false,environment:false,settlements:false});pacing.time=700;
 const forest=pacing._difficultyTime();pacing.time=7000;assert.equal(pacing._difficultyTime(),forest);
-pacing.regionIndex=2;const ruins=pacing._difficultyTime();assert(ruins>forest);
+pacing.regionIndex=2;pacing.region=regionFor(2);const ruins=pacing._difficultyTime();assert(ruins>=forest);
 pacing.regions.unlockedConnections.add('0:1');pacing.regions.unlockedConnections.add('1:2');
-const two=pacing._difficultyTime(),tier=pacing._waveTier();pacing.time+=1000;
-assert.equal(pacing._difficultyTime(),two);assert.equal(pacing._waveTier(),tier,'exploration waves cannot grow without bound');
-pacing.terrain=new Terrain({obstacles:[]});assert.equal(pacing._difficultyTime(),two,'entering a room preserves finite exploration scaling');
-pacing.regions.unlockedConnections.add('0:2');pacing.regions.endlessStartedAt=pacing.time;
-const start=pacing._difficultyTime();pacing.time+=60;assert.equal(pacing._difficultyTime(),start+60,'only time since all connections opened drives endless growth');
+assert.equal(pacing._difficultyTime(),ruins,'opening connections does not amplify region populations');
+pacing.terrain=new Terrain({obstacles:[]});assert.equal(pacing._difficultyTime(),ruins,'entering a room preserves fixed regional strength');
+pacing.regions.unlockedConnections.add('0:2');pacing.time+=1000;
+assert.equal(pacing.regions.endlessUnlocked,false);assert.equal(pacing._difficultyTime(),ruins);
+pacing._updatePressure(.05);assert.equal(pacing.waveDirector.count,0);
 const isolated=new Game({adventure:false,terrain:new Terrain({obstacles:[]})});isolated.time=700;assert.equal(isolated._difficultyTime(),700,'isolated legacy arenas retain timed endless balance');
-console.log(`Island spawning QA passed: ${checked} dry offscreen coast spawns, directed warnings, safe cancellation, deep-sea bounds, flyers, summons, bay pursuit and finite/endless scaling.`);
+console.log(`Island spawning QA passed: ${checked} dry offscreen coast spawns, directed warnings, safe cancellation, deep-sea bounds, flyers, summons, bay pursuit and fixed world strength.`);

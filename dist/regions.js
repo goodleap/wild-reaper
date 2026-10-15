@@ -15,12 +15,12 @@ const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 
 // Only the current region is simulated. Inactive worlds retain their finite
-// authored objectives; disposable chase mobs and terrain caches are released.
+// authored objectives and territory populations; terrain caches are released.
 export class Regions {
   constructor(game){this.game=game;this._lastBossId=null;this.portals=[];this.states=new Map();this.guarded=!!(game.stage||game._features.adventure);this.rewardPortal=null;this.unlockedConnections=new Set();this.claimedConnections=new Set();this.endlessStartedAt=null;this._rewardQueue=[];}
   _setStructures(){this.game.terrain.setStructures?.(this.portals.flatMap(portalObstacles),'portals');}
   get defeatedConnectionsCount(){return this.unlockedConnections.size;}
-  get endlessUnlocked(){return !this.game.stage&&this.unlockedConnections.size>=GUARDIAN_RULES.endlessConnections;}
+  get endlessUnlocked(){return !this.game._worldExploration&&!this.game.stage&&!this.game.expedition&&this.unlockedConnections.size>=GUARDIAN_RULES.endlessConnections;}
   _endpoint(target,{origin=null,back=false}={}) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
     const point=plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
@@ -44,8 +44,8 @@ export class Regions {
     for(const state of this.states.values())state.enemies=sync(state.portals,state.enemies);
   }
   _spawnGuardian(portal) {
-    const g=this.game,boss=g._spawnEnemy('boss',1),base=enemyDefinition('boss'),rules=GUARDIAN_RULES,progress=this.unlockedConnections.size+Math.min(rules.timeProgressCap,Math.max(0,g.time||0)/rules.timeProgressPeriod),danger=g.region.danger||1;
-    boss.bossIndex=this.unlockedConnections.size+1;
+    const g=this.game,boss=g._spawnEnemy('boss',1),base=enemyDefinition('boss'),rules=GUARDIAN_RULES,progress=g._worldExploration?0:this.unlockedConnections.size+Math.min(rules.timeProgressCap,Math.max(0,g.time||0)/rules.timeProgressPeriod),danger=g.region.danger||1;
+    boss.bossIndex=g._worldExploration?1:this.unlockedConnections.size+1;
     boss.hp=boss.maxHp=(g.easy?base.easyHp:base.baseHp)*(1+progress*rules.hpGrowth)*danger;boss.damage=base.damage*(1+progress*rules.damageGrowth)*danger*(g.easy?ENEMY_GROWTH.easyDamageMultiplier:1);boss.xp=Math.round(base.xp*(1+progress*rules.xpGrowth)*danger);
     boss.portalId=portal.id;boss.portalHome={x:portal.x,y:portal.y+115};boss.x=boss.portalHome.x;boss.y=boss.portalHome.y-groundOffset(boss);boss.guardActive=false;boss._portalAnnounced=false;portal.bossId=boss.id;
     g._initializeRegionalBoss?.(boss);g._moveEntity(boss,0,0);
@@ -74,6 +74,7 @@ export class Regions {
   }
   initialize(fromPortal=null,fromRegionIndex=null) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex);this.portals=[];g.portal=null;this._setStructures();
+    if(g.expedition)return;
     if(g.stage){g.stage.initialize();g.settlements?.ensureAngels?.();return;}
     // Small isolated mechanics fixtures keep the legacy timed-boss trigger.
     // Once entered they still use the same finite world graph.
@@ -88,7 +89,7 @@ export class Regions {
     g.settlements?.ensureAngels?.();
   }
   update() {
-    const g=this.game;if(g.dungeon?.active)return;
+    const g=this.game;if(g.dungeon?.active||g.expedition)return;
     if(g.stage){g.stage.update();return;}
     const p=feet(g);
     for(const portal of this.portals) {
@@ -119,6 +120,7 @@ export class Regions {
     return false;
   }
   canTarget(enemy) {
+    if(this.game.expedition)return this.game.expedition.canTarget(enemy);
     if(enemy.stageBoss)return this.game.stage?.canTarget(enemy)??false;
     if(!enemy.portalId)return true;
     const portal=this.portals.find(p=>p.id===enemy.portalId);
@@ -126,6 +128,8 @@ export class Regions {
   }
   canDamage(enemy) {
     if(!this.canTarget(enemy))return false;
+    if(this.game.expedition){this.game.expedition.awaken(enemy);return true;}
+    if(enemy.territoryId)this.game.territories?.awaken(enemy);
     if(enemy.stageBoss){this.game.stage.awaken(enemy);return true;}
     if(!enemy.portalId)return true;
     enemy.guardActive=true;
@@ -207,16 +211,16 @@ export class Regions {
   }
   saveWorld() {
     const g=this.game;
-    const enemies=g.enemies.filter(e=>e.hp>0&&(e.stageBoss||e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId||e.debugBoss));
+    const enemies=g.enemies.filter(e=>e.hp>0&&(e.territoryId||e.stageBoss||e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId||e.debugBoss));
     g.terrain._cache?.clear();
-    const state={savedAt:g.time,savedClock:g._clock,terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,settlements:g.settlements,relicSites:g.relicSites,enemies,gems:g.gems,coins:g.coins,portals:this.portals,portal:g.portal,dungeonStates:g.dungeon.states,discoveredMap:g.discoveredMap,
+    const state={savedAt:g.time,savedClock:g._clock,terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,settlements:g.settlements,relicSites:g.relicSites,territories:g.territories,enemies,gems:g.gems,coins:g.coins,portals:this.portals,portal:g.portal,dungeonStates:g.dungeon.states,discoveredMap:g.discoveredMap,
       companionCamps:g.companions.camps,companionNextAt:g.companions.nextAt,companionGeneration:g.companions.generation,bossDefeated:g.bossDefeated,nextBossAt:g.nextBossAt};
     this.states.set(g.mapId??g.regionIndex,state);return state;
   }
   restoreWorld(index) {
     const state=this.states.get(index);if(!state)return false;
     const g=this.game,delta=g.time-state.savedAt,clockDelta=g._clock-state.savedClock;
-    for(const key of ['terrain','adventure','environment','encounters','settlements','relicSites','enemies','gems','coins','portal','discoveredMap','bossDefeated','nextBossAt'])g[key]=state[key];
+    for(const key of ['terrain','adventure','environment','encounters','settlements','relicSites','territories','enemies','gems','coins','portal','discoveredMap','bossDefeated','nextBossAt'])g[key]=state[key];
     this.portals=state.portals;g.dungeon.states=state.dungeonStates;
     g.companions.camps=state.companionCamps||(state.companionCamp?[state.companionCamp]:[]);g.companions.generation=state.companionGeneration;g.companions.nextAt=state.companionNextAt+delta;
     if(g.adventure)g.adventure._nextTreasureAt+=delta;if(g.encounters)g.encounters.nextAt+=delta;

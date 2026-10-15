@@ -30,17 +30,18 @@ export function validateCombat(sections){
   for(const field of ['baseHealth','easyBaseHealth','baseMoveSpeed','skillCooldown'])number(heroes.defaults[field],`heroes.defaults.${field}`,0.001);
   requireKeys(heroes.statLabels,statKeys,'heroes.statLabels');for(const id of statKeys)string(heroes.statLabels[id],`heroes.statLabels.${id}`);
   const heroIds=ids(heroes.definitions,'heroes.definitions');if(!heroIds.has('traveler'))fail('heroes.definitions','legacy traveler identity is required');
-  for(const hero of heroes.definitions){ref(hero.appearanceId??hero.id,new Set(['traveler','princess','elder']),`heroes.${hero.id}.appearanceId`);for(const field of ['name','role','summary','color'])string(hero[field],`heroes.${hero.id}.${field}`);record(hero.statModifiers,`heroes.${hero.id}.statModifiers`);for(const [stat,value] of Object.entries(hero.statModifiers)){ref(stat,new Set(statKeys),`heroes.${hero.id}.statModifiers`);record(value,`heroes.${hero.id}.${stat}`);for(const field of Object.keys(value))if(!['multiplier','fixed'].includes(field))fail(`heroes.${hero.id}.${stat}`,`unknown modifier ${field}`);if(value.multiplier!==undefined)number(value.multiplier,`heroes.${hero.id}.${stat}.multiplier`,0,100);if(value.fixed!==undefined)number(value.fixed,`heroes.${hero.id}.${stat}.fixed`,-1e6,1e6);}}
-  const appearanceIds=ids(heroes.appearances,'heroes.appearances'),supportedAppearances=new Set(['traveler','princess','elder','traveler-v2','princess-v2','elder-v2']);
+  for(const hero of heroes.definitions){ref(hero.id,new Set(['traveler','princess','elder']),`heroes.${hero.id}.id`);for(const field of ['name','dialogueName','role','summary','color'])string(hero[field],`heroes.${hero.id}.${field}`);record(hero.statModifiers,`heroes.${hero.id}.statModifiers`);for(const [stat,value] of Object.entries(hero.statModifiers)){ref(stat,new Set(statKeys),`heroes.${hero.id}.statModifiers`);record(value,`heroes.${hero.id}.${stat}`);for(const field of Object.keys(value))if(!['multiplier','fixed'].includes(field))fail(`heroes.${hero.id}.${stat}`,`unknown modifier ${field}`);if(value.multiplier!==undefined)number(value.multiplier,`heroes.${hero.id}.${stat}.multiplier`,0,100);if(value.fixed!==undefined)number(value.fixed,`heroes.${hero.id}.${stat}.fixed`,-1e6,1e6);}}
+  const appearanceIds=ids(heroes.appearances,'heroes.appearances'),supportedAppearances=new Set(['traveler-v2','princess-v2','elder-v2']);
   for(const appearance of heroes.appearances){
     const path=`heroes.appearances.${appearance.id}`;ref(appearance.id,supportedAppearances,path);ref(appearance.heroId,heroIds,`${path}.heroId`);
     for(const field of Object.keys(appearance))if(!['id','heroId','nameSuffix','label','animation'].includes(field))fail(`${path}.${field}`,'appearance configuration cannot override hero gameplay');
-    if(appearance.id!==appearance.heroId&&appearance.id!==`${appearance.heroId}-v2`)fail(path,'appearance must belong to its hero');
-    if(typeof appearance.nameSuffix!=='string'||appearance.nameSuffix.length>30)fail(`${path}.nameSuffix`,'expected a short display suffix');
+    if(appearance.id!==`${appearance.heroId}-v2`)fail(path,'appearance must belong to its hero');
+    if(appearance.nameSuffix!=='')fail(`${path}.nameSuffix`,'standard hero names do not have an appearance suffix');
     string(appearance.label,`${path}.label`);
-    if(appearance.animation!==(appearance.id.endsWith('-v2')?'directional':'legacy'))fail(`${path}.animation`,'unsupported appearance renderer');
+    if(appearance.animation!=='directional')fail(`${path}.animation`,'unsupported appearance renderer');
   }
   for(const hero of heroes.definitions){
+    if(heroes.appearances.filter(appearance=>appearance.heroId===hero.id).length!==1)fail(`heroes.${hero.id}.appearanceId`,'each hero must have one standard appearance');
     ref(hero.appearanceId??hero.id,appearanceIds,`heroes.${hero.id}.appearanceId`);
     if(!heroes.appearances.some(appearance=>appearance.id===(hero.appearanceId??hero.id)&&appearance.heroId===hero.id))fail(`heroes.${hero.id}.appearanceId`,'default appearance must belong to its hero');
   }

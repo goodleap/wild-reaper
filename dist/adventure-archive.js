@@ -69,7 +69,8 @@ export class AdventureArchive {
     if(this._runs.has(game))return true;
     if(this._active)this.finish(this._active,'exit');
     const difficulty=game.difficulty==='casual'||game.difficulty==='easy'?'casual':'normal';
-    const stageId=safeId(game.stage?.id)?game.stage.id:null;
+    const candidate=game.stage?.id??game.expedition?.id;
+    const stageId=safeId(candidate)?candidate:null;
     const heroId=HERO_IDS.has(game.hero?.id)?game.hero.id:null;
     const run={difficulty,stageId,heroId,stageCompletion:null,ended:false,reason:null,baseline:{...this.data.best[difficulty]},counted:emptyBest(),lastSavedTime:0,defeated:new WeakSet(),defeatedBosses:0,acquired:new Set(),discoveries:[],final:null};
     this._runs.set(game,run);this._active=game;
@@ -148,7 +149,9 @@ export class AdventureArchive {
     if(!run.ended){
       this.checkpoint(game,{force:true});
       run.final={...run.counted};run.ended=true;run.reason=typeof reason==='string'?reason.slice(0,32):'death';
-      if(reason==='victory'&&game.status==='victory'&&run.stageId&&game.stage?.id===run.stageId&&game.stage.completed===true&&game.stage.coreDefeated===true){
+      const completedStage=game.stage?.id===run.stageId&&game.stage.completed===true&&game.stage.coreDefeated===true;
+      const completedExpedition=game.expedition?.id===run.stageId&&game.expedition.completed===true;
+      if(reason==='victory'&&game.status==='victory'&&run.stageId&&(completedStage||completedExpedition)){
         const records=this.data.stages[run.stageId]??={normal:emptyStageRecord(),casual:emptyStageRecord()};
         const record=records[run.difficulty],time=run.final.time,isBest=record.clears===0||time<record.bestTime;
         record.clears=integer(record.clears+1);

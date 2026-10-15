@@ -52,7 +52,7 @@ const verify=()=>{
     const door=portalDoor(portal);assert(game.terrain.isFree(door.x,door.y,game.player.r));
     assert(game.terrain.island.isDry(portal.x,portal.y,200));
     assert.equal(game.enemies.filter(enemy=>enemy.hp>0&&enemy.portalId===portal.id).length,portal.state==='locked'?1:0);
-    assert.equal(game.settlements.sites.filter(site=>site.anchorId===portal.id).length,portal.state==='active'?1:0);
+    assert.equal(game.settlements.sites.filter(site=>site.anchorId===portal.id).length,0,'gate angels remain removed; the starting sanctuary is preserved');
   }
 };
 function travel(target){
@@ -69,7 +69,7 @@ function travel(target){
   feet(portalDoor(portal));assert(game.enterPortal(portal.id));assert.equal(game.regionIndex,target);verify();
   assert.equal(game.regions.portals.find(candidate=>candidate.nextRegionIndex===from).state,'active');
   assert.deepEqual({kills:game.kills,gold:game.gold,crystals:game.crystals,claimed:game.regions.claimedConnections.size},before,'arrival never grants another guardian reward');
-  assert(game.regions.states.size<REGIONS.length);assert.equal(game.regions.endlessUnlocked,game.regions.defeatedConnectionsCount>=3);
+  assert(game.regions.states.size<REGIONS.length);assert.equal(game.regions.endlessUnlocked,false,'world exploration never enables the survival wave rules');
 }
 for(const target of [1,2,0,3,4,5,6,7,2,4])travel(target);
 assert.equal(game.regions.defeatedConnectionsCount,WORLD_CONNECTIONS.length);
@@ -78,4 +78,4 @@ assert.equal(game.regions.states.size,REGIONS.length-1);
 const rewards={kills:game.kills,gold:game.gold,crystals:game.crystals};
 for(const target of [3,0,2,7,6,5,4,2,1,0])travel(target);
 assert.deepEqual({kills:game.kills,gold:game.gold,crystals:game.crystals},rewards,'return routes cannot farm completed gates');
-console.log('World connections: eight distinct deterministic islands, all ten bidirectional routes reachable, dry independent gate approaches, mild progress-based guardians, lazy world creation, persistent rewards and three-route endless milestone passed.');
+console.log('World connections: eight distinct deterministic islands, all ten bidirectional routes reachable, dry independent gate approaches, mild progress-based guardians, lazy world creation, persistent rewards, finite territories and no world endless waves passed.');

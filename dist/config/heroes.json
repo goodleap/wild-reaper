@@ -41,7 +41,8 @@
           "fixed": 0
         }
       },
-      "appearanceId": "traveler"
+      "appearanceId": "traveler-v2",
+      "dialogueName": "王子"
     },
     {
       "id": "princess",
@@ -71,7 +72,8 @@
           "fixed": 0
         }
       },
-      "appearanceId": "princess"
+      "appearanceId": "princess-v2",
+      "dialogueName": "公主"
     },
     {
       "id": "elder",
@@ -101,50 +103,30 @@
           "fixed": 0
         }
       },
-      "appearanceId": "elder"
+      "appearanceId": "elder-v2",
+      "dialogueName": "老登"
     }
   ],
   "appearances": [
     {
-      "id": "traveler",
-      "heroId": "traveler",
-      "nameSuffix": "",
-      "label": "原版",
-      "animation": "legacy"
-    },
-    {
       "id": "traveler-v2",
       "heroId": "traveler",
-      "nameSuffix": "·新版",
-      "label": "新版",
-      "animation": "directional"
-    },
-    {
-      "id": "princess",
-      "heroId": "princess",
       "nameSuffix": "",
-      "label": "原版",
-      "animation": "legacy"
+      "label": "标准形象",
+      "animation": "directional"
     },
     {
       "id": "princess-v2",
       "heroId": "princess",
-      "nameSuffix": "·新版",
-      "label": "新版",
-      "animation": "directional"
-    },
-    {
-      "id": "elder",
-      "heroId": "elder",
       "nameSuffix": "",
-      "label": "原版",
-      "animation": "legacy"
+      "label": "标准形象",
+      "animation": "directional"
     },
     {
       "id": "elder-v2",
       "heroId": "elder",
-      "nameSuffix": "·新版",
-      "label": "新版",
+      "nameSuffix": "",
+      "label": "标准形象",
       "animation": "directional"
     }
   ]

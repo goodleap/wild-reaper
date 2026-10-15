@@ -82,6 +82,35 @@ export function validateWorlds(sections){
     }
     if(s.core.boss.hp<=s.outer.boss.hp)fail(p+'.core boss strength');reward(s.coreReward,p+'.reward');
   }
+  const expeditionIds=new Set();
+  for(const d of list(stages.expeditions||[],'stages.expeditions',0,32)){
+    const p='expedition '+text(d.id,'expedition.id');if(expeditionIds.has(d.id)||stageIds.has(d.id))fail(p+'.duplicate');expeditionIds.add(d.id);
+    for(const key of ['name','shortName','summary','objective','rewardLabel','color'])text(d[key],p+'.'+key);
+    ref(d.themeId,worldIds,p+'.themeId');if(!['arena','x','y'].includes(d.axis))fail(p+'.axis');reward(d.reward,p+'.reward');
+    const bounds=object(d.bounds,p+'.bounds');for(const key of ['minX','maxX','minY','maxY'])number(bounds[key],p+'.bounds.'+key,-1e5,1e5);
+    if(bounds.maxX-bounds.minX<300||bounds.maxY-bounds.minY<300)fail(p+'.bounds.size');
+    const point=(value,path,margin=0)=>{object(value,path);number(value.x,path+'.x',bounds.minX+margin,bounds.maxX-margin);number(value.y,path+'.y',bounds.minY+margin,bounds.maxY-margin);};
+    point(d.start,p+'.start',40);positive(d.exit?.r,p+'.exit.r');point(d.exit,p+'.exit',d.exit.r+20);
+    if(Math.hypot(d.start.x-d.exit.x,d.start.y-d.exit.y)<d.exit.r+150)fail(p+'.exit.distance');
+    for(const [index,prop]of list(d.obstacles,p+'.obstacles',0,96).entries()){
+      const q=p+'.obstacles.'+index;positive(prop.r,q+'.r');point(prop,q,prop.r+20);
+      if(!['expedition-cargo','expedition-mast','expedition-moonrock'].includes(prop.variant))fail(q+'.variant');
+      if(Math.hypot(prop.x-d.start.x,prop.y-d.start.y)<prop.r+40||Math.hypot(prop.x-d.exit.x,prop.y-d.exit.y)<prop.r+d.exit.r)fail(q+'.route endpoint');
+    }
+    const segments=list(d.segments,p+'.segments',0,8);
+    if(d.axis==='arena'){positive(d.duration,p+'.duration');if(segments.length)fail(p+'.arena segments');}
+    else {
+      if(!segments.length)fail(p+'.segments');let previous=d.axis==='x'?d.start.x:d.start.y;
+      const end=d.exit[d.axis],direction=Math.sign(end-previous);if(!direction)fail(p+'.axis direction');
+      for(const [index,segment]of segments.entries()){
+        const q=p+'.segments.'+index;text(segment.name,q+'.name');point(segment.center,q+'.center',190);positive(segment.triggerRadius,q+'.triggerRadius');positive(segment.healthMultiplier,q+'.healthMultiplier');
+        number(segment.gate,q+'.gate',d.axis==='x'?bounds.minX:bounds.minY,d.axis==='x'?bounds.maxX:bounds.maxY);
+        if(direction*(segment.center[d.axis]-previous)<=0||direction*(segment.gate-segment.center[d.axis])<190||direction*(end-segment.gate)<=0)fail(q+'.route order');previous=segment.gate;
+        let count=0;for(const [id,n]of Object.entries(object(segment.enemies,q+'.enemies'))){ref(id,enemyIds,q+'.enemies');if(id==='boss')fail(q+'.boss');integer(n,q+'.enemies.'+id,1,40);count+=n;}
+        if(count<1||count>60)fail(q+'.enemy count');
+      }
+    }
+  }
   const reservations=new Set();for(const spec of list(geo.siteReservations,'geography.siteReservations',1,128)){
     list(spec,'site reservation',4,4);text(spec[0],'reservation.id');if(reservations.has(spec[0]))fail('duplicate site reservation');reservations.add(spec[0]);number(spec[1],'reservation.angle',-1e5,1e5);positive(spec[2],'reservation.distance');positive(spec[3],'reservation.radius');
   }

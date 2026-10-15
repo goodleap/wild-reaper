@@ -44,12 +44,13 @@ const finishVictory=(archive,game,time)=>{archive.begin(game);game.runTime=time;
 
 const click=(h,id)=>{h.nodes[id].focus();h.nodes[id].onclick();};
 const quiet=h=>h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
-const select=(h,mode)=>{h.nodes['mode-stage'].checked=mode==='stage';h.nodes['mode-free'].checked=mode==='free';h.listeners[`mode-${mode}:change`]();};
+const select=(h,mode)=>{h.nodes['mode-dungeon'].checked=mode==='dungeon';h.nodes['mode-world'].checked=mode==='world';h.listeners[`mode-${mode}:change`]();};
+const selectForest=h=>{select(h,'dungeon');const input=h.document.getElementById('stage-forest-trial');input.checked=true;h.fire(input,'change');};
 
 // Exercise the real title controls, HUD, result dialog and retained settings.
 // Canvas is mocked by the shared harness; this is not device/rendering QA.
 {
-  const h=harness();assert.equal(h.nodes['mode-stage'].checked,true);
+  const h=harness();assert.equal(h.nodes['mode-world'].checked,true);selectForest(h);
   click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);
   assert.equal(h.run('game.stage.id'),'forest-trial');assert.equal(h.run('game.mapId'),'forest-outer');
   h.run('updateHUD();');assert.match(h.nodes['wave-label'].textContent,/核心岛/,'the objective remains visible in the narrow mobile HUD');
@@ -66,21 +67,21 @@ const select=(h,mode)=>{h.nodes['mode-stage'].checked=mode==='stage';h.nodes['mo
   h.run("game.status='dead';");h.tick();
   assert.equal(h.nodes['end-time-label'].textContent,'存活时间');assert.doesNotMatch(h.nodes['end-title'].textContent,/通关/);
   assert.equal(h.run("archive.data.stages['forest-trial'].normal.clears"),1);
-  click(h,'home-button');select(h,'free');h.nodes['difficulty-casual'].checked=true;click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);
-  assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.difficulty'),'casual');
+  click(h,'home-button');select(h,'world');click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);
+  assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.difficulty'),'normal');
   h.run("game.status='dead';");h.tick();click(h,'restart-button');await h.flush();assert.equal(h.run('game.stage'),null);
-  const loaded=harness('',{storage:h.storage});assert.equal(loaded.nodes['mode-free'].checked,true);assert.equal(loaded.nodes['difficulty-casual'].checked,true);
-  assert.match(loaded.nodes['stage-mode-note'].textContent,/八种主题/);
+  const loaded=harness('',{storage:h.storage});assert.equal(loaded.nodes['mode-world'].checked,true);
+  assert.match(loaded.nodes['stage-mode-note'].textContent,/固定怪物领域/);
 }
 
 {
   const h=harness('?debug&world=beach');
-  assert.equal(h.nodes['mode-free'].checked,true,'an explicit valid debug world opens its free-exploration theme');
+  assert.equal(h.nodes['mode-world'].checked,true,'an explicit valid debug world opens its free-exploration theme');
   click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.region.id'),'beach');
-  h.run('home();');select(h,'stage');click(h,'start-button');click(h,'prepare-start-button');await h.flush();
+  h.run('home();');selectForest(h);click(h,'start-button');click(h,'prepare-start-button');await h.flush();
   assert.equal(h.run('game.stage.id'),'forest-trial');assert.equal(h.run('game.region.id'),'forest','manual stage selection overrides the debug-world default');
-  assert.equal(harness('?world=beach').nodes['mode-stage'].checked,true,'ordinary world query never silently changes adventure mode');
-  assert.equal(harness('?debug&world=invalid').nodes['mode-stage'].checked,true);
+  assert.equal(harness('?world=beach').nodes['mode-world'].checked,true,'ordinary world query never silently changes adventure mode');
+  assert.equal(harness('?debug&world=invalid').nodes['mode-world'].checked,true);
 }
 
 console.log('stage UI/archive: mode persistence, mobile objective, victory/death lifecycle, v1 migration, old-tab isolation, one-shot clears, fastest time and difficulty records passed');

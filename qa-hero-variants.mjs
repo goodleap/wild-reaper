@@ -6,11 +6,14 @@ import {Environment} from './dist/environment.js';
 import {movementProfile} from './dist/height-rules.js';
 import {portalDoor} from './dist/portal-geometry.js';
 import {AdventureArchive} from './dist/adventure-archive.js';
+import {getConfigSnapshot} from './dist/content-config.js';
+import {validateContentPack} from './dist/content-schema.js';
 import {harness,html} from './qa-app-harness.mjs';
 
 let seed=910071;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
 const baseIds=['traveler','princess','elder'];
-const choiceIds=baseIds.flatMap(id=>[id,`${id}-v2`]);
+const choiceIds=baseIds.map(id=>`${id}-v2`);
+const names={traveler:['帅气王子','王子'],princess:['美丽公主','公主'],elder:['年迈的老登','老登']};
 const node=(h,id)=>h.document.getElementById(id);
 const click=(h,id)=>h.fire(node(h,id),'click');
 const choose=(h,group,id)=>{
@@ -26,22 +29,37 @@ const stats=game=>({
 });
 
 assert.deepEqual(HEROES.map(hero=>hero.id),baseIds,'appearances do not create new gameplay identities');
-assert.deepEqual(HERO_CHOICES.map(choice=>choice.id),choiceIds,'each original is immediately followed by its new appearance');
+assert.deepEqual(HERO_CHOICES.map(choice=>choice.id),choiceIds,'each hero has exactly one standard appearance');
+for(const change of [
+  heroes=>heroes.appearances.push({id:'traveler',heroId:'traveler',nameSuffix:'',label:'原版',animation:'legacy'}),
+  heroes=>heroes.appearances[0].heroId='princess',
+  heroes=>heroes.appearances.splice(0,1),
+  heroes=>heroes.appearances[0].nameSuffix='·新版',
+  heroes=>heroes.definitions[0].dialogueName=''
+]){
+  const invalid=structuredClone(getConfigSnapshot());change(invalid.sections.heroes);
+  assert.throws(()=>validateContentPack(invalid),'loaded content cannot reintroduce an old choice or lose a hero/name');
+}
 const htmlIds=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert.equal(new Set(htmlIds).size,htmlIds.length,'new controls must not duplicate existing home-screen IDs');
 for(const hero of HEROES){
-  const original=HERO_CHOICES.find(choice=>choice.id===hero.id),next=HERO_CHOICES.find(choice=>choice.id===`${hero.id}-v2`);
-  assert.equal(original.name,hero.name);assert.equal(next.name,`${hero.name}·新版`);
-  assert.equal(original.heroId,hero.id);assert.equal(next.heroId,hero.id);
+  const next=HERO_CHOICES.find(choice=>choice.id===`${hero.id}-v2`);
+  assert(!HERO_CHOICES.some(choice=>choice.id===hero.id),'original artwork is no longer selectable');
+  assert.equal(hero.name,names[hero.id][0]);assert.equal(next.name,hero.name);
+  assert.equal(hero.dialogueName,names[hero.id][1]);assert.equal(next.dialogueName,hero.dialogueName);
+  assert.equal(hero.appearanceId,next.id);assert.equal(next.heroId,hero.id);
+  assert.equal(next.animation,'directional');assert.equal(next.nameSuffix,'');
+  assert(hero.details.every(detail=>!detail.includes('轻松')),'role details do not advertise removed difficulty choices');
   assert.deepEqual(next.statModifiers,hero.statModifiers);assert.deepEqual(next.details,hero.details);
-  assert.equal(getHeroAppearance(hero.id).id,hero.id,'legacy records use their original appearance');
+  assert.equal(getHeroAppearance(hero.id).id,next.id,'records without an appearance migrate to standard artwork');
+  assert.equal(getHeroAppearance(hero.id,hero.id).id,next.id,'records with an original appearance migrate within the same identity');
   for(const invalid of [null,{},[],[`${hero.id}-v2`],0,true,'unknown','__proto__',...baseIds.filter(id=>id!==hero.id).flatMap(id=>[id,`${id}-v2`])]){
-    assert.equal(getHeroAppearance(hero.id,invalid).id,hero.id,'invalid or cross-character appearance falls back to the chosen original');
-    const game=arena(hero.id,invalid);assert.equal(game.appearanceId,hero.id);assert.equal(game.player.appearanceId,hero.id);
+    assert.equal(getHeroAppearance(hero.id,invalid).id,next.id,'invalid or cross-character appearance retains the chosen hero');
+    const game=arena(hero.id,invalid);assert.equal(game.appearanceId,next.id);assert.equal(game.player.appearanceId,next.id);
   }
   for(const difficulty of ['normal','casual'])for(const debug of [false,true])for(const initialWeaponId of ['sword','orbit','arrow']){
     const options={difficulty,debug,initialWeaponId},oldGame=arena(hero.id,hero.id,options),newGame=arena(hero.id,`${hero.id}-v2`,options);
-    assert.deepEqual(stats(newGame),stats(oldGame),'appearance changes neither starting stats, skills, weapons nor collision');
+    assert.deepEqual(stats(newGame),stats(oldGame),'migrated selections retain starting stats, skills, weapons and collision');
     for(const game of [oldGame,newGame]){
       for(const upgrade of ['power','speed','vitality','magnet','fireball','sword'])assert(game.build.increment(upgrade));
       game._refreshStats();game._refreshWeapons();
@@ -57,11 +75,11 @@ for(const hero of HEROES){
 // Real selection/start/restart and storage handlers, with only DOM/Canvas mocked.
 for(const choice of HERO_CHOICES)for(const weaponId of ['sword','orbit','arrow']){
   const h=harness();click(h,'start-button');
-  assert.equal(node(h,'hero-options').children.length,6);
+  assert.equal(node(h,'hero-options').children.length,3);
   choose(h,'hero',choice.id);choose(h,'weapon',weaponId);
   assert.equal(node(h,'hero-selection-name').textContent,choice.name);
   assert.match(node(h,'prepare-summary').textContent,new RegExp(choice.name));
-  assert.equal(h.run('archive.data.totals.runs'),0,'browsing animation never creates an adventure');
+  assert.equal(h.run('archive.data.totals.runs'),0,'browsing characters never creates an adventure');
   click(h,'prepare-back-button');click(h,'start-button');assert(node(h,`hero-${choice.id}`).checked);
   const setup=JSON.parse(h.storage.get('wild-echoes-setup'));
   assert.equal(setup.heroId,choice.heroId);assert.equal(setup.appearanceId,choice.id);assert.equal(setup.weaponId,weaponId);
@@ -80,51 +98,30 @@ for(const choice of HERO_CHOICES)for(const weaponId of ['sword','orbit','arrow']
 
 // A missing appearance is a legacy selection; malformed/cross-role appearances
 // cannot accidentally change a valid chosen hero or its starter weapon.
-for(const heroId of baseIds)for(const appearanceId of [undefined,'unknown',null,['princess-v2'],{},...baseIds.filter(id=>id!==heroId).map(id=>`${id}-v2`)]){
+for(const heroId of baseIds)for(const appearanceId of [heroId,undefined,'unknown',null,['princess-v2'],{},...baseIds.filter(id=>id!==heroId).map(id=>`${id}-v2`)]){
   const setup={heroId,appearanceId,weaponId:'arrow',mode:'free'},h=harness('',{storage:new Map([['wild-echoes-setup',JSON.stringify(setup)]])});
-  click(h,'start-button');assert(node(h,`hero-${heroId}`).checked);
+  click(h,'start-button');assert(node(h,`hero-${heroId}-v2`).checked);
   click(h,'prepare-start-button');await h.flush();
-  assert.equal(h.run('game.hero.id'),heroId);assert.equal(h.run('game.appearanceId'),heroId);assert.equal(h.run('game.initialWeaponId'),'arrow');
+  assert.equal(h.run('game.hero.id'),heroId);assert.equal(h.run('game.appearanceId'),`${heroId}-v2`);assert.equal(h.run('game.initialWeaponId'),'arrow');
 }
 for(const heroId of [null,undefined,'unknown',['traveler'],{}]){
-  assert.equal(getHeroAppearance(heroId,'traveler-v2').id,'traveler','invalid hero identity cannot opt into a new appearance');
-  if(heroId!==undefined){const game=arena(heroId,'traveler-v2');assert.equal(game.hero.id,'traveler');assert.equal(game.appearanceId,'traveler');}
+  assert.equal(getHeroAppearance(heroId,'traveler-v2').id,'traveler-v2','invalid identities select the standard prince');
+  if(heroId!==undefined){const game=arena(heroId,'traveler-v2');assert.equal(game.hero.id,'traveler');assert.equal(game.appearanceId,'traveler-v2');}
   const h=harness('',{storage:new Map([['wild-echoes-setup',JSON.stringify({heroId,appearanceId:'traveler-v2',weaponId:'arrow'})]])});
-  click(h,'start-button');assert(node(h,'hero-traveler').checked);
+  click(h,'start-button');assert(node(h,'hero-traveler-v2').checked);
 }
 
-// The selected character owns one animation preview, and all controls remain
-// independent of adventure creation. Paused/covered/hidden previews do no work.
+// Preparation keeps static portraits and offers no action-preview controls.
+for(const id of ['hero-action-preview','hero-action-preview-name','hero-preview-canvas','hero-preview-action','hero-preview-toggle','hero-preview-front','hero-preview-back','hero-preview-left','hero-preview-right']){
+  assert(!htmlIds.includes(id),`removed preview control ${id} cannot remain in preparation`);
+}
 {
-  const h=harness();click(h,'start-button');choose(h,'hero','princess-v2');h.tick();
-  assert.equal(node(h,'hero-action-preview-name').textContent,getHeroAppearance('princess','princess-v2').name);
-  assert.equal(h.run('heroPreview.entity.heroId'),'princess');assert.equal(h.run('heroPreview.entity.appearanceId'),'princess-v2');
-  const before=h.run('heroPreview.time');h.tick();assert(h.run('heroPreview.time')>before);
-  for(const direction of ['front','back','left','right']){
-    click(h,`hero-preview-${direction}`);h.tick();assert.equal(h.run('heroPreview.direction'),direction);
-    assert.equal(node(h,`hero-preview-${direction}`).getAttribute('aria-pressed'),'true');
-  }
-  for(const action of ['idle','walk','melee','ranged','cast','hurt','fall']){
-    node(h,'hero-preview-action').value=action;h.fire(node(h,'hero-preview-action'),'change');h.tick();
-    assert.equal(h.run('heroPreview.entity.heroAnimationPreview.action'),action);
-  }
-  click(h,'hero-preview-toggle');h.tick();
-  const paused={time:h.run('heroPreview.time'),draws:h.run('heroPreview.draws')};
-  for(let i=0;i<5;i++)h.tick();assert.equal(h.run('heroPreview.time'),paused.time);assert.equal(h.run('heroPreview.draws'),paused.draws);
-  click(h,'hero-preview-back');h.tick();assert.equal(h.run('heroPreview.draws'),paused.draws+1,'paused direction change draws one requested pose');
-  assert.equal(h.run('heroPreview.time'),paused.time);
-  click(h,'hero-preview-toggle');h.tick();
-  for(const modal of ['help','archive']){
-    click(h,`prepare-${modal}-button`);const clock=h.run('heroPreview.time'),draws=h.run('heroPreview.draws');
-    h.tick();h.tick();assert.equal(h.run('heroPreview.time'),clock);assert.equal(h.run('heroPreview.draws'),draws);
-    h.listeners['window:keydown']({code:'Escape',key:'Escape',target:node(h,'game-canvas'),preventDefault(){}});
-  }
-  h.document.hidden=true;const hidden=h.run('heroPreview.time');h.tick();assert.equal(h.run('heroPreview.time'),hidden);h.document.hidden=false;
-  const canvas=node(h,'hero-preview-canvas'),body=node(h,'prepare-body');
-  canvas.getBoundingClientRect=()=>({top:900,bottom:1156});body.getBoundingClientRect=()=>({top:0,bottom:717});
-  const offscreen=h.run('heroPreview.draws');h.tick();assert.equal(h.run('heroPreview.draws'),offscreen,'a scrolled-off preview stops drawing');
+  const h=harness();click(h,'start-button');choose(h,'hero','princess-v2');
+  const canvas=node(h,'hero-options').querySelectorAll('canvas');
+  assert.equal(canvas.length,3,'the standard roster retains three static portraits');
+  for(let i=0;i<5;i++)h.tick();
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0);
-  click(h,'prepare-back-button');const closed=h.run('heroPreview.draws');h.tick();assert.equal(h.run('heroPreview.draws'),closed);
+  assert.equal(h.run('typeof heroPreview'),'undefined','there is no background action-preview controller');
 }
 
 // Castle/portal transitions retain the player object and appearance; archive
@@ -154,4 +151,4 @@ for(const heroId of baseIds){
   assert.equal(record.bestHeroId,heroId);assert.equal(record.lastHeroId,heroId);
   assert(!JSON.stringify(record).includes('-v2'),'visual variants do not fragment existing hero records');
 }
-console.log('Hero variants: six adjacent choices / 18 real starter combinations, legacy and invalid saves, restart/reload, equal stats/build/immersion, castle and island transitions, unchanged companion and archive identities passed (VM DOM / mocked Canvas).');
+console.log('Standard heroes: three named choices / nine real starter combinations, short dialogue names, original and invalid save migration, preview removal, restart/reload, equal stats/build/immersion, scene transitions and stable archive identities passed (VM DOM / mocked Canvas).');

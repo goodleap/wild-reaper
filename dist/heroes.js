@@ -17,7 +17,7 @@ export function applyHeroStat(hero,key,base) {
   return base*(modifier?.multiplier??1)+(modifier?.fixed??0);
 }
 
-function hero({id,name,role,summary,color,appearanceId=id,statModifiers={}}) {
+function hero({id,name,dialogueName,role,summary,color,appearanceId=`${id}-v2`,statModifiers={}}) {
   const modifiers=normalizeModifiers(statModifiers),identity={statModifiers:modifiers};
   const effects=[];
   for(const [key,label] of Object.entries(STAT_LABELS)) {
@@ -28,9 +28,9 @@ function hero({id,name,role,summary,color,appearanceId=id,statModifiers={}}) {
   const traits=effects.map((effect,index)=>`${index===0?'角色特性：':''}${effect}`);
   const details=[
     `角色特性：${effects.join(' · ')||'无'}`,
-    `初始生命：标准 ${Math.round(applyHeroStat(identity,'maxHealth',HERO_CONFIG.defaults.baseHealth))} / 轻松 ${Math.round(applyHeroStat(identity,'maxHealth',HERO_CONFIG.defaults.easyBaseHealth))}`
+    `初始生命：${Math.round(applyHeroStat(identity,'maxHealth',HERO_CONFIG.defaults.baseHealth))}`
   ];
-  return Object.freeze({id,name,role,summary,appearanceId,tagline:role,passive:summary,color,statModifiers:modifiers,
+  return Object.freeze({id,name,dialogueName,role,summary,appearanceId,tagline:role,passive:summary,color,statModifiers:modifiers,
     hpMultiplier:modifiers.maxHealth.multiplier,baseSpeed:Math.round(applyHeroStat(identity,'moveSpeed',HERO_CONFIG.defaults.baseMoveSpeed)*100)/100,
     damageMultiplier:modifiers.attack.multiplier,baseDefense:modifiers.defense.fixed,magnetMultiplier:modifiers.pickupRange.multiplier,
     skillCooldown:HERO_CONFIG.defaults.skillCooldown,initialUpgrade:null,traits:Object.freeze(traits),details:Object.freeze(details)});
@@ -38,9 +38,9 @@ function hero({id,name,role,summary,color,appearanceId=id,statModifiers={}}) {
 export const HEROES=Object.freeze(HERO_CONFIG.definitions.map(hero));
 export const getHero=id=>HEROES.find(hero=>hero.id===id)||HEROES[0];
 
-// Appearance choices share a stable hero identity and its exact gameplay stats.
-// Legacy saves without an appearance always resolve to that hero's original art.
-export const HERO_APPEARANCES=Object.freeze(HERO_CONFIG.appearances.map(appearance=>Object.freeze({...appearance,name:getHero(appearance.heroId).name+appearance.nameSuffix})));
+// Each stable hero identity has one standard appearance. Old selection records
+// retain that identity and migrate to its directional artwork on resolution.
+export const HERO_APPEARANCES=Object.freeze(HERO_CONFIG.appearances.map(appearance=>Object.freeze({...appearance,name:getHero(appearance.heroId).name})));
 export function getHeroAppearance(heroId,appearanceId) {
   const validIdentity=HEROES.find(identity=>identity.id===heroId),identity=validIdentity||HEROES[0];
   if(!validIdentity)appearanceId=identity.appearanceId;

@@ -2,14 +2,17 @@ import assert from 'node:assert/strict';
 import { harness } from './qa-app-harness.mjs';
 import { WeaponTrail } from './dist/weapon-trails.js';
 import { sceneItemVisible, compareSceneDepth } from './dist/scene-rendering.js';
+import { Game } from './dist/engine.js';
+import { HERO_CHOICES } from './dist/heroes.js';
 
 const h=harness('?debug');
 h.run(`game=new Game({adventure:false,encounters:false,environment:false,settlements:false,companions:false});
 game.terrain=new game.terrain.constructor({obstacles:[]});game.enemies=[];game.effects=[];
 game.player.x=game.player.y=0;game.bullets=[];game.enemyBullets=[];game.orbitals=[];
-var depthDrawLog=[];
-const depthActorPainter=drawActor,depthArrowPainter=combatArt.drawArrow.bind(combatArt);
+var depthDrawLog=[],depthHeroArt=[];
+const depthActorPainter=drawActor,depthArrowPainter=combatArt.drawArrow.bind(combatArt),depthHeroPainter=humanoidArt.draw.bind(humanoidArt);
 drawActor=actor=>{depthDrawLog.push('body');depthActorPainter(actor);};
+humanoidArt.draw=(target,kind,options)=>{depthHeroArt.push(kind);return depthHeroPainter(target,kind,options);};
 combatArt.drawArrow=(target,bullet,options)=>{depthDrawLog.push(bullet.id);depthArrowPainter(target,bullet,options);};`);
 const game=h.run('game'),p=game.player;
 const arrows=[];
@@ -18,12 +21,24 @@ for(let i=0;i<8;i++){
   arrows.push({id:`arrow-${i}`,x:Math.cos(angle)*12,y:Math.sin(angle)*12,angle,vx:Math.cos(angle)*640,vy:Math.sin(angle)*640,r:4,life:1});
 }
 game.bullets=arrows;
-for(const hero of ['traveler','princess','elder'])for(const appearanceId of [hero,`${hero}-v2`]){
-  Object.assign(p,{heroId:hero,appearanceId});
-  h.run(`depthDrawLog=[];drawScene([actorVisual(game.player,true)],[],game.player);`);
+assert.equal(HERO_CHOICES.length,3,'only the three standard characters are selectable');
+function checkHeroDepth(heroId,appearanceId){
+  Object.assign(p,{heroId,appearanceId});
+  h.run(`depthDrawLog=[];depthHeroArt=[];drawScene([actorVisual(game.player,true)],[],game.player);`);
   const order=Array.from(h.run('depthDrawLog')),body=order.indexOf('body');
   assert.equal(order.length,9,'each real arrow and the actor draw exactly once');
+  assert.deepEqual(Array.from(h.run('depthHeroArt')),[`${heroId}-v2`],'the shipped painter uses the standard directional artwork');
   for(const arrow of arrows)assert.equal(order.indexOf(arrow.id)<body,arrow.vy<0,`${appearanceId}: actual shot direction controls body overlap`);
+}
+for(const hero of HERO_CHOICES)checkHeroDepth(hero.heroId,hero.appearanceId);
+
+// Old save IDs are migration inputs, never additional selectable appearances.
+// Resolving them before the first frame keeps the same eight-direction depth.
+for(const hero of HERO_CHOICES)for(const appearanceId of [hero.heroId,undefined]){
+  const restored=new Game({hero:hero.heroId,appearanceId,terrain:new game.terrain.constructor({obstacles:[]}),adventure:false});
+  assert.equal(restored.appearanceId,hero.appearanceId);assert.equal(restored.player.appearanceId,hero.appearanceId);
+  assert(!HERO_CHOICES.some(choice=>choice.id===hero.heroId));
+  checkHeroDepth(restored.player.heroId,restored.player.appearanceId);
 }
 
 // Current position, not the initial launch heading or the owner's movement,
@@ -76,4 +91,4 @@ h.run('shippedRenderGame();shippedRenderGame();');
 assert.equal(JSON.stringify({x:p.x,y:p.y,hp:p.hp,clock:game._clock,bullet:game.bullets[0]}),state,'repeated paused draws preserve combat state');
 game.bullets=[];game.effects=[];game.abilities.effects=[];
 assert.equal(h.run('collectAttackDepthItems([actorVisual(game.player,true)]).length'),0,'cleared scene has no retained attack draw items');
-console.log('Attack depth: six hero appearances / eight directions, moving shots, rigid weapons with their own trails, projected enemy bullets, delayed energy, stable scene/wall/fog ordering, exactly-once real render and immutable combat state passed (VM DOM / mocked Canvas).');
+console.log('Attack depth: three standard heroes / eight directions, explicit legacy-save migration, moving shots, rigid weapons with their own trails, projected enemy bullets, delayed energy, stable scene/wall/fog ordering, exactly-once real render and immutable combat state passed (VM DOM / mocked Canvas).');

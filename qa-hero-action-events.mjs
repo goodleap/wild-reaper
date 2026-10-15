@@ -113,11 +113,13 @@ for(const branch of [null,'chain','focus']){
   close(event.angle,Math.atan2(first.y2,first.x2),'lightning body aims at first actual strike, never the last chain hop');
 }
 
-// Frozen and original appearances never start new presentation events.
+// Original selections migrate to standard actions; frozen/dead heroes cannot
+// start a new event. NPC-like legacy entities remain outside this pipeline.
 for(const hero of ['traveler','princess','elder']){
-  const legacy=arena(hero,hero);enemy(legacy);legacy.levels.arrow=1;legacy.attacks.updateSword(0);legacy._shot=0;legacy.attacks.updateBasic(0);
-  legacy.abilities.cast('fireball',legacy.player,{point:{x:0,y:100}});legacy.attacks.castStorm();
-  assert.equal(legacy.player._heroAction,undefined,'old appearance stays on its original animation path');
+  const migrated=arena(hero,hero);enemy(migrated);migrated.attacks.updateSword(0);
+  assert.equal(migrated.player.appearanceId,`${hero}-v2`);
+  assert.equal(migrated.player._heroAction.kind,'melee','old selections use the standard hero attack animation');
+  assert.equal(recordHeroAction({player:{heroId:hero,appearanceId:hero,hp:100}},{kind:'cast'}),false,'shared legacy/NPC art does not opt into player actions');
   const frozen=arena(hero);enemy(frozen);frozen.levels.arrow=1;frozen.abilities.statusFor(frozen.player).frozenUntil=1;
   frozen.attacks.updateSword(0);frozen._shot=0;frozen.attacks.updateBasic(0);
   assert.equal(frozen.abilities.cast('fireball',frozen.player,{point:{x:0,y:100}}),false);
@@ -147,7 +149,7 @@ const sceneCast=arena();enemy(sceneCast);sceneCast.attacks.updateSword(0);sceneC
 const manualEvent=sceneCast.player._heroAction;sceneCast.attacks.sword.clearScene();
 assert.strictEqual(sceneCast.player._heroAction,manualEvent,'clearing a sword never cancels a different manual action');
 
-// Equal seeds and input produce equal simulation results for old/new artwork,
+// Equal seeds and input produce equal results for migrated and current saves,
 // including a mixed build, freeze, movement, contact damage and manual storm.
 const originalRandom=Math.random;
 function combatSnapshot(hero,appearanceId,weapon){
@@ -173,7 +175,7 @@ function combatSnapshot(hero,appearanceId,weapon){
 }
 try{
   for(const hero of ['traveler','princess','elder'])for(const weapon of ['sword','arrow'])
-    assert.deepEqual(combatSnapshot(hero,`${hero}-v2`,weapon),combatSnapshot(hero,hero,weapon),`${hero}/${weapon} new artwork changes no battle results`);
+    assert.deepEqual(combatSnapshot(hero,`${hero}-v2`,weapon),combatSnapshot(hero,hero,weapon),`${hero}/${weapon} migrated appearance changes no battle results`);
 }finally{Math.random=originalRandom;}
 
-console.log('Hero action events: real sword/arrow/spell/storm/pulse/lightning triggers, exact mirrored grip, priority, legacy isolation, freeze/cancellation and identical mixed-build battle results passed.');
+console.log('Hero action events: real sword/arrow/spell/storm/pulse/lightning triggers, exact grip, priority, legacy save migration and NPC isolation, freeze/cancellation and identical mixed-build battle results passed.');

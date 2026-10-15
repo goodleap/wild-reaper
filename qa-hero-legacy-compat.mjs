@@ -28,7 +28,8 @@ const variants=[
 ];
 
 // Captured before the directional appearances were implemented, from published
-// v0.0.90. The old choices keep every path, color, gait and expression intact.
+// v0.0.90. These are low-level shared-renderer fixtures, not player choices;
+// keeping the reusable cache intact also protects the existing NPC art.
 const publishedTraces={
   traveler:'85863809ebd40e96d9ffc8cd4c53eb92dd2559c394fb8255c1af0c47cf449d3c',
   princess:'22602c7f83fc75a5116f5bfd1534979951c42a81d38968f393c176c94c47d5b3',
@@ -47,6 +48,6 @@ for(const [kind,expected] of Object.entries(publishedTraces)){
     for(const canvas of canvases)assert.equal(canvas.record.stack.length,0);
     traces.push({calls:out.calls,sprites:canvases.map(c=>({width:c.width,height:c.height,calls:c.record.calls}))});
   }
-  assert.equal(createHash('sha256').update(JSON.stringify(traces)).digest('hex'),expected,`${kind} retains the published old appearance exactly`);
+  assert.equal(createHash('sha256').update(JSON.stringify(traces)).digest('hex'),expected,`${kind} retains the shared low-level art fixture exactly`);
 }
-console.log('Legacy hero compatibility: all three published v90 appearances retain exact paths, materials, walking and expressions at both supported pixel densities and horizontal facings.');
+console.log('Shared humanoid art fixtures: original paths, materials, gait and expressions remain intact at both pixel densities and horizontal facings; old player appearances are not selectable.');

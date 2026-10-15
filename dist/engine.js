@@ -32,6 +32,8 @@ import { Dungeon } from './dungeon.js';
 import { Settlements } from './settlements.js';
 import { WaveDirector } from './wave-director.js';
 import { StageRun } from './stage-run.js';
+import { ExpeditionRun } from './expedition-run.js';
+import { MonsterTerritories } from './monster-territories.js';
 import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
@@ -63,12 +65,17 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,stageId=null}={}) {
+  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,stageId=null,mode=null,dungeonId=null}={}) {
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
     this.debugOptions=normalizeDebugOptions(debugOptions,this.debug);
     this.debugFull=this.debugOptions.fullLoadout;
-    this.stage=stageId?new StageRun(this,stageId):null;
+    this.mode=stageId||dungeonId||mode==='dungeon'?'dungeon':'world';
+    this.dungeonId=this.mode==='dungeon'?dungeonId:null;
+    this._worldExploration=this.mode==='world'&&!!adventure;
+    if(mode==='world'||mode==='dungeon')difficulty='normal';
+    this.stage=stageId&&!dungeonId?new StageRun(this,stageId):null;
+    this.expedition=dungeonId?new ExpeditionRun(this,dungeonId):null;
     this.regionIndex=this.stage?.currentIsland.themeIndex??(this.debug?Math.max(0,REGIONS.findIndex(region=>region.id===debugWorld)):0);
     this.mapId=this.stage?.currentMapId??this.regionIndex;
     this.region=regionFor(this.regionIndex);
@@ -113,7 +120,7 @@ export class Game {
     this._refreshStats();this._refreshWeapons();
     this._grid = new Map(); this._cell = 86; this._pendingLevels = 0;
     this._moveEntity(this.player,0,0,true);
-    for(let i=0;i<EXPLORATION_SPAWN.initialCount;i++)this._spawnEnemy(EXPLORATION_SPAWN.initialType,adventure?undefined:EXPLORATION_SPAWN.testStartRadius+i*EXPLORATION_SPAWN.testRadiusStep);
+    if(!this._worldExploration&&!this.expedition)for(let i=0;i<EXPLORATION_SPAWN.initialCount;i++)this._spawnEnemy(EXPLORATION_SPAWN.initialType,adventure?undefined:EXPLORATION_SPAWN.testStartRadius+i*EXPLORATION_SPAWN.testRadiusStep);
     this.adventure=null;
     this.encounters=encounters?new Encounters(this):null;
     this.combat=new CombatResolution(this);this.attacks=new CombatAttacks(this);
@@ -133,6 +140,8 @@ export class Game {
     this.discoveredMap=new Set();this.regions.initialize();
     this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
     this.settlements.ensureAngels?.();
+    this.territories=new MonsterTerritories(this);
+    this.expedition?.initialize();
     // Keep debug entry immediately playable. Shop gold is granted once;
     // crystals earned later still use the ordinary upgrade thresholds.
     if(this.debugOptions.extraGold)this.grantResources({gold:500},'debugStart');
@@ -177,6 +186,7 @@ export class Game {
     return best;
   }
   _difficultyTime() {
+    if(this._worldExploration)return Math.max(0,(this.region.danger||1)-1)*PRESSURE.dangerSeconds;
     if(this.stage)return Math.max(0,(this.stage.definition.dangerFactor??1)-1)*PRESSURE.dangerSeconds+Math.min(this.time,PRESSURE.timeCap)*PRESSURE.timeFactor;
     // Pressure follows cleared connections and elapsed time, not the world
     // array index. The first three cleared routes start the endless clock.
@@ -313,7 +323,7 @@ export class Game {
     }
   }
   _updatePressure(dt=0) {
-    if(this.debugOptions.allMonsters){this.pressurePhase='steady';this.phaseEndsAt=this.time;return;}
+    if(this.debugOptions.allMonsters||this._worldExploration||(this.expedition&&!this.expedition.allowAmbient)){this.pressurePhase='steady';this.phaseEndsAt=this.time;return;}
     this.waveDirector.update(dt);
   }
   _hurtPlayer(amount,origin=null) {return this.combat.damagePlayer(amount,origin);}
@@ -414,6 +424,7 @@ export class Game {
     // Clear only transient attacks. Persistent sites and surviving objective
     // guards remain in a suspended per-region snapshot for return journeys.
     for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
+    this.territories?.suspend();
     this.superSkills.clearScene();this.barrier.clearScene();this.abilities.clearScene();this.regions.saveWorld();
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];
     if(this.stage)this.stage.currentMapId=nextIsland.id;
@@ -438,6 +449,7 @@ export class Game {
       this.settlements=new Settlements(this,{generation:generate&&this._features.settlements});
       this.regions.initialize(portal,fromIndex);
       this.relicSites=new RelicSites(this,{generation:!!(generate&&this._features.adventure&&(this._features.encounters||this._features.companions))});
+      this.territories=new MonsterTerritories(this);
     }
     if(this.adventure){this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;}
     const arrival=this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>this.stage?candidate.nextMapId===fromMapId:candidate.nextRegionIndex===fromIndex);
@@ -474,7 +486,7 @@ export class Game {
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}
     this.relics.update(dt);
     this.barrier.update(dt);
-    if(!inDungeon){this.regions.update(dt);this._updatePressure(dt);}
+    if(!inDungeon){this.expedition?.update(dt);if(this.status!=='playing')return;this.regions.update(dt);this.territories?.update(dt);this._updatePressure(dt);}
     p.invuln=Math.max(0,p.invuln-dt); p.skillCooldown=this.debugOptions.zeroStormCooldown?0:Math.max(0,p.skillCooldown-dt);
     p.hurtFlash=Math.max(0,(p.hurtFlash||0)-dt);
     p.hurtFace=Math.max(0,(p.hurtFace||0)-dt);p.castFace=Math.max(0,(p.castFace||0)-dt);
@@ -497,7 +509,7 @@ export class Game {
     const regen=resolveCharacterStats(this).regen;if(regen)p.hp=Math.min(p.maxHp,p.hp+regen*dt);
     if(!inDungeon)this._spawn-=dt;
     updateDebugMonsterStream(this,dt);
-    if(!this.debugOptions.allMonsters&&!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
+    if(!this._worldExploration&&(!this.expedition||this.expedition.allowAmbient)&&!this.debugOptions.allMonsters&&!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
       const bossActive=this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false);
@@ -508,7 +520,7 @@ export class Game {
         if(enemy)this.elites.maybePromote(enemy);
       }
     }
-    if(!inDungeon&&!this.stage&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0)) {
+    if(!this._worldExploration&&!this.expedition&&!inDungeon&&!this.stage&&!this.regions.guarded&&(!this.portal||this.portal.state==='locked')&&this.regionGrace<=0&&this.time>=this.nextBossAt && !this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0)) {
       this.bossSpawned=true; this.bossDefeated=false; this.bossCount++;
       this.nextBossAt=this.time+BALANCE.bossInterval;
       this._spawnEnemy('boss'); this._emit('boss');
@@ -521,6 +533,7 @@ export class Game {
       if(e.trainingDummy||this.abilities.isFrozen(e))continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
+      if(!inDungeon&&this.territories?.updateEnemy(e,dt))continue;
       if(this.companions.updateEnemy(e,dt))continue;
       if(this.elites.updateEnemy(e,dt))continue;
       if(this.encounters?.updateEnemy(e,dt))continue;
@@ -582,7 +595,7 @@ export class Game {
     resolveBossPhase(this,'ranged');
     this._resolveEnemyAttacks(dt);
     if(this.status==='dead')return;
-    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.trainingDummy||e.type==='boss'||e.dungeonId||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
+    this.enemies=this.enemies.filter(e=>e.hp>0 && (e.trainingDummy||e.type==='boss'||e.dungeonId||e.territoryId||e.expeditionId||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
     this._collectDrops(this.gems,dt,'crystals');
     this._collectDrops(this.coins,dt,'gold');
     this.gems=this.gems.filter(g=>g.value>0);this.coins=this.coins.filter(c=>c.value>0);

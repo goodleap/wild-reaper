@@ -64,7 +64,7 @@ assert(!g.enemies.some(e=>e.portalId===gate(0).id),'newly initialized opposite e
 unlock(2);travel(2);verifyWorld();assert.equal(g.regions.defeatedConnectionsCount,2);assert.equal(g.regions.endlessStartedAt,null);
 const oldForest=g.regions.states.get(0),remoteBoss=oldForest.enemies.find(e=>e.portalId===original.gateToTwo.id);assert(remoteBoss&&remoteBoss.hp>0);
 g.time=321;unlock(0);
-assert(g.regions.endlessUnlocked);assert.equal(g.regions.endlessStartedAt,321);
+assert.equal(g.regions.endlessUnlocked,false);assert.equal(g.regions.endlessStartedAt,null,'world clear progress never starts survival waves');
 assert.equal(original.gateToTwo.state,'active');assert(original.gateToTwo.rewardClaimed);
 assert(!oldForest.enemies.includes(remoteBoss),'opening an already visited opposite end despawns its dormant boss without another kill');
 assert(remoteBoss.hp>0,'opposite boss removal never routes through damage');
@@ -77,4 +77,4 @@ for(const target of [2,1,0,1,2,0]){
   assert.deepEqual({kills:g.kills,bossKills:g.bossKills,gold:g.gold,crystals:g.crystals,skills:JSON.stringify(g.superSkills.owned)},rewardState,'return journeys preserve progress and cannot farm rewards');
   for(const portal of g.regions.portals)assert.equal(g.settlements.sites.filter(site=>site.anchorId===portal.id).length,portal.state==='active'?1:0,'each active gate has exactly one persistent angel');
 }
-console.log('Island worlds: original route retained in expanded graph, planned dry landmarks, paired gateways, single connection rewards, no remote boss duplication, retained castle/merchant/relic progress, bounded snapshots and endless unlock passed.');
+console.log('Island worlds: original route retained in expanded graph, planned dry landmarks, paired gateways, single connection rewards, no remote boss duplication, retained castle/merchant/relic progress, bounded snapshots and finite world populations passed.');

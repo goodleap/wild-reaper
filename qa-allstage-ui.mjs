@@ -1,27 +1,28 @@
 import assert from 'node:assert/strict';
+import { EXPEDITIONS } from './dist/expedition-definitions.js';
 import { STAGES } from './dist/stage-definitions.js';
 import { AdventureArchive, ARCHIVE_STORAGE_KEY } from './dist/adventure-archive.js';
 import { archivePanelHTML } from './dist/archive-panel.js';
 import { harness, html } from './qa-app-harness.mjs';
 
 const click=(h,id)=>h.document.getElementById(id).onclick();
-const selectMode=(h,mode)=>{for(const id of ['stage','free'])h.nodes[`mode-${id}`].checked=id===mode;h.listeners[`mode-${mode}:change`]();};
+const selectMode=(h,mode)=>{for(const id of ['dungeon','world'])h.nodes[`mode-${id}`].checked=id===mode;h.listeners[`mode-${mode}:change`]();};
 const selectStage=(h,id)=>{h.document.getElementById(`stage-${id}`).checked=true;h.listeners[`stage-${id}:change`]();};
 const quiet=h=>h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
 const storageFrom=data=>new Map([['wild-echoes-setup',JSON.stringify(data)]]);
 
 assert.equal(STAGES.length,8);
-assert.match(html,/主题关卡/);assert.doesNotMatch(html,/森林关卡/);
+assert.match(html,/副本关卡/);assert.doesNotMatch(html,/森林关卡/);
 
 // Real title event handlers, engine construction and restart, with canvas
 // mocked by the shared harness. This does not claim device/rendering QA.
 for(const stage of STAGES){
   const h=harness();
-  assert.equal(h.nodes['stage-options'].children.length,8);
+  assert.equal(h.nodes['stage-options'].children.length,STAGES.length+EXPEDITIONS.length);selectMode(h,'dungeon');
   selectStage(h,stage.id);
   assert.equal(h.nodes['stage-title'].textContent,stage.name);
   assert.equal(h.nodes['stage-description'].textContent,stage.summary);
-  assert.match(h.nodes['stage-difficulty'].textContent,new RegExp(stage.difficultyLabel));
+  assert.equal(h.nodes['stage-kind'].textContent,'岛屿试炼');
   assert.equal(STAGES.filter(item=>h.document.getElementById(`stage-${item.id}`).checked).length,1);
   assert.equal(h.document.getElementById(`stage-${stage.id}`).getAttribute('aria-label'),stage.name);
   click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);
@@ -35,38 +36,39 @@ for(const stage of STAGES){
   h.run('home();');
   const loaded=harness('',{storage:h.storage});
   assert.equal(loaded.document.getElementById(`stage-${stage.id}`).checked,true);
-  assert.equal(loaded.nodes['mode-stage'].checked,true);
+  assert.equal(loaded.nodes['mode-dungeon'].checked,true);
   assert.equal(loaded.nodes['stage-picker'].classList.contains('hidden'),false);
-  selectMode(loaded,'free');assert.equal(loaded.nodes['stage-picker'].classList.contains('hidden'),true);
-  selectMode(loaded,'stage');assert.equal(loaded.document.getElementById(`stage-${stage.id}`).checked,true);
+  selectMode(loaded,'world');assert.equal(loaded.nodes['stage-picker'].classList.contains('hidden'),true);
+  selectMode(loaded,'dungeon');assert.equal(loaded.document.getElementById(`stage-${stage.id}`).checked,true);
 }
 
 // Title settings remain backward compatible and recover from stale values.
 for(const initial of [{},{mode:'stage',stageId:'obsolete'}, {mode:'obsolete',stageId:[]}, {mode:'stage',stageId:null}]){
   const h=harness('',{storage:storageFrom(initial)});
-  assert.equal(h.document.getElementById('stage-forest-trial').checked,true);
+  if(initial.mode==='stage')assert.equal(h.document.getElementById('stage-forest-trial').checked,true);
+  selectMode(h,'dungeon');selectStage(h,'forest-trial');
   click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage.id'),'forest-trial');
 }
 {
   const h=harness('',{storage:new Map([['wild-echoes-setup','{invalid']])});
-  assert.equal(h.document.getElementById('stage-forest-trial').checked,true);
+  assert.equal(h.nodes['mode-world'].checked,true);assert.equal(h.document.getElementById('dungeon-survival').checked,true);
 }
 {
   const h=harness('',{storage:storageFrom({mode:'free',difficulty:'casual',stageId:'snow-trial'})});
-  assert.equal(h.nodes['mode-free'].checked,true);assert.equal(h.nodes['difficulty-casual'].checked,true);
-  click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.difficulty'),'casual');
+  assert.equal(h.nodes['mode-world'].checked,true);
+  click(h,'start-button');click(h,'prepare-start-button');await h.flush();quiet(h);assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.difficulty'),'normal');
   h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();assert.equal(h.run('game.stage'),null);
-  h.run('home();');selectMode(h,'stage');click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage.id'),'snow-trial');
-  assert.equal(h.run('game.difficulty'),'casual');
+  h.run('home();');selectMode(h,'dungeon');selectStage(h,'snow-trial');click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage.id'),'snow-trial');
+  assert.equal(h.run('game.difficulty'),'normal');
 }
 {
   const h=harness('?debug&world=beach',{storage:storageFrom({mode:'stage',stageId:'snow-trial'})});
-  assert.equal(h.nodes['mode-free'].checked,true);
+  assert.equal(h.nodes['mode-world'].checked,true);
   click(h,'start-button');click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage'),null);assert.equal(h.run('game.region.id'),'beach');
-  h.run('home();');selectMode(h,'stage');selectStage(h,'volcano-trial');click(h,'start-button');click(h,'prepare-start-button');await h.flush();
+  h.run('home();');selectMode(h,'dungeon');selectStage(h,'volcano-trial');click(h,'start-button');click(h,'prepare-start-button');await h.flush();
   assert.equal(h.run('game.stage.id'),'volcano-trial');assert.equal(h.run('game.region.id'),'volcano');
-  assert.equal(harness('?world=beach').nodes['mode-stage'].checked,true);
-  assert.equal(harness('?debug&world=invalid').nodes['mode-stage'].checked,true);
+  assert.equal(harness('?world=beach').nodes['mode-world'].checked,true);
+  assert.equal(harness('?debug&world=invalid').nodes['mode-world'].checked,true);
 }
 
 // Existing v2 forest progress survives; each theme and difficulty keeps its

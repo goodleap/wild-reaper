@@ -58,5 +58,39 @@
     "initialType": "slime",
     "testStartRadius": 330,
     "testRadiusStep": 24
+  },
+  "territories": {
+    "maxGroups": 18,
+    "radius": 195,
+    "spacing": 535,
+    "notice": 235,
+    "leash": 600,
+    "enemyLeash": 540,
+    "disengageDelay": 1.2,
+    "returnArrival": 9,
+    "patrolRadius": 36,
+    "patrolSpeed": 0.28,
+    "simulationRange": 1150,
+    "ringRadii": [
+      560,
+      1120,
+      1720,
+      2340,
+      2960
+    ],
+    "baseMembers": 8,
+    "ringStrength": 0.12,
+    "typeBaseTime": 40,
+    "typeRingTime": 35,
+    "rallyDelay": 0.2,
+    "rallySpeed": 170,
+    "provokedDuration": 2,
+    "eliteStartRing": 2,
+    "eliteGroupInterval": 4,
+    "eliteAffixes": [
+      "shield",
+      "swift",
+      "summoner"
+    ]
   }
 }

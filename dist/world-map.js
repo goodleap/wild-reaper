@@ -16,9 +16,9 @@ export function minimapBounds(width,height,insets={}){
   const compact=width<600||height<430,size=compact?104:128,margin=compact?10:16;
   return {x:width-size-margin-(insets.right||0),y:margin+(insets.top||0),width:size,height:size,margin};
 }
-export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',dogcamp:'旅犬营地',stonevault:'封石宝库',portal:'传送门',exit:'荒野出口',chest:'宝箱',boss:'首领'});
+export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',dogcamp:'旅犬营地',stonevault:'封石宝库',portal:'传送门',exit:'荒野出口',chest:'宝箱',boss:'首领',territory:'怪物领域',expedition:'副本目标'});
 export function landmarkLabel(marker){return marker.name||LANDMARK_NAMES[marker.type]||'遗迹';}
-export function landmarkState(marker){if(marker.kind==='victory')return '从正面进入，完成本局';if(marker.type==='stonevault')return marker.completed?'已领取':marker.gateOpen?'通路已开启 · 宝藏待领取':'封石阻挡 · 需要岩灵';if(marker.type==='dogcamp')return marker.completed?'已招募':'可招募寻宝小狗';if(marker.type==='rescue'&&marker.appearance==='golemaltar')return marker.completed?'岩灵已唤醒':'唤醒岩灵试炼';if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
+export function landmarkState(marker){if(marker.type==='territory')return marker.completed?'已清理':'进入后会惊动怪群';if(marker.type==='expedition')return marker.completed?'已通关':marker.label||'副本目标';if(marker.kind==='victory')return '从正面进入，完成本局';if(marker.type==='stonevault')return marker.completed?'已领取':marker.gateOpen?'通路已开启 · 宝藏待领取':'封石阻挡 · 需要岩灵';if(marker.type==='dogcamp')return marker.completed?'已招募':'可招募寻宝小狗';if(marker.type==='rescue'&&marker.appearance==='golemaltar')return marker.completed?'岩灵已唤醒':'唤醒岩灵试炼';if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
 // Discovery lives on each region-owned landmark. A map instance never keeps a
@@ -33,6 +33,8 @@ function landmarks(game) {
   for(const site of game.relicSites?.sites||[])if(RELICS.has(site.type))add(site,site.type);
   for(const portal of game.regions?.portals||[])add(portal,'portal');
   for(const enemy of game.enemies||[])if(enemy.stageBoss&&enemy.hp>0)add(enemy,'boss');
+  for(const group of game.territories?.groups||[])add(group,'territory');
+  for(const marker of game.expedition?.markers||[])add(marker,marker.type||'exit');
   return result;
 }
 
@@ -75,10 +77,10 @@ export class WorldMap {
       if(!site.discovered&&game.debug!==true)continue;
       const dx=site.x-p.x,dy=site.y-p.y,distance=Math.hypot(dx,dy);
       if(distance>range)continue;
-      const active=type==='portal'&&site.state==='active';
-      const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored);
+      const active=type==='portal'?site.state==='active':type==='expedition'&&site.active===true;
+      const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored||type==='territory'&&site.cleared||type==='expedition'&&site.completed===true);
       const name=site.kind==='victory'?'通关大门':type==='boss'&&site.stageBossRole?(site.stageBossRole==='core'?'关卡首领':'外岛首领 · 可选'):type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||'';
-      result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,gateOpen:!!site.gateOpen,appearance:site.appearance,kind:site.kind,name});
+      result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,gateOpen:!!site.gateOpen,appearance:site.appearance,kind:site.kind,name,label:site.label,color:site.color});
     }
     // Bright active gates remain readable when a sanctuary is nearby.
     return result.sort((a,b)=>Number(a.active)-Number(b.active));
@@ -88,6 +90,7 @@ export class WorldMap {
     if(!game?.player)return null;
     width=positive(width,128);height=positive(height,128);range=positive(range,WORLD_MAP_RULES.range);
     if(!game.dungeon?.active&&game.terrain?.island)return this._drawIslandMap(ctx,game,{x,y,width,height,range,expanded});
+    if(game.expedition&&!game.dungeon?.active&&expanded)return this._drawExpeditionMap(ctx,game,{x,y,width,height});
     const markers=this.getMarkers(game,{range}),p=feet(game),pad=6;
     const mapW=width-pad*2,mapH=height-pad*2,cx=x+width*.5,cy=y+height*.5;
     const radius=Math.max(20,Math.min(mapW,mapH)*.5-(expanded?16:7)),scale=radius/range;
@@ -101,6 +104,7 @@ export class WorldMap {
     for(let gx=ox+step;gx<x+width-pad;gx+=step)segment(ctx,gx,y+pad,gx,y+height-pad);
     for(let gy=oy;gy>y+pad;gy-=step)segment(ctx,x+pad,gy,x+width-pad,gy);
     for(let gy=oy+step;gy<y+height-pad;gy+=step)segment(ctx,x+pad,gy,x+width-pad,gy);
+    if(game.expedition){const b=game.terrain.bounds;ctx.fillStyle='#657d7030';ctx.strokeStyle='#b2bc9d';ctx.lineWidth=1.2;ctx.fillRect(cx+(b.minX-p.x)*scale,cy+(b.minY-p.y)*scale,(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);ctx.strokeRect(cx+(b.minX-p.x)*scale,cy+(b.minY-p.y)*scale,(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);}
     if(game.dungeon?.active){
       const vision=game.dungeon.vision;
       // The indoor map uses the exact same scale and player anchor. Unknown
@@ -194,11 +198,32 @@ export class WorldMap {
     return {markers,center:{x:cx,y:cy},worldCenter:center,player:playerPoint,radius,scale,explored:expanded?this.exploration(game):undefined};
   }
 
+  _drawExpeditionMap(ctx,game,{x,y,width,height}) {
+    const b=game.terrain.bounds,p=feet(game),cx=x+width/2,cy=y+height/2;
+    const center={x:(b.minX+b.maxX)/2,y:(b.minY+b.maxY)/2},scale=Math.min((width-48)/(b.maxX-b.minX),(height-48)/(b.maxY-b.minY));
+    const mx=value=>cx+(value-center.x)*scale,my=value=>cy+(value-center.y)*scale;
+    const markers=this.getMarkers(game,{range:Math.hypot(b.maxX-b.minX,b.maxY-b.minY)+1});
+    ctx.save();rounded(ctx,x,y,width,height,9);ctx.fillStyle='#101f1ce8';ctx.fill();ctx.strokeStyle='#a6b99b50';ctx.stroke();
+    ctx.save();rounded(ctx,x+6,y+6,width-12,height-12,5);ctx.clip();ctx.fillStyle='#657d7030';ctx.strokeStyle='#b2bc9d';ctx.lineWidth=1.2;
+    ctx.fillRect(mx(b.minX),my(b.minY),(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);ctx.strokeRect(mx(b.minX),my(b.minY),(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);
+    ctx.fillStyle='#bed0b1';ctx.font=`600 15px ${FONT}`;ctx.textAlign='center';ctx.fillText('N',cx,y+20);
+    for(const [index,marker]of markers.entries()){
+      const xx=mx(marker.x),yy=my(marker.y);ctx.save();ctx.translate(xx,yy);ctx.scale(1.5,1.5);this._drawMarker(ctx,marker,0,0);ctx.restore();
+      ctx.font=`600 14px ${FONT}`;ctx.textAlign=xx<x+width-40?'left':'right';ctx.fillStyle='#e4e9cd';ctx.fillText(String(index+1),xx+(xx<x+width-40?11:-11),yy-10);
+    }
+    const player={x:mx(p.x),y:my(p.y)};ctx.save();ctx.translate(player.x,player.y);ctx.rotate(game.player.facing||0);ctx.beginPath();ctx.moveTo(7,0);ctx.lineTo(-5,4);ctx.lineTo(-3,0);ctx.lineTo(-5,-4);ctx.closePath();ctx.strokeStyle='#142720';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#fff0c2';ctx.fill();ctx.restore();ctx.restore();ctx.restore();
+    return {markers,center:{x:cx,y:cy},worldCenter:center,player,scale};
+  }
+
   _drawMarker(ctx,marker,x,y) {
     ctx.save();ctx.translate(x,y);ctx.lineWidth=1.25;
-    const color=marker.kind==='victory'?'#f4dc91':marker.completed?'#6d8271':marker.type==='portal'?(marker.active?'#a7e3cd':'#c08b78'):marker.type==='angel'?'#eee4b7':'#cbb888';
+    const color=marker.kind==='victory'?'#f4dc91':marker.completed?'#6d8271':marker.type==='territory'?'#d59c86':marker.color|| (marker.type==='portal'?(marker.active?'#a7e3cd':'#c08b78'):marker.type==='angel'?'#eee4b7':'#cbb888');
     ctx.strokeStyle=color;ctx.fillStyle='#172b25';
-    if(marker.type==='exit') {
+    if(marker.type==='territory') {
+      ctx.beginPath();ctx.arc(0,0,5,0,TAU);ctx.fill();ctx.stroke();ctx.fillStyle=color;ctx.fillRect(-1.2,-1.2,2.4,2.4);
+    } else if(marker.type==='expedition') {
+      segment(ctx,-3,5,-3,-5);ctx.beginPath();ctx.moveTo(-3,-5);ctx.lineTo(5,-3);ctx.lineTo(-3,0);ctx.closePath();ctx.fillStyle=color;ctx.fill();
+    } else if(marker.type==='exit') {
       ctx.beginPath();ctx.moveTo(-4,4);ctx.lineTo(-4,-4);ctx.lineTo(3,-4);ctx.lineTo(3,4);ctx.stroke();segment(ctx,-1,0,6,0);segment(ctx,3,-2,6,0);segment(ctx,3,2,6,0);
     } else if(marker.type==='chest') {
       ctx.fillRect(-4,-2,8,6);ctx.strokeRect(-4,-2,8,6);segment(ctx,-4,0,4,0);segment(ctx,0,-1,0,2);

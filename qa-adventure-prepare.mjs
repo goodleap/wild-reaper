@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EXPEDITIONS } from './dist/expedition-definitions.js';
 import { STAGES } from './dist/stage-definitions.js';
 import { harness, html } from './qa-app-harness.mjs';
 
@@ -9,18 +10,22 @@ const click=(h,id)=>{node(h,id).focus();h.fire(node(h,id),'click');};
 const selected=(h,expression)=>JSON.parse(h.run(`JSON.stringify(${expression})`));
 const quiet=h=>h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
 const choose=(h,group,id)=>{
-  const ids=group==='stage'?STAGES.map(stage=>stage.id):group==='weapon'?['sword','orbit','arrow']:group==='mode'?['stage','free']:['normal','casual'];
+  const ids=group==='stage'?STAGES.map(stage=>stage.id):group==='weapon'?['sword','orbit','arrow']:group==='mode'?['world','dungeon']:group==='hero'?['traveler-v2','princess-v2','elder-v2']:EXPEDITIONS.map(item=>item.id);
   for(const value of ids)node(h,`${group}-${value}`).checked=value===id;
   h.fire(node(h,`${group}-${id}`),'change');
 };
 const key=(h,code,target=node(h,'game-canvas'))=>{const event={code,key:code,repeat:false,target,preventDefault(){this.defaultPrevented=true;}};h.listeners['window:keydown'](event);return event;};
 const equipment=h=>selected(h,'game.build.getWeaponLoadout().filter(item=>item.equipped).map(item=>({id:item.id,level:item.level}))');
 
+assert.deepEqual(EXPEDITIONS.map(item=>item.id),['survival','ship','moon']);
 assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/span>/);
 {
   const h=harness(),prepare=node(h,'prepare-screen');
   assert.equal(prepare.classList.contains('modal-layer'),false,'preparation is an independent full-screen view');
   assert.equal(prepare.getAttribute('aria-labelledby'),'prepare-title');
+  assert.equal(node(h,'debug-prepare-settings').tagName,'DETAILS');assert.equal(node(h,'debug-prepare-settings').hasAttribute('open'),false);
+  const sections=node(h,'prepare-body').querySelectorAll('fieldset').map(item=>item.id||item.className);
+  assert(sections.indexOf('stage-picker')<sections.indexOf('hero-picker')&&sections.indexOf('hero-picker')<sections.indexOf('weapon-picker'));
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0);
   click(h,'start-button');
   assert.equal(h.run('prepareOpen'),true);assert.equal(h.run('game'),null);
@@ -31,15 +36,15 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   for(let i=0;i<5;i++)h.tick();
   assert.equal(h.run('introDraws'),prepareDraws,'the preparation background retains its frame');
   assert.equal(h.run('clock'),prepareClock,'preparation does not keep the title scene animation running');
-  assert.equal(node(h,'stage-options').children.length,8);assert.equal(node(h,'weapon-options').children.length,3);
-  assert.equal(prepare.querySelectorAll('canvas[data-world-archive-art]').length,8);
+  assert.equal(node(h,'stage-options').children.length,STAGES.length+EXPEDITIONS.length);assert.equal(node(h,'weapon-options').children.length,3);
+  assert.equal(prepare.querySelectorAll('canvas[data-world-archive-art]').length,STAGES.length);
   assert.equal(prepare.querySelectorAll('canvas[data-archive-art]').length,3);
   assert(h.drawImages()>0,'real theme portrait helpers draw into the mocked canvas');
 
-  choose(h,'stage','snow-trial');choose(h,'difficulty','casual');choose(h,'weapon','arrow');
+  choose(h,'mode','dungeon');choose(h,'stage','snow-trial');choose(h,'weapon','arrow');
   const setup=JSON.parse(h.storage.get('wild-echoes-setup'));
-  assert.deepEqual(setup,{difficulty:'casual',mode:'stage',stageId:'snow-trial',weaponId:'arrow',heroId:'traveler',appearanceId:'traveler'});
-  assert.match(node(h,'prepare-summary').textContent,/雪原试炼.*帅气王子.*翠羽飞矢.*轻松漫游/);
+  assert.deepEqual(setup,{mode:'dungeon',dungeonId:null,stageId:'snow-trial',weaponId:'arrow',heroId:'traveler',appearanceId:'traveler-v2'});
+  assert.match(node(h,'prepare-summary').textContent,/雪原试炼.*帅气王子.*翠羽飞矢/);
   for(const id of ['prepare-archive-button','prepare-help-button']){
     click(h,id);assert.equal(h.run('prepareOpen'),true);key(h,'Escape');
     assert.equal(h.document.activeElement.id,id);assert.equal(h.run('prepareOpen'),true);
@@ -55,7 +60,7 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   click(h,'prepare-start-button');await h.flush();quiet(h);
   assert.equal(h.run('prepareOpen'),false);assert.equal(prepare.classList.contains('hidden'),true);
   assert.equal(h.run('game.initialWeaponId'),'arrow');assert.deepEqual(equipment(h),[{id:'arrow',level:1}]);
-  assert.equal(h.run('game.stage.id'),'snow-trial');assert.equal(h.run('game.difficulty'),'casual');
+  assert.equal(h.run('game.stage.id'),'snow-trial');assert.equal(h.run('game.difficulty'),'normal');
   assert.equal(h.run('archive.data.totals.runs'),1);assert.equal(h.run('!!archive.data.entries["weapon:arrow"]'),true);
   assert.equal(h.run('!!archive.data.entries["weapon:sword"]'),false,'previewing weapons does not unlock unchosen weapons');
 
@@ -72,9 +77,9 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
 // change event. Keyboard-focused cards are revealed without changing selection.
 {
   const h=harness(),rail=node(h,'stage-options');
-  rail.clientWidth=325;rail.scrollWidth=8*140;
+  rail.clientWidth=325;rail.scrollWidth=(STAGES.length+EXPEDITIONS.length)*140;
   rail.children.forEach((card,index)=>{card.offsetLeft=index*140;card.offsetWidth=128;});
-  click(h,'start-button');assert(node(h,'stage-prev-button').disabled);assert(!node(h,'stage-next-button').disabled);
+  click(h,'start-button');choose(h,'mode','dungeon');assert(node(h,'stage-prev-button').disabled);assert(!node(h,'stage-next-button').disabled);
   const before=h.run('selectedStageId');click(h,'stage-next-button');
   assert(rail.scrollLeft>0);assert.equal(h.run('selectedStageId'),before);assert(!node(h,'stage-prev-button').disabled);
   rail.scrollLeft=rail.scrollWidth-rail.clientWidth;h.fire(rail,'scroll');
@@ -90,8 +95,8 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
     h.resize(width,height);assert.equal(h.run('prepareOpen'),true);assert.equal(h.run('selectedStageId'),'volcano-trial');
     assert.equal(node(h,'prepare-start-button').disabled,false);assert.equal(h.run('game'),null);
   }
-  choose(h,'mode','free');assert(node(h,'stage-picker').classList.contains('hidden'));
-  choose(h,'mode','stage');assert.equal(node(h,'stage-volcano-trial').checked,true);
+  choose(h,'mode','world');assert(node(h,'stage-picker').classList.contains('hidden'));
+  choose(h,'mode','dungeon');assert.equal(node(h,'stage-volcano-trial').checked,true);
   choose(h,'weapon','orbit');click(h,'prepare-start-button');await h.flush();quiet(h);
   const canvas=node(h,'game-canvas');
   assert(h.fire(canvas,'touchstart').defaultPrevented,'only live gameplay canvas retains its scoped callout fallback');
@@ -113,4 +118,35 @@ for(const weaponId of ['sword','orbit','arrow']){
   click(h,'prepare-start-button');await h.flush();assert.equal(h.run('game.stage'),null);assert.deepEqual(equipment(h),[{id:weaponId,level:1}]);
   const loaded=harness('',{storage});click(loaded,'start-button');assert.equal(node(loaded,`weapon-${weaponId}`).checked,true);
 }
-console.log('Adventure preparation: real open/back/start/restart, no preview archive runs, remembered mode/theme/difficulty/starter, old save fallback, portrait reuse, horizontal browsing, radio Escape, short viewport state and live joystick passed (VM DOM / mocked Canvas).');
+console.log('Adventure preparation: real open/back/start/restart, no preview archive runs, remembered mode/destination/starter, old save fallback, portrait reuse, horizontal browsing, radio Escape, short viewport state and live joystick passed (VM DOM / mocked Canvas).');
+
+// Modes share character and starter choices. New destinations launch and
+// restart their actual runtime, while legacy difficulty is discarded.
+assert.doesNotMatch(html,/id="difficulty-(normal|casual)"|id="hero-preview-[^"]*"|动作预览/);
+for(const expedition of EXPEDITIONS){
+  const storage=new Map([['wild-echoes-setup',JSON.stringify({mode:'free',difficulty:'casual',heroId:'princess',appearanceId:'princess',weaponId:'orbit'})]]);
+  const h=harness('',{storage});click(h,'start-button');
+  assert.equal(node(h,'mode-world').checked,true);assert.equal(node(h,'prepare-start-label').textContent,'开始探索');
+  assert(node(h,'stage-picker').classList.contains('hidden'));assert(!node(h,'world-mode-note').classList.contains('hidden'));
+  choose(h,'mode','dungeon');choose(h,'dungeon',expedition.id);
+  const card=node(h,`dungeon-${expedition.id}`).parentElement.textContent;
+  for(const text of [expedition.name,expedition.objective,expedition.rewardLabel])assert(card.includes(text));
+  for(const id of node(h,`dungeon-${expedition.id}`).getAttribute('aria-describedby').split(' '))assert(node(h,id).textContent.length>0);
+  choose(h,'mode','world');choose(h,'mode','dungeon');
+  assert(node(h,`dungeon-${expedition.id}`).checked);assert(node(h,'hero-princess-v2').checked);assert(node(h,'weapon-orbit').checked);
+  assert.equal(node(h,'prepare-start-label').textContent,'进入副本');
+  click(h,'prepare-start-button');await h.flush();quiet(h);
+  assert.equal(h.run('game.mode'),'dungeon');assert.equal(h.run('game.dungeonId'),expedition.id);assert.equal(h.run('game.expedition.id'),expedition.id);
+  assert.equal(h.run('game.difficulty'),'normal');assert.equal(h.run('game.hero.id'),'princess');assert.equal(h.run('game.appearanceId'),'princess-v2');
+  assert.equal(Object.hasOwn(JSON.parse(storage.get('wild-echoes-setup')),'difficulty'),false);
+  h.run('game.status="dead"');h.tick();click(h,'restart-button');await h.flush();
+  assert.equal(h.run('game.dungeonId'),expedition.id);assert.equal(h.run('game.initialWeaponId'),'orbit');
+  const loaded=harness('',{storage});click(loaded,'start-button');assert(node(loaded,`dungeon-${expedition.id}`).checked);
+}
+console.log('Preparation modes: world default, all three expedition starts/restarts, shared hero/starter, semantic card copy, legacy appearance/difficulty migration and removed preview passed.');
+
+for(const dungeonId of ['missing',{},['moon']]){
+  const h=harness('',{storage:new Map([['wild-echoes-setup',JSON.stringify({mode:'dungeon',dungeonId,difficulty:'casual'})]])});
+  assert(node(h,'mode-dungeon').checked);assert(node(h,'dungeon-survival').checked);click(h,'start-button');click(h,'prepare-start-button');await h.flush();
+  assert.equal(h.run('game.dungeonId'),'survival');assert.equal(h.run('game.difficulty'),'normal');
+}
