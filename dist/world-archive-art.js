@@ -11,6 +11,9 @@ import { HumanoidArt } from './humanoid-art.js';
 import { PropArt } from './prop-art.js';
 import { SETTLEMENT_DEFINITIONS, RELIC_SITE_DEFINITIONS, RELIC_SITE_TYPES, WORLD_RELIC_DEFINITIONS } from './site-definitions.js';
 import { WORLD_SITE_FEATURES } from './world-sites.js';
+import { worldForId } from './world-definitions.js';
+import { createRiftLayout } from './worlds/rift-layout.js';
+import { drawRiftOverview } from './worlds/rift-art.js';
 
 const WIDTH=480,HEIGHT=300,CACHE_LIMIT=16;
 const OPTIONS=Object.freeze({time:0,reduced:true,pixelRatio:2});
@@ -26,6 +29,11 @@ function water(c,id,art,kind='water',x=151,y=106,rx=64,ry=30){
   art('water').draw(c,{x,y,rx,ry,kind,shape:'ellipse',seed:.23,angle:-.15},{...OPTIONS,region:id});
 }
 function worldPortrait(c,id,art){
+  if(worldForId(id).authored?.worldId===id){
+    const layout=createRiftLayout(id),b=layout.bounds,scale=Math.min(232/(b.maxX-b.minX),142/(b.maxY-b.minY));
+    c.save();c.translate(120,75);c.scale(scale,scale);c.translate(-(b.minX+b.maxX)/2,-(b.minY+b.maxY)/2);
+    drawRiftOverview(c,layout,{scale,labels:false,landmarks:true});c.restore();return;
+  }
   terrain(c,id,art);
   const tree=(x,y,variant,scale=.7)=>{
     const prop={type:'tree',x,y,variant,scale,treeForm:0,seed:.2};

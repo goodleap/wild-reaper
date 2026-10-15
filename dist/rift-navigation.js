@@ -3,41 +3,47 @@ import { riftPointInPolygon } from './rift-collision.js';
 // bounded grid search handles only the next ordinary walking leg.
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const same=(a,b)=>!!a&&!!b&&distance(a,b)<.01;
+function pointSegmentDistanceSq(p,a,b){const dx=b.x-a.x,dy=b.y-a.y,length=dx*dx+dy*dy,t=length?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/length)):0;return (p.x-a.x-dx*t)**2+(p.y-a.y-dy*t)**2;}
+function segmentDistanceSq(a,b,c,d){
+  const ux=b.x-a.x,uy=b.y-a.y,vx=d.x-c.x,vy=d.y-c.y,den=ux*vy-uy*vx;
+  if(Math.abs(den)>1e-10){const t=((c.x-a.x)*vy-(c.y-a.y)*vx)/den,s=((c.x-a.x)*uy-(c.y-a.y)*ux)/den;if(t>=0&&t<=1&&s>=0&&s<=1)return 0;}
+  return Math.min(pointSegmentDistanceSq(a,c,d),pointSegmentDistanceSq(b,c,d),pointSegmentDistanceSq(c,a,b),pointSegmentDistanceSq(d,a,b));
+}
 export class RiftNavigation{
   constructor(terrain){
-    this.terrain=terrain;this.layout=terrain.island.layout;this.nodes=[];this.links=new Map();this.groups=[];this.edgeCache=new Map();
+    this.terrain=terrain;this.layout=terrain.island.layout;this.gates=this.layout.passages.filter(p=>p.gateId);this.nodes=[];this.links=new Map();this.groups=[];this.edgeCache=new Map();
     const add=(id,point)=>{const node={id,x:point.x,y:point.y};this.nodes.push(node);this.links.set(id,[]);return node;};
     this.areas=new Map(this.layout.areas.map(area=>[area.id,add(`area:${area.id}`,area.center)]));
-    const link=(a,b,gateId)=>{if(a.id===b.id)return;const cost=distance(a,b);this.links.get(a.id).push({node:b,cost,gateId});this.links.get(b.id).push({node:a,cost,gateId});};
+    const link=(a,b)=>{if(a.id===b.id)return;const cost=distance(a,b);this.links.get(a.id).push({node:b,cost});this.links.get(b.id).push({node:a,cost});};
     for(const passage of this.layout.passages){
       const group={points:passage.points,nodes:[]};this.groups.push(group);
       const points=passage.waypoints||[],from=this.areas.get(passage.from),to=this.areas.get(passage.to)??add(`${passage.id}:end`,points.at(-1));let previous=from;group.nodes.push(from,to);
       for(const [i,point] of points.entries()){
         const next=same(point,from)?from:same(point,to)?to:add(`${passage.id}:${i}`,point);
-        group.nodes.push(next);link(previous,next,passage.gateId);previous=next;
+        group.nodes.push(next);link(previous,next);previous=next;
       }
-      link(previous,to,passage.gateId);
+      link(previous,to);
     }
     for(const area of this.layout.areas)this.groups.push({points:area.points,nodes:this.nodes.filter(node=>riftPointInPolygon(node,area.points))});
   }
   nearby(point){const nodes=new Set();for(const group of this.groups)if(riftPointInPolygon(point,group.points))for(const node of group.nodes)nodes.add(node);return nodes.size?nodes:new Set([...this.nodes].sort((a,b)=>distance(point,a)-distance(point,b)).slice(0,16));}
   edgeClear(a,b,r,profile){
-    const key=`${profile}:${Math.ceil(r)}:${a.id}:${b.id}`;if(this.edgeCache.has(key))return this.edgeCache.get(key);
-    const clear=!this.terrain.rift.firstBlocker(a.x,a.y,b.x,b.y,Math.ceil(r),profile);this.edgeCache.set(key,clear);if(this.edgeCache.size>3000)this.edgeCache.delete(this.edgeCache.keys().next().value);return clear;
+    const radius=Math.ceil(r),key=`${profile}:${radius}:${a.id}:${b.id}`;
+    if(!this.edgeCache.has(key)){this.edgeCache.set(key,!this.terrain.rift.firstBlocker(a.x,a.y,b.x,b.y,radius,profile));if(this.edgeCache.size>3000)this.edgeCache.delete(this.edgeCache.keys().next().value);}
+    // Only immutable outlines are cached. A door constrains the legs that
+    // physically touch it, including rounded endcaps, in its current state.
+    return this.edgeCache.get(key)&&this.gatesClear(a,b,radius,profile);
   }
-  clear(a,b,r,profile){
-    if(this.terrain.rift.firstBlocker(a.x,a.y,b.x,b.y,r,profile))return false;
-    for(const passage of this.layout.passages){
-      if(!passage.gateId||this.terrain.riftGateOpen(passage.gateId))continue;
-      const gate=passage.gate,dx=gate.bx-gate.ax,dy=gate.by-gate.ay,den=(b.x-a.x)*dy-(b.y-a.y)*dx;
-      if(Math.abs(den)>1e-9){const t=((gate.ax-a.x)*dy-(gate.ay-a.y)*dx)/den,s=((gate.ax-a.x)*(b.y-a.y)-(gate.ay-a.y)*(b.x-a.x))/den;if(t>=0&&t<=1&&s>=0&&s<=1)return false;}
-      // Actual full-body gate clearance is checked by the local planner. The
-      // graph also rejects short legs lying alongside the closed crossbar.
-      const p=this.terrain._structures.find(p=>p.id===`rift-gate:${passage.gateId}`);
-      if(p&&[a,b].some(q=>{const near=this.terrain.closestPoint(p,q.x,q.y);return Math.hypot(near.x-q.x,near.y-q.y)<r+p.r;}))return false;
+  gatesClear(a,b,r,profile){
+    if(profile==='overhead')return true;
+    for(const passage of this.gates){
+      if(this.terrain.riftGateOpen(passage.gateId))continue;
+      const gate=passage.gate;
+      if(segmentDistanceSq(a,b,{x:gate.ax,y:gate.ay},{x:gate.bx,y:gate.by})<(r+(gate.r??16))**2)return false;
     }
     return true;
   }
+  clear(a,b,r,profile){return !this.terrain.rift.firstBlocker(a.x,a.y,b.x,b.y,r,profile)&&this.gatesClear(a,b,r,profile);}
   route(start,target,r,profile){
     if(this.clear(start,target,r,profile))return [target];
     const frontier=[],costs=new Map(),parents=new Map(),targetLinks=new Map();
@@ -50,7 +56,7 @@ export class RiftNavigation{
       frontier.sort((a,b)=>b.cost-a.cost);const current=frontier.pop();if(current.cost!==costs.get(current.node.id)||current.cost>=bestCost)continue;
       const final=targetLinks.get(current.node.id);if(final!==undefined&&current.cost+final<bestCost){best=current.node;bestCost=current.cost+final;}
       for(const edge of this.links.get(current.node.id)){
-        if(edge.gateId&&!this.terrain.riftGateOpen(edge.gateId)||!this.edgeClear(current.node,edge.node,r,profile))continue;
+        if(!this.edgeClear(current.node,edge.node,r,profile))continue;
         const cost=current.cost+edge.cost;if(cost>=(costs.get(edge.node.id)??Infinity))continue;
         costs.set(edge.node.id,cost);parents.set(edge.node.id,current.node);frontier.push({node:edge.node,cost});
       }

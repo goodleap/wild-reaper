@@ -154,4 +154,4 @@ for(const region of WORLD_IDS)for(const seed of [0,7,17]){
   reports.push({region,seed,goals:goals.length,territories:game.territories.groups.length,...reachability,mainSweeps});
 }
 assert.equal(networks.size,WORLD_IDS.length,'worlds have their own route geometry');
-console.log(JSON.stringify({worldLayout:'passed',worlds:8,seeds:[0,7,17],bodyRadii:[15,22,49],lakeChecks,reports}));
+console.log(JSON.stringify({worldLayout:'passed',worlds:WORLD_IDS.length,seeds:[0,7,17],bodyRadii:[15,22,49],lakeChecks,reports}));

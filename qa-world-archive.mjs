@@ -12,7 +12,7 @@ assert.deepEqual(WORLD_ARCHIVE_WORLDS.map(({id,name})=>({id,name})),REGIONS.map(
 const byId=new Map(WORLD_ARCHIVE_LOCATIONS.map(item=>[item.id,item]));
 assert.equal(byId.size,WORLD_ARCHIVE_LOCATIONS.length,'stable unique location IDs');
 for(const id of ['castle','hunt','rescue','owlroost','golemaltar','rune','stonevault','occupied','supply','merchant','angel','dogcamp','shipwreck','belltower','mine','icealtar','furnace'])assert.ok(byId.has(id),`${id} documented`);
-assert.equal(WORLD_ARCHIVE_WORLDS.length,8);
+assert.equal(WORLD_ARCHIVE_WORLDS.length,9);
 for(const world of WORLD_ARCHIVE_WORLDS)for(const key of ['theme','risk','tip'])assert.ok(world[key]?.length>0,`${world.id} has actual gameplay reference`);
 assert.ok(byId.get('rune').feature.includes(`${REGIONAL_MECHANISM_RULES.runeDuration} 秒`));
 assert.ok(byId.get('dogcamp').trigger.includes(`${ARMY_SITE_RULES.dogCost} 金币`));
@@ -43,7 +43,10 @@ assert.equal(allArtKeys.size,WORLD_ARCHIVE_WORLDS.length+WORLD_ARCHIVE_LOCATIONS
 assert.equal(worldArchiveSelection({category:'unknown',selectedId:'stonevault'}).selected.id,'forest');
 assert.equal(worldArchiveSelection({category:'relics',selectedId:'forest'}).selected.id,'castle');
 assert.match(archivePanelHTML({}, {tab:'world',worldCategory:'relics',worldSelectedId:'stonevault'}),/进入宝库获得/);
-assert.match(worldArchiveHTML(),/关卡模式：[\s\S]*往返[\s\S]*自由探索：[\s\S]*跨世界通道/,'the guide distinguishes trial travel from world connections');
+assert.match(worldArchiveHTML({selectedId:'marsh'}),/关卡模式：[\s\S]*往返[\s\S]*自由探索：[\s\S]*跨世界通道/,'the guide distinguishes trial travel from guarded world connections');
+assert.match(worldArchiveHTML({selectedId:'forest'}),/自然山口和长桥[\s\S]*无需击败驻门首领/,'the original authored map describes natural travel');
+assert.match(worldArchiveHTML({selectedId:'verdant-rift'}),/世界选择[\s\S]*独立地图[\s\S]*没有跨世界出口/,'the new authored map describes its actual independent entry');
+assert(!worldArchiveHTML({selectedId:'verdant-rift'}).match(/archive-small-note[^>]*>[^<]*击败驻门首领/),'the new world does not promise guardian-locked exits');
 assert.match(worldArchiveHTML(),/具体位置留待每局冒险中探索/);
 
 // Exercise every portrait through the real gameplay painters. The canvas fake
@@ -53,17 +56,23 @@ const imageDraws=[];
 const contexts=[];
 function context(){
   const stack=[],state={globalAlpha:1,lineWidth:1};
+  let paints=0;
   const ctx=new Proxy(state,{get(object,key){
     if(key in object)return object[key];
     if(key==='save')return()=>stack.push({...object});
     if(key==='restore')return()=>{assert(stack.length,'balanced canvas state');Object.assign(object,stack.pop());};
     if(key==='createLinearGradient'||key==='createRadialGradient')return()=>({addColorStop(){}});
-    return (...args)=>{for(const value of args)if(typeof value==='number')assert(Number.isFinite(value),`${String(key)} argument must be finite`);if(key==='drawImage'){draws++;imageDraws.push(args);}};
+    return (...args)=>{for(const value of args)if(typeof value==='number')assert(Number.isFinite(value),`${String(key)} argument must be finite`);if(['fill','fillRect','stroke','drawImage'].includes(key))paints++;if(key==='drawImage'){draws++;imageDraws.push(args);}};
   }});
-  contexts.push({stack,state});return ctx;
+  contexts.push({stack,state,ctx,paints:()=>paints});return ctx;
 }
 const makeCanvas=()=>{const ctx=context();return {width:480,height:300,getContext:()=>ctx};};
 const art=new WorldArchiveArt(makeCanvas);
+const verdantCanvas=Object.assign(makeCanvas(),{dataset:{worldArchiveArt:'world:verdant-rift'}});
+art.draw({querySelectorAll:()=>[verdantCanvas]});
+const verdantPortrait=art.cache.get('world:verdant-rift'),portraitContext=contexts.find(record=>record.ctx===verdantPortrait.getContext('2d'));
+assert(portraitContext.paints()>30,'the new world portrait paints its actual layout rather than an empty fallback');
+const built=art.cacheStats.builds;art.draw({querySelectorAll:()=>[verdantCanvas]});assert.equal(art.cacheStats.builds,built,'the authored map portrait is cached');
 for(const category of WORLD_ARCHIVE_CATEGORIES){
   const html=worldArchiveHTML({category:category.id});
   const canvases=[...html.matchAll(/data-world-archive-art="([^"]+)"/g)].map(([,key])=>Object.assign(makeCanvas(),{dataset:{worldArchiveArt:key}}));
@@ -82,4 +91,4 @@ for(const {stack} of contexts)assert.equal(stack.length,0,'all painter transform
 const css=fs.readFileSync(new URL('./dist/archive.css',import.meta.url),'utf8');
 assert.match(css,/world-archive-grid\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
 assert.match(css,/world-archive-detail:focus-visible/);
-console.log('World codex checked: 8 worlds/17 locations, isolated category/selection, unchanged guide access, gameplay art, bounded warm cache and finite geometry.');
+console.log('World codex checked: 9 worlds/17 locations, natural/standalone travel descriptions, nonempty authored portrait, isolated guide selection, bounded warm cache and finite geometry.');
