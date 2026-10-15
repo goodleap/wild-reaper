@@ -3,9 +3,17 @@ import { RiftCollision } from '../rift-collision.js';
 // The authored valley uses the same polygons for art, collision and maps.
 // Detailed floor and deep forest are rasterized only in visible, bounded tiles.
 // The complete trees and shrubs at the forest edge use the world depth queue.
-export const RIFT_PALETTE=Object.freeze({ground:'#f3e4b9',groundShade:'#dfd2a9',grass:'#b4ca88',grassLight:'#c7d79e',forest:'#244337',forestDark:'#172f29',forestLight:'#335647',cliff:'#68615a',cliffLight:'#91877b',cliffDark:'#454540',water:'#226a96',waterDeep:'#1d5982',waterEdge:'#438eb4',bridge:'#bb894c',bridgeLight:'#e2b879',bridgeDark:'#644b32'});
+export const RIFT_PALETTE=Object.freeze({ground:'#f3e4b9',groundShade:'#dfd2a9',grass:'#b4ca88',grassLight:'#c7d79e',forest:'#2c4e3d',forestDark:'#1d3a2e',forestLight:'#426750',cliff:'#68615a',cliffLight:'#91877b',cliffDark:'#454540',water:'#226a96',waterDeep:'#1d5982',waterEdge:'#438eb4',bridge:'#bb894c',bridgeLight:'#e2b879',bridgeDark:'#644b32'});
 const TAU=Math.PI*2,TILE=384,BLEED=2,PIXEL_LIMIT=6*1024*1024,FONT='"PingFang SC",system-ui,sans-serif';
 const preparedLayouts=new WeakMap();
+const ROCK_KINDS=new Set(['quarry','ravine','pass','ruins','fortress']);
+function rockyArea(layout,area){
+  if(area?.material==='rock')return true;if(area?.material==='forest')return false;
+  // Preserve the original world's hand-picked geology while new worlds use
+  // their region material/kind rather than a coincidental numeric area ID.
+  if(layout.id==='rift-forest:1')return area?.id==='09'||area?.kind!=='ravine'&&ROCK_KINDS.has(area?.kind);
+  return ROCK_KINDS.has(area?.kind);
+}
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const point=p=>Array.isArray(p)?{x:p[0],y:p[1]}:p;
 function trace(c,points,begin=true){if(begin)c.beginPath();for(let i=0;i<points.length;i++){const p=point(points[i]);c[i?'lineTo':'moveTo'](p.x,p.y);}c.closePath();}
@@ -20,7 +28,7 @@ function prepared(layout){let data=preparedLayouts.get(layout);if(data)return da
       for(let d=carry;d<length;d+=29){const x=a.x+dx*d/length,y=a.y+dy*d/length,n=hash(x+12,y-7),nx=-dy/length,ny=dx/length,side=data.collision.high.inside(x+nx*3,y+ny*3)?-1:1,px=x+nx*side*(8+n*8),py=y+ny*side*(8+n*8);
         if(data.collision.high.inside(px,py)||data.bridges.some(p=>overlaps(p.bounds,{minX:px,minY:py,maxX:px,maxY:py},65)))continue;
         let nearest=null,best=Infinity;for(const area of layout.areas){const d=(area.center.x-x)**2+(area.center.y-y)**2;if(d<best){best=d;nearest=area;}}
-        data.undergrowth.push({x:px,y:py,n,stone:['quarry','ravine','pass'].includes(nearest?.kind)});
+        data.undergrowth.push({x:px,y:py,n,stone:nearest?.material==='rock'||nearest?.material!=='forest'&&['quarry','ravine','pass'].includes(nearest?.kind)});
       }carry=(carry-length)%29;if(carry<0)carry+=29;
     }
   }
@@ -70,20 +78,20 @@ function base(c,layout,{viewBounds,overview=false}={}){
 // Anchors are evaluated against the same indexed mask as movement. Near-edge
 // scenery is reserved for the depth-sorted props; far crowns are cheap stamps.
 function blockedScenery(c,layout,view,scenery){
-  const data=prepared(layout),mask=data.collision.high,rocky=new Set(['03','06','09','11','13','14','17']);
+  const data=prepared(layout),mask=data.collision.high;
   for(let gy=Math.floor((view.minY-150)/62);gy<=Math.floor((view.maxY+150)/62);gy++)for(let gx=Math.floor((view.minX-150)/71);gx<=Math.floor((view.maxX+150)/71);gx++){
     const n=hash(gx+13,gy+11),m=hash(gy-33,gx+4),x=(gx+.15+n*.7)*71,y=(gy+.1+m*.8)*62;
     if(mask.inside(x,y))continue;const edge=mask.nearest(x,y,100),distance=edge?.distance??Infinity;if(distance<52)continue;
     let nearest=null,best=Infinity;for(const area of layout.areas){const d=(area.center.x-x)**2+(area.center.y-y)**2;if(d<best){best=d;nearest=area;}}
-    const stony=rocky.has(nearest?.id),seed=gx*37+gy*59;
-    if(stony&&n<.81){scenery.drawRock(c,{x,y:y+16,r:36+n*24,rockForm:[0,1,2,4][Math.floor(m*4)],riftPalette:true});if(n>.55)scenery.drawShrub(c,{x:x-18,y:y+27,scale:.55+n*.22,seed});}
+    const stony=rockyArea(layout,nearest),seed=gx*37+gy*59;
+    if(stony&&n<.81){scenery.drawRock(c,{x,y:y+16,r:36+n*24,rockForm:[0,1,2,4][Math.floor(m*4)],riftPalette:true});if(n>.55)scenery.drawShrub(c,{x:x-18,y:y+27,scale:.55+n*.22,seed,riftPalette:true});}
     else scenery.drawCanopy(c,{x,y,scale:.81+n*.35,treeForm:Math.floor(m*5),riftPalette:true});
   }
 }
 function undergrowth(c,layout,view,scenery){
   for(const {x,y,n,stone}of prepared(layout).undergrowth){if(x<view.minX-65||x>view.maxX+65||y<view.minY-25||y>view.maxY+65)continue;
     if(stone&&n<.7)scenery.drawRock(c,{x,y,r:9+n*10,rockForm:n<.36?3:1,riftPalette:true});
-    else scenery.drawShrub(c,{x,y,scale:.34+n*.24,seed:x*.13+y*.37});
+    else scenery.drawShrub(c,{x,y,scale:.34+n*.24,seed:x*.13+y*.37,riftPalette:true});
   }
 }
 function shoreDetails(c,layout,view){

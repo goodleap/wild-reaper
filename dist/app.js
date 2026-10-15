@@ -165,9 +165,15 @@ let portalRequested=false,superChoiceKey='',lastSupers='',shopKey='';
 let prepareOpen=false,prepareArtReady=false,startLoading=false,activeStartPromise=null;
 const sceneLoadingView=createLoadingView(document,{setTimer:setTimeout,clearTimer:clearTimeout});
 const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer:setTimeout});
-let selectedMode='world',selectedDungeonId='survival',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
+const explorableWorlds=Object.freeze([
+  Object.freeze({id:'forest',name:'裂谷林海',radioId:'world-rift-forest',previewId:'world-preview',description:'从南岸营地出发，探索 18 片相连区域。沿桥梁和山口寻找通路，发现隐秘洞穴与荒野领主。'}),
+  Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'})
+]);
+const explorationWorld=id=>explorableWorlds.find(world=>world.id===id)||explorableWorlds[0];
+let selectedMode='world',selectedWorldId='forest',selectedDungeonId='survival',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
 try{
   const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));
+  selectedWorldId=explorationWorld(saved?.worldId).id;
   if(saved?.mode==='dungeon'||saved?.mode==='stage')selectedMode='dungeon';
   if(getStageDefinition(saved?.stageId))selectedStageId=saved.stageId;
   if(getExpeditionDefinition(saved?.dungeonId))selectedDungeonId=saved.dungeonId;
@@ -242,7 +248,7 @@ function refreshArchiveEntry(){
   $('archive-entry-note').textContent='图鉴 · 记录 · 里程碑';
 }
 syncSound();refreshArchiveEntry();
-function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({mode:selectedMode,dungeonId:selectedDungeonId,stageId:selectedStageId,heroId:selectedHeroId,appearanceId:selectedAppearanceId,weaponId:selectedWeaponId}));}catch{}}
+function saveSetup(){try{localStorage.setItem('wild-echoes-setup',JSON.stringify({mode:selectedMode,worldId:selectedWorldId,dungeonId:selectedDungeonId,stageId:selectedStageId,heroId:selectedHeroId,appearanceId:selectedAppearanceId,weaponId:selectedWeaponId}));}catch{}}
 if(debugMode){
   show('debug-prepare-settings');
   for(const option of DEBUG_OPTION_DEFS){
@@ -296,7 +302,7 @@ for(const weapon of initialWeapons){
 }
 function refreshPreparationSummary(){
   const destination=getExpeditionDefinition(selectedDungeonId)||getStageDefinition(selectedStageId)||STAGES[0],hero=getHeroAppearance(selectedHeroId,selectedAppearanceId),weapon=initialWeapons.find(item=>item.ownerId===selectedWeaponId);
-  $('prepare-summary').textContent=`${selectedMode==='dungeon'?destination.name:'裂谷林海'} · ${hero.name} · ${weapon.name}`;
+  $('prepare-summary').textContent=`${selectedMode==='dungeon'?destination.name:explorationWorld(selectedWorldId).name} · ${hero.name} · ${weapon.name}`;
   $('prepare-start-label').textContent=selectedMode==='dungeon'?'进入副本':'开始探索';
 }
 function refreshHeroSetup(){
@@ -316,13 +322,26 @@ function drawHeroChoices(){
   }
 }
 function drawWorldPreview(){
-  const portrait=$('world-preview'),context=portrait.getContext('2d'),layout=createRiftLayout();
-  portrait.width=800;portrait.height=600;
-  const {minX,minY,maxX,maxY}=layout.bounds,scale=Math.min(portrait.width/(maxX-minX),portrait.height/(maxY-minY))*.96;
-  context.clearRect(0,0,portrait.width,portrait.height);context.fillStyle='#203c34';context.fillRect(0,0,portrait.width,portrait.height);
-  context.save();context.translate(portrait.width/2,portrait.height/2);context.scale(scale,scale);context.translate(-(minX+maxX)/2,-(minY+maxY)/2);
-  // Keep landmark symbols legible when the high-resolution card is reduced.
-  drawRiftOverview(context,layout,{scale:scale/2,labels:false,landmarks:true});context.restore();
+  for(const world of explorableWorlds){
+    const portrait=$(world.previewId),context=portrait.getContext('2d'),layout=createRiftLayout(world.id);
+    portrait.width=800;portrait.height=600;
+    const {minX,minY,maxX,maxY}=layout.bounds,scale=Math.min(portrait.width/(maxX-minX),portrait.height/(maxY-minY))*.96;
+    context.clearRect(0,0,portrait.width,portrait.height);context.fillStyle='#203c34';context.fillRect(0,0,portrait.width,portrait.height);
+    context.save();context.translate(portrait.width/2,portrait.height/2);context.scale(scale,scale);context.translate(-(minX+maxX)/2,-(minY+maxY)/2);
+    // Keep landmark symbols legible when the high-resolution card is reduced.
+    drawRiftOverview(context,layout,{scale:scale/2,labels:false,landmarks:true});context.restore();
+  }
+}
+function refreshWorldSetup(){
+  const world=explorationWorld(selectedWorldId);selectedWorldId=world.id;
+  for(const option of explorableWorlds)$(option.radioId).checked=option.id===world.id;
+  $('world-count').textContent=`${explorableWorlds.length} 张地图`;
+  $('world-description').textContent=world.description;refreshPreparationSummary();
+}
+function revealWorld(id=selectedWorldId){
+  const rail=$('world-options'),card=$(explorationWorld(id).radioId).parentElement;if(!prepareOpen||selectedMode!=='world'||!rail.clientWidth)return;
+  if(card.offsetLeft<rail.scrollLeft)rail.scrollLeft=Math.max(0,card.offsetLeft-3);
+  else if(card.offsetLeft+card.offsetWidth>rail.scrollLeft+rail.clientWidth)rail.scrollLeft=card.offsetLeft+card.offsetWidth-rail.clientWidth+3;
 }
 function revealHeroChoice(id=selectedAppearanceId){
   const rail=$('hero-options'),card=heroRadios.get(id)?.parentElement;if(!prepareOpen||!card||!rail.clientWidth)return;
@@ -360,16 +379,17 @@ for(const [id,direction] of [['stage-prev-button',-1],['stage-next-button',1]])$
 };
 $('stage-options').addEventListener('scroll',updateStageScroll,{passive:true});
 new ResizeObserver(()=>{if(prepareOpen)updateStageScroll();}).observe($('stage-options'));
-for(const mode of ['world','dungeon']){const radio=$(`mode-${mode}`);radio.checked=mode===selectedMode;radio.addEventListener('change',()=>{if(radio.checked){selectedMode=mode;saveSetup();refreshStageSetup();if(prepareOpen){revealSelectedStage();updateStageScroll();}}});}
-refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
+for(const mode of ['world','dungeon']){const radio=$(`mode-${mode}`);radio.checked=mode===selectedMode;radio.addEventListener('change',()=>{if(radio.checked){selectedMode=mode;saveSetup();refreshStageSetup();if(prepareOpen){revealSelectedStage();revealWorld();updateStageScroll();}}});}
+for(const world of explorableWorlds){const radio=$(world.radioId);radio.addEventListener('change',()=>{if(radio.checked){selectedWorldId=world.id;saveSetup();refreshWorldSetup();revealWorld();}});radio.addEventListener('focus',()=>revealWorld(world.id));}
+refreshStageSetup();refreshWorldSetup();refreshHeroSetup();refreshWeaponSetup();
 function openPrepare(){
   if(startLoading||game||helpOpen||archiveOpen||prepareOpen)return;
   prepareOpen=true;clearInput();show('intro',false);show('prepare-screen');arena.classList.add('preparing');
-  refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
+  refreshStageSetup();refreshWorldSetup();refreshHeroSetup();refreshWeaponSetup();
   // Reuse the static archive portraits once. No world simulation or animation
   // runs in these cards, and later visits reuse their canvas pixels.
   if(!prepareArtReady){drawArchiveArt($('prepare-screen'));drawHeroChoices();drawWorldPreview();for(const [id,portrait] of dungeonPortraits)drawExpeditionPreview(portrait.getContext('2d'),id,portrait.width,portrait.height);prepareArtReady=true;}
-  revealSelectedStage();revealHeroChoice();updateStageScroll();$('prepare-back-button').focus({preventScroll:true});
+  revealSelectedStage();revealWorld();revealHeroChoice();updateStageScroll();$('prepare-back-button').focus({preventScroll:true});
 }
 function closePrepare(){
   if(startLoading||!prepareOpen||helpOpen||archiveOpen)return;
@@ -386,7 +406,7 @@ function startGame(){
   sceneLoadingView.start('scene',{stage:'正在创建冒险'});$('scene-loading-label').focus({preventScroll:true});
   arena.setAttribute('aria-busy','true');
   saveSetup();
-  const options={hero:selectedHeroId,appearanceId:selectedAppearanceId,difficulty:'normal',mode:selectedMode,dungeonId:selectedMode==='dungeon'?selectedDungeonId:null,initialWeaponId:selectedWeaponId,stageId:selectedMode==='dungeon'&&!selectedDungeonId?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
+  const options={hero:selectedHeroId,appearanceId:selectedAppearanceId,difficulty:'normal',mode:selectedMode,worldId:selectedMode==='world'?selectedWorldId:null,dungeonId:selectedMode==='dungeon'?selectedDungeonId:null,initialWeaponId:selectedWeaponId,stageId:selectedMode==='dungeon'&&!selectedDungeonId?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
   // Unlock audio in the originating click, before yielding to the loading view.
   initAudio();
   let committed=false;
@@ -428,9 +448,10 @@ function restartGame(){
   if(startLoading)return activeStartPromise;
   if(game){
     selectedMode=game.mode==='dungeon'?'dungeon':'world';if(selectedMode==='dungeon')selectedDungeonId=game.dungeonId||null;selectedHeroId=game.hero.id;selectedAppearanceId=getHeroAppearance(selectedHeroId,game.appearanceId).id;selectedWeaponId=game.initialWeaponId;
+    if(selectedMode==='world')selectedWorldId=explorationWorld(game.startWorldId).id;
     if(game.stage)selectedStageId=game.stage.id;
     for(const mode of ['world','dungeon'])$(`mode-${mode}`).checked=mode===selectedMode;
-    refreshStageSetup();refreshHeroSetup();refreshWeaponSetup();
+    refreshStageSetup();refreshWorldSetup();refreshHeroSetup();refreshWeaponSetup();
   }
   return startGame();
 }

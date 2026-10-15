@@ -22,12 +22,12 @@ export class Island {
     this.region=WORLD_IDS.includes(theme)?theme:'forest';this.seed=Number.isFinite(definition?.seed)?Math.trunc(definition.seed):Number.isFinite(seed)?Math.trunc(seed):0;
     this.mapId=definition?.id??this.region;this.role=definition?.role??'world';
     this.worldId=WORLD_IDS.indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.beachWidth=regionFor(this.worldId).coast.beachWidth??COAST_RULES.beachWidth;this.routeRadius=80;
-    if(!definition&&this.region==='forest'&&this.role==='world'){
-      this.layout=createRiftLayout();this.bounds=this.layout.bounds;this.spawn=this.layout.spawn;this.plan=this.layout.plan;this.routes=this.layout.routes;
-      this.profile=Object.freeze({x:3600,y:2700,phase:0,bays:0});this.shallowWidth=0;this.beachWidth=0;
+    if(!definition&&regionFor(this.worldId).authored?.kind==='rift-forest'&&this.role==='world'){
+      this.layout=createRiftLayout(this.region);this.bounds=this.layout.bounds;this.spawn=this.layout.spawn;this.plan=this.layout.plan;this.routes=this.layout.routes;
+      this.profile=Object.freeze({x:(this.bounds.maxX-this.bounds.minX)/2,y:(this.bounds.maxY-this.bounds.minY)/2,phase:0,bays:0});this.shallowWidth=0;this.beachWidth=0;
       const b=this.bounds;this.points=Object.freeze([{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}].map(Object.freeze));
       this._edges=this.points.map((a,i)=>{const b=this.points[(i+1)%4],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);return {a,b,nx:-dy/len,ny:dx/len};});
-      this._innerRadius=2700;this._contours=new Map([[0,this.points]]);return;
+      this._innerRadius=Math.max(0,Math.min(-b.minX,b.maxX,-b.minY,b.maxY));this._contours=new Map([[0,this.points]]);return;
     }
     const profile={...regionFor(this.worldId).profile,...(this.role==='boss'?{x:1080,y:1080,bays:.025}:{}),...definition?.profile};
     if(![profile.x,profile.y,profile.phase,profile.bays].every(Number.isFinite)||profile.x<=0||profile.y<=0)throw new Error(`Invalid island profile: ${this.mapId}`);

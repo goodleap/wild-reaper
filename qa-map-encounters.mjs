@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
-import { WORLD_IDS } from './dist/world-definitions.js';
+import { WORLD_IDS, worldNeighbors } from './dist/world-definitions.js';
 import { groundOffset } from './dist/terrain.js';
 import { getWaterContours, waterBounds } from './dist/water-geometry.js';
 import { MonsterTerritories } from './dist/monster-territories.js';
@@ -46,8 +46,14 @@ for(const region of WORLD_IDS){
   assert(g.adventure.hitSupply(crate,crate.hp));
   place(g,{x:0,y:0});g.adventure._refreshSupplies(true);place(g,secret);g.adventure._refreshSupplies(true);
   assert(!g.adventure.props.some(p=>p.id===crate.id),'returning never regenerates a consumed supply');
-  const origin=g.regionIndex,out=g.regions.portals[0];assert(out);assert(g._switchRegion(out));
-  assert(g._switchRegion(g.regions.portals.find(p=>p.nextRegionIndex===origin)));
+  const origin=g.regionIndex,out=g.regions.portals[0];
+  if(worldNeighbors(origin).length){
+    assert(out,'connected worlds retain a physical exit');assert(g._switchRegion(out));
+    assert(g._switchRegion(g.regions.portals.find(p=>p.nextRegionIndex===origin)));
+  }else{
+    assert.equal(g.regions.portals.length,0,'a separately selected map does not invent a cross-world exit');
+    g.regions.saveWorld();assert(g.regions.restoreWorld(origin),'standalone map snapshots retain completed encounters');
+  }
   assert.equal(g.territories.byId.get(group.id),group);assert(group.rewardClaimed);
   assert(bosses.every(field=>field.rewardClaimed&&!g.enemies.some(e=>field.memberIds.includes(e.id))),'all defeated field bosses retain their claimed reward after world travel');
   let shores=0;

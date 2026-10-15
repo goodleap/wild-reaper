@@ -67,7 +67,7 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,stageId=null,mode=null,dungeonId=null}={}) {
+  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='forest',stageId=null,mode=null,dungeonId=null}={}) {
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
     this.debugOptions=normalizeDebugOptions(debugOptions,this.debug);
@@ -78,9 +78,11 @@ export class Game {
     if(mode==='world'||mode==='dungeon')difficulty='normal';
     this.stage=stageId&&!dungeonId?new StageRun(this,stageId):null;
     this.expedition=dungeonId?new ExpeditionRun(this,dungeonId):null;
-    this.regionIndex=this.stage?.currentIsland.themeIndex??(this.debug?Math.max(0,REGIONS.findIndex(region=>region.id===debugWorld)):0);
+    const selectedWorld=this.debug&&debugWorld?debugWorld:worldId;
+    this.regionIndex=this.stage?.currentIsland.themeIndex??(this.mode==='world'?Math.max(0,REGIONS.findIndex(region=>region.id===selectedWorld)):0);
     this.mapId=this.stage?.currentMapId??this.regionIndex;
     this.region=regionFor(this.regionIndex);
+    this.worldId=this.region.id;this.startWorldId=this.worldId;
     const seed=this.stage?.currentIsland.seed??this.regionIndex;
     this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:this.stage?.currentIsland})});
     this._islandWorlds=!!this.terrain.island;
@@ -439,7 +441,7 @@ export class Game {
     for(const enemy of this.enemies){this._clearRegionalBossAttacks(enemy);enemy._groupProvokedUntil=0;enemy._navTimer=0;enemy._navObstacle=null;}
     this.territories?.suspend();
     this.superSkills.clearScene();this.barrier.clearScene();this.abilities.clearScene();this.regions.saveWorld();
-    this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.portal=null;this.regions.portals=[];
+    this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.worldId=this.region.id;this.portal=null;this.regions.portals=[];
     if(this.stage)this.stage.currentMapId=nextIsland.id;
     this.mapId=nextIsland?.id??this.regionIndex;
     this.status='playing';this.regionGrace=2;this.sceneKind='world';

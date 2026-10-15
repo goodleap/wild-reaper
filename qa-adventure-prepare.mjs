@@ -57,7 +57,7 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
 
   choose(h,'mode','dungeon');choose(h,'stage','snow-trial');choose(h,'weapon','arrow');
   const setup=JSON.parse(h.storage.get('wild-echoes-setup'));
-  assert.deepEqual(setup,{mode:'dungeon',dungeonId:null,stageId:'snow-trial',weaponId:'arrow',heroId:'traveler',appearanceId:'traveler-v2'});
+  assert.deepEqual(setup,{mode:'dungeon',worldId:'forest',dungeonId:null,stageId:'snow-trial',weaponId:'arrow',heroId:'traveler',appearanceId:'traveler-v2'});
   assert.match(node(h,'prepare-summary').textContent,/雪原试炼.*帅气王子.*翠羽飞矢/);
   for(const id of ['prepare-archive-button','prepare-help-button']){
     click(h,id);assert.equal(h.run('prepareOpen'),true);key(h,'Escape');

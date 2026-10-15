@@ -55,7 +55,7 @@ export class ExpeditionRun {
   initialize(){
     if(this.initialized)return;this.initialized=true;
     const g=this.game,d=this.definition;
-    g.regionIndex=REGIONS.findIndex(region=>region.id===d.themeId);g.region=regionFor(g.regionIndex);g.mapId=`expedition:${this.id}`;
+    g.regionIndex=REGIONS.findIndex(region=>region.id===d.themeId);g.region=regionFor(g.regionIndex);g.worldId=g.startWorldId=g.region.id;g.mapId=`expedition:${this.id}`;
     g.terrain=new ExpeditionTerrain(d);g._islandWorlds=false;g.enemies=[];g.gems=[];g.coins=[];g.bullets=[];g.enemyBullets=[];g.effects=[];
     g.player.x=d.start.x;g.player.y=d.start.y-groundOffset(g.player,true);g._moveEntity(g.player,0,0,true);
     g.portal=null;g.regions.portals=[];g.regions.guarded=true;g.regions.states.clear();g.regions._rewardQueue=[];g.regions.rewardPortal=null;g._regionRewardPending=false;

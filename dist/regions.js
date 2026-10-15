@@ -22,6 +22,7 @@ export class Regions {
   get defeatedConnectionsCount(){return this.unlockedConnections.size;}
   get endlessUnlocked(){return !this.game._worldExploration&&!this.game.stage&&!this.game.expedition&&this.unlockedConnections.size>=GUARDIAN_RULES.endlessConnections;}
   _endpoint(target,{origin=null,back=false}={}) {
+    if(!Number.isInteger(target)||!worldNeighbors(this.game.regionIndex).includes(target))return null;
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
     const natural=g.terrain.island?.layout?.kind==='rift-forest';
     const point=natural&&plan?{x:plan.x,y:plan.y}:plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
