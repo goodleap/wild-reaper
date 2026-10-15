@@ -138,6 +138,14 @@ export class Regions {
   }
   openPortal(enemy) {
     if(enemy.type!=='boss'||enemy.dungeonBoss||enemy.dungeonId||enemy.debugBoss||enemy.hp>0||enemy.id===this._lastBossId)return null;
+    if(enemy.worldBoss){
+      // Optional field encounters reuse the regional skill reward, but never
+      // unlock an unrelated gate or remove its living guardian.
+      const group=this.game.territories?.byId.get(enemy.territoryId);
+      if(!group||group.rewardQueued||group.rewardClaimed)return null;
+      group.cleared=true;group.rewardQueued=true;this._lastBossId=enemy.id;
+      this._rewardQueue.push(group);this._offerReward();return null;
+    }
     if(this.game.stage)return this.game.stage.onBossKilled(enemy);
     const g=this.game;let portal=enemy.portalId?this.portals.find(p=>p.id===enemy.portalId):g.portal;
     if(!portal&&!this.guarded) {

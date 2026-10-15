@@ -4,6 +4,7 @@ import { portalDoor } from './dist/portal-geometry.js';
 import { Game, xpCost, crystalCost, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { movementProfile } from './dist/height-rules.js';
+import { applyHeroStat } from './dist/heroes.js';
 let seed=61851;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 const finite = (g) => {
@@ -129,7 +130,7 @@ for(const id of ['endlessPower','endlessVitality','endlessRegen','endlessPower',
   assert(capped.chooseUpgrade(id));assert.equal(capped.status,'playing');
 }
 assert.equal(capped.levels.endlessPower,2);assert.equal(capped.levels.endlessRegen,2);
-assert.equal(capped.player.maxHp,100+5*25+12);finite(capped);
+assert.equal(capped.player.maxHp,Math.round(applyHeroStat(capped.hero,'maxHealth',100+5*25+12)),'paid health upgrades retain the selected hero health modifier');finite(capped);
 const late=new Game({adventure:false});late.time=720;late._spawnEnemy('slime');
 assert(late.enemies.at(-1).hp>late.enemies[0].hp*2&&late.enemies.at(-1).damage>late.enemies[0].damage);
 
@@ -137,7 +138,7 @@ const priority=['orbit','pulse','lightning','multishot','power','rapid','vitalit
 const sim=(difficulty,seconds,immortal=false)=>{
   // Keep the long-run numeric bot independent of authored navigation targets.
   // Guarded portal exploration and return travel are covered in qa-portals.
-  const g=new Game({difficulty,adventure:false});let frames=0,upgrades=0,killsAt180=0,levelAt180=1,maxEnemies=0,maxBullets=0,maxGems=0;
+  const g=new Game({difficulty,adventure:false,terrain:new Terrain({obstacles:[]})});let frames=0,upgrades=0,killsAt180=0,levelAt180=1,maxEnemies=0,maxBullets=0,maxGems=0;
   while(['playing','upgrade','super'].includes(g.status)&&g.time<seconds&&frames++<30*(seconds+10)) {
     if(g.status==='super'){assert(g.chooseSuper(g.getSuperChoices()[0].id));continue;}
     if(g.status==='upgrade') {

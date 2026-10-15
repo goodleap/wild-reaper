@@ -471,7 +471,7 @@
       "id": "survival",
       "name": "荒野守夜",
       "shortName": "生存怪潮",
-      "summary": "守住荒野营地，迎战四周袭来的怪潮。",
+      "summary": "在林间营地迎战怪潮，借助疏林与岩堆周旋，寻找外围补给。",
       "objective": "坚持 150 秒，再前往东侧撤离点。",
       "rewardLabel": "通关获得 60 金币 · 75 晶石",
       "themeId": "forest",
@@ -497,14 +497,649 @@
         "y": 0,
         "r": 62
       },
-      "obstacles": [],
-      "segments": []
+      "obstacles": [
+        {
+          "x": -528,
+          "y": -370,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": -470,
+          "y": -418,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": -394,
+          "y": -382,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": -447,
+          "y": -300,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": -358,
+          "y": -295,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": 362,
+          "y": -380,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": 420,
+          "y": -428,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": 496,
+          "y": -392,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": 443,
+          "y": -310,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": 532,
+          "y": -305,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": -588,
+          "y": 350,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": -530,
+          "y": 302,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": -454,
+          "y": 338,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": -507,
+          "y": 420,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": -418,
+          "y": 425,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": 392,
+          "y": 370,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": 450,
+          "y": 322,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": 526,
+          "y": 358,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": 473,
+          "y": 440,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": 562,
+          "y": 445,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": -1008,
+          "y": -660,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": -950,
+          "y": -708,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": -874,
+          "y": -672,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": -927,
+          "y": -590,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": -838,
+          "y": -585,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": 842,
+          "y": 620,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": 900,
+          "y": 572,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": 976,
+          "y": 608,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": 923,
+          "y": 690,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": 1012,
+          "y": 695,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": -968,
+          "y": 600,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": -910,
+          "y": 552,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": -834,
+          "y": 588,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": -887,
+          "y": 670,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": -798,
+          "y": 675,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": 842,
+          "y": -670,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 0,
+          "scale": 0.92
+        },
+        {
+          "x": 900,
+          "y": -718,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 1,
+          "scale": 1.0
+        },
+        {
+          "x": 976,
+          "y": -682,
+          "r": 23,
+          "variant": "expedition-tree",
+          "treeForm": 2,
+          "scale": 1.08
+        },
+        {
+          "x": 923,
+          "y": -600,
+          "r": 19,
+          "variant": "expedition-tree",
+          "treeForm": 3,
+          "scale": 0.92
+        },
+        {
+          "x": 1012,
+          "y": -595,
+          "r": 21,
+          "variant": "expedition-tree",
+          "treeForm": 4,
+          "scale": 1.0
+        },
+        {
+          "x": -315,
+          "y": 100,
+          "r": 38,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": -355,
+          "y": 155,
+          "r": 31,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": 330,
+          "y": -70,
+          "r": 38,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": 375,
+          "y": -105,
+          "r": 31,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": -740,
+          "y": -120,
+          "r": 42,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": -800,
+          "y": -145,
+          "r": 34,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": 720,
+          "y": 180,
+          "r": 42,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": 775,
+          "y": 210,
+          "r": 34,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": -160,
+          "y": -680,
+          "r": 43,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": -100,
+          "y": -710,
+          "r": 35,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": 130,
+          "y": 680,
+          "r": 41,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": 190,
+          "y": 710,
+          "r": 34,
+          "variant": "expedition-camprock"
+        },
+        {
+          "x": -840,
+          "y": 470,
+          "r": 19,
+          "variant": "expedition-log",
+          "halfLength": 63,
+          "angle": 0.35
+        },
+        {
+          "x": 850,
+          "y": -470,
+          "r": 19,
+          "variant": "expedition-log",
+          "halfLength": 66,
+          "angle": -0.45
+        }
+      ],
+      "segments": [],
+      "paths": [
+        {
+          "width": 135,
+          "points": [
+            {
+              "x": -1130,
+              "y": 0
+            },
+            {
+              "x": -600,
+              "y": 0
+            },
+            {
+              "x": -220,
+              "y": -25
+            },
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 245,
+              "y": 20
+            },
+            {
+              "x": 690,
+              "y": 0
+            },
+            {
+              "x": 1100,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "width": 130,
+          "points": [
+            {
+              "x": 0,
+              "y": -830
+            },
+            {
+              "x": 0,
+              "y": -450
+            },
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 0,
+              "y": 430
+            },
+            {
+              "x": 0,
+              "y": 835
+            }
+          ]
+        },
+        {
+          "width": 98,
+          "points": [
+            {
+              "x": -600,
+              "y": 0
+            },
+            {
+              "x": -690,
+              "y": -330
+            },
+            {
+              "x": -600,
+              "y": -540
+            },
+            {
+              "x": -220,
+              "y": -580
+            },
+            {
+              "x": 220,
+              "y": -580
+            },
+            {
+              "x": 600,
+              "y": -540
+            },
+            {
+              "x": 680,
+              "y": -330
+            },
+            {
+              "x": 620,
+              "y": 0
+            },
+            {
+              "x": 610,
+              "y": 300
+            },
+            {
+              "x": 640,
+              "y": 550
+            },
+            {
+              "x": 220,
+              "y": 600
+            },
+            {
+              "x": -220,
+              "y": 600
+            },
+            {
+              "x": -690,
+              "y": 540
+            },
+            {
+              "x": -700,
+              "y": 280
+            },
+            {
+              "x": -600,
+              "y": 0
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "clearing",
+          "x": 0,
+          "y": 0,
+          "rx": 260,
+          "ry": 220
+        },
+        {
+          "kind": "grove",
+          "x": -450,
+          "y": -350,
+          "rx": 220,
+          "ry": 178
+        },
+        {
+          "kind": "grove",
+          "x": 440,
+          "y": -360,
+          "rx": 220,
+          "ry": 178
+        },
+        {
+          "kind": "grove",
+          "x": -510,
+          "y": 370,
+          "rx": 220,
+          "ry": 175
+        },
+        {
+          "kind": "grove",
+          "x": 470,
+          "y": 390,
+          "rx": 220,
+          "ry": 175
+        },
+        {
+          "kind": "grove",
+          "x": -930,
+          "y": -640,
+          "rx": 205,
+          "ry": 168
+        },
+        {
+          "kind": "grove",
+          "x": 920,
+          "y": 640,
+          "rx": 205,
+          "ry": 168
+        },
+        {
+          "kind": "grove",
+          "x": -890,
+          "y": 620,
+          "rx": 205,
+          "ry": 168
+        },
+        {
+          "kind": "grove",
+          "x": 920,
+          "y": -650,
+          "rx": 205,
+          "ry": 168
+        },
+        {
+          "kind": "camp",
+          "x": -150,
+          "y": 115,
+          "rx": 70,
+          "ry": 48
+        },
+        {
+          "kind": "camp",
+          "x": 155,
+          "y": -125,
+          "rx": 70,
+          "ry": 48
+        }
+      ],
+      "supplies": [
+        {
+          "x": -680,
+          "y": -390,
+          "drop": "herb"
+        },
+        {
+          "x": 660,
+          "y": 420,
+          "drop": "herb"
+        },
+        {
+          "x": 180,
+          "y": -585,
+          "drop": "magnet"
+        },
+        {
+          "x": -200,
+          "y": 570,
+          "drop": "fury"
+        }
+      ]
     },
     {
       "id": "ship",
       "name": "破浪甲板",
       "shortName": "船上突破",
-      "summary": "沿甲板向船首突破，清除三处登船敌群。",
+      "summary": "穿过货舱双侧通道与主桅战场，向船首突破。",
       "objective": "依次清理三段甲板，抵达船首撤离点。",
       "rewardLabel": "通关获得 70 金币 · 85 晶石",
       "themeId": "beach",
@@ -531,40 +1166,166 @@
       },
       "obstacles": [
         {
-          "x": -820,
-          "y": -190,
-          "r": 30,
+          "x": -850,
+          "y": -10,
+          "r": 40,
           "variant": "expedition-cargo"
         },
         {
-          "x": -820,
-          "y": 170,
-          "r": 30,
-          "variant": "expedition-cargo"
-        },
-        {
-          "x": -90,
-          "y": -185,
+          "x": -785,
+          "y": -10,
           "r": 34,
-          "variant": "expedition-mast"
+          "variant": "expedition-cargo"
         },
         {
-          "x": 450,
-          "y": 180,
+          "x": -690,
+          "y": -240,
+          "r": 33,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -630,
+          "y": -240,
           "r": 32,
           "variant": "expedition-cargo"
         },
         {
-          "x": 750,
-          "y": -190,
+          "x": -640,
+          "y": 230,
+          "r": 35,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -580,
+          "y": 235,
+          "r": 29,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -365,
+          "y": -235,
+          "r": 32,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -305,
+          "y": -235,
+          "r": 30,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -10,
+          "y": 5,
+          "r": 36,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 50,
+          "y": 5,
+          "r": 31,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 330,
+          "y": -238,
           "r": 34,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 390,
+          "y": -238,
+          "r": 31,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 375,
+          "y": 230,
+          "r": 35,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 435,
+          "y": 230,
+          "r": 31,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 465,
+          "y": -230,
+          "r": 28,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 730,
+          "y": 10,
+          "r": 38,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 792,
+          "y": 10,
+          "r": 32,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 900,
+          "y": -235,
+          "r": 34,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 962,
+          "y": -235,
+          "r": 31,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 1060,
+          "y": 230,
+          "r": 35,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 1120,
+          "y": 230,
+          "r": 32,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": 1185,
+          "y": -235,
+          "r": 30,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -1135,
+          "y": -245,
+          "r": 28,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -1135,
+          "y": 245,
+          "r": 28,
+          "variant": "expedition-cargo"
+        },
+        {
+          "x": -330,
+          "y": 20,
+          "r": 25,
           "variant": "expedition-mast"
         },
         {
-          "x": 1180,
-          "y": 180,
-          "r": 30,
-          "variant": "expedition-cargo"
+          "x": 100,
+          "y": -222,
+          "r": 27,
+          "variant": "expedition-mast"
+        },
+        {
+          "x": 685,
+          "y": 8,
+          "r": 26,
+          "variant": "expedition-mast"
         }
       ],
       "segments": [
@@ -615,13 +1376,242 @@
             "tidepriest": 3
           }
         }
+      ],
+      "paths": [
+        {
+          "width": 108,
+          "points": [
+            {
+              "x": -1080,
+              "y": 0
+            },
+            {
+              "x": -950,
+              "y": 0
+            },
+            {
+              "x": -850,
+              "y": -145
+            },
+            {
+              "x": -700,
+              "y": -145
+            },
+            {
+              "x": -550,
+              "y": 0
+            },
+            {
+              "x": -420,
+              "y": 0
+            },
+            {
+              "x": -330,
+              "y": -125
+            },
+            {
+              "x": -180,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "width": 100,
+          "points": [
+            {
+              "x": -950,
+              "y": 0
+            },
+            {
+              "x": -850,
+              "y": 145
+            },
+            {
+              "x": -700,
+              "y": 145
+            },
+            {
+              "x": -550,
+              "y": 0
+            },
+            {
+              "x": -420,
+              "y": 0
+            },
+            {
+              "x": -330,
+              "y": 150
+            },
+            {
+              "x": -180,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "width": 108,
+          "points": [
+            {
+              "x": -180,
+              "y": 0
+            },
+            {
+              "x": -80,
+              "y": -140
+            },
+            {
+              "x": 80,
+              "y": -125
+            },
+            {
+              "x": 220,
+              "y": 0
+            },
+            {
+              "x": 570,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "width": 108,
+          "points": [
+            {
+              "x": -180,
+              "y": 0
+            },
+            {
+              "x": -80,
+              "y": 145
+            },
+            {
+              "x": 80,
+              "y": 145
+            },
+            {
+              "x": 220,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "width": 108,
+          "points": [
+            {
+              "x": 570,
+              "y": 0
+            },
+            {
+              "x": 655,
+              "y": -145
+            },
+            {
+              "x": 820,
+              "y": -145
+            },
+            {
+              "x": 950,
+              "y": 0
+            },
+            {
+              "x": 1220,
+              "y": 0
+            },
+            {
+              "x": 1370,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "width": 108,
+          "points": [
+            {
+              "x": 570,
+              "y": 0
+            },
+            {
+              "x": 655,
+              "y": 155
+            },
+            {
+              "x": 820,
+              "y": 155
+            },
+            {
+              "x": 950,
+              "y": 0
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "hatch",
+          "x": -815,
+          "y": -10,
+          "rx": 102,
+          "ry": 79
+        },
+        {
+          "kind": "hatch",
+          "x": 20,
+          "y": 5,
+          "rx": 99,
+          "ry": 72
+        },
+        {
+          "kind": "hatch",
+          "x": 755,
+          "y": 10,
+          "rx": 115,
+          "ry": 80
+        },
+        {
+          "kind": "rope",
+          "x": -1050,
+          "y": -230,
+          "rx": 35,
+          "ry": 24
+        },
+        {
+          "kind": "rope",
+          "x": 265,
+          "y": 242,
+          "rx": 34,
+          "ry": 23
+        },
+        {
+          "kind": "rope",
+          "x": 1210,
+          "y": 225,
+          "rx": 31,
+          "ry": 21
+        }
+      ],
+      "supplies": [
+        {
+          "x": -740,
+          "y": 230,
+          "drop": "herb"
+        },
+        {
+          "x": 250,
+          "y": -230,
+          "drop": "magnet"
+        },
+        {
+          "x": 990,
+          "y": 230,
+          "drop": "herb"
+        }
       ]
     },
     {
       "id": "moon",
       "name": "寂静月面",
       "shortName": "月面推进",
-      "summary": "穿过陨坑与灰色荒原，向北方的信标推进。",
+      "summary": "绕过陨坑岩脊，探索坠落残骸，向北方信标推进。",
       "objective": "清除三处月面敌群，抵达北方信标。",
       "rewardLabel": "通关获得 80 金币 · 95 晶石",
       "themeId": "mountain",
@@ -648,40 +1638,214 @@
       },
       "obstacles": [
         {
-          "x": -245,
-          "y": -70,
-          "r": 44,
-          "variant": "expedition-moonrock"
-        },
-        {
-          "x": 265,
-          "y": -470,
-          "r": 50,
-          "variant": "expedition-moonrock"
-        },
-        {
-          "x": -260,
-          "y": -810,
-          "r": 48,
-          "variant": "expedition-moonrock"
-        },
-        {
-          "x": 240,
-          "y": -1160,
-          "r": 42,
-          "variant": "expedition-moonrock"
-        },
-        {
-          "x": -260,
-          "y": -1520,
+          "x": 0,
+          "y": -25,
           "r": 52,
           "variant": "expedition-moonrock"
         },
         {
-          "x": 250,
-          "y": -1820,
+          "x": 75,
+          "y": -40,
+          "r": 39,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -340,
+          "y": 30,
+          "r": 42,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -300,
+          "y": 90,
+          "r": 38,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -280,
+          "y": -375,
+          "r": 43,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -330,
+          "y": -425,
+          "r": 42,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -280,
+          "y": -485,
+          "r": 37,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 255,
+          "y": -465,
+          "r": 43,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 320,
+          "y": -505,
+          "r": 40,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 340,
+          "y": -565,
+          "r": 35,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -220,
+          "y": -750,
+          "r": 48,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -150,
+          "y": -760,
+          "r": 44,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -80,
+          "y": -765,
+          "r": 36,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 310,
+          "y": -805,
+          "r": 42,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 340,
+          "y": -870,
+          "r": 34,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -300,
+          "y": -1050,
           "r": 46,
           "variant": "expedition-moonrock"
+        },
+        {
+          "x": -330,
+          "y": -1115,
+          "r": 40,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -270,
+          "y": -1170,
+          "r": 35,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 280,
+          "y": -1130,
+          "r": 44,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 330,
+          "y": -1190,
+          "r": 36,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -25,
+          "y": -1390,
+          "r": 56,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 55,
+          "y": -1420,
+          "r": 43,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 110,
+          "y": -1435,
+          "r": 32,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -315,
+          "y": -1460,
+          "r": 44,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -350,
+          "y": -1520,
+          "r": 34,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 290,
+          "y": -1790,
+          "r": 47,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 335,
+          "y": -1850,
+          "r": 39,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 275,
+          "y": -1890,
+          "r": 34,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -320,
+          "y": -2040,
+          "r": 42,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -250,
+          "y": -2085,
+          "r": 38,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 270,
+          "y": -2150,
+          "r": 45,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": 335,
+          "y": -2190,
+          "r": 34,
+          "variant": "expedition-moonrock"
+        },
+        {
+          "x": -290,
+          "y": -100,
+          "r": 49,
+          "variant": "expedition-wreck"
+        },
+        {
+          "x": 290,
+          "y": -1000,
+          "r": 45,
+          "variant": "expedition-wreck"
+        },
+        {
+          "x": -290,
+          "y": -1780,
+          "r": 51,
+          "variant": "expedition-wreck"
         }
       ],
       "segments": [
@@ -730,6 +1894,261 @@
             "stoneape": 3,
             "bat": 6
           }
+        }
+      ],
+      "paths": [
+        {
+          "width": 125,
+          "points": [
+            {
+              "x": 0,
+              "y": 180
+            },
+            {
+              "x": -130,
+              "y": 0
+            },
+            {
+              "x": -145,
+              "y": -120
+            },
+            {
+              "x": 0,
+              "y": -260
+            },
+            {
+              "x": 30,
+              "y": -460
+            },
+            {
+              "x": 0,
+              "y": -610
+            },
+            {
+              "x": 85,
+              "y": -760
+            },
+            {
+              "x": 85,
+              "y": -900
+            },
+            {
+              "x": 0,
+              "y": -1050
+            },
+            {
+              "x": 0,
+              "y": -1280
+            },
+            {
+              "x": -130,
+              "y": -1300
+            },
+            {
+              "x": -155,
+              "y": -1410
+            },
+            {
+              "x": -145,
+              "y": -1510
+            },
+            {
+              "x": 0,
+              "y": -1650
+            },
+            {
+              "x": 0,
+              "y": -1900
+            },
+            {
+              "x": 0,
+              "y": -2160
+            }
+          ]
+        },
+        {
+          "width": 100,
+          "points": [
+            {
+              "x": 0,
+              "y": 180
+            },
+            {
+              "x": 155,
+              "y": 0
+            },
+            {
+              "x": 160,
+              "y": -120
+            },
+            {
+              "x": 0,
+              "y": -260
+            }
+          ]
+        },
+        {
+          "width": 95,
+          "points": [
+            {
+              "x": 0,
+              "y": -640
+            },
+            {
+              "x": -320,
+              "y": -680
+            },
+            {
+              "x": -340,
+              "y": -810
+            },
+            {
+              "x": -270,
+              "y": -930
+            },
+            {
+              "x": 0,
+              "y": -1000
+            }
+          ]
+        },
+        {
+          "width": 100,
+          "points": [
+            {
+              "x": 0,
+              "y": -1280
+            },
+            {
+              "x": 180,
+              "y": -1410
+            },
+            {
+              "x": 180,
+              "y": -1510
+            },
+            {
+              "x": 0,
+              "y": -1650
+            }
+          ]
+        },
+        {
+          "width": 90,
+          "points": [
+            {
+              "x": 0,
+              "y": -1670
+            },
+            {
+              "x": -170,
+              "y": -1760
+            },
+            {
+              "x": -190,
+              "y": -1870
+            },
+            {
+              "x": 0,
+              "y": -1900
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "crater",
+          "x": -265,
+          "y": 15,
+          "rx": 112,
+          "ry": 87
+        },
+        {
+          "kind": "crater",
+          "x": 250,
+          "y": -375,
+          "rx": 115,
+          "ry": 88
+        },
+        {
+          "kind": "crater",
+          "x": -260,
+          "y": -870,
+          "rx": 107,
+          "ry": 86
+        },
+        {
+          "kind": "crater",
+          "x": 260,
+          "y": -1080,
+          "rx": 118,
+          "ry": 94
+        },
+        {
+          "kind": "crater",
+          "x": -260,
+          "y": -1510,
+          "rx": 124,
+          "ry": 92
+        },
+        {
+          "kind": "crater",
+          "x": 255,
+          "y": -1815,
+          "rx": 110,
+          "ry": 89
+        },
+        {
+          "kind": "landing",
+          "x": 0,
+          "y": 180,
+          "rx": 145,
+          "ry": 96
+        },
+        {
+          "kind": "landing",
+          "x": 0,
+          "y": -2160,
+          "rx": 118,
+          "ry": 100
+        },
+        {
+          "kind": "wreckage",
+          "x": -290,
+          "y": -100,
+          "rx": 80,
+          "ry": 65
+        },
+        {
+          "kind": "wreckage",
+          "x": 290,
+          "y": -1000,
+          "rx": 80,
+          "ry": 65
+        },
+        {
+          "kind": "wreckage",
+          "x": -290,
+          "y": -1780,
+          "rx": 85,
+          "ry": 68
+        }
+      ],
+      "supplies": [
+        {
+          "x": -320,
+          "y": -205,
+          "drop": "herb"
+        },
+        {
+          "x": -295,
+          "y": -925,
+          "drop": "magnet"
+        },
+        {
+          "x": -310,
+          "y": -1890,
+          "drop": "herb"
         }
       ]
     }

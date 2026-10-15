@@ -5,6 +5,8 @@ import {Island} from './dist/islands.js';
 import {RelicSites,ARMY_SITE_RULES} from './dist/relic-sites.js';
 import {WorldMap,landmarkState} from './dist/world-map.js';
 import {portalDoor} from './dist/portal-geometry.js';
+import {WORLD_IDS} from './dist/world-definitions.js';
+import {terrainNavigation} from './dist/terrain-navigation.js';
 const feet=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
 function quiet(g){g.enemies=g.enemies.filter(e=>e.portalId);g.nextBossAt=Infinity;g._spawn=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;}
 function joinSite(g,site){feet(g,site.door);assert(g.relicSites.interact(site.id),`${site.key} can activate`);const camp=g.companions.camp;assert(camp);assert.equal(camp.guardTotal,site.guardCount);
@@ -69,4 +71,30 @@ const pausedAltar=altarRun();feet(pausedAltar.game,pausedAltar.altar);pausedAlta
 const busyAltar=altarRun(),otherPrison=busyAltar.game.relicSites.sites.find(site=>site.kind==='stormcaller');feet(busyAltar.game,otherPrison.door);assert(busyAltar.game.relicSites.interact(otherPrison.id));feet(busyAltar.game,busyAltar.altar);busyAltar.game.update(0);assert.equal(busyAltar.altar.state,'active');assert.equal(busyAltar.game.companions.camps.length,2,'a second relic keeps the first challenge intact');
 const graceAltar=altarRun();feet(graceAltar.game,graceAltar.altar);graceAltar.game.regionGrace=2;graceAltar.game.update(0);assert.equal(graceAltar.altar.state,'active','arrival grace protects the player without mutually excluding relic challenges');
 const ownedAltar=altarRun({debug:true,debugOptions:{fullLoadout:true}});ownedAltar.game.companions.recruit('golem');feet(ownedAltar.game,ownedAltar.altar);ownedAltar.game.update(0);assert.equal(ownedAltar.altar.state,'ready');assert.equal(ownedAltar.game.companions.camp,null);assert.equal(ownedAltar.game.getInteraction().enabled,false);assert.equal(ownedAltar.game.getInteraction().label,'岩灵已在队伍中');assert.equal(ownedAltar.game.companions.members.filter(member=>member.kind==='golem').length,1);
-console.log('Army world: five reachable recruitments, safe challenges, conditional stone gate, unique rewards, paused work, persistent travel and actual center-contact altar activation passed.');
+
+// Contiguous woods can occupy the old rectangular defender grid. Real worlds
+// must still create every required guard, with a walkable approach back to the
+// door; a free point on the far side of an impenetrable grove is insufficient.
+let woodedChallenges=0,woodedGuards=0;
+for(const region of WORLD_IDS)for(const seed of [0,7,17]){
+  const terrain=new Terrain({region,seed,island:new Island({region,seed})});
+  const world=new Game({mode:'world',debug:true,debugWorld:region,terrain});
+  world.player.xpNext=world.crystalsNext=Infinity;
+  for(const site of world.relicSites.sites.filter(site=>site.type==='rescue')){
+    feet(world,site.door);assert(world.relicSites.interact(site.id),`${region}/${seed}/${site.kind}: wooded recruitment can activate`);
+    const camp=world.companions.campFor(site.id),guards=world.enemies.filter(enemy=>enemy.rescueId===camp.id);
+    assert.equal(guards.length,site.guardCount,'terrain cannot silently reduce a challenge');
+    for(const guard of guards){
+      let point={x:guard.x,y:guard.y+groundOffset(guard)};
+      assert(Math.hypot(point.x-world.player.x,point.y-site.door.y)>=150,'defenders retain the safe entry distance');
+      const path=terrainNavigation(terrain).find(point,site.door,guard.r,'ground');
+      assert(path&&Math.hypot(path.at(-1).x-site.door.x,path.at(-1).y-site.door.y)<.001,`${region}/${seed}/${site.kind}: guard must reach the entrance`);
+      for(const target of path){const moved=terrain.moveCircle(point.x,point.y,target.x-point.x,target.y-point.y,guard.r);assert(Math.hypot(moved.x-target.x,moved.y-target.y)<.001,'guard path replay never projects through a trunk or lake');point=moved;}
+      guard.rescueSpawnGrace=0;world._hurtEnemy(guard,guard.hp+100);assert(guard.hp<=0);woodedGuards++;
+    }
+    assert.equal(camp.state,'ready');feet(world,camp);assert(world.companions._join(),'a cleared challenge actually recruits its captive');
+    assert.equal(site.state,'cleared');assert(world.companions.members.some(member=>member.kind===site.kind));
+    world.enemies=world.enemies.filter(enemy=>enemy.hp>0);woodedChallenges++;
+  }
+}
+console.log(`Army world: five reachable recruitments, safe challenges, conditional stone gate, unique rewards, paused work, persistent travel, actual center-contact altar activation and ${woodedChallenges} wooded challenges/${woodedGuards} reachable guards passed.`);

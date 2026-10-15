@@ -27,8 +27,10 @@ const upgradeBefore=run('game.skillLevel');key('KeyM');upgrade.onclick();assert.
 run("game.regions.rewardPortal={rewardClaimed:false};game.superSkills.offer('region',game.region.id);game.status='super';openSuperChoices();");
 const superChoice=nodes['super-cards'].children[0];assert(superChoice?.onclick);
 key('KeyM');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),0);assert.equal(run('game.status'),'super');key('Escape');superChoice.onclick();assert.equal(run('Object.values(game.superSkills.owned).filter(level=>level>0).length'),1);assert.equal(run('game.status'),'playing');
-// The expanded map obeys exactly the minimap's discovery rules.
-run("game.status='playing';game.settlements.sites=[{id:'visible',type:'castle',name:'已知城堡',x:40,y:0,state:'ready',discovered:true},{id:'secret',type:'castle',name:'隐藏城堡',x:50,y:0,state:'ready',discovered:false}];game.relicSites.sites=[];game.regions.portals=[];");
+// Normal exploration obeys exactly the minimap's discovery rules. The debug
+// page still exercises its controls, but this game uses ordinary map privacy;
+// debug landmark reveal is covered independently in qa-world-map.mjs.
+run("game.debug=false;game.status='playing';game.settlements.sites=[{id:'visible',type:'castle',name:'已知城堡',x:40,y:0,state:'ready',discovered:true},{id:'secret',type:'castle',name:'隐藏城堡',x:50,y:0,state:'ready',discovered:false}];game.relicSites.sites=[];game.regions.portals=[];");
 key('KeyM');const mapCopy=nodes['map-landmarks'].children.flatMap(row=>row.children.map(child=>child.textContent)).join(' ');assert(mapCopy.includes('已知城堡'));assert(!mapCopy.includes('隐藏城堡'));assert.equal(run('game.settlements.sites[1].discovered'),false);
 listeners['window:blur']();assert(run('paused&&mapOpen'));assert.equal(document.activeElement.id,'close-map');nodes['map-done'].onclick();assert(run('paused'),'window blur keeps run paused when map closes');
 // Objective pointers reserve both the map and the adjacent pause control,
@@ -147,6 +149,10 @@ const sampleRate=async rate=>{
   // A new game is a real reset boundary, not a direct call to telemetry internals.
   nodes['restart-button'].onclick();await flush();assert.equal(fpsNode.textContent,'-- FPS');
   run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
+  // Async startup already delivered RAF callbacks on the harness clock. Start
+  // the synthetic clock at the real foreground boundary, so its large offset
+  // is not accidentally counted as a frame taking many seconds to render.
+  listeners['document:visibilitychange']();
   fpsWrites=[];fpsNow+=10000;run(`frame(${fpsNow})`);
   const interval=1000/rate,halfFrames=rate/2;
   for(let i=1;i<halfFrames;i++)run(`frame(${fpsNow+i*interval})`);

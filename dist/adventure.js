@@ -77,6 +77,14 @@ export class Adventure {
     // when a distant region returns. Broken IDs stay consumed for this run.
     this.props=this.props.filter(o=>o.hp>0&&Math.abs(o.x-p.x)<halfW+360&&Math.abs(o.y-p.y)<halfH+360);
     const present=new Set(this.props.map(o=>o.id)),candidates=[];
+    for(const [index,clearing] of (g.terrain.island?.layout?.clearings??[]).entries()){
+      if(clearing.kind!=='secret')continue;
+      const id=`supply:layout:${clearing.id}`;
+      if(this._consumed.has(id)||present.has(id)||Math.abs(clearing.x-p.x)>halfW||Math.abs(clearing.y-p.y)>halfH)continue;
+      if(!placementAllowed(g,'loot',{x:clearing.x,y:clearing.y,r:22})||g.environment?.isHazardFree?.(clearing.x,clearing.y,25)===false)continue;
+      const point={x:clearing.x,y:clearing.y},seed=this._hash(index+791,313);
+      candidates.push({id,type:'supply',...point,r:18,aimY:point.y-12,sortY:point.y,hp:pickups.supplyHp,maxHp:pickups.supplyHp,hit:0,seed,drop:TYPES[index%TYPES.length]});
+    }
     for(let tx=Math.floor((p.x-halfW)/CELL);tx<=Math.floor((p.x+halfW)/CELL);tx++)
       for(let ty=Math.floor((p.y-halfH)/CELL);ty<=Math.floor((p.y+halfH)/CELL);ty++){
         const o=this._supplyAt(tx,ty);

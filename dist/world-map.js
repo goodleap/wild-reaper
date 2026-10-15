@@ -2,6 +2,7 @@ import { groundOffset } from './terrain.js';
 import { traceIslandContour } from './island-art.js';
 import { REGIONS } from './world-definitions.js';
 import { COAST_RULES } from './placement-rules.js';
+import { drawWorldLayoutMap } from './worlds/world-layout-art.js';
 
 export const WORLD_MAP_RULES=Object.freeze({range:900,discoveryRadius:340,explorationCell:100});
 const TAU=Math.PI*2;
@@ -33,7 +34,7 @@ function landmarks(game) {
   for(const site of game.relicSites?.sites||[])if(RELICS.has(site.type))add(site,site.type);
   for(const portal of game.regions?.portals||[])add(portal,'portal');
   for(const enemy of game.enemies||[])if(enemy.stageBoss&&enemy.hp>0)add(enemy,'boss');
-  for(const group of game.territories?.groups||[])add(group,'territory');
+  for(const group of game.territories?.groups||[])add(group,group.kind==='boss'?'boss':'territory');
   for(const marker of game.expedition?.markers||[])add(marker,marker.type||'exit');
   return result;
 }
@@ -78,7 +79,7 @@ export class WorldMap {
       const dx=site.x-p.x,dy=site.y-p.y,distance=Math.hypot(dx,dy);
       if(distance>range)continue;
       const active=type==='portal'?site.state==='active':type==='expedition'&&site.active===true;
-      const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored||type==='territory'&&site.cleared||type==='expedition'&&site.completed===true);
+      const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored||(type==='territory'||site.kind==='boss')&&site.cleared||type==='expedition'&&site.completed===true);
       const name=site.kind==='victory'?'通关大门':type==='boss'&&site.stageBossRole?(site.stageBossRole==='core'?'关卡首领':'外岛首领 · 可选'):type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||'';
       result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,gateOpen:!!site.gateOpen,appearance:site.appearance,kind:site.kind,name,label:site.label,color:site.color});
     }
@@ -187,6 +188,7 @@ export class WorldMap {
     traceIslandContour(ctx,island.points);ctx.fillStyle=palette.shallow;ctx.fill();
     traceIslandContour(ctx,island.contour(shallow));ctx.fillStyle=palette.sand;ctx.fill();
     traceIslandContour(ctx,island.contour(shallow+beach));ctx.fillStyle=palette.land;ctx.fill();
+    drawWorldLayoutMap(ctx,island,{scale,viewBounds:{minX:center.x-extentX,minY:center.y-extentY,maxX:center.x+extentX,maxY:center.y+extentY}});
     ctx.restore();ctx.restore();
     if(!expanded){ctx.strokeStyle='#abc3b222';ctx.lineWidth=.7;ctx.setLineDash([2,4]);ctx.beginPath();ctx.arc(cx,cy,radius*.5,0,TAU);ctx.stroke();ctx.setLineDash([]);}
     ctx.fillStyle='#bed0b1';ctx.font=`600 ${expanded?15:8}px ${FONT}`;ctx.textAlign='center';ctx.fillText('N',cx,y+pad+(expanded?16:8));

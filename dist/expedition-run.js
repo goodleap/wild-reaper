@@ -1,20 +1,30 @@
 import { getExpeditionDefinition } from './expedition-definitions.js';
-import { Terrain, groundOffset } from './terrain.js';
+import { Terrain, groundOffset, sceneryVisual } from './terrain.js';
 import { enemyDefinition } from './enemy-definitions.js';
 import { REGIONS, regionFor } from './world-definitions.js';
 import { Environment } from './environment.js';
 import { Adventure } from './adventure.js';
 import { Settlements } from './settlements.js';
 import { RelicSites } from './relic-sites.js';
+import { getConfigSection } from './content-config.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const foot=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const supplyRules=getConfigSection('economy').pickups;
+
+function expeditionObstacle(prop){
+  const type=prop.variant==='expedition-tree'?'tree':prop.variant==='expedition-log'?'log':'rock';
+  const base={...prop,type,rockForm:0};
+  if(type!=='rock')return {...base,visual:sceneryVisual(base)};
+  const mast=prop.variant==='expedition-mast',wreck=prop.variant==='expedition-wreck';
+  return {...base,heightBand:mast||wreck?'high':undefined,visual:{halfWidth:mast?65:prop.r*1.2+8,top:mast?115:prop.r*1.5+12,bottom:prop.r+8}};
+}
 
 // Bounds participate in the same foot-based movement as ordinary terrain.
 // Explicit props and gates keep the authored route free of random obstacles.
 export class ExpeditionTerrain extends Terrain {
-  constructor(definition){super({region:definition.themeId,obstacles:definition.obstacles.map(prop=>({...prop,type:'rock',rockForm:0,visual:{halfWidth:prop.variant==='expedition-mast'?65:prop.r+8,top:prop.variant==='expedition-mast'?115:prop.r*2+12,bottom:prop.r+8}}))});this.bounds=definition.bounds;}
+  constructor(definition){super({region:definition.themeId,obstacles:definition.obstacles.map(expeditionObstacle)});this.bounds=definition.bounds;}
   _inside(x,y,r=0){const b=this.bounds;return x-r>=b.minX&&x+r<=b.maxX&&y-r>=b.minY&&y+r<=b.maxY;}
   _bound(x,y,r=0){const b=this.bounds,nx=clamp(x,b.minX+r,b.maxX-r),ny=clamp(y,b.minY+r,b.maxY-r);return {x:nx,y:ny,blocked:nx!==x||ny!==y};}
   isFree(x,y,r=0,profile='ground'){return this._inside(x,y,r)&&super.isFree(x,y,r,profile);}
@@ -50,6 +60,7 @@ export class ExpeditionRun {
     g.player.x=d.start.x;g.player.y=d.start.y-groundOffset(g.player,true);g._moveEntity(g.player,0,0,true);
     g.portal=null;g.regions.portals=[];g.regions.guarded=true;g.regions.states.clear();g.regions._rewardQueue=[];g.regions.rewardPortal=null;g._regionRewardPending=false;
     g.encounters=null;g.environment=new Environment(g,{generation:false});g.adventure=new Adventure(g,{generation:false});
+    g.adventure.props=(d.supplies||[]).map((supply,index)=>({id:`expedition:${this.id}:supply:${index}`,type:'supply',...supply,r:18,aimY:supply.y-12,sortY:supply.y,hp:supplyRules.supplyHp,maxHp:supplyRules.supplyHp,hit:0,seed:(index+1)*.173}));
     g.settlements=new Settlements(g,{generation:false});g.relicSites=new RelicSites(g,{generation:false});
     g.companions.generation=false;g.companions.camps=[];g.elites.generation=false;g.nextBossAt=Infinity;g.regionGrace=0;
     g.waveDirector.reset();g._spawn=.5;
@@ -63,7 +74,7 @@ export class ExpeditionRun {
       enemy.hp=enemy.maxHp=base.baseHp*d.healthMultiplier;enemy.damage=base.damage;enemy.speed=base.baseSpeed;enemy.xp=base.xp;
       enemy.x=d.center.x+Math.cos(angle)*radius;enemy.y=d.center.y+Math.sin(angle)*radius-groundOffset(enemy);
       enemy.expeditionId=this.id;enemy.expeditionSegment=group.index;enemy.guardActive=false;
-      enemy.expeditionHome={x:enemy.x,y:enemy.y+groundOffset(enemy)};g._moveEntity(enemy,0,0);
+      g._moveEntity(enemy,0,0);enemy.expeditionHome={x:enemy.x,y:enemy.y+groundOffset(enemy)};
       group.members.push(enemy);
     }
   }

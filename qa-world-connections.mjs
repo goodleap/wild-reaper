@@ -24,9 +24,20 @@ for(const [index,region] of REGIONS.entries())for(const seed of [0,index,17,91])
   for(const key of ['merchant','supply','occupied','castle','hunt','rescue','rune','rescue-warden','dogcamp','owlroost','golemaltar','stonevault'])assert(island.plan[key],`${region.id} retains ${key}`);
   for(const portal of portals){
     assert(island.isDry(portal.x,portal.y,portal.r+100));
-    assert(island.containsCapsule(0,0,portal.x,portal.y+96,island.routeRadius,island.shallowWidth));
     for(const other of portals)if(other!==portal)assert(Math.hypot(portal.x-other.x,portal.y-other.y)>600,'all endpoints have separated arenas');
   }
+  // A connected route can bend around woods and lakes. Requiring a direct
+  // origin-to-gate corridor would forbid the world's deliberate detours.
+  const key=(x,y)=>`${Math.round(x*1000)},${Math.round(y*1000)}`,links=new Map();
+  for(const route of island.routes){
+    assert(island.containsCapsule(route.ax,route.ay,route.bx,route.by,route.r,island.shallowWidth),'complete route segments stay on land');
+    const a=key(route.ax,route.ay),b=key(route.bx,route.by);
+    if(!links.has(a))links.set(a,new Set());if(!links.has(b))links.set(b,new Set());
+    links.get(a).add(b);links.get(b).add(a);
+  }
+  const connected=new Set([key(0,0)]),pending=[key(0,0)];
+  for(const point of pending)for(const next of links.get(point)||[])if(!connected.has(next)){connected.add(next);pending.push(next);}
+  for(const [name,point] of Object.entries(island.plan))assert(connected.has(key(point.x,point.y+96)),`${region.id}/${seed}: route network misses ${name}`);
 }
 assert.equal(outlines.size,REGIONS.length,'every world has its own outline');
 

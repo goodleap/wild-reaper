@@ -1,4 +1,5 @@
 import { TERRAIN_GENERATOR_IDS } from '../worlds/generator-ids.js';
+import { validateWorldLayout } from './world-layout.js';
 
 const persistentWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
 const fail=path=>{throw new TypeError(`Invalid world configuration: ${path}`);};
@@ -48,6 +49,7 @@ export function validateWorlds(sections){
   }
   for(const w of worldDefs){
     const p='world '+text(w.id,'world.id');for(const key of ['name','shortName'])text(w[key],p+'.'+key);
+    validateWorldLayout(w.layout,bossIds,p+'.layout');
     profile(w.profile,p+'.profile');positive(w.danger,p+'.danger');object(w.colors,p+'.colors');
     for(const key of ['ground','light','dark','accent','mist','grass','stone'])text(w.colors[key],p+'.colors.'+key);
     for(const[key,n]of Object.entries(object(w.enemyWeights,p+'.enemyWeights'))){ref(key,enemyIds,p+'.enemyWeights');number(n,p+'.enemyWeights.'+key);}
@@ -94,8 +96,26 @@ export function validateWorlds(sections){
     if(Math.hypot(d.start.x-d.exit.x,d.start.y-d.exit.y)<d.exit.r+150)fail(p+'.exit.distance');
     for(const [index,prop]of list(d.obstacles,p+'.obstacles',0,96).entries()){
       const q=p+'.obstacles.'+index;positive(prop.r,q+'.r');point(prop,q,prop.r+20);
-      if(!['expedition-cargo','expedition-mast','expedition-moonrock'].includes(prop.variant))fail(q+'.variant');
+      if(!['expedition-cargo','expedition-mast','expedition-moonrock','expedition-wreck','expedition-tree','expedition-camprock','expedition-log'].includes(prop.variant))fail(q+'.variant');
+      if(prop.treeForm!=null)integer(prop.treeForm,q+'.treeForm',0,4);
+      if(prop.scale!=null)number(prop.scale,q+'.scale',.5,1.5);
+      if(prop.variant==='expedition-log'){
+        number(prop.halfLength,q+'.halfLength',1,100);number(prop.angle,q+'.angle',-Math.PI*2,Math.PI*2);
+        for(const sign of [-1,1])point({x:prop.x+Math.cos(prop.angle)*prop.halfLength*sign,y:prop.y+Math.sin(prop.angle)*prop.halfLength*sign},q+'.endpoint',prop.r+20);
+      }
       if(Math.hypot(prop.x-d.start.x,prop.y-d.start.y)<prop.r+40||Math.hypot(prop.x-d.exit.x,prop.y-d.exit.y)<prop.r+d.exit.r)fail(q+'.route endpoint');
+    }
+    for(const [index,path]of list(d.paths||[],p+'.paths',0,24).entries()){
+      const q=p+'.paths.'+index;number(path.width,q+'.width',40,240);
+      for(const [i,vertex]of list(path.points,q+'.points',2,64).entries())point(vertex,q+'.points.'+i,10);
+    }
+    for(const [index,detail]of list(d.details||[],p+'.details',0,48).entries()){
+      const q=p+'.details.'+index;if(!['hatch','rope','crater','landing','wreckage','clearing','grove','camp'].includes(detail.kind))fail(q+'.kind');
+      number(detail.rx,q+'.rx',1,320);number(detail.ry,q+'.ry',1,320);point(detail,q);
+    }
+    for(const [index,supply]of list(d.supplies||[],p+'.supplies',0,12).entries()){
+      const q=p+'.supplies.'+index;point(supply,q,30);
+      if(!sections.economy?.pickups?.types?.includes(supply.drop))fail(q+'.drop');
     }
     const segments=list(d.segments,p+'.segments',0,8);
     if(d.axis==='arena'){positive(d.duration,p+'.duration');if(segments.length)fail(p+'.arena segments');}

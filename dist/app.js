@@ -23,6 +23,7 @@ import { armyPanelHTML } from './army-panel.js';
 import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
 import { WorldArt } from './world-art.js';
+import { WorldLayoutArt } from './worlds/world-layout-art.js';
 import { mapSeed } from './map-context.js';
 import { STAGES, getStageDefinition } from './stage-definitions.js';
 import { INITIAL_WEAPON_IDS as initialWeaponIds } from './combat-catalog.js';
@@ -81,6 +82,7 @@ const humanoidArt=new HumanoidArt(()=>document.createElement('canvas'));
 const companionArt=new CompanionArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
 const worldArt=new WorldArt(()=>document.createElement('canvas'));
+const worldLayoutArt=new WorldLayoutArt(()=>document.createElement('canvas'));
 const worldSiteArt=new WorldSiteArt(()=>document.createElement('canvas'));
 const worldHazardArt=new WorldHazardArt(()=>document.createElement('canvas'));
 const waterArt=new WaterArt(()=>document.createElement('canvas'));
@@ -977,8 +979,9 @@ function background(camX,camY,intro){const {width,height}=sceneViewport(intro);
   if(!intro&&!game?.dungeon?.active&&game?.terrain?.island){decorativeShadowShapes.length=0;islandArt.draw(ctx,game.terrain.island,{camX,camY,width,height,time:game._clock,reduced,dense:combatOptions.dense},()=>backgroundLand(camX,camY,false));return;}
   backgroundLand(camX,camY,intro);
 }
-function backgroundLand(camX,camY,intro){const {width,height}=sceneViewport(intro);decorativeShadowShapes.length=0;if(!intro&&game?.dungeon?.active){drawDungeonBackground(camX,camY);return;}if(!intro&&game?.region?.id!=='forest'&&game?.region){drawRegionBackground(camX,camY);return;}ctx.fillStyle='#2b4130';ctx.fillRect(0,0,width,height);const hX=intro?(width<760?.62:.73)*width:width*.5,hY=intro?(width<760?.71:.52)*height:height*.5;if(intro)glow(hX,hY,width*.6,'#76995b30');
+function backgroundLand(camX,camY,intro){const {width,height}=sceneViewport(intro);decorativeShadowShapes.length=0;if(!intro&&game?.dungeon?.active){drawDungeonBackground(camX,camY);return;}if(!intro&&game?.region?.id!=='forest'&&game?.region){drawRegionBackground(camX,camY);worldLayoutArt.drawGround(ctx,game.terrain?.island,{camX,camY,width,height});return;}ctx.fillStyle='#2b4130';ctx.fillRect(0,0,width,height);const hX=intro?(width<760?.62:.73)*width:width*.5,hY=intro?(width<760?.71:.52)*height:height*.5;if(intro)glow(hX,hY,width*.6,'#76995b30');
   sceneryArt.drawGround(ctx,camX,camY,width,height);
+  if(!intro)worldLayoutArt.drawGround(ctx,game?.terrain?.island,{camX,camY,width,height});
   // Clusters are decorative ground cover; the central fighting space stays readable.
   if(intro){tree(width*.93,height*.14,1.7,.7);tree(width*.99,height*.48,1.2,.3);tree(width*.85,height*.97,1.5,.5);fern(width*.78,height*.88,2,.4);fern(width*.97,height*.8,1.7,.3);stone(hX-100,hY+72,1.5,.7);stone(hX+95,hY-96,1.3,.4);}
 }
@@ -1240,6 +1243,7 @@ function drawDeadTree(prop,mainPlayer){regionalArt.drawDeadTree(ctx,prop,treeCan
 function drawRuinsStone(prop){regionalArt.drawRuinsStone(ctx,prop);}
 function drawRuinsWall(prop){regionalArt.drawRuinsWall(ctx,prop);}
 function drawTerrain(prop,mainPlayer){if(prop.visual===false)return;if(prop.variant==='castle-wall'||prop.variant==='hut-wall'){drawDungeonWall(prop,mainPlayer);return;}if(prop.structureId)return;
+  worldLayoutArt.drawTreeFooting(ctx,prop);
   if(drawExpeditionProp(ctx,prop))return;
   if(worldArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer)}))return;
   if(prop.variant==='dead-tree'){drawDeadTree(prop,mainPlayer);return;}

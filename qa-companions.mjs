@@ -41,11 +41,11 @@ function travel(g) {
   g.regions.flushReward();assert(g.chooseSuper(g.getSuperChoices()[0].id));assert(g.enterPortal());
 }
 
-assert.deepEqual(HEROES.map(h=>h.id),['traveler']);
+assert.deepEqual(HEROES.map(h=>h.id),['traveler','princess','elder']);
 assert.deepEqual(COMPANIONS.map(h=>h.id).sort(),['dog','golem','owl','stormcaller','warden']);
 const original=new Game({hero:'stormcaller',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false});
 assert.equal(original.hero.id,'traveler');assert.equal(original.player.heroId,'traveler');
-assert.equal(original.player.hp,100);assert.equal(original.player.speed,220);assert.equal(original.player.skillCooldownMax,15);
+assert.equal(original.player.hp,110);assert.equal(original.player.speed,220);assert.equal(original.player.skillCooldownMax,15);
 assert.equal(original.levels.sword,1);assert.equal(original.levels.arrow,0);
 assert(Object.entries(original.levels).every(([id,level])=>level===(id==='sword'?1:0)));assert.equal(original.rescuePower,0);
 assert.equal(original.companions.active,null);assert.equal(original.companions.camp,null);
@@ -292,4 +292,4 @@ for(let i=0;i<12;i++) {
   advance(cycling,45.1);
 }
 assert.equal(cycling.rescuePower,12);assert.equal(xpTotal(cycling),144);assert.equal(cycling.player.level,1);
-console.log('Companion mechanics: fixed protagonist, real guard combat/rescue, persistent paid service, permanent run growth, lightning/defensive pulse damage, single rewards, interrupted Boss attacks, collision following, portal continuity, objective scheduling and long-run bounds passed.');
+console.log('Companion mechanics: standard protagonist fallback, real guard combat/rescue, persistent paid service, permanent run growth, lightning/defensive pulse damage, single rewards, interrupted Boss attacks, collision following, portal continuity, objective scheduling and long-run bounds passed.');

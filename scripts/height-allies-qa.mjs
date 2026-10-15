@@ -39,15 +39,20 @@ for(const obstacle of [low,high]){
 const onlyFlight=arena(),groundAlly=ally(onlyFlight,'warden');enemy(onlyFlight,60,0,'bat');
 assert.equal(onlyFlight.companions._castQuake(groundAlly),false,'a ground spell does not spend its cooldown on flying-only targets');
 
-for(const skill of ['swords','vortex'])for(const [obstacle,canCross] of [[low,true],[high,false]]){
+for(const skill of ['swords'])for(const [obstacle,canCross] of [[low,true],[high,false]]){
   const g=arena([obstacle]),target=enemy(g,140);
   assert.equal(g.superSkills._cast(skill,1),canCross,`${skill} acquisition uses its propagation profile`);
   for(let i=0;i<35;i++)g.superSkills.update(.05);
   assert.equal(target.hp<10000,canCross,`${skill} applies its cast only along a reachable route`);
 }
-const roots=arena(),groundTarget=enemy(roots,100),flyingTarget=enemy(roots,110,0,'bat');
-assert(roots.superSkills._cast('domain',1));assert(groundTarget.hp<10000);assert.equal(flyingTarget.hp,10000);assert.equal(flyingTarget.superRootUntil,undefined);
-const blockedRoots=arena([low]);enemy(blockedRoots,140);assert.equal(blockedRoots.superSkills._cast('domain',1),false);
+// These fields belong to enemies now. Neither grounded nor flying targets
+// may reopen a retired player acquisition path through this low-level API.
+for(const retired of ['domain','vortex']){
+  const g=arena(),ground=enemy(g,100),flying=enemy(g,110,0,'bat');
+  assert.equal(g.superSkills._cast(retired,1),false);
+  assert.equal(ground.hp,10000);assert.equal(flying.hp,10000);
+  assert.equal(flying.superRootUntil,undefined);assert.equal(g.superSkills.fields.length,0);
+}
 const swordWall=arena([{...high,x:-20,r:3}]);swordWall.player.x=-100;
 const swordVictim=enemy(swordWall,-110);
 assert(swordWall.superSkills._cast('swords',1));

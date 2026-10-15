@@ -55,4 +55,13 @@ try{
   assert(stress.art.cacheStats.bytes<=stress.art.cacheStats.limitBytes,'exploration evicts old shore images instead of growing memory');
 }finally{Math.random=random;}
 const invalid=recordingContext();assert.equal(art.draw(invalid.ctx,{...mud,rx:NaN}),false);assert.equal(invalid.calls.length,0);
+// A deep lake has a distinct rocky bank and darker water; sharing the shallow
+// image would make its non-wading edge look like an ordinary walkable puddle.
+for(const region of ['forest','marsh','beach','mountain','snow','volcano']){
+  const themed=artwork(),shallow={...mud,island:false,kind:region==='volcano'?'lava':'water'},deep={...shallow,deep:true};
+  themed.art.draw(recordingContext().ctx,shallow,{region,pixelRatio:2});const before=themed.art.cacheStats.builds;
+  themed.art.draw(recordingContext().ctx,deep,{region,pixelRatio:2});assert(themed.art.cacheStats.builds>before,`${region} deep banks cannot reuse a shallow texture`);
+  assert.deepEqual(getWaterContours(shallow),getWaterContours(deep),'depth styling keeps the exact gameplay shoreline');
+  const warm=themed.art.cacheStats.builds;themed.art.draw(recordingContext().ctx,deep,{region,pixelRatio:2});assert.equal(themed.art.cacheStats.builds,warm);
+}
 console.log('Water art: exact shared shore/island clips, world-sized details, viewport chunks, stable paused/reduced animation, no large-pool cache thrash and bounded 8 MB LRU passed.');

@@ -1,6 +1,7 @@
 import { getConfigSection } from './content-config.js';
 import { rescueGuardType } from './encounter-definitions.js';
 import { groundOffset } from './terrain.js';
+import { terrainNavigation } from './terrain-navigation.js';
 import { placementAllowed } from './placement-rules.js';
 import { resetLocomotion, updateLocomotion } from './locomotion.js';
 import { defenseDamageMultiplier } from './combat-stats.js';
@@ -52,14 +53,25 @@ export class Companions {
   }
   _guardPoints(site,count) {
     const g=this.game,p=this._foot(),points=[],r=28;
+    const navigation=terrainNavigation(g.terrain);
     // The doorway and its approach stay empty. Every slot is checked before
     // creating any defenders; an obstructed ruin never uses an unsafe fallback.
-    for(const depth of [52,130,208,286])for(const side of [-1,1])for(const lateral of [150,228,306]) {
-      const point={x:site.x+side*lateral,y:site.door.y+depth};
-      if(distance(point,p)<RESCUE_RULES.spawnDistance||!placementAllowed(g,'structure',{x:point.x,y:point.y,r:r+5})||!this._hazardFree(point.x,point.y,r))continue;
-      if(g.enemies.some(e=>e.hp>0&&distance(point,{x:e.x,y:e.y+groundOffset(e)})<r+e.r+12))continue;
-      if(points.some(other=>distance(point,other)<r*2+14))continue;
-      points.push(point);if(points.length===count)return points;
+    const add=point=>{
+      if(distance(point,p)<RESCUE_RULES.spawnDistance||!placementAllowed(g,'structure',{x:point.x,y:point.y,r:r+5})||!this._hazardFree(point.x,point.y,r))return false;
+      if(g.enemies.some(e=>e.hp>0&&distance(point,{x:e.x,y:e.y+groundOffset(e)})<r+e.r+12))return false;
+      if(points.some(other=>distance(point,other)<r*2+14))return false;
+      // A free point beyond a solid grove is not a usable defender position.
+      // A small bounded search also permits walking around the prison walls.
+      if(!g.terrain.isFree(site.door.x,site.door.y,r)||(!navigation.clearSegment(point,site.door,r)&&!navigation.find(point,site.door,r,'ground',512)))return false;
+      points.push(point);return points.length===count;
+    };
+    for(const depth of [52,130,208,286])for(const side of [-1,1])for(const lateral of [150,228,306])if(add({x:site.x+side*lateral,y:site.door.y+depth}))return points;
+    // A wooded ruin can have a clear courtyard without an open rectangular
+    // field in front of it. Fill missing slots around its existing reservation,
+    // keeping the same full-footprint, separation and harmless-arrival checks.
+    for(const radius of [180,210,250,300])for(let i=0;i<24;i++){
+      const angle=-Math.PI/2+i*TAU/24;
+      if(add({x:site.x+Math.cos(angle)*radius,y:site.y+Math.sin(angle)*radius}))return points;
     }
     return null;
   }

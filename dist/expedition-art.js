@@ -25,8 +25,6 @@ function shipGround(c,d,view,time){
   c.restore();
   for(const y of [b.minY+12,b.maxY-12]){line(c,b.minX,y,b.maxX,y,'#4e4333',13);line(c,b.minX,y-2,b.maxX,y-2,'#c4a16a',4);}
   for(let x=b.minX+30;x<b.maxX;x+=150)for(const y of [b.minY+12,b.maxY-12]){c.fillStyle='#61503a';c.fillRect(x-6,y-9,12,18);line(c,x-5,y-9,x+5,y-9,'#d2b176',2);}
-  // A clear central strip and subtle arrows communicate the route without a HUD overlay.
-  for(let x=-930;x<1250;x+=240){line(c,x-14,-8,x,0,'#e9d3a354',2);line(c,x,0,x-14,8,'#e9d3a354',2);}
 }
 function crater(c,x,y,r){
   oval(c,x,y,r+5,r*.63+4,'#c4c4b721');oval(c,x,y+3,r,r*.62,'#4b525b');oval(c,x,y+6,r-5,Math.max(1,r*.54),'#6c737a');
@@ -48,7 +46,6 @@ function moonGround(c,d,view){
     for(let y=b.minY;y<b.maxY;y+=94){const side=x<0?-1:1;polygon(c,[[x,y],[x+side*25,y-17],[x+side*53,y+20],[x+side*29,y+68],[x,y+94]],'#58616b','#46505b');}
   }
   for(const y of [b.minY,b.maxY])line(c,b.minX,y,b.maxX,y,'#c2c9c17a',5);
-  for(let y=20;y>-2050;y-=240){line(c,-8,y+12,0,y,'#d0d8c95e',2);line(c,0,y,8,y+12,'#d0d8c95e',2);}
   for(const y of [-120,-780,-1440,-2060])for(const x of [-110,110]){oval(c,x,y,6,3,'#3e4953');line(c,x,y,x,y-17,'#5e6e77',3);oval(c,x,y-17,3,2,'#c6d9c3');}
 }
 function survivalGround(c,d,view){
@@ -62,6 +59,47 @@ function survivalGround(c,d,view){
   oval(c,0,0,120,75,'#8c7c5445');oval(c,0,0,57,35,'#4b493b70');
   for(let i=0;i<12;i++){const a=i*TAU/12;oval(c,Math.cos(a)*60,Math.sin(a)*37,6,4,'#a0a085');}
   label(c,'守夜营地',0,63,'#d1d6ac');
+}
+
+function drawLayout(c,run,view){
+  const d=run.definition,ship=run.id==='ship',moon=run.id==='moon';
+  c.save();c.beginPath();c.rect(d.bounds.minX,d.bounds.minY,d.bounds.maxX-d.bounds.minX,d.bounds.maxY-d.bounds.minY);c.clip();
+  // Ground marks use the same authored routes as the obstacles. They sit
+  // below combat telegraphs and do not add a second actor/depth layer.
+  for(const route of d.paths||[]){
+    c.beginPath();route.points.forEach((p,index)=>c[index?'lineTo':'moveTo'](p.x,p.y));
+    c.lineJoin='round';c.lineCap='round';c.lineWidth=route.width;c.strokeStyle=ship?'#d3b77913':moon?'#c3c7b61e':'#b0a27424';c.stroke();
+    c.lineWidth=route.width*.68;c.strokeStyle=ship?'#e2ca9a0a':moon?'#d6d5be0c':'#b5a67712';c.stroke();
+  }
+  for(const detail of d.details||[]){
+    const {x,y,rx,ry,kind}=detail;if(x+rx+20<view.minX||x-rx-20>view.maxX||y+ry+20<view.minY||y-ry-20>view.maxY)continue;
+    if(kind==='hatch'){
+      c.fillStyle='#3e42351f';c.fillRect(x-rx,y-ry,rx*2,ry*2);c.strokeStyle='#574c3c';c.lineWidth=5;c.strokeRect(x-rx,y-ry,rx*2,ry*2);
+      c.strokeStyle='#c8ad7555';c.lineWidth=2;c.strokeRect(x-rx+5,y-ry+5,rx*2-10,ry*2-10);
+      for(let xx=x-rx+18;xx<x+rx;xx+=19)line(c,xx,y-ry+7,xx,y+ry-7,'#4a46372b',3);
+    }else if(kind==='rope'){
+      for(let i=0;i<5;i++){c.beginPath();c.ellipse(x,y,rx-i*5,Math.max(3,ry-i*3),-.2,0,TAU);c.strokeStyle=i%2?'#c5ab76':'#6d593c';c.lineWidth=2.5;c.stroke();}
+      line(c,x+rx-6,y+5,x+rx+20,y+18,'#ccb17a',3);
+    }else if(kind==='crater'){
+      c.save();c.translate(x,y);c.scale(1,ry/(rx*.62));crater(c,0,0,rx);c.restore();
+      for(let i=0;i<13;i++){const a=i*TAU/13,v=hash(x+i,y);oval(c,x+Math.cos(a)*(rx+7),y+Math.sin(a)*(ry+5),3+v*4,2+v*3,'#bbc0b53a');}
+    }else if(kind==='landing'){
+      oval(c,x,y,rx,ry,'#a4aba012');c.save();c.setLineDash([12,14]);c.beginPath();c.ellipse(x,y,rx*.8,ry*.8,0,0,TAU);c.strokeStyle='#d0d8bb57';c.lineWidth=3;c.stroke();c.restore();
+      for(const sign of [-1,1]){line(c,x+sign*rx*.7,y-14,x+sign*rx*.7,y+14,'#c9d7b9',3);line(c,x-14,y+sign*ry*.7,x+14,y+sign*ry*.7,'#c9d7b9',3);}
+    }else if(kind==='wreckage'){
+      oval(c,x,y,rx,ry,'#35444a23');
+      for(let i=0;i<8;i++){const a=hash(x+i,y)*TAU,xx=x+Math.cos(a)*rx*.85,yy=y+Math.sin(a)*ry*.85;polygon(c,[[xx-5,yy-4],[xx+9,yy-2],[xx+5,yy+5],[xx-9,yy+2]],i%2?'#adb7b16b':'#4458667d');}
+    }else if(kind==='grove'){
+      oval(c,x,y,rx,ry,'#203e3431');
+      for(let i=0;i<24;i++){const a=i*2.39996,rad=.35+hash(x+i,y)*.65,xx=x+Math.cos(a)*rx*rad,yy=y+Math.sin(a)*ry*rad;oval(c,xx,yy,12+hash(y,i)*15,6+hash(i,x)*7,'#97aa6020');line(c,xx-3,yy+3,xx-7,yy-5,'#a6b27640');line(c,xx+1,yy+3,xx+4,yy-7,'#a6b27640');}
+    }else if(kind==='clearing'){
+      oval(c,x,y,rx,ry,'#ab9b6712');
+    }else if(kind==='camp'){
+      oval(c,x,y,rx,ry,'#baa67513');
+      for(let i=0;i<3;i++){const xx=x-32+i*30;polygon(c,[[xx-10,y-25],[xx+10,y-25],[xx+13,y+23],[xx-13,y+23]],i%2?'#9c93696b':'#71847779','#55644870');line(c,xx-10,y-17,xx+10,y-17,'#c5bb874f',3);}
+    }
+  }
+  c.restore();
 }
 function drawObjectives(c,run,time){
   const d=run.definition,b=d.bounds;
@@ -90,11 +128,12 @@ export function drawExpeditionGround(c,game,camX,camY,width,height){
   if(run.id==='ship')shipGround(c,run.definition,view,game._clock||0);
   else if(run.id==='moon')moonGround(c,run.definition,view);
   else survivalGround(c,run.definition,view);
+  drawLayout(c,run,view);
   drawObjectives(c,run,game._clock||0);c.restore();return true;
 }
 
 export function drawExpeditionProp(c,prop){
-  if(!['expedition-cargo','expedition-mast','expedition-moonrock'].includes(prop.variant))return false;
+  if(!['expedition-cargo','expedition-mast','expedition-moonrock','expedition-wreck','expedition-camprock'].includes(prop.variant))return false;
   const r=prop.r;c.save();c.translate(prop.x,prop.y);
   if(prop.variant==='expedition-cargo'){
     polygon(c,[[-r,-r*.7],[r,-r*.7],[r,r*.6],[-r,r*.6]],'#80603e','#493e32');
@@ -107,10 +146,18 @@ export function drawExpeditionProp(c,prop){
     polygon(c,[[-9,0],[-7,-104],[6,-104],[10,0]],'#665039','#3f3930');line(c,-4,-5,-3,-100,'#c6a475',3);
     line(c,-51,-78,51,-78,'#5d4935',5);polygon(c,[[-47,-76],[46,-76],[40,-38],[7,-29],[-41,-39]],'#ded0a5','#9c8f6c');
     line(c,-4,-76,-1,-31,'#97886780');line(c,-36,-42,-24,0,'#d5bc7c',1.3);line(c,35,-42,24,0,'#d5bc7c',1.3);
+  }else if(prop.variant==='expedition-wreck'){
+    polygon(c,[[-r,r*.2],[-r*.9,-r*.7],[-r*.3,-r*1.2],[r*.85,-r*.6],[r,r*.4],[r*.15,r*.65]],'#788c8f','#394f59');
+    polygon(c,[[-r*.9,-r*.7],[-r*.3,-r*1.2],[r*.85,-r*.6],[r*.22,-r*.35]],'#b8c2b9','#566c73');
+    polygon(c,[[-r*.55,-r*.56],[-r*.25,-r*.82],[r*.35,-r*.53],[r*.07,-r*.19]],'#435966','#9eafa8');
+    polygon(c,[[r*.12,-r*.12],[r*.72,-r*.34],[r*.78,r*.27],[r*.18,r*.41]],'#516974','#a6b1a680');
+    for(let i=0;i<3;i++)line(c,-r*.7+i*r*.21,r*.08,-r*.62+i*r*.21,r*.4,'#b8bd9a8f',3);
+    line(c,-r*.25,-r*.8,-r*.48,-r*1.45,'#b4bfb5',3);oval(c,-r*.48,-r*1.45,4,3,'#c4d7af');
   }else{
-    polygon(c,[[-r,r*.2],[-r*.82,-r*.55],[-r*.23,-r*1.15],[r*.52,-r*.94],[r,-r*.13],[r*.68,r*.54],[-r*.32,r*.65]],'#808890','#46515c');
-    polygon(c,[[-r*.82,-r*.55],[-r*.23,-r*1.15],[r*.52,-r*.94],[r*.1,-r*.35],[-r*.2,-r*.52]],'#b3b8b4');
-    polygon(c,[[r*.1,-r*.35],[r*.52,-r*.94],[r,-r*.13],[r*.68,r*.54],[r*.04,r*.4]],'#626e7b');
+    const camp=prop.variant==='expedition-camprock';
+    polygon(c,[[-r,r*.2],[-r*.82,-r*.55],[-r*.23,-r*1.15],[r*.52,-r*.94],[r,-r*.13],[r*.68,r*.54],[-r*.32,r*.65]],camp?'#7d8568':'#808890',camp?'#414e42':'#46515c');
+    polygon(c,[[-r*.82,-r*.55],[-r*.23,-r*1.15],[r*.52,-r*.94],[r*.1,-r*.35],[-r*.2,-r*.52]],camp?'#a5ac83':'#b3b8b4');
+    polygon(c,[[r*.1,-r*.35],[r*.52,-r*.94],[r,-r*.13],[r*.68,r*.54],[r*.04,r*.4]],camp?'#5f7159':'#626e7b');
     line(c,-r*.7,-r*.17,-r*.37,r*.4,'#d1d4c652',1.3);line(c,r*.07,-r*.3,r*.12,r*.35,'#35465380',1.5);
   }
   c.restore();return true;

@@ -18,7 +18,7 @@ export class WaterArt {
   constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this._shapes=new WeakMap();}
   get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
   _shape(mud){
-    const seed=Math.floor((mud.seed||0)*3)/3,key=[mud.kind||'water',mud.shape||'ellipse',mud.rx,mud.ry,mud.angle||0,mud.island?1:0,seed].join(':');
+    const seed=Math.floor((mud.seed||0)*3)/3,key=[mud.kind||'water',mud.shape||'ellipse',mud.rx,mud.ry,mud.angle||0,mud.island?1:0,mud.deep?1:0,seed].join(':');
     const previous=this._shapes.get(mud);if(previous?.key===key)return previous;
     const local={...mud,x:0,y:0,seed},contours=getWaterContours(local,{local:true}),b=waterBounds(local),shore=[...shorelinePoints(contours.outer),...contours.holes.flatMap(p=>shorelinePoints(p,13))];
     const r=random(613+Math.round(seed*1e6)),ripples=[];
@@ -38,13 +38,13 @@ export class WaterArt {
   }
   _paint(c,shape,region,tile){
     if(WORLD_WATER[region]||['ice','lava','snow'].includes(shape.local.kind)){this._paintTheme(c,shape,region,tile);return;}
-    const {local,b,shore}=shape,marsh=region==='marsh',seed=Math.round((local.seed||0)*1e6);
+    const {local,b,shore}=shape,marsh=region==='marsh',deep=local.deep===true,seed=Math.round((local.seed||0)*1e6);
     // A narrow dry earthen bank is outside the exact water contour. The broad
     // filled region and all reflective details are clipped to playable water.
-    traceWaterPath(c,local,{local:true});c.lineWidth=14;c.strokeStyle=marsh?'#304a346e':'#49613c75';c.stroke();
-    traceWaterPath(c,local,{local:true});c.lineWidth=5;c.strokeStyle=marsh?'#526447c2':'#627451b5';c.stroke();
+    traceWaterPath(c,local,{local:true});c.lineWidth=deep?20:14;c.strokeStyle=deep?'#293e3baa':marsh?'#304a346e':'#49613c75';c.stroke();
+    traceWaterPath(c,local,{local:true});c.lineWidth=deep?9:5;c.strokeStyle=deep?'#78836bbf':marsh?'#526447c2':'#627451b5';c.stroke();
     const water=c.createLinearGradient(b.maxX,b.minY,b.minX,b.maxY);
-    water.addColorStop(0,marsh?'#496b56':'#52796a');water.addColorStop(.38,marsh?'#345748':'#325f58');water.addColorStop(.78,marsh?'#2d493e':'#2d524b');water.addColorStop(1,marsh?'#3e5944':'#426456');
+    water.addColorStop(0,deep?(marsh?'#3e5b56':'#3b626c'):marsh?'#496b56':'#52796a');water.addColorStop(.38,deep?'#244750':marsh?'#345748':'#325f58');water.addColorStop(.78,deep?'#203b47':marsh?'#2d493e':'#2d524b');water.addColorStop(1,deep?'#304d58':marsh?'#3e5944':'#426456');
     traceWaterPath(c,local,{local:true});c.fillStyle=water;c.fill();c.save();c.clip();
     // The inner band shows shallow sediment; broken highlights prevent the
     // contour from looking like a uniform UI ring around the pool.
@@ -69,6 +69,7 @@ export class WaterArt {
       const p=shore[i];if(p.x<tile.minX-18||p.x>tile.maxX+18||p.y<tile.minY-5||p.y>tile.maxY+24)continue;
       const r=random(seed+i*919+281),x=p.x+p.nx*(r()*3),y=p.y+p.ny*(r()*3),n=3+r()*6;
       const tangent=Math.atan2(p.ny,p.nx)+Math.PI*.5;
+      if(deep&&i%3===0){const xx=x+p.nx*4,yy=y+p.ny*4,rr=3+r()*4;oval(c,xx,yy,rr,rr*.55,'#46594f',tangent);oval(c,xx+.6,yy-1.1,rr*.88,rr*.32,'#a0a68a',tangent);}
       if(i%3!==0){oval(c,x+p.nx*3,y+p.ny*3,3+r()*5,1.3+r()*2.2,marsh?'#435b3894':'#60744989',tangent);for(let j=0;j<3;j++)leaf(c,x+p.nx*3+(r()-.5)*8,y+p.ny*3+(r()-.5)*4,4+r()*6,.7+r(),tangent+(r()-.5),[marsh?'#7088559e':'#8795579c','#38523ac0','#99a3746b'][j]);}
       leaf(c,x,y,n,.7+r()*1.5,tangent+(r()-.5),[marsh?'#6a8151b8':'#718858bf','#455c3cbd','#a1a06d66'][i%3]);
       if(r()<(marsh?.38:.23))reed(c,x,y,seed+i*327+11,marsh);
@@ -77,11 +78,11 @@ export class WaterArt {
     }
   }
   _paintTheme(c,shape,region,tile){
-    const {local,b,shore}=shape,kind=local.kind||'water',ice=kind==='ice',lava=kind==='lava',snow=kind==='snow',p=WORLD_WATER[region]||WORLD_WATER.snow,seed=Math.round((local.seed||0)*1e6);
-    traceWaterPath(c,local,{local:true});c.lineWidth=12;c.strokeStyle=lava?'#1c2225b5':snow?'#91b1b445':p.bank;c.stroke();
-    c.lineWidth=4;c.strokeStyle=lava?'#66605b':snow?'#dbe8dc':p.rim;c.stroke();
+    const {local,b,shore}=shape,kind=local.kind||'water',ice=kind==='ice',lava=kind==='lava',snow=kind==='snow',deep=local.deep===true,p=WORLD_WATER[region]||WORLD_WATER.snow,seed=Math.round((local.seed||0)*1e6);
+    traceWaterPath(c,local,{local:true});c.lineWidth=deep?20:12;c.strokeStyle=lava?'#1c2225b5':snow?'#91b1b445':p.bank;c.stroke();
+    c.lineWidth=deep?8:4;c.strokeStyle=lava?'#66605b':snow?'#dbe8dc':p.rim;c.stroke();
     const gradient=c.createLinearGradient(b.minX,b.minY,b.maxX,b.maxY);
-    gradient.addColorStop(0,lava?'#be703f':snow?'#e6eddf':ice?'#c5e3df':p.top);gradient.addColorStop(.45,lava?'#aa4b31':snow?'#d2e0d8':ice?'#8abfc4':p.deep);gradient.addColorStop(1,lava?'#71372d':snow?'#b7d0cf':ice?'#a8d4d0':p.top);
+    gradient.addColorStop(0,lava?'#be703f':snow?'#e6eddf':ice?'#c5e3df':deep?'#3b6671':p.top);gradient.addColorStop(.45,lava?'#aa4b31':snow?'#d2e0d8':ice?'#8abfc4':deep?'#244653':p.deep);gradient.addColorStop(1,lava?'#71372d':snow?'#b7d0cf':ice?'#a8d4d0':deep?'#315561':p.top);
     traceWaterPath(c,local,{local:true});c.fillStyle=gradient;c.fill();c.save();c.clip();
     const cell=48;
     for(let gy=Math.floor(tile.minY/cell)-1;gy<=Math.floor(tile.maxY/cell)+1;gy++)for(let gx=Math.floor(tile.minX/cell)-1;gx<=Math.floor(tile.maxX/cell)+1;gx++){
@@ -104,6 +105,7 @@ export class WaterArt {
     for(let i=0;i<shore.length;i++){
       const q=shore[i];if(q.x<tile.minX-8||q.x>tile.maxX+8||q.y<tile.minY-8||q.y>tile.maxY+8)continue;
       const r=random(seed+i*191+319),angle=Math.atan2(q.ny,q.nx)+Math.PI*.5;
+      if(deep&&i%3===0){const xx=q.x+q.nx*4,yy=q.y+q.ny*4,rr=3+r()*4;oval(c,xx,yy,rr,rr*.6,lava?'#313135':'#4c6664',angle);oval(c,xx+.4,yy-1.1,rr*.84,rr*.3,lava?'#8b7866':region==='snow'?'#c5d7cf':'#a5ad92',angle);}
       if(lava){oval(c,q.x+q.nx*2,q.y+q.ny*2,3+r()*4,1.5+r()*2,'#57504b',angle);if(i%4===0)stroke(c,[[q.x-2,q.y],[q.x+2,q.y-1]],'#eeae6f8c',.8);}
       else if(ice||snow){if(i%3===0)leaf(c,q.x,q.y,7+r()*7,1.1+r()*2,angle,'#edf6e6c0');}
       else if(i%3===0){oval(c,q.x+q.nx*2,q.y+q.ny*2,2+r()*3,1+r(),region==='beach'?'#d3c499':'#a2b69a',angle);}

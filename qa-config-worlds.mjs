@@ -9,8 +9,8 @@ import { Terrain } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
 
 // Fixed fingerprints preserve authored content and deterministic terrain.
-// v86 updates world enemy weights for nine specialist types and core bosses
-// for forest/beach/snow/volcano; all terrain fingerprints remain unchanged.
+// New macro layouts are checked through schema and navigation tests below;
+// the existing enemy values and standalone terrain recipes retain their hash.
 const expected={
   "exports": {
     "environment": "5a2e7540eee34a6d3ef9ea0b5029222765e9f6bd5b0b869552f15993a5f164c3",
@@ -37,7 +37,7 @@ const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof v
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 for(const [id,hash]of Object.entries(expected.exports)){
   const module=await import(`./dist/${id}.js`),data=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(module).filter(([,value])=>typeof value!=='function'))));
-  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;}
+  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;delete w.layout;}
   assert.equal(digest(data),hash,`${id}: authored values preserved`);
 }
 for(const world of REGIONS){
@@ -51,7 +51,7 @@ for(const world of REGIONS){
   assert(Object.isFrozen(world)&&Object.isFrozen(world.terrain));
 }
 assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,8);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
-const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
+const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
 const reject=(edit,label)=>{const bad=structuredClone(sections);edit(bad);assert.throws(()=>validateWorlds(bad),undefined,label);};
 reject(s=>s.worlds.definitions[0].terrain.generatorId='remote-code','unregistered behavior');
@@ -64,6 +64,10 @@ reject(s=>s.stages.definitions[1].core.id='forest-heart','duplicate map identity
 reject(s=>s.geography.siteFeatures.shipwreck.guardPackId='unknown','unknown guard pack');
 reject(s=>s.worlds.definitions[3].terrain.placements.default[0].properties.scale={base:1,gain:1,roll:'code'},'numeric recipes cannot execute code');
 reject(s=>delete s.geography.environmentRules.mushroom.growthTimePeriod,'missing environmental formula input');
+reject(s=>s.worlds.definitions[0].layout.bossKind='unknown','layout boss references an existing boss');
+reject(s=>s.worlds.definitions[0].layout.paths[0][0][0]=Infinity,'layout routes contain finite world points');
+reject(s=>s.worlds.definitions[0].layout.patches[0][0]='unrendered','layout patches use known terrain themes');
+reject(s=>s.worlds.definitions[0].layout.lakes[0][2]=-1,'layout lakes have positive supported bounds');
 for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   const g=new Game({hero:'princess',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
   g.time=time;g.enemies=[];g.player.x=g.player.y=0;g.player.invuln=0;

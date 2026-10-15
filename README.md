@@ -27,6 +27,8 @@ npm test
 
 领域规则位于 `config/difficulty.json` 的 `territories`，新增副本位于 `config/stages.json` 的 `expeditions`，台词及触发间隔位于 `config/sites.json` 的 `dialogue`；这些路径均相对于 `dist/`。修改后构建配置，并运行 `npm run test:exploration` 验证领域、副本、通关记录、地图、对话及准备流程。
 
+修改地图布局后运行 `npm run test:maps`，检查八世界实际入口与探索空地的可达性、连续障碍绕行、领域及奖励持久化、水域查询、地表缓存和三个副本通路；渲染仍需在云端浏览器检查手机 540 视野与桌面画面。固定地形、地表绘制和小地图共用 `Island.layout`，不要分别生成不一致的碰撞和外观。
+
 ## 内容配置
 
 `dist/config/*.json` 是各领域内容数据的唯一编辑源，保持纯 JSON。角色、战斗、怪物、遭遇、难度、世界、关卡、地理规则、场景、伙伴、经济和图鉴分别维护；行为函数、公式、绘制和生成算法保留在运行模块，通过稳定 ID 关联。

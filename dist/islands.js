@@ -1,6 +1,7 @@
 import { ISLAND_SITE_RESERVATIONS } from './worlds/site-reservations.js';
 import { COAST_RULES } from './placement-rules.js';
 import { WORLD_IDS, regionFor, worldNeighbors } from './world-definitions.js';
+import { createWorldLayout } from './worlds/world-layout.js';
 // Deterministic island outlines are shared by coast paint, collision, spawning
 // and natural terrain generation. The radius varies smoothly: no hidden
 // rectangular world wall and no narrow pixel-scale bays trapping a creature.
@@ -38,7 +39,7 @@ export class Island {
     const plan={};for(const [key,angle,radius,r] of specs){const a=angle+rotate;let d=radius;while(d>500&&!this.isDry(Math.cos(a)*d,Math.sin(a)*d,r+100))d-=40;plan[key]=Object.freeze({x:Math.cos(a)*d,y:Math.sin(a)*d,r});}
     if(definition){
       this._stageReservations(plan,definition,rotate);
-      this.plan=Object.freeze(plan);this.routes=Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
+      this.plan=Object.freeze(plan);this.layout=null;this.routes=Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
       return;
     }
     // Reserve every graph endpoint before natural objects and sites generate.
@@ -59,7 +60,7 @@ export class Island {
       if(!point)throw new Error(`No dry portal reservation for ${this.region}:${target}`);
       plan[`portal:${target}`]=point;
     }
-    this.plan=Object.freeze(plan);this.routes=Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
+    this.plan=Object.freeze(plan);this.layout=createWorldLayout(this,this.plan);this.routes=this.layout?.routes??Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
   }
   _stageReservations(plan,definition,rotate){
     const bossIsland=this.role==='boss',layout=definition.layout??{},scale=Math.min(this.profile.x,this.profile.y);
@@ -136,6 +137,7 @@ export class Island {
   isReservedCapsule(ax,ay,bx,by,r=0){
     if(distanceSq(0,0,ax,ay,bx,by)<(260+r)**2)return true;
     if(Object.values(this.plan).some(p=>distanceSq(p.x,p.y,ax,ay,bx,by)<(p.r+r)**2))return true;
+    if(this.layout?.clearings.some(p=>distanceSq(p.x,p.y,ax,ay,bx,by)<(p.r+r)**2))return true;
     return this.routes.some(p=>segmentDistanceSq(ax,ay,bx,by,p.ax,p.ay,p.bx,p.by)<(p.r+r)**2);
   }
   naturalCircleFree(x,y,r=0){return this.isDry(x,y,r)&&!this.isReserved(x,y,r);}

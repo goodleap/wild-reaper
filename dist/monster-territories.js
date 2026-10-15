@@ -25,6 +25,7 @@ export class MonsterTerritories {
       g.relicSites?.isSafePoint?.(x,y,r+25)!==false;
   }
   _generate() {
+    if(this.game.terrain.island?.layout?.encounters?.length){this._generateLayout();return;}
     const g=this.game,seed=g.terrain.island?.seed??g.regionIndex,plans=Object.values(g.terrain.island?.plan??{}),rotation=hash(seed+77)*TAU;
     for(const [ring,radius] of TERRITORY_RULES.ringRadii.entries()) {
       const slots=6+ring*3;
@@ -57,6 +58,45 @@ export class MonsterTerritories {
       }
     }
   }
+  _generateLayout() {
+    const g=this.game,island=g.terrain.island,seed=island.seed;
+    for(const [slot,point] of island.layout.encounters.entries()) {
+      if(point.kind==='secret'||!this._safe(point.x,point.y,point.kind==='boss'?55:26))continue;
+      const tier=Math.max(0,Math.min(4,point.tier??Math.floor(Math.hypot(point.x,point.y)/800)));
+      const id=`territory:${g.mapId}:${point.id}`,boss=point.kind==='boss';
+      const group={id,x:point.x,y:point.y,radius:TERRITORY_RULES.radius,kind:point.kind||'combat',name:boss?'荒野首领':point.kind==='guard'?'路口守卫':undefined,members:[],memberIds:[],cleared:false,announced:false};
+      const count=boss?1:TERRITORY_RULES.baseMembers+tier%3;
+      for(let member=0;member<count;member++) {
+        const n=seed*419+slot*173+member,context={region:g.region,enemies:g.enemies,time:0,_difficultyTime:()=>TERRITORY_RULES.typeBaseTime+tier*TERRITORY_RULES.typeRingTime};
+        const type=boss?'boss':ordinaryEnemyType(context,hash(n+131)),definition=enemyDefinition(type),r=definition.r;
+        let home=boss?{x:point.x,y:point.y}:null;
+        for(let attempt=0;!home&&attempt<32;attempt++) {
+          const a=hash(n+attempt*13)*TAU,d=35+hash(n+attempt*17+1)*110,p={x:point.x+Math.cos(a)*d,y:point.y+Math.sin(a)*d};
+          if(this._safe(p.x,p.y,r)&&group.members.every(enemy=>distance(foot(enemy),p)>enemy.r+r+8))home=p;
+        }
+        if(!home)continue;
+        const enemy=g._spawnEnemy(type,1),strength=boss?(g.region.danger||1):1+tier*TERRITORY_RULES.ringStrength;
+        if(boss){
+          // Field difficulty belongs to its location, regardless of how many
+          // guardians were fought before first visiting this world.
+          enemy.bossIndex=1;enemy.hp=(g.easy?(definition.easyHp??definition.baseHp):definition.baseHp)*strength;
+          enemy.damage=definition.damage*strength*(g.easy?getConfigSection('difficulty').enemyGrowth.easyDamageMultiplier:1);
+          enemy.xp=Math.round(definition.xp*strength);
+        }else{enemy.hp*=strength;enemy.damage*=strength;}
+        enemy.maxHp=enemy.hp;
+        enemy.x=home.x;enemy.y=home.y-groundOffset(enemy);enemy.territoryId=id;enemy.territoryHome=home;
+        enemy.territoryState='idle';enemy.guardActive=false;enemy._territoryOrder=member;enemy._territoryAway=0;
+        if(boss){enemy.worldBoss=true;g._initializeRegionalBoss(enemy,point.bossKind);}
+        group.members.push(enemy);group.memberIds.push(enemy.id);
+      }
+      if(!group.members.length)continue;
+      if(!boss&&g._features.elites&&(point.kind==='guard'||tier>=TERRITORY_RULES.eliteStartRing&&slot%TERRITORY_RULES.eliteGroupInterval===0)) {
+        const affix=TERRITORY_RULES.eliteAffixes[Math.floor(hash(seed+slot)*TERRITORY_RULES.eliteAffixes.length)];
+        for(const enemy of group.members)if(g.elites.promote(enemy,affix)){enemy.territoryHome=foot(enemy);break;}
+      }
+      this.groups.push(group);this.byId.set(id,group);
+    }
+  }
   _playerFoot(){const p=this.game.player;return {x:p.x,y:p.y+groundOffset(p,true)};}
   _stop(enemy) {
     this.game._clearRegionalBossAttacks?.(enemy);enemy.specialist=null;enemy._friendlyTargetId=null;
@@ -65,6 +105,7 @@ export class MonsterTerritories {
   _activate(enemy,group) {
     enemy.territoryState='chasing';enemy.guardActive=true;enemy.guardReturnTarget=null;enemy._territoryAway=0;
     enemy._navTimer=0;enemy._coastTarget=null;
+    if(enemy.worldBoss&&!enemy._worldBossAnnounced){enemy._worldBossAnnounced=true;this.game.bossCount++;this.game.bossSpawned=true;this.game.bossDefeated=false;this.game._emit('boss');}
     if(!group.announced){group.announced=true;this.game._emit('territoryAlert',{territoryId:group.id,enemyId:enemy.id});}
   }
   awaken(enemy) {
@@ -126,6 +167,7 @@ export class MonsterTerritories {
       return true;
     }
     if(enemy.territoryState==='alert'||distance(position,this._playerFoot())>TERRITORY_RULES.simulationRange)return true;
+    if(enemy.worldBoss)return true;
     const angle=this.game._clock*.18+enemy._territoryOrder*2.4,target={x:home.x+Math.cos(angle)*TERRITORY_RULES.patrolRadius,y:home.y+Math.sin(angle)*TERRITORY_RULES.patrolRadius};
     if(distance(position,target)>5&&this._safe(target.x,target.y,enemy.r)) {
       const speed=enemy.speed;enemy.speed*=TERRITORY_RULES.patrolSpeed;this.game._moveEnemy(enemy,dt,target);enemy.speed=speed;

@@ -49,6 +49,9 @@ export class Environment {
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
     this.world=worldForId(game.region?.id);this.region=this.world.id;this.rules=this.world.environment;
     this.seed=mapSeed(game);
+    // Authored lakes belong to the stable world layout. Their bounds may span
+    // several terrain cells, so neither lookup nor painting uses a cell radius.
+    this._macroWaters=game.terrain?.island?.layout?.lakes??[];
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();
     if(generation)this._refresh(true);
@@ -110,6 +113,7 @@ export class Environment {
     const terrain=this.game.terrain,structures=new Set(terrain._structures||[]);
     const clear=()=>{
       if(Math.hypot(mud.x,mud.y)<=ENVIRONMENT_BALANCE.safeRadius+Math.max(rx,ry)+8)return false;
+      if(this._macroWaters.some(lake=>intersects(waterBounds(lake,80),waterBounds(mud))))return false;
       // Query physical bounds with a skirt covering the measured roots/stone
       // edges beyond collision. A log uses its entire rotated round-ended
       // body, not a circle at the center or a handful of shoreline samples.
@@ -166,6 +170,7 @@ export class Environment {
     if(!bounds||!['minX','minY','maxX','maxY'].every(k=>Number.isFinite(bounds[k]))||bounds.minX>bounds.maxX||bounds.minY>bounds.maxY)return [];
     const waters=[],ids=new Set(),add=m=>{if(m&&intersects(waterBounds(m),bounds)&&!ids.has(m.id||m)){ids.add(m.id||m);waters.push(m);}};
     if(this.generation){
+      for(const lake of this._macroWaters)add(lake);
       for(let tx=Math.floor((bounds.minX-330)/CELL);tx<=Math.floor((bounds.maxX+330)/CELL);tx++)for(let ty=Math.floor((bounds.minY-330)/CELL);ty<=Math.floor((bounds.maxY+330)/CELL);ty++)add(this._mudAt(tx,ty));
     }
     for(const mud of this.muds)add(mud);
@@ -193,6 +198,7 @@ export class Environment {
     const view={minX:g.player.x-g.viewWidth*.5,minY:g.player.y-g.viewHeight*.5,maxX:g.player.x+g.viewWidth*.5,maxY:g.player.y+g.viewHeight*.5};
     const load={minX:view.minX-340,minY:view.minY-340,maxX:view.maxX+340,maxY:view.maxY+340};
     const retained=this.muds.filter(m=>intersects(waterBounds(m,35),load)),ids=new Set(retained.map(m=>m.id)),candidates=[];
+    for(const lake of this._macroWaters)if(!ids.has(lake.id)&&intersects(waterBounds(lake,35),load))candidates.push(lake);
     // A large water can cross into view while its owning cell is still well
     // outside it. Query by maximum extent and retain by its whole footprint.
     for(let tx=Math.floor((load.minX-330)/CELL);tx<=Math.floor((load.maxX+330)/CELL);tx++)for(let ty=Math.floor((load.minY-330)/CELL);ty<=Math.floor((load.maxY+330)/CELL);ty++){

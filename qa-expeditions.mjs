@@ -18,6 +18,7 @@ for(const d of EXPEDITIONS){
   assert.equal(g.stage,null);assert.equal(g.territories.groups.length,0);
   assert.equal(g.regions.portals.length,0);assert.equal(g.settlements.sites.length,0);assert.equal(g.environment.props.length,0);assert.equal(g.relicSites.sites.length,0);
   assert.equal(g.encounters,null);assert.equal(g.environment.generation,false);assert.equal(g.adventure.generation,false);assert.equal(g.companions.generation,false);
+  assert.equal(g.adventure.props.length,d.supplies.length,'authored side routes reuse ordinary supplies');
   assert.equal(run.markers.at(-1).discovered,true);
   assert(g.terrain.isFree(d.start.x,d.start.y,g.player.r));assert(g.terrain.isFree(d.exit.x,d.exit.y,g.player.r));
   for(const [dx,dy]of [[-10000,0],[10000,0],[0,-10000],[0,10000]]){
@@ -67,7 +68,10 @@ for(const mutate of [d=>{d.axis='z';},d=>{d.reward.gold=-1;},d=>{d.exit.x=1e9;},
 const calls=[],ctx=new Proxy({}, {get(target,key){return target[key]??((...args)=>{for(const n of args)if(typeof n==='number')assert(Number.isFinite(n),`finite draw argument ${key}`);calls.push(key);});},set(target,key,value){target[key]=value;return true;}});
 for(const id of ['survival','ship','moon']){
   const g=make(id);assert(drawExpeditionGround(ctx,g,g.player.x,g.player.y,900,600));assert(drawExpeditionPreview(ctx,id,280,150));
-  for(const prop of g.terrain.query(-4000,-4000,4000,4000))if(prop.visual!==false)assert(drawExpeditionProp(ctx,prop));
+  for(const prop of g.terrain.query(-4000,-4000,4000,4000))if(prop.visual!==false){
+    const handled=drawExpeditionProp(ctx,prop);
+    assert(handled||prop.type==='tree'||prop.type==='log','expedition props use custom art or ordinary tree/log depth rendering');
+  }
 }
 assert.equal(calls.filter(key=>key==='save').length,calls.filter(key=>key==='restore').length,'art preserves the actor depth renderer context');
 console.log('Expeditions: catalogue/schema, bounds, fixed groups, gated routes, survival waves, pause/death, exit rewards, restarts and finite artwork passed.');

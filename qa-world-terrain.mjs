@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Terrain, sceneryVisual } from './dist/terrain.js';
 import { Island } from './dist/islands.js';
-import { WORLD_IDS } from './dist/world-definitions.js';
+import { WORLD_IDS, worldForId } from './dist/world-definitions.js';
 import { biomeZone, cityStreetAt, CITY_BLOCK, CITY_STREET_HALF_WIDTH } from './dist/biome-layout.js';
 import { groundFootprint, surfaceAllows, surfaceAt, COAST_RULES } from './dist/placement-rules.js';
 import { blocksObstacle } from './dist/height-rules.js';
@@ -11,11 +11,14 @@ const kinds={beach:['world-palm','world-reef','world-driftwood'],city:['world-bu
 for(const region of WORLD_IDS.slice(3))for(const seed of [2,7]){
   const island=new Island({region,seed}),terrain=new Terrain({region,seed,island,cacheLimit:32});
   const snapshot=terrain.query(-2900,-2900,2900,2900);
-  assert(snapshot.length>25,`${region} must contain meaningful scenery`);
-  for(const variant of kinds[region])assert(snapshot.some(p=>p.variant===variant),`${region} missing ${variant}`);
+  const scenery=snapshot.filter(prop=>!prop.water);
+  assert(scenery.length>25,`${region} must contain meaningful scenery`);
+  for(const variant of kinds[region])assert(scenery.some(p=>p.variant===variant),`${region} missing ${variant}`);
   assert.equal(new Set(snapshot.map(p=>p.id)).size,snapshot.length,'spatial queries cannot duplicate obstacles');
-  assert.equal(new Set(snapshot.map(p=>p.zone)).size,3,`${region} needs distinct local layouts`);
-  for(const prop of snapshot){
+  const zones=new Set(scenery.map(p=>p.zone));
+  for(const zone of worldForId(region).biomeZones)assert(zones.has(zone),`${region}: existing ${zone} district survives the authored patches`);
+  assert(scenery.some(p=>p.layoutPatch),`${region} has contiguous woodland scenery`);
+  for(const prop of scenery){
     const footprint=groundFootprint(prop),kind=prop.type==='tree'?'vegetation':prop.type==='log'?'debris':'stone';
     assert(surfaceAllows(island,kind,footprint),`${region}:${prop.id} has an invalid habitat`);
     assert(!island.isReservedCapsule(footprint.ax,footprint.ay,footprint.bx,footprint.by,footprint.r),`${region}:${prop.id} blocks a guaranteed route`);
@@ -29,6 +32,7 @@ for(const region of WORLD_IDS.slice(3))for(const seed of [2,7]){
   }
   // Walk every guaranteed route with the same swept body check used by actors.
   for(const route of island.routes){
+    assert(!terrain.firstBlocker(route.ax,route.ay,route.bx,route.by,22),`${region} route sweep blocked`);
     const steps=Math.ceil(Math.hypot(route.bx-route.ax,route.by-route.ay)/45);
     for(let i=0;i<=steps;i++){const t=i/steps;assert(terrain.isFree(route.ax+(route.bx-route.ax)*t,route.ay+(route.by-route.ay)*t,22),`${region} route blocked`);}
   }
@@ -44,7 +48,9 @@ for(let line=-4;line<=4;line++)for(let other=-2200;other<=2200;other+=37)for(con
   assert(cityStreetAt(street,other)&&cityStreetAt(other,street));
   assert(city.isFree(street,other,18)&&city.isFree(other,street,18),'ordinary city streets need continuous actor-width clearance');
 }
-// Footprints cannot overlap just because they were emitted by adjacent cells.
+// Legacy standalone terrain still spaces its sparse props. World layouts may
+// deliberately join roots or rock faces into continuous obstacles; their real
+// navigability is checked with all structure layers in qa-world-layout.mjs.
 for(const region of WORLD_IDS.slice(3)){
   const terrain=new Terrain({region,seed:4}),props=terrain.query(-1500,-1500,1500,1500);
   for(let i=0;i<props.length;i++)for(let j=i+1;j<props.length;j++){

@@ -3,6 +3,8 @@ import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
 import { worldForId } from './world-definitions.js';
 import { biomeZone } from './biome-layout.js';
+import { layoutTerrainCell, layoutWet, patchContains } from './worlds/world-layout.js';
+import { getWaterContours, waterBounds, containsWater, waterIntersectsCircle, waterIntersectsCapsule } from './water-geometry.js';
 const CELL=520, TAU=Math.PI*2, EPS=.02;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -119,12 +121,18 @@ export class Terrain {
     this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
     this.cacheLimit=Math.max(16,Math.min(512,cacheLimit));this._cache=new Map();
     this._fixed=obstacles===undefined?null:obstacles.map((o,i)=>obstacle(o,i));
-    this._structures=[];this._structureOwners=new Map();this.island=island;
+    this._structures=[];this._structureOwners=new Map();this.structureRevision=0;this.island=island;
+    this._layoutIndex=new Map();
+    const layout=island?.layout;
+    const props=(layout?.obstacles||[]).map((o,i)=>obstacle({...o,visual:sceneryVisual(o)},i));
+    for(const water of layout?.lakes||[])if(water.deep)props.push(Object.freeze({id:water.id,type:'water',region:this.region,x:water.x,y:water.y,r:0,scale:1,seed:water.seed,sortY:water.y,heightBand:'low',visual:false,water,points:getWaterContours(water).outer,bounds:waterBounds(water)}));
+    for(const prop of props)for(let x=Math.floor(prop.bounds.minX/CELL);x<=Math.floor(prop.bounds.maxX/CELL);x++)for(let y=Math.floor(prop.bounds.minY/CELL);y<=Math.floor(prop.bounds.maxY/CELL);y++){const key=`${x},${y}`;if(!this._layoutIndex.has(key))this._layoutIndex.set(key,[]);this._layoutIndex.get(key).push(prop);}
   }
   get cacheSize(){return this._cache.size;}
   // Each world system replaces only its own bounded collision layer. A gate
   // opening must never erase a neighboring hut or castle foundation.
   setStructures(obstacles=[],owner='default') {
+    this.structureRevision++;
     const key=String(owner),layer=obstacles.slice(0,128).map((o,i)=>obstacle({...o,id:o.id??`structure:${key}:${i}`},i));
     if(layer.length)this._structureOwners.set(key,layer);else this._structureOwners.delete(key);
     this._structures=[...this._structureOwners.values()].flat();
@@ -140,6 +148,12 @@ export class Terrain {
       add({id:`${this.region}:${key}:${index}`,region:this.region,zone:zone.id,type,variant,x:tx*CELL+x,y:ty*CELL+y,r:type==='tree'?19*size:type==='rock'?34*size:18,scale:size,seed,angle:0,treeForm:index%5,rockForm:index%3,logForm:index%3,...extra});
     };
     this.world.terrain.generate({tx,ty,key,region:this.region,hash,roll,zone,add,place,treeProfiles:TREE_PROFILES,cell:CELL,settings:this.world.terrain});
+    if(this.island?.layout){
+      // Sparse legacy scenery does not compete with the contiguous woodland
+      // lattice. Keeping one owner avoids overlapping arbitrary trunks.
+      for(let i=items.length-1;i>=0;i--)if(this.island.layout.patches.some(p=>p.kind==='forest'&&patchContains(p,items[i].x,items[i].y, -100)))items.splice(i,1);
+      layoutTerrainCell({layout:this.island.layout,tx,ty,cell:CELL,region:this.region,seed:this.seed,add});
+    }
     return items;
   }
   _cell(tx,ty) {
@@ -152,7 +166,7 @@ export class Terrain {
       // Reserve roots, the stone base and the full rotated log body. Raised
       // branches may overhang a shore; their artwork does not block the route.
       const footprint=groundFootprint(o),kind=o.type==='tree'?'vegetation':o.type==='log'?'debris':'stone';
-      return surfaceAllows(this.island,kind,footprint)&&!this.island.isReservedCapsule(footprint.ax,footprint.ay,footprint.bx,footprint.by,footprint.r);
+      return surfaceAllows(this.island,kind,footprint)&&!this.island.isReservedCapsule(footprint.ax,footprint.ay,footprint.bx,footprint.by,footprint.r)&&!layoutWet(this.island.layout,footprint.ax,footprint.ay,footprint.bx,footprint.by,footprint.r+8)&&!(this.island.layout?.obstacles||[]).some(p=>{const a=axis(p);return segmentDistanceSq(footprint.ax,footprint.ay,footprint.bx,footprint.by,a.ax,a.ay,a.bx,a.by)<(footprint.r+p.r+16)**2;});
     });
     this._cache.set(key,clear);
     while(this._cache.size>this.cacheLimit)this._cache.delete(this._cache.keys().next().value);
@@ -162,24 +176,29 @@ export class Terrain {
     const intersects=o=>o.bounds.maxX>=minX&&o.bounds.minX<=maxX&&o.bounds.maxY>=minY&&o.bounds.minY<=maxY;
     if(this._fixed)return [...this._fixed.filter(intersects),...this._structures.filter(intersects)];
     const result=this._structures.filter(intersects);
+    const seen=new Set();for(let x=Math.floor(minX/CELL);x<=Math.floor(maxX/CELL);x++)for(let y=Math.floor(minY/CELL);y<=Math.floor(maxY/CELL);y++)for(const o of this._layoutIndex.get(`${x},${y}`)||[])if(!seen.has(o.id)&&intersects(o)){seen.add(o.id);result.push(o);}
     // A neighboring cell can own a long prop that crosses a query edge.
     for(let tx=Math.floor((minX-110)/CELL);tx<=Math.floor((maxX+110)/CELL);tx++)
       for(let ty=Math.floor((minY-110)/CELL);ty<=Math.floor((maxY+110)/CELL);ty++)
         for(const o of this._cell(tx,ty))if(intersects(o))result.push(o);
     return result;
   }
-  closestPoint(o,x,y) {const a=axis(o);return pointOnSegment(x,y,a.ax,a.ay,a.bx,a.by);}
+  closestPoint(o,x,y) {
+    if(o.water){let best=null,distance=Infinity;for(let i=0;i<o.points.length;i++){const a=o.points[i],b=o.points[(i+1)%o.points.length],q=pointOnSegment(x,y,a.x,a.y,b.x,b.y),d=(q.x-x)**2+(q.y-y)**2;if(d<distance){const length=Math.hypot(b.x-a.x,b.y-a.y);distance=d;best={...q,nx:(b.y-a.y)/length,ny:-(b.x-a.x)/length};}}return best;}
+    const a=axis(o);return pointOnSegment(x,y,a.ax,a.ay,a.bx,a.by);
+  }
   isDry(x,y,r=0) {return !this.island||this.island.isDry(x,y,r);}
   isNaturalFree(x,y,r=0) {return (!this.island||this.island.naturalCircleFree(x,y,r))&&this.isFree(x,y,r);}
   isFree(x,y,r=0,profile='ground') {
     if(this.island&&!this.island.contains(x,y,r))return false;
-    return !this.query(x-r,y-r,x+r,y+r).some(o=>{if(!blocksObstacle(o,profile))return false;const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
+    return !this.query(x-r,y-r,x+r,y+r).some(o=>{if(!blocksObstacle(o,profile))return false;if(o.water)return waterIntersectsCircle(o.water,x,y,Math.max(0,r-.001));const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
   }
   _resolve(x,y,r,items,fromX=x,fromY=y) {
     let blocked=false;
     for(let pass=0;pass<6;pass++) {
       let hit=false;
       for(const o of items) {
+        if(o.water){if(!waterIntersectsCircle(o.water,x,y,r))continue;const q=this.closestPoint(o,x,y),inside=containsWater(o.water,x,y),dx=x-q.x,dy=y-q.y,d=Math.hypot(dx,dy),nx=!inside&&d>1e-8?dx/d:q.nx,ny=!inside&&d>1e-8?dy/d:q.ny;x=q.x+nx*(r+EPS);y=q.y+ny*(r+EPS);blocked=hit=true;continue;}
         const q=this.closestPoint(o,x,y),dx=x-q.x,dy=y-q.y,d=Math.hypot(dx,dy),required=r+o.r;
         if(d>=required)continue;
         let nx,ny;
@@ -221,7 +240,7 @@ export class Terrain {
     for(let i=0;i<steps;i++) {
       let next=this._resolve(x+sx,y+sy,r,items,x,y);blocked||=next.blocked;
       if(this.island){const coast=this.island.constrain(next.x,next.y,r);blocked||=coast.blocked;next=coast;}
-      if(!items.some(o=>{const q=this.closestPoint(o,next.x,next.y);return Math.hypot(next.x-q.x,next.y-q.y)<r+o.r-.001;})){x=next.x;y=next.y;}
+      if(!items.some(o=>{if(o.water)return waterIntersectsCircle(o.water,next.x,next.y,Math.max(0,r-.001));const q=this.closestPoint(o,next.x,next.y);return Math.hypot(next.x-q.x,next.y-q.y)<r+o.r-.001;})){x=next.x;y=next.y;}
       else blocked=true;
     }
     return {x,y,blocked};
@@ -230,6 +249,7 @@ export class Terrain {
     let found=null,best=Infinity;const dx=x2-x1,dy=y2-y1,length=dx*dx+dy*dy||1;
     for(const o of this.query(Math.min(x1,x2)-r,Math.min(y1,y2)-r,Math.max(x1,x2)+r,Math.max(y1,y2)+r)) {
       if(!blocksObstacle(o,profile))continue;
+      if(o.water){if(waterIntersectsCapsule(o.water,x1,y1,x2,y2,r)){const q=this.closestPoint(o,x1,y1),t=clamp(((q.x-x1)*dx+(q.y-y1)*dy)/length,0,1);if(t<best){best=t;found=o;}}continue;}
       const a=axis(o),rr=r+o.r;
       if(segmentDistanceSq(x1,y1,x2,y2,a.ax,a.ay,a.bx,a.by)<rr*rr) {
         const t=clamp(((o.x-x1)*dx+(o.y-y1)*dy)/length,0,1);

@@ -8,6 +8,7 @@ import { resolveCharacterStats, resolveMaxHealth, maxHealthGrowth, skillStats } 
 import { EVOLUTIONS, normalizeInitialWeaponId } from './combat-catalog.js';
 export { EVOLUTIONS } from './combat-catalog.js';
 import { Terrain, groundOffset } from './terrain.js';
+import { terrainNavigation } from './terrain-navigation.js';
 import { blocksObstacle, isGrounded, movementProfile } from './height-rules.js';
 import { Island } from './islands.js';
 import { waterIntersectsCircle } from './water-geometry.js';
@@ -274,9 +275,11 @@ export class Game {
     if(!(dt>0))return;
     const pursued=target?null:selectFriendlyTarget(this,e),point=pursued?friendlyFoot(pursued):target;
     const x=e.x,y=e.y+groundOffset(e,!!e.isCompanion),rawX=point.x,rawY=point.y;
+    if(e._routeTerrain!==this.terrain){Object.defineProperty(e,'_routeTerrain',{value:this.terrain,writable:true,configurable:true,enumerable:false});e._navTimer=0;}
+    e._routeTime=(e._routeTime||0)+dt;
     e._navTimer=(e._navTimer||0)-dt;
     if(e._navTimer<=0) {
-      e._navTimer=.16+(e.id%4)*.025;e._coastTarget=null;
+      e._navTimer=.16+(e.id%4)*.025;e._coastTarget=null;e._routePoint=null;
       const island=this.terrain.island;
       // Bays interrupt a straight pursuit even with no solid tree in the way.
       // The island is star-shaped: a short inland waypoint keeps both legs on
@@ -291,11 +294,13 @@ export class Game {
       const obstacle=this.terrain.firstBlocker(x,y,tx,ty,e.r+3,movementProfile(e));
       if(obstacle?.id!==e._navObstacle?.id)e._navSide=0;
       e._navObstacle=obstacle;
+      if(obstacle)e._routePoint=terrainNavigation(this.terrain).waypoint(e,{x,y},{x:tx,y:ty},e.r+3,movementProfile(e),e._routeTime,this._clock);
+      else e._terrainRoute=null;
     }
-    const tx=e._coastTarget?.x??rawX,ty=e._coastTarget?.y??rawY,dx=tx-x,dy=ty-y,d=Math.hypot(dx,dy)||1;
-    let nx=dx/d,ny=dy/d,detouring=false;
+    const tx=e._routePoint?.x??e._coastTarget?.x??rawX,ty=e._routePoint?.y??e._coastTarget?.y??rawY,dx=tx-x,dy=ty-y,d=Math.hypot(dx,dy)||1;
+    let nx=dx/d,ny=dy/d,detouring=!!e._routePoint;
     const obstacle=e._navObstacle;
-    if(obstacle) {
+    if(obstacle&&!e._routePoint) {
       const q=this.terrain.closestPoint(obstacle,x,y),ox=x-q.x,oy=y-q.y,od=Math.hypot(ox,oy)||1;
       const radius=obstacle.r+e.r+8;
       if(od<radius+80) {
@@ -315,7 +320,9 @@ export class Game {
     const definition=e.isCompanion?null:enemyDefinition(e.type);
     const wobble=!detouring&&definition?.wobble?Math.sin(this._clock*definition.wobble.frequency+e.phase)*definition.wobble.amplitude:0;
     const speed=e.speed*(definition?.surge?1+Math.max(0,Math.sin(this._clock*definition.surge.frequency))*definition.surge.amplitude:1)*(this.environment?.movementMultiplier(e,!!e.isCompanion)||1)*(this.elites?.movementMultiplier(e)||1)*this._branchMovementMultiplier(e);
-    this._moveEntity(e,(nx-ny*wobble)*speed*dt,(ny+nx*wobble)*speed*dt);
+    const travel=e._routePoint?Math.min(speed*dt,d):speed*dt;
+    this._moveEntity(e,(nx-ny*wobble)*travel,(ny+nx*wobble)*travel);
+    if(e._routePoint&&d<=speed*dt+6)e._navTimer=0;
     e._navProgressTimer=(e._navProgressTimer||0)+dt;
     if(e._navProgressTimer>.9) {
       if(detouring&&Number.isFinite(e._navProgressX)&&Math.hypot(e.x-e._navProgressX,e.y-e._navProgressY)<2)e._navSide*=-1;
