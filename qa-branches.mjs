@@ -144,7 +144,7 @@ const chainTargets=[60,120,180,240,300,360,420,480].map(x=>monster(chain,x));cha
 assert.equal(chainTargets.filter(e=>damage(e)>0).length,7);
 assert(chainTargets.slice(0,3).every(e=>damage(e)===88));assert(chainTargets.slice(3,7).every(e=>Math.abs(damage(e)-74.8)<1e-8));assert.equal(damage(chainTargets[7]),0);
 const focus=arena();select(focus,'lightning','focus');focus._lightning=0;
-const close=monster(focus,80),healthy=monster(focus,150),boss=monster(focus,310,0,'boss');healthy.hp=healthy.maxHp=20000;
+const close=monster(focus,80),healthy=monster(focus,150),boss=monster(focus,230,0,'boss');healthy.hp=healthy.maxHp=20000;
 focus.update(0);
 assert.equal(damage(close),0);assert.equal(healthy.hp,20000);assert.equal(damage(boss),220,'concentrated lightning prioritizes a visible Boss with one stronger strike');
 assert(boss.shock,'the focused hit retains the normal lightning shock status');
@@ -172,7 +172,7 @@ travel.player.x=travel.portal.x;travel.player.y=portalDoor(travel.portal).y-grou
 travel.regions.flushReward();assert(travel.chooseSuper(travel.getSuperChoices()[0].id));
 for(const [id,branch] of Object.entries(beforeTravel))if(branch!==null)assert.equal(travel.branches[id],branch,'accepting a region reward preserves already chosen branches');
 const rewardedBranches=structuredClone(travel.branches);assert(travel.enterPortal());
-assert.deepEqual(travel.branches,rewardedBranches,'travel preserves all mutually exclusive branch choices including the newly awarded domain');
+assert.deepEqual(travel.branches,rewardedBranches,'travel preserves all mutually exclusive branch choices after the reward choice');
 assert.equal(travel._pulseEchoes.length,0);assert.equal(travel.bullets.length,0);
 assert(Object.values(arena().branches).every(b=>b===null),'a new run resets branch choices');
 

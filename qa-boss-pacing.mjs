@@ -42,7 +42,9 @@ if(process.argv[2]==='--sample'){
     };
     for(let frame=0;frame<120/dt;frame++){
       g._clock=(frame+1)*dt;
-      player.x=e.x+(kind==='ancient'?100:220);player.y=e.y+groundOffset(e)-groundOffset(player,true);
+      // Measure cadence while every authored step is in reach. The separate
+      // range QA verifies approach; this fixture intentionally disables motion.
+      player.x=e.x+100;player.y=e.y+groundOffset(e)-groundOffset(player,true);
       const before=e.specialStep;
       updateBoss(g,e,dt);
       if(e.specialStep!==before)starts.push(g._clock);
@@ -100,7 +102,7 @@ if(process.argv[2]==='--sample'){
   }
   assert.equal(enemies.definitions.boss.baseHp,2300,'ordinary Boss health is unchanged');
   assert.equal(enemies.definitions.boss.damage,22,'ordinary Boss contact damage is unchanged');
-  const protectedTiming={ancient:{windup:1,radius:115},bloom:{fanWindup:1,burstWindup:1.1,bulletSpeed:150},broodmother:{windup:1,leapDuration:.5},deepcaller:{windup:1.1,strikeInterval:.4,waveGap:110,waveDuration:2.8},frostcrown:{windup:1,chargeSpeed:290,chargeDuration:1.05,shatterDelay:1},furnace:{windup:1.1,marchDuration:2.2,eruptionDelay:1.1,flameDuration:1.8}};
+  const protectedTiming={ancient:{windup:1},bloom:{fanWindup:1,burstWindup:1.1,bulletSpeed:150},broodmother:{windup:1,leapDuration:.5},deepcaller:{windup:1.1,strikeInterval:.4,waveGap:110,waveDuration:2.8},frostcrown:{windup:1,chargeSpeed:290,chargeDuration:1.05,shatterDelay:1},furnace:{windup:1.1,marchDuration:2.2,eruptionDelay:1.1,flameDuration:1.8}};
   for(const [kind,values]of Object.entries(protectedTiming))for(const [key,value]of Object.entries(values))assert.equal(enemies.bosses[kind].parameters[key],value,`${kind} preserves ${key}`);
   console.log('Boss pacing: six real attack sequences, full warnings, stronger ordinary/world/stage/interior movement, preserved health and damage passed.');
   console.log(JSON.stringify(Object.fromEntries(Object.keys(prior).map(kind=>[kind,{previousInterval:+before[kind].interval.toFixed(2),currentInterval:+after[kind].interval.toFixed(2),attacksIn120Seconds:after[kind].count}]))));

@@ -57,8 +57,10 @@ const game=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encount
 game.enemies=[];game.effects=[];game.player.xpNext=Infinity;game.crystalsNext=Infinity;game.viewWidth=393;game.viewHeight=717;
 for(let i=0;i<180;i++){const e=game._spawnEnemy('slime',1);Object.assign(e,{x:-177+(i%12)*32,y:-300+Math.floor(i/12)*41,hp:100,maxHp:100,speed:0});}
 const offscreen=game._spawnEnemy('slime',1);Object.assign(offscreen,{x:900,y:0,hp:100,maxHp:100,speed:0});
-game._castStorm();assert.equal(game.kills,180);assert.equal(offscreen.hp,100);assert.equal(game.storm.targets.length,180);assert.equal(game.player.skillCooldown,15);
-const clear=getStormGeometry(game.storm);assert.equal(clear.impacts.length,180);assert(game.effects.length<=201);
+const covered=game.enemies.filter(e=>Math.hypot(e.x-game.player.x,e.y-game.player.y)<=300),outside=game.enemies.filter(e=>!covered.includes(e));
+game._castStorm();assert.equal(game.kills,covered.length);assert(covered.every(e=>e.hp<=0));assert(outside.every(e=>e.hp===100),'visible targets outside 300 retain HP');assert.equal(game.storm.targets.length,covered.length);assert.equal(game.player.skillCooldown,15);
+const clear=getStormGeometry(game.storm);assert.equal(clear.impacts.length,covered.length);assert(game.effects.length<=201);
+assert(clear.mainBolts.every(b=>Math.hypot(b.target.x-game.storm.x,b.target.y-game.storm.y)<=300),'decorative empty strikes respect the actual radius');
 const state=JSON.stringify(clear);game.player.x=2000;game.player.y=-3000;game.viewWidth=900;game.viewHeight=400;
 assert.equal(JSON.stringify(getStormGeometry(game.storm)),state,'leaving/resizing the cast viewport never attaches thunder to the camera');
 game.status='paused';const life=game.storm.life;game.update(.2,{});assert.equal(game.storm.life,life);

@@ -51,15 +51,15 @@ function impact(game,e,circle,multiplier,color){
   }
 }
 function startBrood(game,e,s,p){
-  const step=e.specialStep++%3;
-  if(step===0)return cast(game,e,'domain',s,{radius:p.domainRadius,duration:p.domainDuration,damage:e.damage*p.domainDamage,windup:p.windup},p.windup+p.recovery);
+  const step=e.specialStep%3;
+  if(step===0)return cast(game,e,'domain',s,{range:p.domainRange,radius:p.domainRadius,duration:p.domainDuration,damage:e.damage*p.domainDamage,windup:p.windup},p.windup+p.recovery);
   if(step===1){begin(e,'summon',p.windup,s,{circles:[{...s.a,r:p.summonRadius}]});return true;}
   // The destination is captured before the warning and never tracks movement.
-  if(!game.terrain.isFree(s.b.x,s.b.y,e.r)||!clearLine(game,s.a,s.b))return false;
+  if(s.distance>p.leapRange||!game.terrain.isFree(s.b.x,s.b.y,e.r)||!clearLine(game,s.a,s.b))return false;
   begin(e,'leap',p.windup,s,{destination:{...s.b},circles:[{...s.b,r:p.leapRadius}]});return true;
 }
 function startDeep(game,e,s,p){
-  const step=e.specialStep++%3;
+  const step=e.specialStep%3;
   if(step===0){
     const nx=-Math.sin(s.angle),ny=Math.cos(s.angle),circles=[];
     for(const offset of [0,-p.strikeSpacing,p.strikeSpacing]){
@@ -69,25 +69,25 @@ function startDeep(game,e,s,p){
     if(!circles.length)return false;
     begin(e,'tentacles',p.windup,s,{circles});return true;
   }
-  if(step===1)return cast(game,e,'vortex',s,{radius:p.vortexRadius,duration:p.vortexDuration,damage:e.damage*p.vortexDamage,windup:p.windup},p.vortexDuration+p.windup);
+  if(step===1)return cast(game,e,'vortex',s,{range:p.vortexRange,radius:p.vortexRadius,duration:p.vortexDuration,damage:e.damage*p.vortexDamage,windup:p.windup},p.vortexDuration+p.windup);
   // Two parallel waves have a deliberate, passable central lane.
   const offset=p.waveGap*.5+p.waveWidth*.5,nx=-Math.sin(s.angle),ny=Math.cos(s.angle);
   let fired=false;
   for(const side of [-1,1]){
     const origin={x:e.x+nx*offset*side,y:e.y+ny*offset*side},originFoot={x:origin.x,y:origin.y+groundOffset(e)};
     if(!game.terrain.isFree(originFoot.x,originFoot.y,8)||!clearLine(game,s.a,originFoot))continue;
-    fired=cast(game,e,'tidalWave',s,{origin,radius:p.waveWidth*.5,speed:p.waveSpeed,duration:p.waveDuration,damage:e.damage*p.waveDamage,windup:p.windup},p.windup+p.waveDuration+p.cycleRecovery)||fired;
+    fired=cast(game,e,'tidalWave',s,{origin,range:p.waveRange,radius:p.waveWidth*.5,speed:p.waveSpeed,duration:p.waveDuration,damage:e.damage*p.waveDamage,windup:p.windup},p.windup+p.waveDuration+p.cycleRecovery)||fired;
   }
   return fired;
 }
 function startFrost(game,e,s,p){
-  const step=e.specialStep++%4;
+  const step=e.specialStep%4;
   if(step===0){
     let fired=false;
-    for(let i=0;i<p.fanCount;i++)fired=cast(game,e,'frostbolt',s,{angle:s.angle+(i-(p.fanCount-1)*.5)*p.fanSpread/Math.max(1,p.fanCount-1),damage:e.damage*p.fanDamage,speed:p.fanSpeed,windup:p.windup,freezeChance:0},p.windup+p.recovery)||fired;
+    for(let i=0;i<p.fanCount;i++)fired=cast(game,e,'frostbolt',s,{angle:s.angle+(i-(p.fanCount-1)*.5)*p.fanSpread/Math.max(1,p.fanCount-1),range:p.boltRange,damage:e.damage*p.fanDamage,speed:p.fanSpeed,windup:p.windup,freezeChance:0},p.windup+p.recovery)||fired;
     return fired;
   }
-  if(step===1){begin(e,'frostCharge',p.windup,s,{length:p.chargeSpeed*p.chargeDuration,r:e.r});return true;}
+  if(step===1){begin(e,'frostCharge',p.windup,s,{length:Math.min(p.chargeLength,p.chargeSpeed*p.chargeDuration),distance:0,r:e.r});return true;}
   if(step===2){
     e.specialMarks.forEach((m,i)=>{m.delay=m.maxDelay=p.shatterDelay+i*p.shatterInterval;});
     begin(e,'shatter',p.shatterDelay+e.specialMarks.length*p.shatterInterval,s,{circles:[]});return true;
@@ -95,16 +95,24 @@ function startFrost(game,e,s,p){
   return cast(game,e,'frostRing',s,{radius:p.frostRadius,damage:e.damage*p.frostDamage,windup:p.windup},p.windup+p.cycleRecovery);
 }
 function startFurnace(game,e,s,p){
-  const step=e.specialStep++%4;
-  if(step===0){begin(e,'furnaceMarch',p.windup,s,{length:e.speed*p.marchSpeedMultiplier*p.marchDuration,r:e.r});return true;}
+  const step=e.specialStep%4;
+  if(step===0){begin(e,'furnaceMarch',p.windup,s,{length:Math.min(p.marchLength,e.speed*p.marchSpeedMultiplier*p.marchDuration),distance:0,r:e.r});return true;}
   if(step===1){
     e.specialMarks.forEach((m,i)=>{m.delay=m.maxDelay=p.eruptionDelay+i*p.eruptionInterval;});
     begin(e,'eruption',p.eruptionDelay+e.specialMarks.length*p.eruptionInterval,s,{circles:[]});return true;
   }
-  if(step===2)return cast(game,e,'fireball',s,{damage:e.damage*p.fireballDamage,windup:p.windup},p.windup+p.recovery);
+  if(step===2)return cast(game,e,'fireball',s,{range:p.fireballRange,damage:e.damage*p.fireballDamage,windup:p.windup},p.windup+p.recovery);
   return cast(game,e,'flameStream',s,{range:p.flameRange,spread:p.flameSpread,duration:p.flameDuration,damage:e.damage*p.flameDamage,windup:p.windup},p.windup+p.flameDuration+p.cycleRecovery);
 }
 const START=Object.freeze({broodmother:startBrood,deepcaller:startDeep,frostcrown:startFrost,furnace:startFurnace});
+// Each pattern owns its engagement distance. Future patterns can deliberately
+// use longer reaches without inheriting the current close/mid-range balance.
+const ATTACK_RANGES=Object.freeze({
+  broodmother:['domainRange','summonRange','leapRange'],
+  deepcaller:['strikeRange','vortexRange','waveActivationRange'],
+  frostcrown:['fanRange','chargeRange','shatterRange','frostRange'],
+  furnace:['marchRange','eruptionRange','fireballActivationRange','flameActivationRange']
+});
 
 function updateMovingAttack(game,e,a,p,dt){
   const start=foot(e),life=Math.min(dt,a.life),duration=a.maxLife;
@@ -115,10 +123,12 @@ function updateMovingAttack(game,e,a,p,dt){
     if(moved.blocked)a.life=0;
   }else{
     const speed=(a.kind==='frostCharge'?p.chargeSpeed:e.speed*p.marchSpeedMultiplier)*(game.environment?.movementMultiplier(e)||1)*(game._branchMovementMultiplier?.(e)||1);
-    const moved=game._moveEntity(e,Math.cos(a.angle)*speed*life,Math.sin(a.angle)*speed*life),at=foot(e);
+    const step=Math.min(speed*life,Math.max(0,a.length-a.distance));
+    const moved=game._moveEntity(e,Math.cos(a.angle)*step,Math.sin(a.angle)*step),at=foot(e);
+    a.distance+=Math.hypot(at.x-start.x,at.y-start.y);
     if(!a.lastMark||Math.hypot(at.x-a.lastMark.x,at.y-a.lastMark.y)>=p.markSpacing){mark(e,a.kind==='frostCharge'?'ice':'heat',at.x,at.y,p);a.lastMark=at;}
     if(a.kind==='frostCharge')a.segment={x:start.x,y:start.y,x2:at.x,y2:at.y};
-    if(moved.blocked)a.life=0;
+    if(moved.blocked||a.distance>=a.length-1e-6)a.life=0;
   }
   a.life=Math.max(0,a.life-life);
 }
@@ -133,9 +143,6 @@ export function updateSpecialistBoss(game,e,dt){
     if(e.specialVisualStrikes.life<=0)e.specialVisualStrikes=null;
   }
   const p=rules(e),s=targetState(game,e);
-  if(!game._inView(e)||s.distance>p.range*1.4){
-    clearSpecialistBoss(e);game._moveEnemy(e,dt*p.moveMultiplier);return true;
-  }
   e.specialSummons=(e.specialSummons||[]).filter(child=>child.hp>0);
   for(const m of e.specialMarks){m.life=Math.max(0,m.life-dt);if(m.delay!==null)m.delay=Math.max(0,m.delay-dt);}
   e.specialMarks=e.specialMarks.filter(m=>m.life>0);
@@ -149,11 +156,14 @@ export function updateSpecialistBoss(game,e,dt){
   e.specialRecovery=Math.max(0,e.specialRecovery-dt);
   if(e.specialRecovery>0)return true;
   e.specialPose=null;e.specialCooldown=Math.max(0,e.specialCooldown-dt);
-  if(e.specialCooldown<=0&&s.distance<=p.range&&clearLine(game,s.a,s.b,'sight')){
-    e.specialCooldown=p.cooldown;
-    if(START[e.bossKind](game,e,s,p))return true;
+  const sequence=ATTACK_RANGES[e.bossKind],attackRange=p[sequence[e.specialStep%sequence.length]],visible=game._inView(e),line=clearLine(game,s.a,s.b,'sight');
+  if(e.specialCooldown<=0&&visible&&s.distance<=attackRange&&line){
+    if(START[e.bossKind](game,e,s,p)){e.specialStep++;e.specialCooldown=p.cooldown;return true;}
+    // A blocked landing or exhausted effect budget must not lock a Boss into
+    // an unusable step. Reposition and retry without consuming its attack.
+    game._moveEnemy(e,dt*p.moveMultiplier);return true;
   }
-  if(s.distance>p.preferredRange||!clearLine(game,s.a,s.b,'sight'))game._moveEnemy(e,dt*p.moveMultiplier);
+  if(!visible||s.distance>Math.min(p.preferredRange,attackRange)||!line)game._moveEnemy(e,dt*p.moveMultiplier);
   return true;
 }
 function summon(game,e,p){

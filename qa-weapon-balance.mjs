@@ -63,7 +63,7 @@ assert(surroundingOrbit.damage.every(n=>n>0),'orbit handles every approach aroun
 assert(Math.min(...surroundingOrbit.damage)>Math.min(...surroundingHeavy.damage),'orbit supplies damage to neglected approaches that a focused heavy slash leaves open');
 assert(surroundingOrbit.dps>surroundingSweep.dps,'sustained full-surround contact rewards orbit over the wider directional sword');
 for(const [id,picks] of [['sword',four.sweep],['orbit',four.orbit],['arrow',four.arrow]]) {
-  const distant=measure(id,picks,[[260,0,12]],2);
+  const distant=measure(id,picks,[[250,0,12]],2);
   assert.equal(distant.dps>0,id==='arrow','only the ranged weapon reaches the distant lane');
 }
 let previous=0;

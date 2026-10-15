@@ -5,6 +5,7 @@ import { ordinaryEnemyType, SPECIAL_ENEMY_CAPS, SPECIALIST_SPAWN_RULES } from '.
 import { initializeSpecialist, updateSpecialist, resolveSpecialist, specialistDamageMultiplier, SPECIALIST_RULES } from './dist/enemies/specialists.js';
 import { Game } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
+import { friendlyFoot } from './dist/friendly-combat.js';
 
 const worlds=getConfigSection('worlds').definitions;
 for(const world of worlds){
@@ -34,6 +35,7 @@ function fixture(type){
   const game={status:'playing',_clock:0,player:{id:0,x:180,y:0,r:16,hp:100,heroId:'traveler'},enemies:[enemy],terrain:{firstBlocker:()=>null},
     _inView:()=>true,_moveEntity(e,dx,dy){e.x+=dx;e.y+=dy;return {blocked:false};},_branchMovementMultiplier:()=>1,
     abilities:{cast(id,caster,options){casts.push({id,caster,options});return true;}},_hurtPlayer(amount){hits.push(amount);return true;}};
+  game.player.y+=friendlyFoot(enemy).y-friendlyFoot(game.player).y;
   initializeSpecialist(enemy);enemy.specialist.cooldown=0;
   return {game,enemy,casts,hits};
 }

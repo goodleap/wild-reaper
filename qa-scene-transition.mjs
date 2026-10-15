@@ -90,10 +90,20 @@ assert.deepEqual({phase:paused.sceneTransition.phase,opacity:paused.sceneTransit
 paused.update(30,heldInput);assert.equal(paused.dungeon.active,null,'a background-tab time jump is clamped instead of skipping the fade');
 finish(paused);assert.equal(paused.dungeon.active.kind,'hut');
 
+// Region gates still have real access restrictions; ordinary interiors can be
+// entered while a world Boss is active, so they are not a disabled-door fixture.
+const locked=fresh(),gateBoss=locked._spawnEnemy('boss',1);Object.assign(gateBoss,{x:180,y:0,hp:0});
+locked.regions.openPortal(gateBoss);locked.regions.flushReward();assert(locked.chooseSuper(locked.getSuperChoices()[0].id));
+const lockedGate=locked.portal;lockedGate.state='locked';place(locked,portalDoor(lockedGate));
+const lockedRevision=locked.sceneTransition.inputRevision;
+assert.equal(locked.getInteraction().enabled,false);assert.equal(locked.requestInteraction(lockedGate.id),false,'disabled entrances do not run a misleading transition');
+assert.equal(locked.sceneTransition.active,false);assert.equal(locked.sceneTransition.inputRevision,lockedRevision);
+assert.equal(locked.regionIndex,0);assert.equal(locked.sceneTransition.opacity,0);
+
 const rejected=fresh(),badDoor=site(rejected,'castle');place(rejected,badDoor.door);
 const boss=rejected._spawnEnemy('boss',1);boss.guardActive=true;
-assert.equal(rejected.getInteraction().enabled,false);assert.equal(rejected.requestInteraction(badDoor.id),false,'disabled entrances do not run a misleading transition');
-rejected.enemies=[];assert(rejected.requestInteraction(badDoor.id));
+assert.equal(rejected.getInteraction().enabled,true,'a world Boss does not lock an independent castle');
+assert(rejected.requestInteraction(badDoor.id));
 // Simulate an externally invalidated target. The fade must recover gracefully
 // without performing an unrelated interaction or leaving the screen black.
 rejected.settlements.sites=[];finish(rejected);

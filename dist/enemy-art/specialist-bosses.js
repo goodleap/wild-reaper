@@ -236,13 +236,14 @@ export const BOSS_SPECIALIST_ART=Object.freeze({
 export function drawSpecialistBossGround(c,game,options={}){
   c.save();c.lineCap='round';c.lineJoin='round';
   for(const e of game.enemies||[]){
-    if(e.hp<=0||e.bossKind!=='deepcaller'||options.visible&&!options.visible(e))continue;
+    if(e.hp<=0||e.bossKind!=='deepcaller')continue;
     const current=e.specialAttack?.kind==='tentacles'?e.specialAttack:null;
     const lingering=e.specialVisualStrikes;
     const a=current||lingering;if(!a)continue;
     const recovery=current?0:clamp(1-(a.life||0)/(a.maxLife||.35),0,1);
     const prepare=current?.phase==='windup'?clamp(1-current.life/Math.max(.001,current.maxLife),0,1):1;
     for(const [i,target] of (a.circles||[]).entries()){
+      if(options.visible&&!options.visible(e)&&!options.visible(target))continue;
       const maxDelay=target.maxDelay??i*.4,delay=Math.max(0,target.delay||0);
       const waiting=current?.phase==='strikes'&&!target.done;
       const fall=waiting?clamp(1-delay/Math.max(.15,Math.min(.4,maxDelay||.4)),0,1):0;
@@ -253,6 +254,8 @@ export function drawSpecialistBossGround(c,game,options={}){
       const lift=options.reduced?0:current?.phase==='windup'?35+prepare*25:waiting?(1-fall)*60:struck?Math.sin(retract*Math.PI)*24:0;
       tip[1]-=lift;
       const bend=[mix(base[0],tip[0],.48)+(i-1)*16,mix(base[1],tip[1],.48)-Math.min(48,Math.hypot(target.x-base[0],target.y-base[1])*.15)-lift*.2];
+      const b=options.viewBounds;
+      if(b&&(Math.max(base[0],bend[0],tip[0])+20<b.minX||Math.min(base[0],bend[0],tip[0])-20>b.maxX||Math.max(base[1],bend[1],tip[1])+20<b.minY||Math.min(base[1],bend[1],tip[1])-20>b.maxY))continue;
       c.globalAlpha=struck?1-retract*.65:.88;
       tentacle(c,base,bend,tip,options.dense?10:13,{suckers:!options.dense});
       if(struck&&retract<.5&&!options.reduced){

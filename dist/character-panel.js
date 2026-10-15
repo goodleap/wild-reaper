@@ -126,18 +126,18 @@ function skills(game) {
       notes.push('受到伤害时自动展开，触发的第一击也受保护；伤害先经防御减免，再消耗护盾');
       if(game.relics?.has?.('leafWard'))notes.push('铁叶护符增幅已计入护盾容量与冷却');
     }else if(item.id==='storm') {
-      rows.push(['剩余冷却',seconds(game.player.skillCooldown),'remainingCooldown'],['攻击范围','屏内可攻击目标','range']);
+      rows.push(['剩余冷却',seconds(game.player.skillCooldown),'remainingCooldown'],['攻击半径',`${number(s.radius)} · 屏内目标`,'range']);
       notes.push(`感电持续 ${seconds(STATUS_RULES.shockDuration)}；武器命中可触发传导`);
     }else if(item.id==='pulse') {
       rows.push(['冲击半径',number(s.radius),'range'],['击退强度',number(s.knockback),'knockback']);
       notes.push(`有可攻击地面敌人靠近时施放；消耗流血时伤害增加 ${percent(STATUS_RULES.pulseBonus)}`);
-      if(s.echo)rows.push(['追加回波伤害',number(s.damage*s.echoRetention),'echoDamage'],['回波半径',number(s.radius*s.echoRadiusMultiplier),'echoRange']);
+      if(s.echo)rows.push(['追加回波伤害',number(s.damage*s.echoRetention),'echoDamage'],['回波半径',number(s.echoRadius),'echoRange']);
       if(s.control)notes.push(`普通敌人减速 ${percent(1-STAT_RULES.skillRules.pulse.controlMoveMultiplier)}，持续 ${seconds(s.controlDuration)}`);
     }else if(item.id==='fireball') {
-      rows.push(['索敌范围',number(s.range),'range'],['每跳燃烧',number(s.burnDamage),'burnDamage'],['燃烧间隔',seconds(s.burnInterval),'burnInterval'],['燃烧持续',seconds(s.burnDuration),'burnDuration']);
+      rows.push(['索敌范围',number(s.acquisitionRange),'range'],['飞行距离',number(s.range),'flightRange'],['每跳燃烧',number(s.burnDamage),'burnDamage'],['燃烧间隔',seconds(s.burnInterval),'burnInterval'],['燃烧持续',seconds(s.burnDuration),'burnDuration']);
       notes.push('命中后附加燃烧；重复命中刷新燃烧并保留较强效果，不无限叠加');
     }else if(item.id==='frostbolt') {
-      rows.push(['索敌范围',number(s.range),'range'],['减速',percent(1-s.slowMultiplier),'slow'],['减速持续',seconds(s.slowDuration),'slowDuration'],['冻结概率',percent(s.freezeChance),'freezeChance']);
+      rows.push(['索敌范围',number(s.acquisitionRange),'range'],['飞行距离',number(s.range),'flightRange'],['减速',percent(1-s.slowMultiplier),'slow'],['减速持续',seconds(s.slowDuration),'slowDuration'],['冻结概率',percent(s.freezeChance),'freezeChance']);
       if(s.freezeChance)rows.push(['冻结持续',seconds(s.freezeDuration),'freezeDuration']);
       notes.push(s.freezeChance?`冻结结束后 ${seconds(s.freezeImmunity)} 内不能再次冻结；Boss 冻结更短，保护期更长`:'升至 3 级解锁概率冻结');
     }else if(item.id==='lightning') {
@@ -146,7 +146,7 @@ function skills(game) {
       if(!s.focus&&s.targetLimit>s.fullDamageTargetCount)rows.push(['后续连锁伤害',number(s.damage*s.chainRetention),'secondaryDamage']);
       notes.push(s.focus?'优先攻击 Boss 与高生命目标':`附加 ${seconds(STATUS_RULES.shockDuration)} 感电`);
     }else {
-      rows.push(['索敌范围',number(s.range??COMBAT_CONFIG.super.timing.targetRange),'range']);
+      rows.push(['索敌范围',number(s.range??(item.id==='swords'?COMBAT_CONFIG.super.timing.swordTargetRange:COMBAT_CONFIG.super.timing.targetRange)),'range']);
       if(s.radius)rows.push(['作用半径',number(s.radius),'radius']);
       if(s.impactDamage)rows.push(['初次爆发伤害',number(scalePlayerDamage(game,s.impactDamage,{skillId:item.id})),'impactDamage']);
       if(s.duration)rows.push(['持续时间',seconds(s.duration),'duration']);

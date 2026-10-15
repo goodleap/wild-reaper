@@ -25,7 +25,7 @@ assert.equal(staged.effects.filter(e=>e.type==='superSword'&&e.impactOnly).lengt
 advance(staged,1);assert.equal(first.hp,9876,'completed flight cannot hit twice');
 
 for(const direction of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
-  const g=arena(),target=enemy(g,Math.cos(direction)*220,Math.sin(direction)*220),f=launch(g,target);
+  const g=arena(),target=enemy(g,Math.cos(direction)*140,Math.sin(direction)*140),f=launch(g,target);
   let oldAngle=f.angle;
   advance(g,1.9,dt=>{target.x+=Math.cos(direction+.6)*140*dt;target.y+=Math.sin(direction+.6)*140*dt;});
   assert.equal(target.hp,9876,`ordinary moving target is caught in quadrant ${direction}`);
@@ -90,8 +90,8 @@ assert.equal(frozen.superSkills.swordFlights.length,0);assert.equal(frozenTarget
 assert(!frozen.effects.some(e=>e.skillId==='swords'));
 
 const runaway=arena(),runner=enemy(runaway),expiring=launch(runaway,runner);runner.x=10000;
-advance(runaway,2.6);assert.equal(expiring.reason,'expired');assert.equal(runaway.superSkills.swordFlights.length,0);assert.equal(runner.hp,10000);
-const dense=arena();enemy(dense,280);for(let i=0;i<300;i++){dense.superSkills._cast('swords',3);advance(dense,.025);assert(dense.superSkills.swordFlights.length<=SWORD_FLIGHT_RULES.maxFlights);assert(dense.superSkills.swordFlights.every(f=>f.trail.length<=SWORD_FLIGHT_RULES.trailPoints));}
+advance(runaway,2.6);assert.equal(expiring.reason,'range');assert.equal(runaway.superSkills.swordFlights.length,0);assert.equal(runner.hp,10000);
+const dense=arena();enemy(dense,250);for(let i=0;i<300;i++){dense.superSkills._cast('swords',3);advance(dense,.025);assert(dense.superSkills.swordFlights.length<=SWORD_FLIGHT_RULES.maxFlights);assert(dense.superSkills.swordFlights.every(f=>f.trail.length<=SWORD_FLIGHT_RULES.trailPoints));}
 
 const render=arena(),renderTarget=enemy(render),renderFlight=launch(render,renderTarget);advance(render,.12);
 const snapshot=structuredClone(renderFlight),paths=[],calls=[];let saves=0;

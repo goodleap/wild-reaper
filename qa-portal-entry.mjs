@@ -104,6 +104,7 @@ assert(dryLanding&&dryLanding.y>fallbackGate.y);assert(!waterIntersectsCircle(po
 // Defeat one real gate guardian, then revisit both paired endpoints repeatedly.
 const world=new Game();world._spawn=Infinity;world._shot=Infinity;world.player.xpNext=Infinity;world.crystalsNext=Infinity;
 verifyWalls(world);assert(world.terrain._structureOwners.get('settlements')?.length);assert(world.terrain._structureOwners.get('relic')?.length);
+const sanctuary=world.settlements.sites.find(s=>s.type==='angel'&&s.anchorId?.startsWith('spawn:'));assert(sanctuary);
 const portal=world.regions.portals.find(p=>p.nextRegionIndex===1),boss=world.enemies.find(e=>e.id===portal.bossId);
 place(world,{x:portal.x,y:portal.y+250});world.regionGrace=0;world.regions.update();world._hurtEnemy(boss,boss.hp+1);world.regions.flushReward();assert(world.chooseSuper(world.getSuperChoices()[0].id));
 const originalTerrain=world.terrain,otherOwners=new Map([...world.terrain._structureOwners].filter(([owner])=>owner!=='portals').map(([owner,walls])=>[owner,walls.map(w=>w.id)]));
@@ -112,12 +113,12 @@ for(const target of [1,0,1,0,1,0]){
   const arrival=world.regions.portals.find(p=>p.nextRegionIndex!==target&&p.connectionId===endpoint.connectionId);
   assert(arrival);assert(foot(world).y>arrival.y,'paired travel always arrives in front');assert(world.terrain.isFree(foot(world).x,foot(world).y,world.player.r));
   for(let i=0;i<4;i++){world.update(0);assert.equal(world.regionIndex,target);assert.equal(world.sceneTransition.active,false,'arrival does not bounce back automatically');}
-  verifyWalls(world);assert.equal(world.settlements.sites.filter(s=>s.type==='angel'&&s.anchorId===arrival.id).length,1,'an activated solid gate retains its guardian angel');
-  if(target===0){assert.equal(world.terrain,originalTerrain);for(const [owner,ids] of otherOwners)assert.deepEqual(world.terrain._structureOwners.get(owner).map(w=>w.id),ids,'portal restoration must preserve other collision owners');}
+  verifyWalls(world);assert.equal(world.settlements.sites.filter(s=>s.type==='angel'&&s.anchorId?.startsWith('portal:')).length,0,'paired travel does not recreate retired gate angels');
+  if(target===0){assert.equal(world.terrain,originalTerrain);assert(world.settlements.sites.includes(sanctuary),'returning preserves the original spawn sanctuary');for(const [owner,ids] of otherOwners)assert.deepEqual(world.terrain._structureOwners.get(owner).map(w=>w.id),ids,'portal restoration must preserve other collision owners');}
 }
 // Scene-local collision does not leak into hut/castle interiors, and returning
 // restores the same outdoor geometry rather than re-appending the frame.
 const hut=world.settlements.sites.find(s=>s.type==='supply');place(world,hut.door);assert(world.interact(hut.id));
 assert.equal(world.dungeon.active.kind,'hut');assert.equal(structures(world).length,0);assert(!world.terrain._structures.some(o=>o.structureType==='portal'));
 place(world,world.dungeon.active.entrance);assert(world.dungeon.exit());assert.equal(world.terrain,originalTerrain);verifyWalls(world);
-console.log('Portal entrances: front walk/keyboard entry, solid side/rear walls, debug 660-speed and clamped frame sweeps, locked gates, front dry arrival, persistent independent owners, guardian angels, bounded round trips and interior isolation passed.');
+console.log('Portal entrances: front walk/keyboard entry, solid side/rear walls, debug 660-speed and clamped frame sweeps, locked gates, front dry arrival, persistent independent owners and spawn sanctuary, bounded round trips and interior isolation passed.');

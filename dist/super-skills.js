@@ -156,7 +156,7 @@ export class SuperSkills {
   _compareTargets(a,b,origin,priority=true) {
     return (priority?targetTier(b)-targetTier(a):0)||distance(origin,this._foot(a))-distance(origin,this._foot(b));
   }
-  _targets(origin=this._foot(),range=420,{strongest=false,skillId='swords'}={}) {
+  _targets(origin=this._foot(),range=TIMING.targetRange,{strongest=false,skillId='swords'}={}) {
     const profile=PROPAGATION[skillId]||'projectile';
     const targets=this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,origin)&&distance(origin,this._foot(enemy))<=range&&this._lineClear(origin,this._foot(enemy),0,profile));
     targets.sort((a,b)=>this._compareTargets(a,b,origin,strongest));
@@ -197,7 +197,7 @@ export class SuperSkills {
 
   _cast(id,level) {
     if(!SUPER_SKILLS.some(skill=>skill.id===id)||this.game.abilities?.isFrozen(this.game.player))return false;
-    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,TIMING.targetRange,{strongest:true,skillId:id});
+    const g=this.game,p=g.player,origin=this._foot(),targets=this._targets(origin,id==='swords'?TIMING.swordTargetRange:TIMING.targetRange,{strongest:true,skillId:id});
     if(!targets.length)return false;
     const stats=getSuperSkillStats(id,level,this._branch());
     if(!stats)return false;
@@ -268,8 +268,8 @@ export class SuperSkills {
   castRunicVolley(stats,target) {
     const g=this.game;
     if(g.status!=='playing'||g.abilities?.isFrozen(g.player)||!stats?.equipped||!g.build.isEquipped('arrow')||!(stats.runic>0)||this._runicCooldown>1e-9||this._runicShots.length)return false;
-    target=target||this._targets(this._foot(),TIMING.runicRange,{skillId:'runeArrow'})[0];
-    if(!target||!Number.isFinite(target.x)||!Number.isFinite(target.y))return false;
+    target=target||this._targets(this._foot(),stats.range,{skillId:'runeArrow'})[0];
+    if(!target||!Number.isFinite(target.x)||!Number.isFinite(target.y)||Math.hypot(target.x-g.player.x,(target.aimY??target.y)-g.player.y)>stats.range)return false;
     const origin=this._foot(),visual={x:g.player.x,y:g.player.y},angle=Math.atan2((target.aimY??target.y)-visual.y,target.x-visual.x);
     this._runicShots.push({origin,visual,angle,tick:TIMING.runicDelay,width:TIMING.runicWidth+TIMING.runicWidthPerRank*(stats.runic-1),range:TIMING.runicRange,damage:stats.runicDamage??stats.damage*(TIMING.runicDamageFallbackMultiplier+TIMING.runicDamageFallbackPerRank*(stats.runic-1))});
     this._runicCooldown=stats.runicInterval??TIMING.runicInterval-TIMING.runicIntervalReductionPerRank*(stats.runic-1);
@@ -341,7 +341,7 @@ export class SuperSkills {
       const anchor=swordFormationAnchor(p,index,volley.count),{x,y}=anchor;
       const origin={x,y:y+groundOffset(p,true),groundY:y+groundOffset(p,true)};
       if(!this._lineClear(this._foot(),origin,9,'projectile'))continue;
-      const targets=this._targets(origin,TIMING.swordTargetRange,{strongest:true,skillId:'swords'});
+      const targets=this._targets(this._foot(),TIMING.swordTargetRange,{strongest:true,skillId:'swords'}).filter(target=>this._lineClear(origin,this._foot(target),0,'projectile'));
       let target=null,fewest=Infinity;
       for(const candidate of targets) {
         if(targetTier(candidate)!==targetTier(targets[0]))break;

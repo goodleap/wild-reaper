@@ -3,7 +3,7 @@ import { Terrain } from './dist/terrain.js';
 import { DungeonVision } from './dist/dungeon-vision.js';
 import { sceneGroundAnchor } from './dist/scene-rendering.js';
 import { sceneDialogueVisible } from './dist/scene-dialogue-visibility.js';
-import { SceneDialogue } from './dist/scene-dialogue.js';
+import { SceneDialogue,DIALOGUE_RULES } from './dist/scene-dialogue.js';
 
 const viewport={width:800,height:700};
 const wall=(id,x,y,halfLength,angle=0)=>({id,type:'log',variant:'castle-wall',x,y,halfLength,angle,r:14});
@@ -73,7 +73,7 @@ assert.equal(isVisible(clear,otherRoom,{width:NaN}),false);
 const population=world([],0),dialogue=new SceneDialogue();
 population.enemies=Array.from({length:180},(_,id)=>({id,type:'slime',x:900+id*10,y:0,r:16,hp:100,territoryId:`territory:${Math.floor(id/6)}`,territoryState:'idle',guardActive:false}));
 population.enemies.push({id:181,type:'slime',x:1200,y:0,r:16,hp:100,guardActive:true});
-population.settlements.sites=[{id:'merchant:far',type:'merchant',x:340,y:0,state:'ready'},{id:'angel:near',type:'angel',x:-140,y:0,state:'ready',guardRadius:190}];
+population.settlements.sites=[{id:'merchant:far',type:'merchant',x:DIALOGUE_RULES.merchantFar-10,y:0,state:'ready'},{id:'angel:near',type:'angel',x:-140,y:0,state:'ready',guardRadius:190}];
 let visibilityCalls=0;
 const check={isVisible:s=>{visibilityCalls++;return isVisible(population,s);}};
 dialogue.observe(population,0,check);assert.equal(visibilityCalls,2,'Only the two nearby NPCs require LOS; 181 distant or dormant enemies do not.');

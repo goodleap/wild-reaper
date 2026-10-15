@@ -79,4 +79,36 @@ survival.time=survival.phaseEndsAt;survival._updatePressure(.05);assert.equal(su
 survival.time=survival.phaseEndsAt;survival._updatePressure(.05);survival.time+=.05;survival._updatePressure(.05);assert(survival.waveDirector.spawned>0,'survival actually spawns its promised wave');
 for(const id of ['ship','moon']){const run=new Game({mode:'dungeon',dungeonId:id});run.time=600;run._spawn=0;run._updatePressure(.05);assert.equal(run.waveDirector.count,0);assert.equal(run.territories.groups.length,0);}
 const clone=structuredClone(getConfigSnapshot().sections);clone.difficulty.territories.leash=10;assert.throws(()=>validateTerritories(clone),/boundaries/);
+
+// The alert boundary and the two pursuit limits are world distances. Moving
+// the camera must not awaken a group or extend its pursuit budget.
+const boundary=new Game(options),boundaryGroup=boundary.territories.groups[0],sentry=boundaryGroup.members[0];
+boundary.territories.groups=[boundaryGroup];boundaryGroup.members=[sentry];boundary.regionGrace=0;
+const resetSentry=(x=boundaryGroup.x)=>{
+  Object.assign(sentry,{x,y:boundaryGroup.y-groundOffset(sentry),territoryState:'idle',guardActive:false,_territoryAway:0,_territoryProvokedUntil:0});
+  boundaryGroup.announced=false;
+};
+for(const viewWidth of [480,540,600]){
+  boundary.viewWidth=viewWidth;resetSentry();
+  place(boundary,{x:boundaryGroup.x+boundaryGroup.radius+1,y:boundaryGroup.y});boundary.territories.update(0);
+  assert.equal(sentry.territoryState,'idle','Crossing the camera cannot extend the territory.');
+  place(boundary,{x:boundaryGroup.x+boundaryGroup.radius,y:boundaryGroup.y});boundary.territories.update(0);
+  assert.equal(sentry.territoryState,'chasing','Entering the boundary alerts a nearby sentry.');
+  resetSentry(boundaryGroup.x+TERRITORY_RULES.notice+1);place(boundary,boundaryGroup);boundary.territories.update(0);
+  assert.equal(sentry.territoryState,'idle','A distant member does not discover the player solely from group membership.');
+  sentry.x=boundaryGroup.x+TERRITORY_RULES.notice;boundary.territories.update(0);
+  assert.equal(sentry.territoryState,'chasing','The local notice limit includes its boundary.');
+  for(const limit of ['leash','enemyLeash']){
+    resetSentry();sentry.territoryState='chasing';sentry.guardActive=true;place(boundary,boundaryGroup);
+    if(limit==='leash')place(boundary,{x:boundaryGroup.x+TERRITORY_RULES.leash,y:boundaryGroup.y});
+    else sentry.x=boundaryGroup.x+TERRITORY_RULES.enemyLeash;
+    boundary.territories.update(TERRITORY_RULES.disengageDelay);
+    assert.equal(sentry.territoryState,'chasing',`${limit} permits pursuit at its boundary.`);
+    if(limit==='leash')boundary.player.x+=1;else sentry.x+=1;
+    boundary.territories.update(TERRITORY_RULES.disengageDelay/2);
+    assert.equal(sentry.territoryState,'chasing','Retreat still requires the full delay.');
+    boundary.territories.update(TERRITORY_RULES.disengageDelay/2);
+    assert.equal(sentry.territoryState,'returning',`${limit} ends pursuit after a sustained crossing.`);
+  }
+}
 console.log('Monster territories: deterministic finite populations, patrol and staggered local response, provoked combat, bounded retreat without healing, persistent region clear state, fixed world strength, normal formal modes, and dungeon-only waves passed.');

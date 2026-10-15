@@ -2,7 +2,7 @@ const TAU=Math.PI*2;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const turnDelta=(from,to)=>Math.atan2(Math.sin(to-from),Math.cos(to-from));
 
-export const SWORD_FLIGHT_RULES=Object.freeze({maxFlights:12,maxLife:2.4,outwardTime:.09,outwardSpeed:250,speed:610,turnRate:12,step:.0125,radius:4,trailPoints:10});
+export const SWORD_FLIGHT_RULES=Object.freeze({maxFlights:12,maxLife:2.4,maxRange:320,maxTravel:480,outwardTime:.09,outwardSpeed:250,speed:610,turnRate:12,step:.0125,radius:4,trailPoints:10});
 
 // Shared by the waiting formation and release, in body-space coordinates.
 export function swordFormationAnchor(player,index,count){
@@ -13,7 +13,7 @@ export function swordFormationAnchor(player,index,count){
 export function createSwordFlight({id,anchor,groundLift,target,targetPoint,damage}){
   const x=anchor.x,y=anchor.y+groundLift;
   return {id,skillId:'swords',x,y,groundY:y,visualY:anchor.y,angle:anchor.angle,visualAngle:anchor.angle,groundLift,launchLift:groundLift,
-    target,targetPoint:{...targetPoint},targetDefeated:false,damage,age:0,life:SWORD_FLIGHT_RULES.maxLife,
+    target,targetPoint:{...targetPoint},targetDefeated:false,damage,age:0,life:SWORD_FLIGHT_RULES.maxLife,launch:{x,y},distance:0,
     r:SWORD_FLIGHT_RULES.radius,trail:[{x,y:anchor.y}],done:false};
 }
 
@@ -48,25 +48,35 @@ export function advanceSwordFlight(flight,dt,{pointOf,blocked,onImpact}){
     const bend=Math.max(.12,Math.sin(Math.min(Math.PI/2,misalignment)));
     const turnSpeed=rules.turnRate*Math.max(1,Math.hypot(dx,dy))*.62/bend;
     const speed=outward?rules.outwardSpeed:Math.min(rules.speed*(.3+.7*Math.max(0,Math.cos(misalignment))),turnSpeed);
-    let nx=old.x+Math.cos(flight.angle)*speed*step,ny=old.y+Math.sin(flight.angle)*speed*step;
+    // Curved release needs more path length than radial reach. Both budgets
+    // belong to the launch, so a fleeing target cannot drag a sword forever.
+    const budget=Math.max(0,rules.maxTravel-flight.distance),travel=Math.min(speed*step,budget);
+    let nx=old.x+Math.cos(flight.angle)*travel,ny=old.y+Math.sin(flight.angle)*travel;
+    if(Math.hypot(nx-flight.launch.x,ny-flight.launch.y)>rules.maxRange){
+      const sx=nx-old.x,sy=ny-old.y,ox=old.x-flight.launch.x,oy=old.y-flight.launch.y;
+      const a=sx*sx+sy*sy,b=2*(ox*sx+oy*sy),c=ox*ox+oy*oy-rules.maxRange*rules.maxRange;
+      const t=a?clamp((-b+Math.sqrt(Math.max(0,b*b-4*a*c)))/(2*a),0,1):0;
+      nx=old.x+sx*t;ny=old.y+sy*t;
+    }
     const sx=nx-old.x,sy=ny-old.y,length=sx*sx+sy*sy;
     const t=length?clamp((dx*sx+dy*sy)/length,0,1):0;
     const arrivalRadius=flight.targetDefeated?4:clamp((flight.target.r||12)*.4,5,12);
-    const arrived=!outward&&Math.hypot(old.x+sx*t-destination.x,old.y+sy*t-destination.y)<=arrivalRadius;
+    const arrived=!outward&&Math.hypot(destination.x-flight.launch.x,destination.y-flight.launch.y)<=rules.maxRange&&Math.hypot(dx,dy)<=budget&&Math.hypot(old.x+sx*t-destination.x,old.y+sy*t-destination.y)<=arrivalRadius;
     if(arrived){nx=destination.x;ny=destination.y;}
     if(blocked(old,{x:nx,y:ny},rules.radius)){
       // Only a blocked segment needs refinement; normal flight has one query.
       let lo=0,hi=1;
       for(let i=0;i<5;i++){const mid=(lo+hi)/2;if(blocked(old,{x:old.x+(nx-old.x)*mid,y:old.y+(ny-old.y)*mid},rules.radius))hi=mid;else lo=mid;}
-      flight.x=old.x+(nx-old.x)*lo;flight.y=old.y+(ny-old.y)*lo;
+      flight.x=old.x+(nx-old.x)*lo;flight.y=old.y+(ny-old.y)*lo;flight.distance+=Math.hypot(flight.x-old.x,flight.y-old.y);
       flight.done=true;flight.reason='blocked';rememberTrail(flight);onImpact(flight,old,false);break;
     }
-    flight.x=nx;flight.y=ny;flight.age+=step;flight.life=Math.max(0,flight.life-step);
+    flight.x=nx;flight.y=ny;flight.distance+=Math.hypot(nx-old.x,ny-old.y);flight.age+=step;flight.life=Math.max(0,flight.life-step);
     const blend=clamp(flight.age/.35,0,1),smooth=blend*blend*(3-2*blend);
     flight.groundLift=flight.launchLift+(destination.lift-flight.launchLift)*smooth;
     if(arrived)flight.groundLift=destination.lift;
     rememberTrail(flight);
     if(arrived){flight.done=true;flight.reason='arrived';onImpact(flight,old,!flight.targetDefeated&&flight.target.hp>0);}
+    else if(flight.distance>=rules.maxTravel-1e-9||Math.hypot(nx-flight.launch.x,ny-flight.launch.y)>=rules.maxRange-1e-9){flight.done=true;flight.reason='range';}
     else if(flight.life<=1e-9){flight.done=true;flight.reason='expired';}
   }
 }

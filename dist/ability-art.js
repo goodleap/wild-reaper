@@ -109,7 +109,9 @@ function drawMarks(ctx,enemy,options){
 }
 function drawSpecialGround(ctx,game,options){
   for(const enemy of game.enemies||[]){
-    if(enemy.hp<=0||options.visible&&!options.visible(enemy))continue;
+    // Locked hazards own their visibility: the caster can move behind a wall
+    // while its previously warned destination remains in the visible room.
+    if(enemy.hp<=0)continue;
     drawMarks(ctx,enemy,options);
     const a=enemy.specialAttack;if(!a||!(a.phase==='windup'||a.phase==='strikes'||a.kind==='leap'&&a.phase==='rush'))continue;
     const progress=clamp(1-a.life/Math.max(.01,a.maxLife));ctx.strokeStyle='#f3ba8b';ctx.fillStyle='#f3a777';
@@ -120,6 +122,10 @@ function drawSpecialGround(ctx,game,options){
     }
     if(a.length>0){
       const ux=Math.cos(a.angle),uy=Math.sin(a.angle),r=a.r||enemy.r,x2=a.x+ux*a.length,y2=a.y+uy*a.length;
+      const samples=Math.max(1,Math.min(64,Math.ceil(a.length/Math.max(16,r))));
+      let pathVisible=false;
+      for(let i=0;i<=samples&&!pathVisible;i++)pathVisible=visible(options,{x:a.x+(x2-a.x)*i/samples,y:a.y+(y2-a.y)*i/samples,r});
+      if(!pathVisible)continue;
       ctx.beginPath();ctx.moveTo(a.x-uy*r,a.y+ux*r);ctx.lineTo(x2-uy*r,y2+ux*r);ctx.lineTo(x2+uy*r,y2-ux*r);ctx.lineTo(a.x+uy*r,a.y-ux*r);ctx.closePath();ctx.globalAlpha=.045+progress*.065;ctx.fill();ctx.globalAlpha=.58+progress*.3;ctx.lineWidth=1.4+progress*.5;ctx.stroke();
     }
   }

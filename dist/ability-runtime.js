@@ -64,7 +64,7 @@ export class AbilityRuntime {
     if(!this.clearPath(castOrigin,aimPoint,def.profile==='ground'?'ground':'projectile'))return false;
     const angle=Number.isFinite(options.angle)?options.angle:Math.atan2(aim.y-origin.y,aim.x-origin.x);
     const windup=hostile?clamp(p.windup||0,RULES.minimumEnemyWindup,4):clamp(options.windup??0,0,4);
-    if(distance(origin,aim)>p.range&&['field','zone'].includes(def.shape))return false;
+    if(Math.hypot(aimPoint.x-castOrigin.x,aimPoint.groundY-castOrigin.groundY)>p.range+1e-7&&['field','zone'].includes(def.shape))return false;
     const center=['field','zone'].includes(def.shape)?aim:origin;
     const reference=['field','zone'].includes(def.shape)&&target?target:caster,groundOffset=friendlyFoot(reference).y-reference.y;
     const effect={id:this.nextId++,abilityId:id,caster,hostile,shape:def.shape,profile:def.profile,parameters:p,x:center.x,y:center.y,origin:{...point(origin),groundY:origin.y+friendlyFoot(caster).y-caster.y},groundOffset,angle,age:0,windup,remaining:p.duration,hit:new Set(),lastHit:new Map(),distance:0,

@@ -98,7 +98,7 @@ export function weaponStats(game,id) {
     return {id,equipped,branch,baseDamage,damage:scalePlayerDamage(game,baseDamage,{weaponId:id}),
       runic,runicBaseDamage,runicDamage:scalePlayerDamage(game,runicBaseDamage,{weaponId:id}),runicInterval:rules.runicInterval-Math.max(0,runic-1)*rules.runicIntervalReductionPerRank,
       interval:ATTACK_DEFAULTS.arrowInterval/fireRate,range:ATTACK_DEFAULTS.arrowRange,
-      speed:ATTACK_DEFAULTS.arrowSpeed,life:ATTACK_DEFAULTS.arrowLife,knockback:weaponKnockbackDistance(),
+      speed:ATTACK_DEFAULTS.arrowSpeed,life:ATTACK_DEFAULTS.arrowLife,flightRange:ATTACK_DEFAULTS.arrowFlightRange,knockback:weaponKnockbackDistance(),
       count:Math.min(ATTACK_DEFAULTS.maxArrowProjectiles,1+effectTotal(game,'multishot','projectileCount')),
       sideDamageMultiplier:ATTACK_DEFAULTS.arrowSideDamage,volleyTargetMultiplier:ATTACK_DEFAULTS.arrowVolleyTarget,
       targetLimit:branch?Math.min(ATTACK_DEFAULTS.maxArrowTargets,rules.branchTargets+reach):1,
@@ -109,10 +109,10 @@ export function weaponStats(game,id) {
     const rules=WEAPON_RULES.orbit;
     const level=Math.min(rules.maxRank,rank(game,'orbit'));
     const baseDamage=ORBIT_DAMAGE[level]*(1+effectTotal(game,'orbitPower','baseDamageBonus'));
-    const damage=scalePlayerDamage(game,baseDamage,{weaponId:id});
+    const damage=scalePlayerDamage(game,baseDamage,{weaponId:id}),radius=rules.radius+effectTotal(game,'orbitRadius','radius');
     return {id,equipped:equipped&&level>0,level,baseDamage,damage,baseBleedDamage:baseDamage*ORBIT_BLEED_RATIO,bleedDamage:damage*ORBIT_BLEED_RATIO,
-      count:rules.baseCount+Math.max(rules.minimumRankCount,level),radius:rules.radius+effectTotal(game,'orbitRadius','radius'),
-      rotationSpeed:rules.rotationSpeed,propHitInterval:rules.propHitInterval,evolutionInterval:rules.evolutionInterval,evolutionDuration:rules.evolutionDuration,evolutionRange:rules.evolutionRange,knockback:weaponKnockbackDistance()};
+      count:rules.baseCount+Math.max(rules.minimumRankCount,level),radius,
+      rotationSpeed:rules.rotationSpeed,propHitInterval:rules.propHitInterval,evolutionInterval:rules.evolutionInterval,evolutionDuration:rules.evolutionDuration,evolutionRange:Math.max(0,Math.min(rules.evolutionRange,rules.evolutionRadius-radius)),knockback:weaponKnockbackDistance()};
   }
   return null;
 }
@@ -136,14 +136,15 @@ export function skillStats(game,id) {
   if(id==='storm') {
     const rules=SKILL_RULES.storm;
     const upgrades=boundedRank(game,'storm',rules.maxUpgradeRank),baseDamage=rules.damage*(1+effectTotal(game,'storm','baseDamageBonus'));
-    return {id,level:1+upgrades,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),cooldown:game.debugOptions?.zeroStormCooldown?0:game.hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction')),manual:true,super:true};
+    return {id,level:1+upgrades,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),cooldown:game.debugOptions?.zeroStormCooldown?0:game.hero.skillCooldown*(1-effectTotal(game,'storm','cooldownReduction')),radius:rules.radius,manual:true,super:true};
   }
   if(id==='pulse') {
     const rules=SKILL_RULES.pulse;
     const level=Math.min(rules.maxRank,rank(game,id)),evolved=!!game.evolutions?.pulse,control=evolved&&branch==='control';
+    const radius=control?rules.controlRadius:rules.radius+level*rules.radiusPerRank,echoRadius=Math.min(rules.echoMaxRadius,radius*rules.echoRadiusMultiplier);
     const baseDamage=(rules.baseDamage+level*rules.damagePerRank)*(1+effectTotal(game,'pulseMastery','baseDamageBonus'));
     return {id,level,owned:level>0,branch,evolved,control,baseDamage,damage:scalePlayerDamage(game,baseDamage,{skillId:id}),
-      cooldown:rules.cooldown-effectTotal(game,'pulseMastery','cooldownReduction'),radius:control?rules.controlRadius:rules.radius+level*rules.radiusPerRank,knockback:control?rules.controlKnockback:rules.knockback,controlDuration:rules.controlDuration,echo:evolved&&branch==='echoes',echoRadiusMultiplier:rules.echoRadiusMultiplier,echoRetention:rules.echoRetention,echoDelay:rules.echoDelay,echoKnockback:rules.echoKnockback};
+      cooldown:rules.cooldown-effectTotal(game,'pulseMastery','cooldownReduction'),radius,echoRadius,knockback:control?rules.controlKnockback:rules.knockback,controlDuration:rules.controlDuration,echo:evolved&&branch==='echoes',echoRadiusMultiplier:rules.echoRadiusMultiplier,echoRetention:rules.echoRetention,echoDelay:rules.echoDelay,echoKnockback:rules.echoKnockback};
   }
   if(id==='lightning') {
     const rules=SKILL_RULES.lightning;

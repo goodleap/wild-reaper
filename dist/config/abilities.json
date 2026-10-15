@@ -264,6 +264,7 @@
       "shape": "field",
       "profile": "ground",
       "parameters": {
+        "range": 500,
         "radius": 100,
         "duration": 3.3,
         "damage": 11,
@@ -284,6 +285,7 @@
       "shape": "field",
       "profile": "ground",
       "parameters": {
+        "range": 500,
         "radius": 115,
         "duration": 3,
         "damage": 9,
@@ -304,6 +306,7 @@
       "shape": "field",
       "profile": "ground",
       "parameters": {
+        "range": 230,
         "radius": 65,
         "duration": 2.7,
         "damage": 9,
@@ -344,6 +347,7 @@
       "shape": "zone",
       "profile": "projectile",
       "parameters": {
+        "range": 250,
         "radius": 58,
         "duration": 0.22,
         "damage": 23,

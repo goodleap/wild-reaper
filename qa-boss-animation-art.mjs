@@ -46,6 +46,10 @@ try{
   assert(impact.calls.some(call=>call[0]==='lineTo'&&call[1]===160&&call[2]===200),'The striking tentacle ends at the actual captured damage point');
   assert(!impact.calls.some(call=>call[0]==='lineTo'&&call[1]===285&&call[2]===200),'A pending strike is visibly raised above its future impact');
   const hidden=recorder();drawSpecialistBossGround(hidden.ctx,{enemies:[e]},{visible:()=>false});assert.equal(hidden.calls.length,0);assert.equal(hidden.depth,0);
+  const hiddenOwner=recorder();drawSpecialistBossGround(hiddenOwner.ctx,{enemies:[e]},{visible:item=>item!==e&&item.x===160,viewBounds:{minX:100,minY:100,maxX:220,maxY:240}});
+  assert(hiddenOwner.calls.some(call=>call[0]==='lineTo'&&call[1]===160&&call[2]===200),'a visible committed strike retains its limb when the caster is hidden');
+  assert(!hiddenOwner.calls.some(call=>call[0]==='lineTo'&&call[1]===285),'an unseen second strike is not disclosed');
+  const outside=recorder();drawSpecialistBossGround(outside.ctx,{enemies:[e]},{visible:()=>true,viewBounds:{minX:1000,minY:1000,maxX:1200,maxY:1200}});assert.equal(outside.calls.length,0,'tentacles outside the camera remain culled');
   const after={...e,specialAttack:null,specialVisualStrikes:{life:.175,maxLife:.35,circles:e.specialAttack.circles}};
   const recovery=recorder();drawSpecialistBossGround(recovery.ctx,{enemies:[after]},{dense:true,reduced:true});assert.equal(recovery.depth,0);assert(recovery.calls.length>0,'The last strike retains a retracting arm during recovery');
 }finally{Math.random=originalRandom;}

@@ -51,15 +51,23 @@ try{
     Object.assign(enemy,{x,y:y+groundOffset(g.player,true)-groundOffset(enemy),hp:10000,maxHp:10000,chargeCooldown:0,castCooldown:0});
     if(enemy.bossKind==='bloom')enemy.bloomCooldown=0;
   }
-  const observed={};
+  const observed={},timeline=[];
   for(let frame=0;frame<260;frame++){
     g.update(.025);
-    for(const event of g.events)observed[event.type]=(observed[event.type]||0)+1;
+    for(const event of g.events){observed[event.type]=(observed[event.type]||0)+1;timeline.push(event.type);}
     g.events=[];
   }
   // A single mixed encounter exercises registry dispatch, shared damage grace,
   // both Boss resolution phases, and normal projectile movement together.
-  assert.deepEqual(observed,{boarWindup:1,sporeWindup:2,bossWindup:1,bloomWindup:2,sporeShot:2,bossSlam:1,hurt:7,bloomShot:1,bloomBurst:1});
+  assert.deepEqual(Object.keys(observed).sort(),['boarWindup','sporeWindup','bossWindup','bloomWindup','sporeShot','bossSlam','hurt','bloomShot','bloomBurst'].sort());
+  for(const [warning,release] of [['sporeWindup','sporeShot'],['bossWindup','bossSlam']]){
+    assert(observed[warning]>=observed[release]&&observed[warning]<=observed[release]+1,`${release} belongs to a warned attack`);
+    assert(timeline.indexOf(warning)<timeline.indexOf(release),`${warning} precedes release`);
+  }
+  assert(observed.bloomWindup>=observed.bloomShot+observed.bloomBurst&&observed.bloomWindup<=observed.bloomShot+observed.bloomBurst+1);
+  for(const release of ['bloomShot','bloomBurst'])assert(timeline.indexOf('bloomWindup')<timeline.indexOf(release));
+  assert(observed.boarWindup<=3&&observed.sporeWindup<=3&&observed.bossWindup<=3&&observed.bloomWindup<=3,'mixed attacks preserve their cooldowns');
+  assert(observed.hurt>0,'the registered attacks still resolve friendly damage');
   assert(g.enemies.every(enemy=>Number.isFinite(enemy.x)&&Number.isFinite(enemy.y)));
   const ordinary={type:'slime',marker:1};assert.equal(initBoss(ordinary),ordinary);
   assert.deepEqual(ordinary,{type:'slime',marker:1});

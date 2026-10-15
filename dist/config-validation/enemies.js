@@ -62,14 +62,15 @@ export function validateEnemies(sections){
 }
 function validateSpecialistBosses(bosses){
   const required={
-    broodmother:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup domainRadius domainDuration domainDamage summonCount summonCap summonGlobalCap summonAttempts summonRadius summonClearance enemyCap leapRadius leapDuration leapDamage moveMultiplier',
-    deepcaller:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup strikeRadius strikeSpacing strikeInterval strikeDamage vortexRadius vortexDuration vortexDamage waveGap waveWidth waveSpeed waveDuration waveDamage moveMultiplier',
-    frostcrown:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup fanCount fanSpread fanDamage fanSpeed chargeSpeed chargeDuration chargeDamage markRadius markSpacing markCap markLife markDamage shatterDelay shatterInterval frostRadius frostDamage moveMultiplier',
-    furnace:'range preferredRange initialCooldown cooldown recovery cycleRecovery windup marchDuration marchSpeedMultiplier markRadius markSpacing markCap markLife markDamage eruptionDelay eruptionInterval fireballDamage flameDamage flameRange flameDuration flameSpread moveMultiplier'
+    broodmother:'preferredRange domainRange summonRange leapRange initialCooldown cooldown recovery cycleRecovery windup domainRadius domainDuration domainDamage summonCount summonCap summonGlobalCap summonAttempts summonRadius summonClearance enemyCap leapRadius leapDuration leapDamage moveMultiplier',
+    deepcaller:'preferredRange strikeRange vortexRange waveActivationRange waveRange initialCooldown cooldown recovery cycleRecovery windup strikeRadius strikeSpacing strikeInterval strikeDamage vortexRadius vortexDuration vortexDamage waveGap waveWidth waveSpeed waveDuration waveDamage moveMultiplier',
+    frostcrown:'preferredRange fanRange boltRange chargeRange chargeLength shatterRange frostRange initialCooldown cooldown recovery cycleRecovery windup fanCount fanSpread fanDamage fanSpeed chargeSpeed chargeDuration chargeDamage markRadius markSpacing markCap markLife markDamage shatterDelay shatterInterval frostRadius frostDamage moveMultiplier',
+    furnace:'preferredRange marchRange marchLength eruptionRange fireballActivationRange fireballRange flameActivationRange initialCooldown cooldown recovery cycleRecovery windup marchDuration marchSpeedMultiplier markRadius markSpacing markCap markLife markDamage eruptionDelay eruptionInterval fireballDamage flameDamage flameRange flameDuration flameSpread moveMultiplier'
   };
+  const activation={broodmother:['domainRange','summonRange','leapRange'],deepcaller:['strikeRange','vortexRange','waveActivationRange'],frostcrown:['fanRange','chargeRange','shatterRange','frostRange'],furnace:['marchRange','eruptionRange','fireballActivationRange','flameActivationRange']};
   for(const[id,keys]of Object.entries(required)){
     const p=bosses[id].parameters,path=`enemies.bosses.${id}.parameters`;positive(p,keys,path);
-    if(p.preferredRange>p.range)fail(path,'preferred range exceeds acquisition range');
+    if(p.preferredRange>Math.max(...activation[id].map(key=>p[key])))fail(path,'preferred range exceeds every attack activation range');
     for(const key of ['summonCount','summonCap','summonGlobalCap','summonAttempts','enemyCap','fanCount','markCap'])if(p[key]!==undefined)integer(p[key],`${path}.${key}`,1,500);
     if(p.fanCount>9||p.markCap>12)fail(path,'excessive simultaneous attacks');
   }
@@ -86,8 +87,9 @@ function validateSpecialists(enemies,sections){
     if(['cast','fan','strafe'].includes(rule.mode))reference(rule.abilityId,abilities,`${path}.abilityId`);
     for(const[key,value]of Object.entries(rule))if(!['mode','abilityId'].includes(key))number(value,`${path}.${key}`);
     if(rule.mode==='fan'){integer(rule.count,`${path}.count`,2,7);number(rule.spread,`${path}.spread`,.1,Math.PI);}
-    if(rule.mode==='pounce')positive(rule,'minRange duration speed',path);
-    if(rule.mode==='strafe')positive(rule,'duration speed projectileSpeed',path);
+    if(['cast','fan','strafe'].includes(rule.mode))positive(rule,'abilityRange',path);
+    if(rule.mode==='pounce')positive(rule,'minRange duration speed travelDistance',path);
+    if(rule.mode==='strafe')positive(rule,'duration speed projectileSpeed projectileDuration',path);
     if(rule.mode==='shield'){positive(rule,'duration speedMultiplier turnSpeed frontHalfAngle frontDamageMultiplier',path);number(rule.frontDamageMultiplier,`${path}.frontDamageMultiplier`,.1,1);number(rule.frontHalfAngle,`${path}.frontHalfAngle`,.1,Math.PI*.75);}
   }
   for(const world of sections.worlds.definitions){

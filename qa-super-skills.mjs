@@ -56,7 +56,7 @@ assert(meteor.superSkills.fields.every(f=>f.stage==='warning'));advance(meteor,.
 assert.equal(meteor.events.filter(e=>e.type==='superImpact'&&e.skillId==='meteor').length,2,'both landing events coincide with damage');
 const swords=arena();acquire(swords,'swords');const small=enemy(swords,80),royal=enemy(swords,200,0,'boss');swords.superSkills.cooldowns.swords=0;advance(swords,1);assert(royal.hp<10000);assert.equal(small.hp,10000,'royal swords prioritize the Boss');
 const staged=arena();acquire(staged,'swords');const duelist=enemy(staged);staged.superSkills.cooldowns.swords=0;advance(staged,.175);assert.equal(duelist.hp,10000);advance(staged,.025);assert.equal(duelist.hp,10000,'a released sword must travel before damage');assert.equal(staged.superSkills.swordFlights.length,1);advance(staged,.225);assert.equal(staged.superSkills.swordFlights.length,2,'release cadence remains staggered');advance(staged,1.8);assert.equal(duelist.hp,9504);
-const walking=arena();acquire(walking,'swords');enemy(walking,260);walking.superSkills.cooldowns.swords=0;advance(walking,.025);
+const walking=arena();acquire(walking,'swords');enemy(walking,250);walking.superSkills.cooldowns.swords=0;advance(walking,.025);
 const formation=walking.effects.find(e=>e.type==='superBurst'&&e.skillId==='swords'),castPosition={x:walking.player.x,y:walking.player.y};let firstSword;
 for(let i=0;i<9;i++){
  walking.player.x+=2;walking.player.y+=1;advance(walking,.025);assert.equal(formation.x,walking.player.x);assert.equal(formation.y,walking.player.y);

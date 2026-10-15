@@ -25,12 +25,14 @@ for(const name of ['王子','公主','老登']){
   const g=game(name),d=new SceneDialogue();g.hero.name='帅气王子';g.settlements.sites=[site('angel')];tick(d,g);
   assert(contents(d).includes(name));assert(!contents(d).includes('帅气'));
 }
-const merchant=game(),greet=new SceneDialogue();merchant.settlements.sites=[site('merchant',300)];tick(greet,merchant);
+const merchant=game(),greet=new SceneDialogue();merchant.settlements.sites=[site('merchant',DIALOGUE_RULES.merchantFar+1)];tick(greet,merchant);
+assert.equal(greet.items(visible).length,0,'Even a visible merchant waits until the distant greeting radius.');
+merchant.settlements.sites[0].x=DIALOGUE_RULES.merchantFar;tick(greet,merchant);
 assert(contents(greet).includes('王子'));assert.equal(greet.items(visible).length,1);
-merchant.player.x=200;tick(greet,merchant,1);tick(greet,merchant,4);
+merchant.player.x=DIALOGUE_RULES.merchantFar-100;tick(greet,merchant,1);tick(greet,merchant,4);
 assert(contents(greet).includes('用得上的'),'Approaching a visible shop follows its distant invitation with a close greeting.');
 tick(greet,merchant,35);assert.equal(greet.items(visible).length,0,'Standing in range never repeats a greeting.');
-for(const x of [174,176,174,176]){merchant.player.x=x;tick(greet,merchant,10);}
+for(const delta of [-1,1,-1,1]){merchant.player.x=DIALOGUE_RULES.merchantFar-DIALOGUE_RULES.merchantNear+delta;tick(greet,merchant,10);}
 assert.equal(greet.items(visible).length,0,'Crossing the inner boundary cannot retrigger without leaving its outer hysteresis.');
 merchant.player.x=800;tick(greet,merchant,30);merchant.player.x=0;tick(greet,merchant);
 assert(contents(greet).includes('行装'),'A real departure plus cooldown permits the next stable variant.');
@@ -41,7 +43,7 @@ assert.equal(silence.items(visible).length,1,'An unseen cue remains eligible onl
 hidden.settlements.sites[0].hidden=true;assert.equal(silence.items(visible).length,0,'Draw-time visibility closes the gap before the next observation.');tick(silence,hidden);
 assert.equal(silence.items(visible).length,0);assert.equal(silence.items().length,0,'Absent visibility evidence always fails closed.');
 
-const priority=game(),scheduler=new SceneDialogue();priority.settlements.sites=[site('angel'),site('merchant',280)];tick(scheduler,priority);
+const priority=game(),scheduler=new SceneDialogue();priority.settlements.sites=[site('angel'),site('merchant',DIALOGUE_RULES.merchantFar)];tick(scheduler,priority);
 assert.equal(scheduler.items(visible).length,2);
 const boss=enemy('boss',9,210,{guardActive:true,bossKind:'ancient'});priority.enemies=[boss];tick(scheduler,priority,.1);
 assert.equal(scheduler.items(visible).length,1);assert.equal(scheduler.items(visible)[0].speaker.source,boss,'A boss preempts both incidental greetings.');

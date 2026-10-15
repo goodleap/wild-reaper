@@ -52,13 +52,15 @@ function spreadSelection(clusters,limit,w,h){
 }
 function fillerTarget(storm,w,h,occupied,index){
   const margin=Math.min(26,w*.12,h*.12),usableW=w-2*margin,usableH=h-2*margin;
-  let best=null,bestDistance=-1;
+  let best={x:storm.x,y:storm.y,r:14,seed:9001+index},bestDistance=-1;
   // Fixed jittered candidates give sparse casts broad coverage, without any
-  // gameplay RNG or a random-search loop. Fillers remain inside the cast view.
+  // gameplay RNG or a random-search loop. Fillers remain inside both the cast
+  // view and its fixed attack radius.
   for(let i=0;i<48;i++){
     const x=storm.x-w/2+margin+((i%8+.2+hash(i,index+37)*.6)/8)*usableW;
     const y=storm.y-h/2+margin+((Math.floor(i/8)+.2+hash(i,index+61)*.6)/6)*usableH;
     let distance=(x-storm.x)**2+(y-storm.y)**2;
+    if(Number.isFinite(storm.radius)&&distance>storm.radius**2)continue;
     for(const point of occupied)distance=Math.min(distance,(x-point.x)**2+(y-point.y)**2);
     if(distance>bestDistance){best={x,y,r:14,seed:9001+index};bestDistance=distance;}
   }

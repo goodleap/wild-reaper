@@ -73,13 +73,13 @@ export class CombatAttacks {
   castStorm() {
     const g=this.game,p=g.player,stats=skillStats(g,'storm');
     if(g.abilities?.isFrozen(p))return false;
-    const targets=g.enemies.filter(e=>canTarget(g,e,p,{requireView:true,source:'storm',checkPath:true}));
+    const targets=g.enemies.filter(e=>dist2(e,p)<=sq(stats.radius)&&canTarget(g,e,p,{requireView:true,source:'storm',checkPath:true}));
     p.skillCooldownMax=stats.cooldown;p.skillCooldown=stats.cooldown;p.castFace=.25;
     recordHeroAction(g,{kind:'cast',angle:p.facing,duration:.65,priority:4});
-    g.storm={x:p.x,y:p.y,viewWidth:g.viewWidth,viewHeight:g.viewHeight,life:STORM_DURATION,maxLife:STORM_DURATION,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
+    g.storm={x:p.x,y:p.y,radius:stats.radius,viewWidth:g.viewWidth,viewHeight:g.viewHeight,life:STORM_DURATION,maxLife:STORM_DURATION,targets:targets.map(e=>({x:e.x,y:e.y,r:e.r,seed:e.id}))};
     g._emit('skill');
     for(const e of targets)g._hitEnemy(e,stats.damage,0,p,'storm');
-    g.environment?.hitAllVisible('storm');
+    g.environment?.hitAt(p.x,p.y,stats.radius,'storm',prop=>sq(prop.x-p.x)+sq((prop.aimY??prop.y-13)-p.y)<=sq(stats.radius)&&g._inView({x:prop.x,y:prop.aimY??prop.y-13})&&propPath(g,p,prop,'storm'));
     g._effect(p.x,p.y,'ring',.45,95,'#d4e7ff');
   }
 
@@ -93,8 +93,8 @@ export class CombatAttacks {
     g._shot-=dt;
     if(g._shot<=0&&!g.abilities?.isFrozen(p)) {
       const enemy=g._nearest(p.x,p.y,stats.range,undefined,p,{source:'arrow',pathRadius:4}),
-        supply=nearestProp(g,g.adventure?.props,g.adventure?.nearestSupply(280),280,prop=>prop.hp>0),
-        vine=nearestProp(g,g.environment?.mechanisms?.props,g.environment?.nearestDestructible?.(280),280,prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active'));
+        supply=nearestProp(g,g.adventure?.props,g.adventure?.nearestSupply(stats.range),stats.range,prop=>prop.hp>0),
+        vine=nearestProp(g,g.environment?.mechanisms?.props,g.environment?.nearestDestructible?.(stats.range),stats.range,prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active'));
       const supplyDistance=supply?sq(supply.x-p.x)+sq((supply.aimY??supply.y)-p.y):Infinity;
       let target=supply&&(!enemy||(dist2(enemy,p)>180*180&&supplyDistance<dist2(enemy,p)))?supply:enemy;
       if(vine&&(!enemy||dist2(enemy,p)>150*150))target=vine;
@@ -109,7 +109,7 @@ export class CombatAttacks {
           const angle=base+(i?Math.ceil(i/2)*.16*(i%2?1:-1)*(g._volley%2?1:-1):0);
           // A projectile snapshots its source and numbers. Later upgrades or
           // expiry of fury do not alter a volley already crossing the screen.
-          g.bullets.push({weaponId:'arrow',x:p.x,y:p.y,r:4,angle,color:branch==='ricochet'?'#ead59b':branch==='pierce'?'#a5eed1':'#c3e9a4',vx:Math.cos(angle)*stats.speed,vy:Math.sin(angle)*stats.speed,speed:stats.speed,life:stats.life,damage:stats.damage*(i?stats.sideDamageMultiplier:1),knockback:stats.knockback,volley,branch,pierce:stats.targetLimit,targetLimit:stats.targetLimit,maxBounces:stats.maxBounces,ricochetRange:stats.ricochetRange,ricochetMinimumLife:stats.ricochetMinimumLife,retention:stats.retention,bounces:0,hitIds:new Set()});
+          g.bullets.push({weaponId:'arrow',x:p.x,y:p.y,r:4,angle,color:branch==='ricochet'?'#ead59b':branch==='pierce'?'#a5eed1':'#c3e9a4',vx:Math.cos(angle)*stats.speed,vy:Math.sin(angle)*stats.speed,speed:stats.speed,life:stats.life,remainingRange:stats.flightRange,damage:stats.damage*(i?stats.sideDamageMultiplier:1),knockback:stats.knockback,volley,branch,pierce:stats.targetLimit,targetLimit:stats.targetLimit,maxBounces:stats.maxBounces,ricochetRange:stats.ricochetRange,ricochetMinimumLife:stats.ricochetMinimumLife,retention:stats.retention,bounces:0,hitIds:new Set()});
         }
         if(stats.runic>0)g.superSkills?.castRunicVolley?.(stats,target);
         g._emit('shoot');
@@ -122,7 +122,7 @@ export class CombatAttacks {
   updateArrow(b,dt) {
     const g=this.game;
     if(b.life<=0)return;
-    const elapsed=Math.min(dt,b.life);b.life-=dt;
+    const elapsed=Math.min(dt,b.life,(b.remainingRange??Infinity)/Math.max(1,Math.hypot(b.vx,b.vy)));b.life-=dt;
     // Samples are taken at sweep boundaries, including the exact ricochet
     // impact before its remaining motion. Rendering never guesses a direction.
     const trail=b.trail||(b.trail=new WeaponTrail('arrow')),clock=Number.isFinite(g._clock)?g._clock:0;
@@ -150,6 +150,7 @@ export class CombatAttacks {
       }
       const fraction=Number.isFinite(first)?first:1;
       b.x=x+dx*fraction;b.y=y+dy*fraction;
+      if(Number.isFinite(b.remainingRange))b.remainingRange=Math.max(0,b.remainingRange-Math.hypot(dx,dy)*fraction);
       trail.add(b.x,b.y,clock-remaining+remaining*fraction);
       g.environment?.hitSegment(x,y,b.x,b.y,b.r,'arrow');
       if(!impact){if(Number.isFinite(wallHit)){b.life=0;g._effect(b.x,b.y,'hit',.18,7,'#d8cfba',undefined,{source:'arrow',angle:b.angle||0,strength:.18});}break;}
@@ -175,6 +176,7 @@ export class CombatAttacks {
       }
       if(remaining<=1e-9)break;
     }
+    if(b.remainingRange<=1e-9)b.life=0;
   }
 
   updateAbilities(dt) {
@@ -253,7 +255,7 @@ export class CombatAttacks {
     if(!stats.owned||g._pulse>0||g.abilities?.isFrozen(p))return;
     // The extended echo is part of the same cast, so a reachable enemy in its
     // outer band is also a useful target. Never spend a full cooldown on air.
-    const reach=stats.radius*(stats.echo?stats.echoRadiusMultiplier:1),origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};
+    const reach=(stats.echo?stats.echoRadius:stats.radius),origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};
     const hasEnemy=g.enemies.some(e=>dist2(e,p)<sq(reach+e.r)&&canTarget(g,e,origin,{requireView:true,source:'pulse',checkPath:true,canHitFlying:false}));
     const hasSupply=!hasEnemy&&(g.adventure?.props||[]).some(prop=>prop.hp>0&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
     const hasVine=!hasEnemy&&!hasSupply&&(g.environment?.mechanisms?.props||[]).some(prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active')&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
@@ -261,7 +263,7 @@ export class CombatAttacks {
     g._pulse=stats.cooldown;
     recordHeroAction(g,{kind:'cast',angle:p.facing,duration:.48,priority:1});
     this.castPulse(p.x,p.y,stats.radius,stats.damage,stats.knockback,false,stats.control,stats.controlDuration);
-    if(stats.echo)g._pulseEchoes.push({x:p.x,y:p.y,r:stats.radius*stats.echoRadiusMultiplier,damage:stats.damage*stats.echoRetention,life:stats.echoDelay,maxLife:stats.echoDelay});
+    if(stats.echo)g._pulseEchoes.push({x:p.x,y:p.y,r:stats.echoRadius,damage:stats.damage*stats.echoRetention,life:stats.echoDelay,maxLife:stats.echoDelay});
   }
 
   updateLightning(dt) {

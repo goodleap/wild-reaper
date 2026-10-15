@@ -3,6 +3,7 @@ import { Game, BALANCE } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { movementProfile } from './dist/height-rules.js';
 import { Adventure } from './dist/adventure.js';
+import { defenseDamageMultiplier } from './dist/combat-stats.js';
 
 // Short, isolated behavior checks. Play balance is evaluated separately.
 let seed=70261;
@@ -103,7 +104,7 @@ assert(exposed.player.hp<exposed.player.maxHp,'a wall behind the player cannot r
 
 const repeated=arena();hostileShot(repeated,-25);hostileShot(repeated,-25);
 repeated.update(.05);
-assert.equal(repeated.player.hp,repeated.player.maxHp-13,'simultaneous shots respect the shared damage grace period');
+assert.equal(repeated.player.hp,repeated.player.maxHp-13*defenseDamageMultiplier(repeated.player.defense),'simultaneous shots apply defense and only one hit during shared damage grace');
 assert.equal(repeated.enemyBullets.length,0,'both contacting shots are consumed, even when the second is resisted');
 const afterShots=repeated.player.hp;advance(repeated,1);
 assert.equal(repeated.player.hp,afterShots,'spent projectiles cannot hit the same player again');

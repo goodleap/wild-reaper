@@ -337,7 +337,7 @@ export class Game {
     for(const e of this.enemies)if(e.hp>0&&e.guardActive!==false&&!this.abilities.isFrozen(e))resolveEnemyBehavior(this,e,context);
     for(const b of this.enemyBullets) {
       if(b.life<=0)continue;
-      const dx=b.vx*dt,dy=b.vy*dt;
+      const elapsed=Math.min(dt,b.life),dx=b.vx*elapsed,dy=b.vy*elapsed;
       let terrainHit=Infinity;
       for(const o of this.terrain.query(Math.min(b.x,b.x+dx)-b.r,Math.min(b.y,b.y+dy)-b.r,Math.max(b.x,b.x+dx)+b.r,Math.max(b.y,b.y+dy)+b.r))
         if(blocksObstacle(o,'projectile'))terrainHit=Math.min(terrainHit,obstacleImpact(o,b.x,b.y,dx,dy,b.r));
@@ -349,7 +349,7 @@ export class Game {
       }
       if(victim&&friendlyHit<terrainHit){damageFriendly(this,victim,b.damage,b);b.life=0;}
       else if(terrainHit<Infinity)b.life=0;
-      else{b.x+=dx;b.y+=dy;b.life-=dt;}
+      else{b.x+=dx;b.y+=dy;b.life-=elapsed;}
     }
     this.enemyBullets=this.enemyBullets.filter(b=>b.life>0);
   }
@@ -616,7 +616,7 @@ export class Game {
       this._abilityCooldowns[id]-=dt;
       if(this._abilityCooldowns[id]>0)continue;
       const stats=skillStats(this,id),p=this.player;
-      const target=this._nearest(p.x,p.y,stats.range,undefined,p,{source:id});
+      const target=this._nearest(p.x,p.y,stats.acquisitionRange,undefined,p,{source:id});
       if(target&&this.abilities.cast(id,p,{...stats,target,rank:stats.level}))this._abilityCooldowns[id]=stats.cooldown;
       else this._abilityCooldowns[id]=.12;
     }

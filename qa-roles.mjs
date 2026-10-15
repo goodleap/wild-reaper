@@ -29,7 +29,7 @@ function offer(g,id) {
 function shootOnce(g) {g.levels.arrow=1;g._shot=0;g.update(0);g._shot=Infinity;}
 
 assert.deepEqual(HEROES.map(h=>h.id),['traveler','princess','elder']);
-const expectedHeroes={traveler:{hp:110,speed:220,defense:8},princess:{hp:90,speed:246.4,defense:0},elder:{hp:85,speed:202.4,defense:0}};
+const expectedHeroes={traveler:{hp:110,speed:220,defense:8},princess:{hp:100,speed:246.4,defense:0},elder:{hp:85,speed:202.4,defense:0}};
 for(const hero of ['traveler','princess','elder','ranger','warden','stormcaller','unknown']) {
   const id=Object.hasOwn(expectedHeroes,hero)?hero:'traveler',expected=expectedHeroes[id];
   const g=arena({hero,fresh:true});
@@ -91,9 +91,9 @@ assert(!rupture.e.bleed);const rupturedHp=rupture.e.hp;advance(rupture.g,.6);
 assert.equal(rupture.e.hp,rupturedHp,'consumed bleed does not continue ticking');
 
 const echoed=arena();echoed.levels.pulse=5;echoed.branches.pulse='echoes';echoed._pulse=0;
-const echoTarget=monster(echoed,'slime',205);echoed.update(0);
+const echoTarget=monster(echoed,'slime',198);echoed.update(0);
 assert.equal(echoTarget.hp,10000,'the target is outside the first pulse');
-echoed.player.x=131;echoed.levels.orbit=1;echoed.update(0);assert(echoTarget.bleed);
+echoed.player.x=124;echoed.levels.orbit=1;echoed.update(0);assert(echoTarget.bleed);
 echoed.levels.orbit=0;echoed.player.x=480;const beforeEcho=echoTarget.hp;
 advance(echoed,.36);
 assert(Math.abs(beforeEcho-echoTarget.hp-90*.6*1.25)<1e-8,'the delayed original-location echo also consumes bleed for bonus damage');

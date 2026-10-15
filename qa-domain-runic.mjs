@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
-import { Terrain, groundOffset } from './dist/terrain.js';
+import { Terrain } from './dist/terrain.js';
 import { weaponStats } from './dist/combat-stats.js';
-import { getSuperSkillStats } from './dist/super-skills.js';
+import { getAbilityDefinition } from './dist/ability-definitions.js';
 import { SuperArt } from './dist/super-art.js';
 let seed=73183;Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(obstacles=[]){
@@ -12,53 +12,47 @@ function arena(obstacles=[]){
 }
 function enemy(g,x=160,y=0,type='slime'){const e=g._spawnEnemy(type);Object.assign(e,{x,y,hp:10000,maxHp:10000,speed:0});return e;}
 function advance(g,t){for(let left=t;left>1e-8;left-=.025){const dt=Math.min(.025,left);if(g.status==='playing')g._clock+=dt;g.superSkills.update(dt);}}
-function domain(g,branch){assert(g.build.awardDomain(branch));g.superSkills.cooldowns.domain=0;}
 function runic(g){assert(g.build.awardRuneArrow());return weaponStats(g,'arrow');}
 const choices=arena();assert(choices.superSkills.offer('region','forest'));
-const initial=choices.getSuperChoices();assert.deepEqual(initial.map(c=>c.id),['domain:binding','domain:erosion','runeArrow']);
-assert(initial.filter(c=>c.domainBranch).every(c=>c.category==='skill'&&c.ownerId==='domain'&&!c.branch));
-choices.status='super';assert(choices.superSkills.choose('domain:binding'));assert.equal(choices.build.getSkill('domain').branch,'binding');
-assert(choices.superSkills.offer('region','marsh'));assert.deepEqual(choices.getSuperChoices().map(c=>c.id),['domain','runeArrow'],'owned fields offer one branch upgrade, not two identical cards');
-assert.equal(choices.getSuperChoices()[0].domainBranch,'binding');assert.equal(choices.build.awardDomain('erosion'),false);
-choices.status='super';assert.equal(choices.superSkills.choose('domain:erosion'),false);
-const stale=arena();domain(stale,'binding');assert(stale.superSkills.offer('region'));assert(stale.build.awardDomain('binding'));assert(stale.build.awardDomain('binding'));
+const initial=choices.getSuperChoices();assert.deepEqual(initial.map(c=>c.id),['meteor','swords','runeArrow']);
+assert(!initial.some(c=>c.domainBranch),'retired player fields do not return through Boss rewards');
+for(const branch of ['binding','erosion'])assert.equal(choices.build.awardDomain(branch),false);
+assert.equal(choices.build.getSkill('domain'),null);assert.equal(choices.superSkills._cast('domain',1),false);
+choices.status='super';assert.equal(choices.superSkills.choose('domain:binding'),false);assert(choices.superSkills.choose('meteor'));
+assert.equal(choices.build.getSkill('meteor').baseRank,1);
+assert(choices.superSkills.offer('region','marsh'));assert.deepEqual(choices.getSuperChoices().map(c=>c.id),['meteor','swords','runeArrow']);
+assert.equal(choices.getSuperChoices()[0].currentLevel,1,'owned skills offer their next rank');
+assert.equal(choices.superSkills.choose('domain:erosion'),false);
+const stale=arena();assert(stale.superSkills.offer('region'));stale.build.superLevels.meteor=3;stale.build.superLevels.swords=3;
 assert.deepEqual(stale.getSuperChoices().map(c=>c.id),['runeArrow'],'a pending reward refreshes after other progression');
 const ricochet=arena();assert(ricochet.build.increment('arrow'));ricochet.levels.rapid=3;assert(ricochet.build.selectBranch('arrow','ricochet'));
-assert(ricochet.superSkills.offer('region'));assert(!ricochet.getSuperChoices().some(c=>c.id==='runeArrow'));for(let i=0;i<3;i++)assert(ricochet.build.awardDomain('erosion'));
+assert(ricochet.superSkills.offer('region'));assert(!ricochet.getSuperChoices().some(c=>c.id==='runeArrow'));ricochet.build.superLevels.meteor=3;ricochet.build.superLevels.swords=3;
 assert.deepEqual(ricochet.getSuperChoices().map(c=>c.id),['super:resource'],'incompatible weapons do not block the mastered reward');
 
-const binding=arena();domain(binding,'binding');const ground=enemy(binding),boss=enemy(binding,195,0,'boss'),flyer=enemy(binding,175,0,'bat');
-ground.charge={phase:'rush'};ground._chargeSegment={x1:0,x2:120};advance(binding,.025);
-assert.equal(ground.hp,9960);assert.equal(ground.charge,null);assert.equal(ground._chargeSegment,null);assert.equal(binding.superSkills.movementMultiplier(ground),0);
-assert.equal(boss.superRootUntil,undefined);assert.equal(binding.superSkills.movementMultiplier(boss),.85);assert.equal(flyer.hp,10000);assert.equal(binding.superSkills.movementMultiplier(flyer),1);
-advance(binding,.5);assert.equal(binding.superSkills.movementMultiplier(ground),1,'roots release between repeated pulses');advance(binding,.25);
-assert.equal(ground.hp,9932);assert.equal(binding.superSkills.movementMultiplier(ground),0,'the next field pulse briefly roots again');
-const empty=arena();domain(empty,'binding');advance(empty,.025);assert(empty.superSkills.cooldowns.domain<=.2,'an empty field cast retries soon instead of spending the full cooldown');const late=enemy(empty);advance(empty,.25);assert(late.hp<10000);
-for(const branch of ['binding','erosion']){
- const g=arena();domain(g,branch);const armored=enemy(g);armored.affix={id:'shield',shield:1000,maxShield:1000,color:'#9acbdf'};
- advance(g,1);assert.equal(armored.hp,10000);assert(armored.affix.shield<1000);
- assert.equal(armored.superRootUntil,undefined);assert.equal(armored.superSlowUntil,undefined);assert.equal(g.superSkills._erosion.size,0,'absorbed hits cannot leak control or erosion through a shield');
-}
-const guardian=arena();domain(guardian,'binding');const guard=enemy(guardian,150,0,'boss');
-Object.assign(guard,{portalId:'domain-guardian',guardActive:false,_portalAnnounced:false});
-guardian.regions.portals=[{id:'domain-guardian',x:150,y:19.8,state:'locked'}];
-assert(guardian.superSkills._visible(guard));assert.equal(guard.guardActive,false,'acquisition stays pure');advance(guardian,.025);
-assert(guard.hp<10000);assert.equal(guard.guardActive,true,'a valid field hit awakens a visible portal guardian');
-for(let level=1;level<=3;level++){
- const g=arena();for(let n=0;n<level;n++)assert(g.build.awardDomain('erosion'));const target=enemy(g);g.superSkills.cooldowns.domain=0;advance(g,.025);
- const stats=getSuperSkillStats('domain',level,'erosion');assert.equal(target.hp,10000-stats.impactDamage);assert.equal(g.superSkills.movementMultiplier(target),.8);
- advance(g,.475);assert.equal(target.hp,10000-stats.impactDamage,'no periodic damage precedes the half-second tick');advance(g,.025);
- assert.equal(target.hp,10000-stats.impactDamage-stats.damage);advance(g,4.8);
- assert.equal(10000-target.hp,stats.impactDamage+stats.damage*9,'eight field ticks and two half-damage residual ticks have one damage owner each');
-}
-const escape=arena();domain(escape,'erosion');const escaping=enemy(escape);advance(escape,.025);escaping.x=390;advance(escape,1.15);assert.equal(10000-escaping.hp,56,'leaving the field retains two weaker ticks');advance(escape,.5);assert.equal(escape.superSkills.movementMultiplier(escaping),1);
+// Domains are now hostile Boss abilities. Exercise their live execution path,
+// including the warning, repeated hits, control, cover and scene cleanup.
+const domainStats=getAbilityDefinition('domain').parameters;
+function advanceDomain(g,t){for(let left=t;left>1e-8;left-=.025){const dt=Math.min(.025,left);if(g.status==='playing'){g._clock+=dt;g.player.invuln=Math.max(0,g.player.invuln-dt);}g.abilities.update(dt);}}
+function hostileDomain(g){const boss=enemy(g,160,0,'boss');g.player.hp=g.player.maxHp=1000;g.player.invuln=0;assert(g.abilities.cast('domain',boss,{target:g.player}));return boss;}
+const field=arena(),fieldBoss=hostileDomain(field),hp=field.player.hp;
+advanceDomain(field,domainStats.windup-.05);assert.equal(field.player.hp,hp,'field warning deals no damage');
+advanceDomain(field,.075);const firstHit=field.player.hp;assert(firstHit<hp);assert.equal(fieldBoss.hp,10000,'hostile fields do not damage their caster');
+assert.equal(field.abilities.movementMultiplier(field.player),domainStats.slowMultiplier);
+advanceDomain(field,.4);assert.equal(field.player.hp,firstHit,'a field does not deal damage every frame');
+advanceDomain(field,domainStats.tickInterval-.35);assert(field.player.hp<firstHit,'later field ticks apply damage again');
+field.player.x=domainStats.radius+field.player.r+20;const escapedHp=field.player.hp;
+advanceDomain(field,domainStats.slowDuration+.1);assert.equal(field.player.hp,escapedHp);assert.equal(field.abilities.movementMultiplier(field.player),1,'leaving the field lets its slow expire');
+const protectedField=arena();hostileDomain(protectedField);protectedField.relics.grantWard(1000);
+advanceDomain(protectedField,domainStats.windup+.1);assert.equal(protectedField.player.hp,1000);assert.equal(protectedField.abilities.movementMultiplier(protectedField.player),1,'fully absorbed hits cannot apply field control');
+const flying=arena();hostileDomain(flying);flying.player.flying=true;advanceDomain(flying,domainStats.windup+.1);assert.equal(flying.player.hp,1000,'ground fields cannot hit airborne targets');
 const low={id:'low',type:'log',x:80,y:19.8,r:12,halfLength:180,angle:Math.PI/2};
 const high={...low,id:'high',structureType:'castle-wall'};
-for(const branch of ['binding','erosion'])for(const obstacle of [low,high]){
- const g=arena([obstacle]);domain(g,branch);const target=enemy(g,160);advance(g,.4);assert.equal(target.hp,10000,`${branch} cannot propagate through ground cover`);
+for(const obstacle of [low,high]){
+ const g=arena([obstacle]),boss=enemy(g,160,0,'boss');assert.equal(g.abilities.cast('domain',boss,{target:g.player}),false,'ground cover blocks a field cast');
 }
-const separated=arena();domain(separated,'erosion');const leaving=enemy(separated);advance(separated,.025);leaving.x=330;separated.terrain=new Terrain({obstacles:[{...high,x:240}]});advance(separated,1.2);assert.equal(leaving.hp,9968,'residue does not tick through a newly intervening wall');
-binding.superSkills.clearScene();assert.equal(binding.superSkills.fields.length,0);assert.equal(binding.superSkills.movementMultiplier(ground),1);assert.equal(binding.superSkills.movementMultiplier(boss),1);assert.equal(binding.superSkills._erosion.size,0);
+const separated=arena();hostileDomain(separated);separated.player.x=75;separated.terrain=new Terrain({obstacles:[{...high,x:40}]});advanceDomain(separated,domainStats.windup+.1);assert.equal(separated.player.hp,1000,'a new wall blocks damage from a previously placed field');
+const frozenField=arena();hostileDomain(frozenField);frozenField.status='paused';advanceDomain(frozenField,1);assert.equal(frozenField.abilities.effects[0].age,0);assert.equal(frozenField.player.hp,1000);
+field.abilities.clearScene();assert.equal(field.abilities.effects.length,0);assert.equal(field.abilities.statuses.size,0);assert.equal(field.abilities.movementMultiplier(field.player),1);
 
 const reward=arena();assert.equal(reward.build.isEquipped('arrow'),false);assert(reward.superSkills.offer('region','ruins'));const runeCard=reward.getSuperChoices()[0];assert.equal(runeCard.id,'runeArrow');assert.match(runeCard.desc,/获得翠羽飞矢/);
 reward.status='super';assert(reward.superSkills.choose('runeArrow'));reward.status='playing';assert(reward.build.isEquipped('arrow'));assert(reward.build.isEquipped('sword'));assert.equal(reward.build.getWeapon('arrow').branch,'pierce');assert.equal(reward.build.getRank('arrowRune'),1);assert(!reward.build.getSkillLoadout().some(s=>s.id==='runes'));
@@ -87,4 +81,4 @@ for(const branch of ['binding','erosion']){
  assert(art.drawField(ctx,field));assert(art.drawEffect(ctx,{type:'superBurst',skillId:'domain',domainBranch:branch,x:0,y:0,r:120,life:.25,maxLife:.5}));assert.deepEqual(field,before);
 }
 assert(art.drawEffect(ctx,{type:'superRunicCharge',skillId:'runeArrow',x:0,y:0,angle:0,r:18,life:.06,maxLife:.12}));assert(paints>0);assert(art.cacheStats.pixels<=art.cacheStats.limitBytes/4);
-console.log('Domain / runic: exclusive branches, distinct control and lingering damage, flight/wall rules, earned weapon rewards, arrow-only timed beams, pause/equipment cleanup and bounded artwork passed.');
+console.log('Domain / runic: Boss-only domains, warning and repeated damage, flight/cover/control rules, current rewards, arrow-only timed beams, pause/equipment cleanup and bounded artwork passed.');

@@ -1154,7 +1154,7 @@
         "weaponId": "pulse",
         "branch": "control",
         "name": "撼地重震",
-        "desc": "升至 5 级；冲击范围扩大至 230，强力震退并使非 Boss 敌人减速 35%，持续 1.1 秒",
+        "desc": "升至 5 级；冲击范围扩大至 200，强力震退并使非 Boss 敌人减速 35%，持续 1.1 秒",
         "icon": "◉",
         "color": "#9fe5cf",
         "ownerId": "pulse",
@@ -1219,14 +1219,15 @@
     "attackDefaults": {
       "arrowDamage": 32,
       "arrowInterval": 0.38,
-      "arrowRange": 420,
+      "arrowRange": 260,
       "arrowSpeed": 640,
-      "arrowLife": 0.82,
+      "arrowLife": 0.5,
       "arrowSideDamage": 0.45,
       "arrowVolleyTarget": 1.45,
       "magnet": 105,
       "maxArrowTargets": 4,
-      "maxArrowProjectiles": 4
+      "maxArrowProjectiles": 4,
+      "arrowFlightRange": 320
     },
     "orbitBleedRatio": 0.15,
     "orbitDamage": [
@@ -1286,7 +1287,8 @@
         "propHitInterval": 0.42,
         "evolutionInterval": 3,
         "evolutionDuration": 0.9,
-        "evolutionRange": 55
+        "evolutionRange": 55,
+        "evolutionRadius": 140
       }
     },
     "skillRules": {
@@ -1301,7 +1303,8 @@
       },
       "storm": {
         "maxUpgradeRank": 2,
-        "damage": 160
+        "damage": 160,
+        "radius": 300
       },
       "pulse": {
         "maxRank": 5,
@@ -1310,7 +1313,7 @@
         "cooldown": 2.6,
         "radius": 132,
         "radiusPerRank": 8,
-        "controlRadius": 230,
+        "controlRadius": 200,
         "knockback": 30,
         "controlKnockback": 48,
         "controlDuration": 1.1,
@@ -1319,7 +1322,8 @@
         "echoDelay": 0.35,
         "echoKnockback": 12,
         "controlMoveMultiplier": 0.65,
-        "interruptCooldown": 1.2
+        "interruptCooldown": 1.2,
+        "echoMaxRadius": 200
       },
       "lightning": {
         "maxRank": 5,
@@ -1327,9 +1331,9 @@
         "damagePerRank": 10,
         "focusMultiplier": 2.5,
         "cooldown": 2.8,
-        "range": 360,
-        "chainRange": 190,
-        "evolvedChainRange": 220,
+        "range": 250,
+        "chainRange": 140,
+        "evolvedChainRange": 150,
         "targetLimit": 3,
         "evolvedTargetLimit": 7,
         "chainRetention": 0.85,
@@ -1341,52 +1345,57 @@
           {
             "damage": 40,
             "cooldown": 2.4,
-            "range": 410,
+            "range": 300,
             "speed": 430,
             "radius": 9,
             "burnDamage": 6,
             "burnDuration": 2.4,
-            "burnInterval": 0.6
+            "burnInterval": 0.6,
+            "acquisitionRange": 250
           },
           {
             "damage": 50,
             "cooldown": 2.3,
-            "range": 410,
+            "range": 300,
             "speed": 430,
             "radius": 9,
             "burnDamage": 8,
             "burnDuration": 2.4,
-            "burnInterval": 0.6
+            "burnInterval": 0.6,
+            "acquisitionRange": 250
           },
           {
             "damage": 62,
             "cooldown": 2.2,
-            "range": 410,
+            "range": 300,
             "speed": 430,
             "radius": 9,
             "burnDamage": 10,
             "burnDuration": 3,
-            "burnInterval": 0.6
+            "burnInterval": 0.6,
+            "acquisitionRange": 250
           },
           {
             "damage": 76,
             "cooldown": 2.05,
-            "range": 410,
+            "range": 300,
             "speed": 430,
             "radius": 9,
             "burnDamage": 12,
             "burnDuration": 3,
-            "burnInterval": 0.6
+            "burnInterval": 0.6,
+            "acquisitionRange": 250
           },
           {
             "damage": 92,
             "cooldown": 1.9,
-            "range": 410,
+            "range": 300,
             "speed": 430,
             "radius": 9,
             "burnDamage": 15,
             "burnDuration": 3,
-            "burnInterval": 0.6
+            "burnInterval": 0.6,
+            "acquisitionRange": 250
           }
         ]
       },
@@ -1396,7 +1405,7 @@
           {
             "damage": 30,
             "cooldown": 2.2,
-            "range": 390,
+            "range": 300,
             "speed": 470,
             "radius": 7,
             "slowMultiplier": 0.78,
@@ -1405,12 +1414,13 @@
             "freezeDuration": 0.7,
             "freezeImmunity": 3,
             "bossFreezeMultiplier": 0.35,
-            "bossFreezeImmunity": 6
+            "bossFreezeImmunity": 6,
+            "acquisitionRange": 250
           },
           {
             "damage": 39,
             "cooldown": 2.1,
-            "range": 390,
+            "range": 300,
             "speed": 470,
             "radius": 7,
             "slowMultiplier": 0.74,
@@ -1419,12 +1429,13 @@
             "freezeDuration": 0.7,
             "freezeImmunity": 3,
             "bossFreezeMultiplier": 0.35,
-            "bossFreezeImmunity": 6
+            "bossFreezeImmunity": 6,
+            "acquisitionRange": 250
           },
           {
             "damage": 49,
             "cooldown": 2,
-            "range": 390,
+            "range": 300,
             "speed": 470,
             "radius": 7,
             "slowMultiplier": 0.7,
@@ -1433,12 +1444,13 @@
             "freezeDuration": 0.7,
             "freezeImmunity": 3,
             "bossFreezeMultiplier": 0.35,
-            "bossFreezeImmunity": 6
+            "bossFreezeImmunity": 6,
+            "acquisitionRange": 250
           },
           {
             "damage": 61,
             "cooldown": 1.9,
-            "range": 390,
+            "range": 300,
             "speed": 470,
             "radius": 7,
             "slowMultiplier": 0.66,
@@ -1447,12 +1459,13 @@
             "freezeDuration": 0.7,
             "freezeImmunity": 3,
             "bossFreezeMultiplier": 0.35,
-            "bossFreezeImmunity": 6
+            "bossFreezeImmunity": 6,
+            "acquisitionRange": 250
           },
           {
             "damage": 75,
             "cooldown": 1.8,
-            "range": 390,
+            "range": 300,
             "speed": 470,
             "radius": 7,
             "slowMultiplier": 0.62,
@@ -1461,7 +1474,8 @@
             "freezeDuration": 0.7,
             "freezeImmunity": 3,
             "bossFreezeMultiplier": 0.35,
-            "bossFreezeImmunity": 6
+            "bossFreezeImmunity": 6,
+            "acquisitionRange": 250
           }
         ]
       }
@@ -1658,7 +1672,7 @@
       ]
     },
     "timing": {
-      "targetRange": 420,
+      "targetRange": 240,
       "initialCooldown": 0.6,
       "retryCooldown": 0.2,
       "meteorSpacingRatio": 0.9,
@@ -1666,7 +1680,7 @@
       "meteorStagger": 0.25,
       "maxVolleys": 2,
       "volleyDelay": 0.16,
-      "swordTargetRange": 430,
+      "swordTargetRange": 260,
       "rootChargeDelay": 0.6,
       "slowRefresh": 0.65,
       "bossMinimumMoveRatio": 0.85,
@@ -1675,7 +1689,7 @@
       "erosionSlowDuration": 0.5,
       "erosionBossMoveRatio": 0.9,
       "erosionMoveRatio": 0.8,
-      "runicRange": 450,
+      "runicRange": 320,
       "runicDelay": 0.12,
       "runicWidth": 11,
       "runicWidthPerRank": 3,
