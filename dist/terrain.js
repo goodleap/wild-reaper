@@ -1,4 +1,4 @@
-import { RiftCollision } from './rift-collision.js';
+import { RiftCollision, sweepCircleVsCapsule } from './rift-collision.js';
 import { createRiftScenery } from './worlds/rift-scenery.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
@@ -107,6 +107,43 @@ function segmentDistanceSq(ax,ay,bx,by,cx,cy,dx,dy) {
     if(t>=0&&t<=1&&s>=0&&s<=1)return 0;
   }
   return Math.min(pointDistanceSq(ax,ay,cx,cy,dx,dy),pointDistanceSq(bx,by,cx,cy,dx,dy),pointDistanceSq(cx,cy,ax,ay,bx,by),pointDistanceSq(dx,dy,ax,ay,bx,by));
+}
+// Combine independent trunks, rocks and gates with authored outline contacts.
+// Sequential push-outs can exceed the input budget or undo a boundary slide.
+function movementHooks(terrain,items) {
+  const capsules=items.flatMap(o=>{
+    if(o.water)return o.points.map((a,i)=>({a,b:o.points[(i+1)%o.points.length],r:0,obstacle:o}));
+    const a=axis(o);return [{a:{x:a.ax,y:a.ay},b:{x:a.bx,y:a.by},r:o.r,obstacle:o}];
+  });
+  const circleFree=(x,y,r)=>!items.some(o=>{
+    if(o.water)return waterIntersectsCircle(o.water,x,y,Math.max(0,r-.001));
+    const q=terrain.closestPoint(o,x,y);return Math.hypot(x-q.x,y-q.y)<r+o.r-.001;
+  });
+  return {
+    circleFree,
+    firstBlocker:(ax,ay,bx,by,r)=>items.find(o=>{
+      if(o.water)return waterIntersectsCapsule(o.water,ax,ay,bx,by,Math.max(0,r-.001));
+      const a=axis(o);return segmentDistanceSq(ax,ay,bx,by,a.ax,a.ay,a.bx,a.by)<Math.max(0,r+o.r-.001)**2;
+    }),
+    firstContact:(ax,ay,bx,by,r)=>{
+      let time=Infinity;const contacts=[],tolerance=1e-7/Math.max(1,Math.hypot(bx-ax,by-ay));
+      for(const capsule of capsules){
+        const hit=sweepCircleVsCapsule(ax,ay,bx,by,r,capsule);if(!hit)continue;
+        if(hit.time<time-tolerance){time=hit.time;contacts.length=0;contacts.push(hit);}
+        else if(Math.abs(hit.time-time)<=tolerance){time=Math.min(time,hit.time);contacts.push(hit);}
+      }
+      return contacts.length?{time,contacts}:null;
+    },
+    contacts:(x,y,r)=>{
+      const contacts=[];
+      for(const capsule of capsules){
+        const q=pointOnSegment(x,y,capsule.a.x,capsule.a.y,capsule.b.x,capsule.b.y),dx=x-q.x,dy=y-q.y,d=Math.hypot(dx,dy);
+        if(d>r+capsule.r+3.01e-5||d<1e-12)continue;
+        const nx=dx/d,ny=dy/d;if(!contacts.some(n=>n.nx*nx+n.ny*ny>1-1e-10))contacts.push({nx,ny,edge:capsule});
+      }
+      return contacts;
+    }
+  };
 }
 function obstacle(spec,index=0) {
   const o={id:spec.id??`fixed:${index}`,type:'rock',r:36,scale:1,seed:hash(index+37,19),angle:0,halfLength:0,...spec};
@@ -252,11 +289,24 @@ export class Terrain {
     const start=this.resolveCircle(x,y,r,profile);x=start.x;y=start.y;
     const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(3,Math.min(6,r*.45))));
     const sx=dx/steps,sy=dy/steps;let blocked=start.blocked;
-    const items=this.query(Math.min(x,x+dx)-r-110,Math.min(y,y+dy)-r-110,Math.max(x,x+dx)+r+110,Math.max(y,y+dy)+r+110).filter(o=>blocksObstacle(o,profile));
+    let coverage={minX:Math.min(x,x+dx)-r-110,minY:Math.min(y,y+dy)-r-110,maxX:Math.max(x,x+dx)+r+110,maxY:Math.max(y,y+dy)+r+110};
+    let items=this.query(coverage.minX,coverage.minY,coverage.maxX,coverage.maxY).filter(o=>blocksObstacle(o,profile));
     if(!items.length&&(!this.rift||!this.rift.firstBlocker(x,y,x+dx,y+dy,r,profile))&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
+    let hooks=this.rift&&items.length?movementHooks(this,items):undefined;
     for(let i=0;i<steps;i++) {
+      if(this.rift){
+        const margin=r+Math.hypot(sx,sy)+1;
+        if(x-margin<coverage.minX||x+margin>coverage.maxX||y-margin<coverage.minY||y+margin>coverage.maxY){
+          coverage={minX:x-r-110,minY:y-r-110,maxX:x+r+110,maxY:y+r+110};
+          items=this.query(coverage.minX,coverage.minY,coverage.maxX,coverage.maxY).filter(o=>blocksObstacle(o,profile));
+          hooks=items.length?movementHooks(this,items):undefined;
+        }
+        const next=this.rift.step(x,y,x+sx,y+sy,r,profile,hooks);blocked||=next.blocked;
+        if((!this.island||this.island.contains(next.x,next.y,r))&&(!hooks||hooks.circleFree(next.x,next.y,r))){x=next.x;y=next.y;}
+        else blocked=true;
+        continue;
+      }
       let next=this._resolve(x+sx,y+sy,r,items,x,y);blocked||=next.blocked;
-      if(this.rift){next=this.rift.step(x,y,next.x,next.y,r,profile);blocked||=next.blocked;}
       if(this.island){const coast=this.island.constrain(next.x,next.y,r);blocked||=coast.blocked;next=coast;}
       if(!items.some(o=>{if(o.water)return waterIntersectsCircle(o.water,next.x,next.y,Math.max(0,r-.001));const q=this.closestPoint(o,next.x,next.y);return Math.hypot(next.x-q.x,next.y-q.y)<r+o.r-.001;})){x=next.x;y=next.y;}
       else blocked=true;
