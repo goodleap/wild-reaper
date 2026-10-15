@@ -39,14 +39,14 @@ export class RegionalMechanisms {
     // Rune support now belongs to a permanent, deliberately activated relic.
     // The roaming cache only owns renewable woodland/marsh hazards.
     if(!this.rules)return null;
-    const env=this.environment,seed=env._hash(tx+1423,ty+1451);
+    const env=this.environment,seed=env._hash(tx+1423,ty+1451),safe=env._safeAnchor||{x:0,y:0};
     if(seed>this.rules.chance)return null;
     const type=this.rules.type,r=REGIONAL_MECHANISM_RULES[`${type}Radius`];
     // Choose a cell's single stable point before considering dynamic objectives.
     // A removed chest therefore cannot relocate a previously seen mechanism.
     for(let i=0;i<6;i++){
       const x=tx*CELL+95+env._hash(tx+1481+i*31,ty+1483)*330,y=ty*CELL+95+env._hash(tx+1487,ty+1489+i*23)*330;
-      if(Math.hypot(x,y)<REGIONAL_MECHANISM_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+18)||(this.game.terrain.island&&!this.game.terrain.island.naturalCircleFree(x,y,r+18)))continue;
+      if(Math.hypot(x-safe.x,y-safe.y)<REGIONAL_MECHANISM_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+18)||(this.game.terrain.island&&!this.game.terrain.island.naturalCircleFree(x,y,r+18)))continue;
       if(!placementAllowed(this.game,type==='gas'?'wetlandHazard':'hazard',{x,y,r:r+8},{environment:env,checkTerrain:false}))continue;
       return {id:`${type}:${tx},${ty}`,type,x,y,r,seed,sortY:y,aimY:y,hp:type==='vine'?1:undefined,state:'idle',remaining:2+seed*2,maxRemaining:2+seed*2,warning:0,charge:0};
     }

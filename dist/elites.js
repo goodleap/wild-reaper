@@ -23,10 +23,11 @@ export class Elites {
   }
 
   // A deterministic entry point also makes authored encounters and QA safe:
-  // it bypasses only natural spawn timing/chance, never eligibility or caps.
-  promote(enemy,id) {
-    const game=this.game,rules=ELITE_RULES,definition=ELITE_AFFIXES[id];
-    if(game.status!=='playing'||!definition||!this._eligible(enemy)||game.enemies.filter(e=>e.hp>0&&e.affix).length>=rules.cap)return false;
+  // it bypasses only natural spawn timing/chance. A finite authored population
+  // may reserve its own cap; natural runtime promotion keeps the global cap.
+  promote(enemy,id,{authoredCap}={}) {
+    const game=this.game,rules=ELITE_RULES,definition=ELITE_AFFIXES[id],cap=Number.isInteger(authoredCap)?Math.max(rules.cap,authoredCap):rules.cap;
+    if(game.status!=='playing'||!definition||!this._eligible(enemy)||game.enemies.filter(e=>e.hp>0&&e.affix).length>=cap)return false;
     const foot=enemy.y+groundOffset(enemy);
     enemy.maxHp*=rules.health;enemy.hp*=rules.health;enemy.r*=rules.scale;
     enemy.y=foot-groundOffset(enemy);enemy.xp=Math.round(enemy.xp*rules.xp);

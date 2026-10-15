@@ -49,9 +49,13 @@ export class Environment {
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
     this.world=worldForId(game.region?.id);this.region=this.world.id;this.rules=this.world.environment;
     this.seed=mapSeed(game);
+    this._safeAnchor=game.terrain?.island?.layout?.kind==='rift-forest'?game.terrain.island.layout.spawn:{x:0,y:0};
     // Authored lakes belong to the stable world layout. Their bounds may span
     // several terrain cells, so neither lookup nor painting uses a cell radius.
-    this._macroWaters=game.terrain?.island?.layout?.lakes??[];
+    this._fixedWater=game.terrain?.island?.layout?.kind==='rift-forest';
+    // This map's deep-water polygons and bridge cutouts share the baked
+    // terrain mask. Legacy wading pools must not repaint or close its paths.
+    this._macroWaters=this._fixedWater?[]:game.terrain?.island?.layout?.lakes??[];
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();this._contactFeet=new WeakMap();
     if(generation)this._refresh(true);
@@ -61,7 +65,7 @@ export class Environment {
   _hash(x,y=0){const offset=this.rules.hashOffset;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer||humanoid(entity))};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<=g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<=g.viewHeight*.5+margin;}
-  _terrainClear(x,y,r){const terrain=this.game.terrain;return Math.hypot(x,y)>=ENVIRONMENT_BALANCE.safeRadius+r&&(!terrain.island||terrain.island.naturalCircleFree(x,y,r))&&terrain.isFree(x,y,r);}
+  _terrainClear(x,y,r){const terrain=this.game.terrain;return Math.hypot(x-this._safeAnchor.x,y-this._safeAnchor.y)>=ENVIRONMENT_BALANCE.safeRadius+r&&(!terrain.island||terrain.island.naturalCircleFree(x,y,r))&&terrain.isFree(x,y,r);}
   _objectiveClear(x,y,r){
     const adventure=this.game.adventure;
     if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
@@ -100,6 +104,7 @@ export class Environment {
     return result;
   }
   _mudCandidate(tx,ty){
+    if(this._fixedWater)return null;
     const key=`${tx},${ty}`;if(this._waterCandidates.has(key))return this._waterCandidates.get(key);
     const remember=mud=>{this._waterCandidates.set(key,mud);while(this._waterCandidates.size>192)this._waterCandidates.delete(this._waterCandidates.keys().next().value);return mud;};
     const water=this.rules.water,chance=water.chance;
@@ -215,7 +220,7 @@ export class Environment {
   }
   getImmersion(entity,isPlayer=entity===this.game.player){
     if(!isGrounded(entity))return null;
-    const point=this._foot(entity,isPlayer),island=this.game.terrain.island;let depth=island?.depthAt(point.x,point.y)||0,mud=depth>0?this._shore:null;
+    const point=this._foot(entity,isPlayer),island=this.game.terrain.island;let depth=this._fixedWater?0:island?.depthAt(point.x,point.y)||0,mud=depth>0?this._shore:null;
     // Choose the deepest overlapping pool instead of adding their depths.
     // Only the sprite sinks: movement, collision and ordering keep their feet.
     for(const patch of this.muds){
@@ -239,7 +244,7 @@ export class Environment {
       const slow=patch.kind==='ice'||patch.kind==='lava'?1:patch.kind==='snow'?RULES.snowMovement:this.rules.waterMovement[this.rules.hazard?.type==='tide'&&this.worldHazards?.tideAt(patch)==='active'?'active':'idle'];
       mud=Math.min(mud,slow);
     }
-    const shoreDepth=this.game.terrain.island?.depthAt(point.x,point.y)||0,shore=1-shoreDepth*RULES.shoreSlowPerDepth;
+    const shoreDepth=this._fixedWater?0:this.game.terrain.island?.depthAt(point.x,point.y)||0,shore=1-shoreDepth*RULES.shoreSlowPerDepth;
     return Math.min(mud,shore,this.mechanisms.movementMultiplier(entity,isPlayer));
   }
   isHazardFree(x,y,r=0){return this.mechanisms.isHazardFree(x,y,r)&&this.worldHazards.isHazardFree(x,y,r);}

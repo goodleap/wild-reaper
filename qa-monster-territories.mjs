@@ -18,7 +18,7 @@ const signatures=game=>game.territories.groups.map(group=>({id:group.id,x:group.
 const fresh=new Game(options);assert.deepEqual(signatures(fresh),signatures(g),'same world has fixed group locations, composition and strength');
 const first=territories.groups[0],enemy=first.members[0],other=territories.groups.find(group=>Math.hypot(group.x-first.x,group.y-first.y)>1200);
 assert(other);const home={...enemy.territoryHome},start=feet(enemy);
-step(g,2);assert.equal(enemy.territoryState,'idle');
+place(g,{x:first.x+first.radius+350,y:first.y});step(g,2);assert.equal(enemy.territoryState,'idle');
 assert(Math.hypot(enemy.x-home.x,feet(enemy).y-home.y)<=TERRITORY_RULES.patrolRadius+5,'idle stays near home');
 assert(Math.hypot(enemy.x-start.x,feet(enemy).y-start.y)>0,'nearby idle groups patrol');
 place(g,first);territories.update(.05);

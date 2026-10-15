@@ -35,6 +35,7 @@ import { WaveDirector } from './wave-director.js';
 import { StageRun } from './stage-run.js';
 import { ExpeditionRun } from './expedition-run.js';
 import { MonsterTerritories } from './monster-territories.js';
+import { RiftExploration } from './rift-exploration.js';
 import { RelicSites } from './relic-sites.js';
 import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
@@ -95,6 +96,8 @@ export class Game {
     const baseMaxHp=this.easy?HERO_DEFAULTS.easyBaseHealth:HERO_DEFAULTS.baseHealth,maxHp=Math.max(1,Math.round(applyHeroStat(this.hero,'maxHealth',baseMaxHp)));
     this.player = {x:0,y:0,r:15,hp:maxHp,maxHp,speed:this.hero.baseSpeed,heroId:this.hero.id,level:1,xp:0,xpNext:xpCost(1),invuln:0,hurtFlash:0,hurtFace:0,castFace:0,skillCooldown:0,skillCooldownMax:this.debugOptions.zeroStormCooldown?0:this.hero.skillCooldown,facing:0};
     this.player.appearanceId=this.appearanceId;
+    const worldSpawn=this.terrain.island?.layout?.spawn;
+    if(worldSpawn){this.player.x=worldSpawn.x;this.player.y=worldSpawn.y-groundOffset(this.player,true);}
     resetLocomotion(this.player);
     this.initialWeaponId=normalizeInitialWeaponId(initialWeaponId);
     this.build=new CombatBuild({initialWeaponId:this.initialWeaponId,heroId:this.hero.id});
@@ -139,6 +142,7 @@ export class Game {
     this.settlements??=new Settlements(this,{generation:settlements});
     this.waveDirector=new WaveDirector(this);
     this.discoveredMap=new Set();this.regions.initialize();
+    this.riftExploration=new RiftExploration(this);
     this.relicSites=new RelicSites(this,{generation:!!(adventure&&(encounters||companions))});
     this.settlements.ensureAngels?.();
     this.territories=new MonsterTerritories(this);
@@ -371,6 +375,7 @@ export class Game {
     const settlement=this.settlements.getInteraction();if(settlement)candidates.push(settlement);
     const portal=this.regions.getInteraction();if(portal)candidates.push(portal);
     const relic=this.relicSites?.getInteraction();if(relic)candidates.push(relic);
+    const rift=this.riftExploration?.getInteraction();if(rift)candidates.push(rift);
     const p=this.player,footY=p.y+groundOffset(p,true);
     return candidates.sort((a,b)=>Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
   }
@@ -379,6 +384,7 @@ export class Game {
     const interaction=this.getInteraction();
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
+    if(interaction.category==='rift')return !!this.riftExploration?.interact(interaction.id);
     if(interaction.category==='relic'||interaction.type==='relic')return !!this.relicSites?.interact(interaction.id);
     return interaction.type==='portal'||interaction.type==='stageExit'?this.enterPortal(interaction.id):this.settlements.interact(interaction.id);
   }
@@ -446,15 +452,18 @@ export class Game {
     if(!this.regions.restoreWorld(this.mapId)) {
       const seed=nextIsland?.seed??this.regionIndex,generate=!this.stage?.isBossIsland;
       this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:nextIsland})});this.enemies=[];this.gems=[];this.coins=[];
-      this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.discoveredMap=new Set();
+      this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.riftExploration=null;this.discoveredMap=new Set();
       this.companions.camps=[];this.companions.generation=generate&&this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();
+      const worldSpawn=this.terrain.island?.layout?.spawn;
+      if(worldSpawn){p.x=worldSpawn.x;p.y=worldSpawn.y-groundOffset(p,true);}
       this._moveEntity(p,0,0,true);
       if(this._features.environment)this.environment=new Environment(this,{generation:generate});
       if(this._features.adventure)this.adventure=new Adventure(this,{generation:generate});
       if(generate&&this._features.encounters)this.encounters=new Encounters(this);
       this.settlements=new Settlements(this,{generation:generate&&this._features.settlements});
       this.regions.initialize(portal,fromIndex);
+      this.riftExploration=new RiftExploration(this);
       this.relicSites=new RelicSites(this,{generation:!!(generate&&this._features.adventure&&(this._features.encounters||this._features.companions))});
       this.territories=new MonsterTerritories(this);
     }
@@ -474,7 +483,7 @@ export class Game {
     if(this.environment?.mechanisms.generation)this.environment.mechanisms._refresh(true);
     if(this.environment?.worldHazards?.generation)this.environment.worldHazards._refresh(true);
     if(this.adventure?.generation)this.adventure._refreshSupplies(true);
-    this.companions.onSceneChange?.(arrival?{doorway:portalDoor(arrival),direction:{x:0,y:1}}:null);
+    this.companions.onSceneChange?.(arrival?{doorway:portalDoor(arrival),direction:arrival.arrivalDirection||{x:0,y:1}}:null);
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
     this._emit('regionEnter',{regionId:this.region.id,name:nextIsland?.name??this.region.name,regionIndex:this.regionIndex,mapId:this.mapId});return true;
   }

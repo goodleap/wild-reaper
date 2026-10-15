@@ -43,6 +43,7 @@ export class SceneryArt {
   constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;}
   get diagnostics(){return {entries:this.cache.size,size:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
   get cacheStats(){return this.diagnostics;}
+  _riftImage(image,kind,key){return this._image(`rift:${kind}:${key}`,image.w,image.h,2,c=>{c.filter=kind==='rock'?'saturate(.28) sepia(.25) brightness(1.03)':'saturate(.7) brightness(1.16)';c.drawImage(image.canvas,0,0,image.w,image.h);c.filter='none';});}
   _image(key,w,h,scale,paint){let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}const canvas=this.makeCanvas();canvas.width=Math.ceil(w*scale);canvas.height=Math.ceil(h*scale);const c=canvas.getContext('2d');c.setTransform(scale,0,0,scale,0,0);c.lineCap='round';c.lineJoin='round';paint(c);image={canvas,w,h,pixels:canvas.width*canvas.height};while(this.pixels+image.pixels>PIXEL_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);}this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;}
   _variant(seed,count=5){return Math.floor(hash((seed||0)*913,37)*count);}
   _groundTile(variant){return this._image(`ground:${variant}`,384,384,1,c=>{
@@ -103,7 +104,7 @@ export class SceneryArt {
     for(let i=0;i<leaves;i++){const x=-rx+r()*rx*2,y=-ry+r()*ry*2,lit=x/rx-y/ry>.15,l=2.5+r()*5;leaf(c,x,y,l,1+r()*1.4,-.8+r()*1.4,lit?['#adc07173','#8fa45a99','#c0d18548'][i%3]:['#6a8b4760','#20493080','#9aaa5650'][i%3]);if(i%11===0)stroke(c,[[x-3,y+3],[x+4,y-2]],'#173c2950',.8);}
     c.restore();for(let i=0;i<outline.length;i+=2){const [x,y]=outline[i];leaf(c,x,y,4.5,1.4,Math.atan2(y,x),'#496d3a');}
   });}
-  drawTree(c,prop,canopyAlpha=1){const v=Number.isInteger(prop.treeForm)?prop.treeForm:this._variant(prop.seed),p=TREE_PROFILES[v],s=prop.scale||1,trunk=this._trunk(v),crown=this._canopy(v),cw=prop.crownWidth||1,ch=prop.crownHeight||1;c.save();c.translate(prop.x,prop.y);c.scale(s,s);c.drawImage(trunk.canvas,-trunk.w/2,-trunk.h+28,trunk.w,trunk.h);c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));
+  drawTree(c,prop,canopyAlpha=1){const v=Number.isInteger(prop.treeForm)?prop.treeForm:this._variant(prop.seed),p=TREE_PROFILES[v],s=prop.scale||1,trunk=this._trunk(v),crown=prop.riftPalette?this._riftImage(this._canopy(v),'tree',v):this._canopy(v),cw=prop.crownWidth||1,ch=prop.crownHeight||1;c.save();c.translate(prop.x,prop.y);c.scale(s,s);c.drawImage(trunk.canvas,-trunk.w/2,-trunk.h+28,trunk.w,trunk.h);c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));
     c.drawImage(crown.canvas,p.x-crown.w*cw/2,p.y-crown.h*ch/2,crown.w*cw,crown.h*ch);c.restore();}
   _rock(v){return this._image(`rock:${v}`,96,120,2,c=>{c.translate(48,72);if(v===3){paintRockFragments(c);return;}const r=rng(148+v*27);
     const forms=[
@@ -124,7 +125,7 @@ export class SceneryArt {
     if(v===4){for(const [x,y,k] of [[-21,12,.67],[22,14,.48],[5,24,.35]]){poly(c,[[x-17*k,y+6*k],[x-18*k,y-11*k],[x-9*k,y-24*k],[x+9*k,y-22*k],[x+19*k,y-7*k],[x+16*k,y+11*k],[x,y+17*k]],'#687c60','#304c3a',1);poly(c,[[x-18*k,y-11*k],[x-9*k,y-24*k],[x+9*k,y-22*k],[x+19*k,y-7*k],[x,y-3*k]],'#aab18f');poly(c,[[x,y-3*k],[x+19*k,y-7*k],[x+16*k,y+11*k],[x,y+17*k]],'#879779');stroke(c,[[x-8*k,y-24*k],[x+9*k,y-22*k],[x+17*k,y-9*k]],'#d0ceaa83',.8);}}
     tuft(c,-26,27,.85,v+813,.95);tuft(c,23,29,.75,v+711,.8);
   });}
-  drawRock(c,prop){const v=Number.isInteger(prop.rockForm)?prop.rockForm:this._variant(prop.seed),image=this._rock(v),s=prop.r/36;c.drawImage(image.canvas,prop.x-48*s,prop.y-72*s,96*s,120*s);}
+  drawRock(c,prop){const v=Number.isInteger(prop.rockForm)?prop.rockForm:this._variant(prop.seed),image=prop.riftPalette?this._riftImage(this._rock(v),'rock',v):this._rock(v),s=prop.r/36;c.drawImage(image.canvas,prop.x-48*s,prop.y-72*s,96*s,120*s);}
   _log(v){return this._image(`log:${v}`,194,60,2,c=>{c.translate(97,31);const r=rng(297+v*41);poly(c,[[-68,-14],[-54,-16],[45,-17],[65,-13],[73,-5],[72,7],[64,15],[-66,14],[-75,6],[-76,-7]],'#5f5538','#2b3b2c',1.3);poly(c,[[-68,-14],[-54,-16],[45,-17],[65,-13],[68,-6],[-67,-4]],'#978051');poly(c,[[-69,6],[67,7],[65,15],[-66,14],[-74,7]],'#464b33');
     for(let i=0;i<21;i++){const y=-13+r()*26,x=-60+r()*94;stroke(c,[[x,y],[x+10+r()*9,y+(r()-.5)*3],[x+25+r()*9,y+(r()-.5)*3]],i%3?'#383f2b90':'#c7a96b85',.55+r()*1.1);}
     if(v%3!==1){poly(c,[[-34,-12],[-27,-26],[-23,-25],[-26,-11]],'#6d5c3c','#33452d',1);poly(c,[[-28,-25],[-26,-28],[-22,-27],[-23,-24]],'#c0a06b');}if(v%3===2){poly(c,[[18,-10],[23,-22],[27,-26],[30,-25],[27,-18],[26,-8]],'#6e6140','#38482e',1);stroke(c,[[25,-22],[28,-25]],'#c7ae78',2);}

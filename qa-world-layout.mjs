@@ -5,6 +5,7 @@ import { Terrain, groundOffset } from './dist/terrain.js';
 import { WORLD_IDS, worldNeighbors } from './dist/world-definitions.js';
 import { portalDoor } from './dist/portal-geometry.js';
 import { getWaterContours, containsWater, waterIntersectsCircle, waterIntersectsCapsule } from './dist/water-geometry.js';
+import { riftPointInPolygon } from './dist/rift-collision.js';
 
 const STEP=48;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -37,7 +38,11 @@ function reachablePaths(game,goals,radius=22){
     }
     assert(candidates,`${island.region}/${island.seed}: ${goal.id} has no open approach`);
   }
-  const start=index(0,0);assert(free(start),'the origin is free');
+  const spawn=feet(game.player,true),starts=[];
+  for(let x=Math.round(spawn.x/STEP)-2;x<=Math.round(spawn.x/STEP)+2;x++)for(let y=Math.round(spawn.y/STEP)-2;y<=Math.round(spawn.y/STEP)+2;y++){
+    if(x<minX||x>maxX||y<minY||y>maxY)continue;const id=index(x,y);if(free(id)&&clear(spawn,point(id)))starts.push(id);
+  }
+  assert(starts.length,'the real player spawn has a body-safe grid approach');const start=starts.sort((a,b)=>distance(point(a),spawn)-distance(point(b),spawn))[0];
   let read=0,write=1;queue[0]=start;states[start]=3;
   while(read<write&&found.size<goals.length){
     const id=queue[read++],p=point(id),gx=id%cols+minX,gy=Math.floor(id/cols)+minY;
@@ -49,7 +54,7 @@ function reachablePaths(game,goals,radius=22){
     }
   }
   assert.equal(found.size,goals.length,`${island.region}/${island.seed}: unreachable ${goals.filter((_,i)=>!found.has(i)).map(p=>p.id).join(', ')}`);
-  const paths=goals.map((goal,i)=>{const path=[goal];for(let id=found.get(i);id!==-1;id=parents[id])path.push(point(id));return path.reverse();});
+  const paths=goals.map((goal,i)=>{const path=[goal];for(let id=found.get(i);id!==-1;id=parents[id])path.push(point(id));return [spawn,...path.reverse()];});
   // Replay the independently found route through actual swept movement. The
   // smaller player and the largest ground follower must both finish each edge
   // without a collision projection or a shortcut through an obstacle.
@@ -74,7 +79,8 @@ for(const region of WORLD_IDS)for(const seed of [0,7,17]){
   const node=(x,y)=>`${Math.round(x*1000)},${Math.round(y*1000)}`,nodes=new Set(),edges=new Set();
   for(const route of layout.routes){const a=node(route.ax,route.ay),b=node(route.bx,route.by);nodes.add(a);nodes.add(b);edges.add([a,b].sort().join(':'));}
   assert(edges.size>=nodes.size,'the world retains a loop instead of a tree of dead-end spokes');
-  assert(layout.patches.length>=4&&layout.patches.some(patch=>patch.kind==='brush'),'connected terrain includes readable grassland patches');
+  const fixed=layout.kind==='rift-forest';
+  assert(layout.patches.length>=4&&layout.patches.some(patch=>patch.kind===(fixed?'sparse':'brush')),'connected terrain includes readable traversable vegetation patches');
   assert(layout.clearings.some(clearing=>clearing.kind==='secret'),'an optional exploration pocket remains available');
   assert(layout.encounters.some(clearing=>clearing.kind==='boss')&&layout.encounters.some(clearing=>clearing.kind==='guard'),'combat clearings have different purposes');
   if(seed===0)networks.add(JSON.stringify(layout.routes.map(({ax,ay,bx,by})=>[ax,ay,bx,by])));
@@ -112,6 +118,16 @@ for(const region of WORLD_IDS)for(const seed of [0,7,17]){
     assert(distance(p,boss.portalHome)<.001,'guardians keep their authored arena footing');
   }
   for(const lake of layout.lakes){
+    if(fixed){
+      const ring=lake.points,box=ring.reduce((b,p)=>({minX:Math.min(b.minX,p.x),minY:Math.min(b.minY,p.y),maxX:Math.max(b.maxX,p.x),maxY:Math.max(b.maxY,p.y)}),{minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity});
+      let sampled=0;
+      for(let y=box.minY+30;y<box.maxY;y+=90)for(let x=box.minX+30;x<box.maxX;x+=90){
+        if(!riftPointInPolygon({x,y},ring)||(lake.holes||[]).some(h=>riftPointInPolygon({x,y},h.points||h)))continue;
+        assert(!terrain.rift.circleFree(x,y,0,'ground'),'baked deep-water interior stays outside grounded terrain');
+        assert(terrain.rift.circleFree(x,y,0,'air'),'deep water remains traversable by aerial actors');sampled++;
+      }
+      assert(sampled>0,'each authored water polygon has a physical interior');lakeChecks++;continue;
+    }
     assert(lake.deep&&containsWater(lake,lake.x,lake.y));
     assert(!terrain.isFree(lake.x,lake.y,15),'deep water is physical terrain for grounded actors');
     assert(terrain.isFree(lake.x,lake.y,15,'air'),'deep water does not become an invisible aerial wall');

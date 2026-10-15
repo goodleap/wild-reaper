@@ -70,7 +70,10 @@ for(const [region,kind,multiple] of [['marsh','owl',true],['ruins','owl',false],
   }
   // The hero exits through the real opening and walks around to the opposite
   // side. The followers pursue a moving leader, not a fixed synthetic target.
-  for(const [dx,dy] of [[0,140],[140,140],[140,-300],[0,-300]])walkPlayer(g,{x:site.x+dx,y:site.y+dy});
+  // The fixed forest's prison backs onto a continuous boundary. Its real
+  // rear aisle is 120 units from the prison, not the former open-field 300.
+  const rear=g.terrain.island?.layout?.kind==='rift-forest'?-120:-300;
+  for(const [dx,dy] of [[0,140],[140,140],[140,rear],[0,rear]])walkPlayer(g,{x:site.x+dx,y:site.y+dy});
   let frames=0;while(!g.companions.members.every(m=>exited(g,site,m))&&frames++<800)tick(g);
   assert(g.companions.members.every(m=>exited(g,site,m)),`${region}/${kind}: every rescued ally exits and catches the leader`);
   assert(g.companions.members.includes(member));completed.push({region,kind,members:g.companions.members.length,waitSeconds:frames*.025});

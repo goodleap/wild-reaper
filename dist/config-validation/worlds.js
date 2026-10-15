@@ -1,5 +1,6 @@
 import { TERRAIN_GENERATOR_IDS } from '../worlds/generator-ids.js';
 import { validateWorldLayout } from './world-layout.js';
+import { validateRiftLayout } from './rift-layout.js';
 
 const persistentWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
 const fail=path=>{throw new TypeError(`Invalid world configuration: ${path}`);};
@@ -50,6 +51,7 @@ export function validateWorlds(sections){
   for(const w of worldDefs){
     const p='world '+text(w.id,'world.id');for(const key of ['name','shortName'])text(w[key],p+'.'+key);
     validateWorldLayout(w.layout,bossIds,p+'.layout');
+    if(w.authored){if(w.id!=='forest')fail(p+'.authored');const neighbors=worlds.connections.flatMap(([a,b])=>a===w.id?[order.indexOf(b)]:b===w.id?[order.indexOf(a)]:[]);validateRiftLayout(w.authored,p+'.authored',bossIds,geo.siteReservations.map(spec=>spec[0]),neighbors);}
     profile(w.profile,p+'.profile');positive(w.danger,p+'.danger');object(w.colors,p+'.colors');
     for(const key of ['ground','light','dark','accent','mist','grass','stone'])text(w.colors[key],p+'.colors.'+key);
     for(const[key,n]of Object.entries(object(w.enemyWeights,p+'.enemyWeights'))){ref(key,enemyIds,p+'.enemyWeights');number(n,p+'.enemyWeights.'+key);}

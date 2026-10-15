@@ -1,3 +1,4 @@
+import { RiftCollision, riftPointInPolygon } from './rift-collision.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
@@ -124,9 +125,30 @@ export class Terrain {
     this._structures=[];this._structureOwners=new Map();this.structureRevision=0;this.island=island;
     this._layoutIndex=new Map();
     const layout=island?.layout;
+    this.rift=layout?.kind==='rift-forest'?new RiftCollision(layout):null;this._riftGates=new Map();
     const props=(layout?.obstacles||[]).map((o,i)=>obstacle({...o,visual:sceneryVisual(o)},i));
-    for(const water of layout?.lakes||[])if(water.deep)props.push(Object.freeze({id:water.id,type:'water',region:this.region,x:water.x,y:water.y,r:0,scale:1,seed:water.seed,sortY:water.y,heightBand:'low',visual:false,water,points:getWaterContours(water).outer,bounds:waterBounds(water)}));
+    if(this.rift)for(const [index,patch] of layout.patches.entries()){
+      const minX=Math.min(...patch.points.map(p=>p.x)),maxX=Math.max(...patch.points.map(p=>p.x)),minY=Math.min(...patch.points.map(p=>p.y)),maxY=Math.max(...patch.points.map(p=>p.y)),placed=[];
+      // A few small, separated trunks make sparse woodland readable while
+      // preserving every authored road and landmark reservation.
+      for(let attempt=0;attempt<120&&placed.length<5;attempt++){
+        const x=minX+hash(index*131+attempt*17,this.seed+27)*(maxX-minX),y=minY+hash(index*73+attempt*31,this.seed+43)*(maxY-minY);
+        if(!riftPointInPolygon({x,y},patch.points)||!this.rift.circleFree(x,y,55,'ground')||this.island.isReserved(x,y,26)||placed.some(p=>Math.hypot(x-p.x,y-p.y)<90))continue;
+        const tree={id:`rift-sparse:${index}:${placed.length}`,type:'tree',x,y,r:12,scale:.72,treeForm:placed.length%4,seed:hash(index,attempt),riftPalette:true,layoutPatch:patch.id};
+        placed.push(tree);props.push(obstacle({...tree,visual:sceneryVisual(tree)}));
+      }
+    }
+    for(const water of this.rift?[]:layout?.lakes||[])if(water.deep)props.push(Object.freeze({id:water.id,type:'water',region:this.region,x:water.x,y:water.y,r:0,scale:1,seed:water.seed,sortY:water.y,heightBand:'low',visual:false,water,points:getWaterContours(water).outer,bounds:waterBounds(water)}));
     for(const prop of props)for(let x=Math.floor(prop.bounds.minX/CELL);x<=Math.floor(prop.bounds.maxX/CELL);x++)for(let y=Math.floor(prop.bounds.minY/CELL);y<=Math.floor(prop.bounds.maxY/CELL);y++){const key=`${x},${y}`;if(!this._layoutIndex.has(key))this._layoutIndex.set(key,[]);this._layoutIndex.get(key).push(prop);}
+    for(const passage of layout?.passages||[])if(passage.gateId)this.setRiftGate(passage.gateId,false);
+  }
+  riftGateOpen(id){return this._riftGates.get(id)===true;}
+  setRiftGate(id,open){
+    const passage=this.island?.layout?.passages?.find(p=>p.gateId===id);if(!passage?.gate)return false;
+    if(this._riftGates.has(id)&&this.riftGateOpen(id)===!!open)return true;
+    this._riftGates.set(id,!!open);const gate=passage.gate,dx=gate.bx-gate.ax,dy=gate.by-gate.ay;
+    this.setStructures(open?[]:[{id:`rift-gate:${id}`,type:'log',variant:'rift-gate',structureId:id,x:(gate.ax+gate.bx)/2,y:(gate.ay+gate.by)/2,halfLength:Math.hypot(dx,dy)/2,angle:Math.atan2(dy,dx),r:gate.r??16}],`rift-gate:${id}`);
+    return true;
   }
   get cacheSize(){return this._cache.size;}
   // Each world system replaces only its own bounded collision layer. A gate
@@ -147,6 +169,16 @@ export class Terrain {
       const index=items.length,seed=roll(index+7),size=.8+roll(index+13)*.36;
       add({id:`${this.region}:${key}:${index}`,region:this.region,zone:zone.id,type,variant,x:tx*CELL+x,y:ty*CELL+y,r:type==='tree'?19*size:type==='rock'?34*size:18,scale:size,seed,angle:0,treeForm:index%5,rockForm:index%3,logForm:index%3,...extra});
     };
+    if(this.rift){
+      // Sparse interior scenery supplies familiar depth without defining the
+      // impassable forests. Their continuous outlines own all large barriers.
+      for(let i=0;i<3;i++){
+        const x=(tx+roll(i+21))*CELL,y=(ty+roll(i+31))*CELL;
+        if(!this.rift.circleFree(x,y,80,'ground')||this.island.isReserved(x,y,50))continue;
+        place(i===2?'rock':'tree',i===2?'world-rock':undefined,x-tx*CELL,y-ty*CELL,{r:i===2?24:18,scale:i===2?.8:.78,riftPalette:true});
+      }
+      return items;
+    }
     this.world.terrain.generate({tx,ty,key,region:this.region,hash,roll,zone,add,place,treeProfiles:TREE_PROFILES,cell:CELL,settings:this.world.terrain});
     if(this.island?.layout){
       // Sparse legacy scenery does not compete with the contiguous woodland
@@ -190,7 +222,7 @@ export class Terrain {
   isDry(x,y,r=0) {return !this.island||this.island.isDry(x,y,r);}
   isNaturalFree(x,y,r=0) {return (!this.island||this.island.naturalCircleFree(x,y,r))&&this.isFree(x,y,r);}
   isFree(x,y,r=0,profile='ground') {
-    if(this.island&&!this.island.contains(x,y,r))return false;
+    if(this.island&&!this.island.contains(x,y,r)||this.rift&&!this.rift.circleFree(x,y,r,profile))return false;
     return !this.query(x-r,y-r,x+r,y+r).some(o=>{if(!blocksObstacle(o,profile))return false;if(o.water)return waterIntersectsCircle(o.water,x,y,Math.max(0,r-.001));const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
   }
   _resolve(x,y,r,items,fromX=x,fromY=y) {
@@ -217,10 +249,12 @@ export class Terrain {
   resolveCircle(x,y,r,profile='ground') {
     if(this.isFree(x,y,r,profile))return {x,y,blocked:false};
     const originalX=x,originalY=y;let blocked=false;
-    if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked=coast.blocked;}
+    if(this.rift){const boundary=this.rift.constrain(x,y,r,profile);x=boundary.x;y=boundary.y;blocked=boundary.blocked;}
+    if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked||=coast.blocked;}
     for(let pass=0;pass<8;pass++) {
       const resolved=this._resolve(x,y,r,this.query(x-r-110,y-r-110,x+r+110,y+r+110).filter(o=>blocksObstacle(o,profile)));
       x=resolved.x;y=resolved.y;blocked||=resolved.blocked;
+      if(this.rift){const boundary=this.rift.constrain(x,y,r,profile);x=boundary.x;y=boundary.y;blocked||=boundary.blocked;}
       if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked||=coast.blocked;}
       if(this.isFree(x,y,r,profile))return {x,y,blocked};
     }
@@ -236,9 +270,10 @@ export class Terrain {
     const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(3,Math.min(6,r*.45))));
     const sx=dx/steps,sy=dy/steps;let blocked=start.blocked;
     const items=this.query(Math.min(x,x+dx)-r-110,Math.min(y,y+dy)-r-110,Math.max(x,x+dx)+r+110,Math.max(y,y+dy)+r+110).filter(o=>blocksObstacle(o,profile));
-    if(!items.length&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
+    if(!items.length&&(!this.rift||!this.rift.firstBlocker(x,y,x+dx,y+dy,r,profile))&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
     for(let i=0;i<steps;i++) {
       let next=this._resolve(x+sx,y+sy,r,items,x,y);blocked||=next.blocked;
+      if(this.rift){next=this.rift.step(x,y,next.x,next.y,r,profile);blocked||=next.blocked;}
       if(this.island){const coast=this.island.constrain(next.x,next.y,r);blocked||=coast.blocked;next=coast;}
       if(!items.some(o=>{if(o.water)return waterIntersectsCircle(o.water,next.x,next.y,Math.max(0,r-.001));const q=this.closestPoint(o,next.x,next.y);return Math.hypot(next.x-q.x,next.y-q.y)<r+o.r-.001;})){x=next.x;y=next.y;}
       else blocked=true;
@@ -246,7 +281,8 @@ export class Terrain {
     return {x,y,blocked};
   }
   firstBlocker(x1,y1,x2,y2,r=0,profile='ground') {
-    let found=null,best=Infinity;const dx=x2-x1,dy=y2-y1,length=dx*dx+dy*dy||1;
+    let found=this.rift?.firstBlocker(x1,y1,x2,y2,r,profile)??null,best=Infinity;const dx=x2-x1,dy=y2-y1,length=dx*dx+dy*dy||1;
+    if(found){const q=this.closestPoint(found,x1,y1);best=clamp(((q.x-x1)*dx+(q.y-y1)*dy)/length,0,1);}
     for(const o of this.query(Math.min(x1,x2)-r,Math.min(y1,y2)-r,Math.max(x1,x2)+r,Math.max(y1,y2)+r)) {
       if(!blocksObstacle(o,profile))continue;
       if(o.water){if(waterIntersectsCapsule(o.water,x1,y1,x2,y2,r)){const q=this.closestPoint(o,x1,y1),t=clamp(((q.x-x1)*dx+(q.y-y1)*dy)/length,0,1);if(t<best){best=t;found=o;}}continue;}

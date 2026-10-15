@@ -2,6 +2,7 @@ import { ISLAND_SITE_RESERVATIONS } from './worlds/site-reservations.js';
 import { COAST_RULES } from './placement-rules.js';
 import { WORLD_IDS, regionFor, worldNeighbors } from './world-definitions.js';
 import { createWorldLayout } from './worlds/world-layout.js';
+import { createRiftLayout } from './worlds/rift-layout.js';
 // Deterministic island outlines are shared by coast paint, collision, spawning
 // and natural terrain generation. The radius varies smoothly: no hidden
 // rectangular world wall and no narrow pixel-scale bays trapping a creature.
@@ -21,6 +22,13 @@ export class Island {
     this.region=WORLD_IDS.includes(theme)?theme:'forest';this.seed=Number.isFinite(definition?.seed)?Math.trunc(definition.seed):Number.isFinite(seed)?Math.trunc(seed):0;
     this.mapId=definition?.id??this.region;this.role=definition?.role??'world';
     this.worldId=WORLD_IDS.indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.beachWidth=regionFor(this.worldId).coast.beachWidth??COAST_RULES.beachWidth;this.routeRadius=80;
+    if(!definition&&this.region==='forest'&&this.role==='world'){
+      this.layout=createRiftLayout();this.bounds=this.layout.bounds;this.spawn=this.layout.spawn;this.plan=this.layout.plan;this.routes=this.layout.routes;
+      this.profile=Object.freeze({x:3600,y:2700,phase:0,bays:0});this.shallowWidth=0;this.beachWidth=0;
+      const b=this.bounds;this.points=Object.freeze([{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}].map(Object.freeze));
+      this._edges=this.points.map((a,i)=>{const b=this.points[(i+1)%4],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);return {a,b,nx:-dy/len,ny:dx/len};});
+      this._innerRadius=2700;this._contours=new Map([[0,this.points]]);return;
+    }
     const profile={...regionFor(this.worldId).profile,...(this.role==='boss'?{x:1080,y:1080,bays:.025}:{}),...definition?.profile};
     if(![profile.x,profile.y,profile.phase,profile.bays].every(Number.isFinite)||profile.x<=0||profile.y<=0)throw new Error(`Invalid island profile: ${this.mapId}`);
     this.profile=Object.freeze(profile);
@@ -98,6 +106,7 @@ export class Island {
     return null;
   }
   _inside(x,y){
+    if(this.layout?.kind==='rift-forest'){const b=this.bounds;return x>=b.minX&&x<=b.maxX&&y>=b.minY&&y<=b.maxY;}
     // All outlines are star-shaped around the origin, so one angular edge is
     // sufficient for point inclusion. Circular clearance still checks edges.
     if(x===0&&y===0)return true;
@@ -112,7 +121,7 @@ export class Island {
     return r===0||this._nearest(x,y).distance+1e-7>=r;
   }
   isDry(x,y,r=0){return this.contains(x,y,r+this.shallowWidth);}
-  depthAt(x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return 0;if(Math.hypot(x,y)+this.shallowWidth<=this._innerRadius)return 0;if(!this._inside(x,y))return 1;const t=clamp(1-this._nearest(x,y).distance/this.shallowWidth,0,1);return t*t*(3-2*t);}
+  depthAt(x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return 0;if(this.layout?.kind==='rift-forest')return this._inside(x,y)?0:1;if(Math.hypot(x,y)+this.shallowWidth<=this._innerRadius)return 0;if(!this._inside(x,y))return 1;const t=clamp(1-this._nearest(x,y).distance/this.shallowWidth,0,1);return t*t*(3-2*t);}
   containsCapsule(ax,ay,bx,by,r=0,inset=0){
     if(![ax,ay,bx,by,r,inset].every(Number.isFinite)||r<0||inset<0)return false;
     const clearance=r+inset;if(!this.contains(ax,ay,clearance)||!this.contains(bx,by,clearance))return false;
@@ -130,12 +139,14 @@ export class Island {
   }
   contour(inset=0){
     const amount=Number.isFinite(inset)?inset:0;if(this._contours.has(amount))return this._contours.get(amount);
+    if(this.layout?.kind==='rift-forest'){const b=this.bounds,points=Object.freeze([{x:b.minX+amount,y:b.minY+amount},{x:b.maxX-amount,y:b.minY+amount},{x:b.maxX-amount,y:b.maxY-amount},{x:b.minX+amount,y:b.maxY-amount}].map(Object.freeze));this._contours.set(amount,points);return points;}
     const points=this.points.map((p,i)=>{const before=this._edges[(i+COUNT-1)%COUNT],after=this._edges[i],nx=before.nx+after.nx,ny=before.ny+after.ny,len=Math.hypot(nx,ny),dot=(nx/len)*after.nx+(ny/len)*after.ny;return Object.freeze({x:p.x+nx/len*amount/Math.max(.65,dot),y:p.y+ny/len*amount/Math.max(.65,dot)});});
     if(this._contours.size<12)this._contours.set(amount,Object.freeze(points));return points;
   }
   isReserved(x,y,r=0){return this.isReservedCapsule(x,y,x,y,r);}
   isReservedCapsule(ax,ay,bx,by,r=0){
-    if(distanceSq(0,0,ax,ay,bx,by)<(260+r)**2)return true;
+    const spawn=this.layout?.kind==='rift-forest'?this.layout.spawn:{x:0,y:0};
+    if(distanceSq(spawn.x,spawn.y,ax,ay,bx,by)<(260+r)**2)return true;
     if(Object.values(this.plan).some(p=>distanceSq(p.x,p.y,ax,ay,bx,by)<(p.r+r)**2))return true;
     if(this.layout?.clearings.some(p=>distanceSq(p.x,p.y,ax,ay,bx,by)<(p.r+r)**2))return true;
     return this.routes.some(p=>segmentDistanceSq(ax,ay,bx,by,p.ax,p.ay,p.bx,p.by)<(p.r+r)**2);

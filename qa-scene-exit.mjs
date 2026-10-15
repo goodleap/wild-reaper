@@ -61,8 +61,9 @@ for(const type of ['supply','occupied','castle']){
 // The same five-member placement is exercised at actual paired world gates,
 // including active guardian angels and both outbound and return directions.
 const gate=world.regions.portals.find(p=>p.nextRegionIndex===1),boss=world.enemies.find(e=>e.id===gate.bossId);
-place(world.player,{x:gate.x,y:gate.y+250});world.regionGrace=0;world.regions.update();
-world._hurtEnemy(boss,boss.hp+1);world.regions.flushReward();assert(world.chooseSuper(world.getSuperChoices()[0].id));
+if(boss){place(world.player,{x:gate.x,y:gate.y+250});world.regionGrace=0;world.regions.update();
+world._hurtEnemy(boss,boss.hp+1);world.regions.flushReward();assert(world.chooseSuper(world.getSuperChoices()[0].id));}
+else assert(gate.natural&&gate.state==='active');
 for(const target of [1,0]){
   const departure=world.regions.portals.find(p=>p.nextRegionIndex===target);place(world.player,portalDoor(departure));
   assert(world.requestInteraction(departure.id));finish(world);assert.equal(world.regionIndex,target);
@@ -78,7 +79,7 @@ assert(safe.y>=0&&blocked.terrain.isFree(safe.x,safe.y,blocked.player.r+4));
 
 // Ordinary following resumes only when the leader really leaves the leash.
 const follow=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,encounters:false,settlements:false});
-quiet(follow);recruit(follow);place(follow.player,{x:0,y:72});follow.companions.onSceneChange({doorway:door,direction:{x:0,y:1}});
+quiet(follow);follow.enemies=[];recruit(follow);place(follow.player,{x:0,y:72});follow.companions.onSceneChange({doorway:door,direction:{x:0,y:1}});
 const before=follow.companions.members.map(foot);place(follow.player,{x:0,y:400});
 for(let i=0;i<8;i++){for(const member of follow.companions.members)member._scan=Infinity;follow.companions.update(.025);}
 follow.companions.members.forEach((member,i)=>assert(foot(member).y>before[i].y,'each ally naturally follows a distant leader'));

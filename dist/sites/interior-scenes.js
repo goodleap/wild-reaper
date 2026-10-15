@@ -26,4 +26,4 @@ export const INTERIOR_SCENES=Object.freeze({
     roomCleared(dungeon,state,room){room.rewarded=true;state.site.state='cleared';dungeon.game._emit('houseCleared',{name:state.name});}
   })
 });
-export const interiorSceneFor=state=>INTERIOR_SCENES[typeof state==='string'?state:state?.kind||'castle'];
+export const interiorSceneFor=state=>{const kind=typeof state==='string'?state:state?.kind||'castle';return INTERIOR_SCENES[kind==='cave'?'castle':kind];};

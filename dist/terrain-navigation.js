@@ -1,3 +1,4 @@
+import { RiftNavigation } from './rift-navigation.js';
 // Shared, bounded navigation for solid groves, courtyard walls and lakes.
 // Paths contain ordinary walking waypoints; movement/collision remains owned
 // by Terrain.moveCircle. Separate clearance layers preserve flying behavior.
@@ -17,7 +18,7 @@ function pop(heap){
 }
 function endpoints(obstacle){const dx=Math.cos(obstacle.angle||0)*(obstacle.halfLength||0),dy=Math.sin(obstacle.angle||0)*(obstacle.halfLength||0);return [{x:obstacle.x-dx,y:obstacle.y-dy},{x:obstacle.x+dx,y:obstacle.y+dy}];}
 export class TerrainNavigation {
-  constructor(terrain){this.terrain=terrain;this.revision=terrain.structureRevision||0;this.layers=new Map();this.searches=0;this.expanded=0;this.lastExpanded=0;}
+  constructor(terrain){this.terrain=terrain;this.rift=terrain.rift?new RiftNavigation(terrain):null;this.revision=terrain.structureRevision||0;this.layers=new Map();this.plans=0;this.searches=0;this.expanded=0;this.lastExpanded=0;}
   clear(){this.layers.clear();this.revision=this.terrain.structureRevision||0;}
   layer(radius,profile){
     if(this.revision!==(this.terrain.structureRevision||0))this.clear();
@@ -75,6 +76,19 @@ export class TerrainNavigation {
     return remember(layer.edges,id,clear,LIMITS.edges);
   }
   find(start,target,radius,profile='ground',budget=LIMITS.expanded,bodyRadius=radius){
+    if(!this.rift||this.clearSegment(start,target,bodyRadius,profile))return this.findLocal(start,target,radius,profile,budget,bodyRadius);
+    this.lastExpanded=0;if(budget<=0)return null;this.plans++;
+    const route=this.rift.route(start,target,bodyRadius,profile);
+    if(!route?.length)return this.findLocal(start,target,radius,profile,budget,bodyRadius);
+    // Return the first reachable leg. waypoint() plans the following leg once
+    // reached, so a distant world target never triggers a full-world A* scan.
+    for(const point of route){
+      if(Math.hypot(point.x-start.x,point.y-start.y)<8)continue;
+      return this.findLocal(start,point,radius,profile,budget,bodyRadius);
+    }
+    return null;
+  }
+  findLocal(start,target,radius,profile='ground',budget=LIMITS.expanded,bodyRadius=radius){
     const layer=this.layer(radius,profile),{r,step}=layer;
     // Collision resolution may leave a body resting against a wall. The
     // initial attachment uses its actual radius until it reaches a node with
@@ -159,11 +173,11 @@ export class TerrainNavigation {
     // A moving leader must not erase an unfinished exit while the next search
     // is waiting for its budget. Keep the safe next step, or briefly hold.
     if(time<state.nextSearch)return fallback??start;
-    if(this.frame!==frame){this.frame=frame;this.frameExpanded=0;this.frameSearches=0;}
-    const remaining=LIMITS.frameExpanded-this.frameExpanded,budget=this.frameSearches<LIMITS.frameSearches&&remaining>=800?remaining:0,searches=this.searches;
+    if(this.frame!==frame){this.frame=frame;this.frameExpanded=0;this.frameSearches=0;this.framePlans=0;}
+    const remaining=LIMITS.frameExpanded-this.frameExpanded,budget=this.frameSearches<LIMITS.frameSearches&&this.framePlans<LIMITS.frameSearches&&remaining>=800?remaining:0,searches=this.searches,plans=this.plans;
     const replacement=this.find(start,target,radius,profile,budget,bodyRadius);
     if(replacement){state.target={...target};state.path=replacement;}
-    this.frameExpanded+=this.lastExpanded;this.frameSearches+=this.searches-searches;
+    this.frameExpanded+=this.lastExpanded;this.frameSearches+=this.searches-searches;this.framePlans+=this.plans-plans;
     // Large populations share a per-frame work budget. Cache hits still work
     // when it is spent; the remaining actors retry in staggered short turns.
     state.nextSearch=time+(budget>0?.7+(Math.abs(entity.id||0)%5)*.06:.06+(Math.abs(entity.id||0)%4)*.015);

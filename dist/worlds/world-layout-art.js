@@ -1,4 +1,5 @@
 import { traceWaterPath } from '../water-geometry.js';
+import { RiftArt, drawRiftOverview } from './rift-art.js';
 
 const TAU=Math.PI*2,TILE=256,BLEED=2,PIXEL_LIMIT=6*1024*1024;
 const PALETTES=Object.freeze({
@@ -54,8 +55,8 @@ function pebble(c,x,y,size,seed,p){
 // The macro layout supplies all positions. These bounded transparent tiles add
 // ground detail only; collision and the raised scenery keep their own geometry.
 export class WorldLayoutArt {
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this.layouts=new WeakMap();this.nextLayout=0;}
-  get cacheStats(){return {entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
+  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.pixels=0;this.builds=0;this.layouts=new WeakMap();this.nextLayout=0;this.riftArt=new RiftArt(makeCanvas);}
+  get cacheStats(){const rift=this.riftArt.cacheStats;return {entries:this.cache.size+rift.entries,pixels:this.pixels+rift.pixels,bytes:this.pixels*4+rift.bytes,limitBytes:PIXEL_LIMIT*4+rift.limitBytes,builds:this.builds+rift.builds};}
   _layout(island){
     const layout=island.layout;if(!layout)return null;
     let prepared=this.layouts.get(layout);if(prepared)return prepared;
@@ -123,6 +124,7 @@ export class WorldLayoutArt {
     }c.restore();
   }
   drawGround(c,island,{camX=0,camY=0,width=1100,height=700}={}){
+    if(island?.layout?.kind==='rift-forest')return this.riftArt.drawGround(c,island,{camX,camY,width,height});
     const prepared=island&&this._layout(island);if(!prepared)return false;
     const left=camX-width/2,top=camY-height/2;
     c.save();
@@ -152,8 +154,9 @@ export class WorldLayoutArt {
 // Called inside the map's existing exploration clip and world transform.
 // It only reads permanent layout data: no terrain generation, active-water
 // cache, landmark discovery or simulation state is touched while drawing.
-export function drawWorldLayoutMap(c,island,{viewBounds,scale=1}={}){
+export function drawWorldLayoutMap(c,island,{viewBounds,scale=1,labels=false}={}){
   const layout=island?.layout;if(!layout)return false;const p=PALETTES[island.region]||PALETTES.forest;
+  if(layout.kind==='rift-forest')return drawRiftOverview(c,layout,{viewBounds,scale,labels});
   c.save();c.lineCap='round';c.lineJoin='round';
   for(const patch of layout.patches||[]){
     if(viewBounds&&!overlaps(patchBounds(patch),viewBounds))continue;

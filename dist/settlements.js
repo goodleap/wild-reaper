@@ -125,7 +125,8 @@ export class Settlements {
     for(let i=this.sites.length-1;i>=0;i--){const site=this.sites[i];if(site.type==='angel'&&(site.anchorId?.startsWith('portal:')||site.id?.startsWith('angel:portal:')))this.sites.splice(i,1);}
     const g=this.game,stageSanctuary=!!(g.stage&&g._features?.settlements);if((!this.generation&&!stageSanctuary)||g.dungeon?.active)return;
     const spawn=g.stage?g.stage.currentIsland.role==='outer':(g.regionIndex||0)===0;
-    const anchors=spawn?[{id:`spawn:${mapIdentity(g)}`,x:0,y:19.8}]:[];
+    const riftSpawn=g.terrain.island?.layout?.kind==='rift-forest'?g.terrain.island.layout.landmarks?.spawn:null;
+    const anchors=spawn?[{id:`spawn:${mapIdentity(g)}`,x:riftSpawn?.x??0,y:riftSpawn?.y??19.8}]:[];
     for(const anchor of anchors) {
       const id=`angel:${anchor.id}`;if(this.sites.some(s=>s.id===id))continue;
       const point=this._angelPoint(anchor);if(!point)continue;

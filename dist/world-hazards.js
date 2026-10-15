@@ -21,11 +21,11 @@ export class WorldHazards {
   _visible(prop,margin=0){const g=this.game,r=prop.patch?Math.max(prop.patch.rx,prop.patch.ry):prop.r||0;return Math.abs(prop.x-g.player.x)<=g.viewWidth*.5+r+margin&&Math.abs(prop.y-g.player.y)<=g.viewHeight*.5+r+margin;}
   _candidate(tx,ty){
     const hazard=this.rules.hazard;if(hazard?.source!=='terrain')return null;const type=hazard.type;
-    const env=this.environment,seed=env._hash(tx+2053,ty+2081);if(seed>hazard.chance)return null;
+    const env=this.environment,seed=env._hash(tx+2053,ty+2081),safe=env._safeAnchor||{x:0,y:0};if(seed>hazard.chance)return null;
     const r=WORLD_HAZARD_RULES[type].radius;
     for(let i=0;i<5;i++){
       const x=tx*CELL+90+env._hash(tx+2089+i*29,ty+2111)*340,y=ty*CELL+90+env._hash(tx+2129,ty+2131+i*31)*340;
-      if(Math.hypot(x,y)<WORLD_HAZARD_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+20))continue;
+      if(Math.hypot(x-safe.x,y-safe.y)<WORLD_HAZARD_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+20))continue;
       if(!placementAllowed(this.game,'hazard',{x,y,r:r+14},{environment:env,checkTerrain:false,checkReserved:true}))continue;
       return {id:`${type}:${tx},${ty}`,type,x,y,r,seed,state:'idle',remaining:2+seed*3,maxRemaining:2+seed*3,warning:0};
     }

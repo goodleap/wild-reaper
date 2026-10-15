@@ -14,7 +14,7 @@ import { Environment } from './dist/environment.js';
 const expected={
   "exports": {
     "environment": "5a2e7540eee34a6d3ef9ea0b5029222765e9f6bd5b0b869552f15993a5f164c3",
-    "world-definitions": "e5a5a8de90d78cf790a62b418b020eb8b9ff51b47872b7f1f61434f917ae2d69",
+    "world-definitions": "6b1ab206e047d336c42195f544a6c01e51f8926daeea2c6e71020de5fe2ae19e",
     "stage-definitions": "db9a79f08bbbb15d4659f34dae6c9aa87bfe658c8c31d8870dcf025035665af7",
     "world-sites": "31546e1f1db7a911f55177cd5395ee8bc3d508b7f6c6254f978018f2b9bb0a3a",
     "world-hazards": "1bda6969e34de2b9e50c502f2c9359998fb901561f39acf1daab0b4a2cfcc222",
@@ -37,7 +37,8 @@ const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof v
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 for(const [id,hash]of Object.entries(expected.exports)){
   const module=await import(`./dist/${id}.js`),data=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(module).filter(([,value])=>typeof value!=='function'))));
-  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;delete w.layout;}
+  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;delete w.layout;delete w.authored;}
+  if(data.REGIONS){assert.equal(data.REGIONS[0].name,'裂谷林海');assert.equal(data.REGIONS[0].shortName,'裂谷');assert.equal(digest(data.REGIONS.slice(1)),'fd814dc1ee3286e77cc1a1d51ffe609ee2d74d3d8012ae13a78f91f80bc5d46a','the other seven world catalogues remain unchanged');}
   assert.equal(digest(data),hash,`${id}: authored values preserved`);
 }
 for(const world of REGIONS){
@@ -53,6 +54,8 @@ for(const world of REGIONS){
 assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,8);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
+assert.equal(sections.worlds.definitions.filter(world=>world.authored).length,1,'the fixed map changes only the starting forest');
+assert.equal(sections.worlds.definitions[0].authored.areas.length,18);
 const reject=(edit,label)=>{const bad=structuredClone(sections);edit(bad);assert.throws(()=>validateWorlds(bad),undefined,label);};
 reject(s=>s.worlds.definitions[0].terrain.generatorId='remote-code','unregistered behavior');
 reject(s=>s.worlds.order.reverse(),'persistent numeric world identities');
@@ -68,6 +71,9 @@ reject(s=>s.worlds.definitions[0].layout.bossKind='unknown','layout boss referen
 reject(s=>s.worlds.definitions[0].layout.paths[0][0][0]=Infinity,'layout routes contain finite world points');
 reject(s=>s.worlds.definitions[0].layout.patches[0][0]='unrendered','layout patches use known terrain themes');
 reject(s=>s.worlds.definitions[0].layout.lakes[0][2]=-1,'layout lakes have positive supported bounds');
+reject(s=>s.worlds.definitions[0].authored.passages[0].to='missing','fixed map passage endpoints reference real areas');
+reject(s=>delete s.worlds.definitions[0].authored.plan['portal:3'],'fixed map retains every existing world connection');
+reject(s=>s.worlds.definitions[0].authored.boundaries[0].points[0].x=Infinity,'baked collision geometry stays finite');
 for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   const g=new Game({hero:'princess',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
   g.time=time;g.enemies=[];g.player.x=g.player.y=0;g.player.invuln=0;

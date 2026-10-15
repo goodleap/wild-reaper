@@ -100,7 +100,10 @@ for(const region of ['forest','city','mountain','marsh']){
   const world=new Game({mode:'world',debug:true,debugWorld:region}),terrain=world.terrain,layout=terrain.island.layout;
   assert(layout,`${region}: the real world has a layout`);
   let pair=null;
-  if(region==='forest'){
+  if(layout.kind==='rift-forest'){
+    pair={from:{...layout.areas.find(a=>a.id==='13').center},to:{...layout.areas.find(a=>a.id==='08').center}};
+    assert(!terrain.riftGateOpen('bell-shortcut'),'the closed shortcut requires walking the eastern connection');
+  }else if(region==='forest'){
     const patch=layout.patches.find(p=>p.kind==='forest'&&p.density>=1),d=Math.max(patch.rx,patch.ry)+80;
     for(let i=0;i<6&&!pair;i++){
       const a=i*Math.PI/6,from={x:patch.x-Math.cos(a)*d,y:patch.y-Math.sin(a)*d},to={x:patch.x+Math.cos(a)*d,y:patch.y+Math.sin(a)*d};

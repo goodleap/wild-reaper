@@ -1,6 +1,6 @@
 import { beginRelicActivation, advanceRelicActivation } from './relic-activation.js';
 export const SCENE_TRANSITION_RULES=Object.freeze({outDuration:.15,inDuration:.25,castleRitualDuration:.2});
-const SCENE_INTERACTIONS=new Set(['portal','castle','supply','occupied','dungeonExit']);
+const SCENE_INTERACTIONS=new Set(['portal','castle','supply','occupied','dungeonExit','riftCave']);
 const clamp=v=>Math.max(0,Math.min(1,v));
 const smooth=v=>{const t=clamp(v);return t*t*(3-2*t);};
 

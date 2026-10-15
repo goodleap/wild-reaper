@@ -23,10 +23,13 @@ export class Regions {
   get endlessUnlocked(){return !this.game._worldExploration&&!this.game.stage&&!this.game.expedition&&this.unlockedConnections.size>=GUARDIAN_RULES.endlessConnections;}
   _endpoint(target,{origin=null,back=false}={}) {
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
-    const point=plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
+    const natural=g.terrain.island?.layout?.kind==='rift-forest';
+    const point=natural&&plan?{x:plan.x,y:plan.y}:plan?this._safePoint(plan,true,true):this._safePoint(origin||{x:0,y:0},true,false,target);
     if(!point)return null;
-    const connectionId=worldConnectionId(index,target),active=this.unlockedConnections.has(connectionId);
-    return {id:`portal:${index}:${target}`,...point,r:32,interactRadius:PORTAL_RULES.interactRadius,state:active?'active':'locked',direction:back?'back':'forward',connectionId,nextRegionIndex:target,nextRegion:regionFor(target),targetPortalId:`portal:${target}:${index}`,discovered:back&&active,rewardClaimed:this.claimedConnections.has(connectionId)};
+    const connectionId=worldConnectionId(index,target);
+    if(natural)this.unlockedConnections.add(connectionId);
+    const active=this.unlockedConnections.has(connectionId);
+    return {id:`portal:${index}:${target}`,...point,...(natural?{natural:true,kind:'travel',touchRadius:42,arrivalDirection:plan?.arrivalDirection||(target===1?{x:0,y:1}:target===2?{x:0,y:-1}:{x:1,y:0}),name:target===1?'北境山口':target===2?'南境长桥':'营地小径'}:{}),r:32,interactRadius:PORTAL_RULES.interactRadius,state:active?'active':'locked',direction:back?'back':'forward',connectionId,nextRegionIndex:target,nextRegion:regionFor(target),targetPortalId:`portal:${target}:${index}`,discovered:back&&active,rewardClaimed:this.claimedConnections.has(connectionId)};
   }
   _syncConnections() {
     if(this.game.stage)return;
@@ -85,7 +88,7 @@ export class Regions {
     if(fromPortal)fromPortal.targetPortalId=`portal:${index}:${normalizeWorldIndex(fromRegionIndex)}`;
     g.portal=this.portals.find(portal=>portal.state==='locked')||this.portals[0]||null;
     this._setStructures();
-    if(this.guarded)for(const portal of this.portals)if(portal.state==='locked')this._spawnGuardian(portal);
+    if(this.guarded)for(const portal of this.portals)if(portal.state==='locked'&&!portal.natural)this._spawnGuardian(portal);
     g.settlements?.ensureAngels?.();
   }
   update() {
@@ -198,11 +201,16 @@ export class Regions {
     const door=portalDoor(portal);if(distance(feet(g),door)>portal.interactRadius)return null;
     const locked=portal.state!=='active',enabled=this.canEnter(portal);
     if(portal.kind==='victory')return {id:portal.id,type:'stageExit',label:'进入通关门',description:'完成本局试炼',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
-    if(portal.kind==='travel')return {id:portal.id,type:'portal',label:`前往${portal.nextRegion.name}`,description:'可自由往返',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
+    if(portal.kind==='travel')return {id:portal.id,type:'portal',label:`前往${portal.nextRegion.name}`,description:portal.natural?'沿通路离开 · 可返回探索':'可自由往返',...door,touchRadius:portal.touchRadius||PORTAL_GEOMETRY.touchRadius,enabled};
     return {id:portal.id,type:'portal',label:locked?`通往${portal.nextRegion.name}`:`前往${portal.nextRegion.name}`,description:locked?'击败驻门首领 · 解锁双向通道':'已激活 · 可以往返穿越',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
   }
   arrivalPoint(portal,r=this.game.player.r){
     const g=this.game,door=portalDoor(portal),clearance=r+4;
+    if(portal.natural){
+      const d=portal.arrivalDirection||{x:0,y:1};
+      for(const offset of [110,140,170,80]){const point={x:door.x+d.x*offset,y:door.y+d.y*offset};if(g.terrain.isFree(point.x,point.y,clearance)&&!g.terrain.firstBlocker(door.x,door.y,point.x,point.y,clearance))return point;}
+      return g.terrain.isFree(door.x,door.y,clearance)?door:null;
+    }
     // Arrival stays beyond the contact zone and on the open front apron.
     // Guardians are removed on unlock; persistent angels still need room.
     const safe=point=>placementAllowed(g,'loot',{...point,r:clearance})&&
@@ -221,14 +229,14 @@ export class Regions {
     const g=this.game;
     const enemies=g.enemies.filter(e=>e.hp>0&&(e.territoryId||e.stageBoss||e.portalId||e.guardianId||e.eventId||e.rescueId||e.settlementId||e.relicSiteId||e.debugBoss));
     g.terrain._cache?.clear();
-    const state={savedAt:g.time,savedClock:g._clock,terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,settlements:g.settlements,relicSites:g.relicSites,territories:g.territories,enemies,gems:g.gems,coins:g.coins,portals:this.portals,portal:g.portal,dungeonStates:g.dungeon.states,discoveredMap:g.discoveredMap,
+    const state={savedAt:g.time,savedClock:g._clock,terrain:g.terrain,adventure:g.adventure,environment:g.environment,encounters:g.encounters,settlements:g.settlements,relicSites:g.relicSites,territories:g.territories,riftExploration:g.riftExploration,enemies,gems:g.gems,coins:g.coins,portals:this.portals,portal:g.portal,dungeonStates:g.dungeon.states,discoveredMap:g.discoveredMap,
       companionCamps:g.companions.camps,companionNextAt:g.companions.nextAt,companionGeneration:g.companions.generation,bossDefeated:g.bossDefeated,nextBossAt:g.nextBossAt};
     this.states.set(g.mapId??g.regionIndex,state);return state;
   }
   restoreWorld(index) {
     const state=this.states.get(index);if(!state)return false;
     const g=this.game,delta=g.time-state.savedAt,clockDelta=g._clock-state.savedClock;
-    for(const key of ['terrain','adventure','environment','encounters','settlements','relicSites','territories','enemies','gems','coins','portal','discoveredMap','bossDefeated','nextBossAt'])g[key]=state[key];
+    for(const key of ['terrain','adventure','environment','encounters','settlements','relicSites','territories','riftExploration','enemies','gems','coins','portal','discoveredMap','bossDefeated','nextBossAt'])g[key]=state[key];
     this.portals=state.portals;g.dungeon.states=state.dungeonStates;
     g.companions.camps=state.companionCamps||(state.companionCamp?[state.companionCamp]:[]);g.companions.generation=state.companionGeneration;g.companions.nextAt=state.companionNextAt+delta;
     if(g.adventure)g.adventure._nextTreasureAt+=delta;if(g.encounters)g.encounters.nextAt+=delta;

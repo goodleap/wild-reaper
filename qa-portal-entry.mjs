@@ -37,9 +37,10 @@ function walkTo(g,target){
 }
 const structures=g=>g.terrain._structureOwners.get('portals')||[];
 function verifyWalls(g){
-  const walls=structures(g);assert.equal(walls.length,g.regions.portals.length*3,'every portal has exactly three solid frame segments');
+  const walls=structures(g);assert.equal(walls.length,g.regions.portals.filter(p=>!p.natural).length*3,'stone portals have three solid frame segments; natural paths have none');
   assert.equal(new Set(walls.map(w=>w.id)).size,walls.length,'restoring a world must not duplicate portal collision');
   for(const p of g.regions.portals){
+    if(p.natural){assert.equal(walls.filter(w=>w.structureId===p.id).length,0);assert(g.terrain.isFree(p.x,p.y,g.player.r));continue;}
     assert.equal(walls.filter(w=>w.structureId===p.id).length,3);
     const d=portalDoor(p);assert(g.terrain.isFree(d.x,d.y,g.player.r),'the centered front doorway fits the player');
     for(const q of [{x:p.x-GEOMETRY.halfWidth,y:p.y},{x:p.x+GEOMETRY.halfWidth,y:p.y},{x:p.x,y:p.y+GEOMETRY.backY}])
@@ -106,7 +107,8 @@ const world=new Game();world._spawn=Infinity;world._shot=Infinity;world.player.x
 verifyWalls(world);assert(world.terrain._structureOwners.get('settlements')?.length);assert(world.terrain._structureOwners.get('relic')?.length);
 const sanctuary=world.settlements.sites.find(s=>s.type==='angel'&&s.anchorId?.startsWith('spawn:'));assert(sanctuary);
 const portal=world.regions.portals.find(p=>p.nextRegionIndex===1),boss=world.enemies.find(e=>e.id===portal.bossId);
-place(world,{x:portal.x,y:portal.y+250});world.regionGrace=0;world.regions.update();world._hurtEnemy(boss,boss.hp+1);world.regions.flushReward();assert(world.chooseSuper(world.getSuperChoices()[0].id));
+if(boss){place(world,{x:portal.x,y:portal.y+250});world.regionGrace=0;world.regions.update();world._hurtEnemy(boss,boss.hp+1);world.regions.flushReward();assert(world.chooseSuper(world.getSuperChoices()[0].id));}
+else assert(portal.natural&&portal.state==='active','the forest connection is a natural open road');
 const originalTerrain=world.terrain,otherOwners=new Map([...world.terrain._structureOwners].filter(([owner])=>owner!=='portals').map(([owner,walls])=>[owner,walls.map(w=>w.id)]));
 for(const target of [1,0,1,0,1,0]){
   const endpoint=world.regions.portals.find(p=>p.nextRegionIndex===target);place(world,portalDoor(endpoint));assert(world.enterPortal(endpoint.id));

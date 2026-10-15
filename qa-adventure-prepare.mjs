@@ -32,6 +32,13 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   assert.equal(node(h,'intro').classList.contains('hidden'),true);assert.equal(prepare.classList.contains('hidden'),false);
   assert.equal(node(h,'arena').classList.contains('preparing'),true);
   assert.equal(h.run('archive.data.totals.runs'),0,'opening setup never starts or records a run');
+  assert.equal(node(h,'world-mode-title').textContent,'裂谷林海');
+  assert.equal(node(h,'world-preview').getAttribute('role'),'img');
+  assert.match(node(h,'world-preview').getAttribute('aria-label'),/中央湖泊.*双桥/);
+  assert.equal(node(h,'world-preview').width/node(h,'world-preview').height,4/3,'world preview contains the complete authored map');
+  assert.match(node(h,'prepare-summary').textContent,/裂谷林海.*帅气王子/);
+  assert.equal(h.run('createRiftLayout().areas.length'),18,'preview reads the fixed world layout without starting a Game');
+  assert(!node(h,'world-mode-note').querySelector('details').hasAttribute('open'),'world explanation remains folded');
   h.tick();const prepareDraws=h.run('introDraws'),prepareClock=h.run('clock');
   for(let i=0;i<5;i++)h.tick();
   assert.equal(h.run('introDraws'),prepareDraws,'the preparation background retains its frame');
