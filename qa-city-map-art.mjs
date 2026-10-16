@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRiftLayout } from './dist/worlds/rift-layout.js';
 import { RiftArt } from './dist/worlds/rift-art.js';
-import { drawCityOverview } from './dist/worlds/city-map-art.js';
+import { CityMapArt, drawCityOverview } from './dist/worlds/city-map-art.js';
 import { WorldLayoutArt, drawWorldLayoutMap } from './dist/worlds/world-layout-art.js';
 
 function recording(record=true){
@@ -40,6 +40,13 @@ const culled=recording();drawCityOverview(culled.c,layout,{scale:.1,labels:true,
 assert(!culled.calls.some(call=>call.key==='fillText'),'offscreen region names are culled');
 
 const canvases=[],factory=()=>{const canvas={width:0,height:0,getContext:()=>recording(false).c};canvases.push(canvas);return canvas;};
+// Reproduce the former corner cuts at the same entrance/street junction.
+// Raised houses must not be painted into the blocked-complement floor clip,
+// including neighboring grid cells whose projections extend into this view.
+const sampleFloor=new CityMapArt(factory),sampleScreen=recording();
+sampleFloor.ground._building=()=>{throw new Error('A clipped background house leaked into the depth-sorted sample');};
+assert(sampleFloor.paintTile(sampleScreen.c,layout,{minX:-4470,maxX:-3930,minY:-2550,maxY:-2250}));
+assert.equal(sampleScreen.stack.length,0);
 const art=new RiftArt(factory),screen=recording(false),view={camX:layout.spawn.x,camY:layout.spawn.y,width:540,height:985};
 assert(art.drawGround(screen.c,island,view));const warm=art.cacheStats.builds;
 for(let i=0;i<40;i++)art.drawGround(screen.c,island,{...view,camX:view.camX+i*.01});

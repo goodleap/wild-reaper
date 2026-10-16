@@ -7,3 +7,12 @@ export const CITY_SAMPLE_FOLIAGE=Object.freeze([
 ].map(([key,x,y])=>Object.freeze({id:`city-sample:foliage:${key}`,region:'clockshadow-city',
   variant:'city-detail',cityKind:'foliage',type:'tree',x,y,r:8,scale:1,width:44,depth:16,height:32,
   collision:false,heightBand:'low',sortY:y+8,riftShrub:true,seed:.25})));
+
+// Entire buildings belong to the shared depth queue, never the clipped floor.
+// Both rectangular foundations are inside the existing blocked city mass;
+// these carriers only index artwork and do not add another collision shape.
+export const CITY_SAMPLE_HOUSES=Object.freeze([
+  ['west',-4410,-2340],['east',-3990,-2340]
+].map(([key,x,y])=>Object.freeze({id:`city-sample:house:${key}`,region:'clockshadow-city',
+  variant:'city-detail',cityKind:'house',type:'log',x,y,r:50,halfLength:55,angle:0,
+  scale:1,width:210,depth:100,height:160,collision:false,heightBand:'high',sortY:y+50,seed:.25})));

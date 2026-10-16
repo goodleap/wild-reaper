@@ -1,9 +1,9 @@
 import { cityDetailArt } from '../city-detail-art.js';
 import { CITY_SAMPLE_BOUNDS } from './city-sample-scene.js';
 
-// Real diffuse PNG on the same clipped floor as movement. Alternate reflected
-// tiles share their edge texels; this avoids inventing a different floor image
-// for screenshots and keeps the slabs at 20–28 game units.
+// Real diffuse PNG with stable world-space paving beneath floors and buildings.
+// Alternate reflected tiles share their edge texels and keep the slabs at
+// 20–28 game units, including across a walkable-mask boundary.
 export function drawCitySampleGround(c,layout,view){
   if(layout.worldId!=='clockshadow-city')return false;
   const b=CITY_SAMPLE_BOUNDS;if(view.maxX<b.minX||view.minX>b.maxX||view.maxY<b.minY||view.minY>b.maxY)return false;
@@ -15,11 +15,11 @@ export function drawCitySampleGround(c,layout,view){
   }c.restore();return true;
 }
 
-// Background houses stand inside the already blocked city mass. The caller
-// clips to that mass, so the artwork cannot paint a house across a real road.
-export function drawCitySampleBlockedHouse(c,layout,x,y){
+// Old background buildings are replaced by complete depth-sorted props in
+// this sample. Test their whole projected rectangle, including neighboring
+// grid cells, so a clipped fragment cannot leak back in at a tile edge.
+export function citySampleReplacesBackgroundHouse(layout,x,y){
   if(layout.worldId!=='clockshadow-city')return false;
-  const b=CITY_SAMPLE_BOUNDS;if(x<b.minX-120||x>b.maxX||y<b.minY-120||y>b.maxY)return false;
-  const image=cityDetailArt.getImage('house');if(!image)return false;
-  c.drawImage(image,x-12,y-86,264,264);return true;
+  const b=CITY_SAMPLE_BOUNDS;
+  return x+252>=b.minX&&x-12<=b.maxX&&y+196>=b.minY&&y-86<=b.maxY;
 }

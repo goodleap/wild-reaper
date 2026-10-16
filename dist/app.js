@@ -1396,7 +1396,7 @@ function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
     if(prop.visual===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.structureId)continue;
     const {x,y,r,type,scale=1}=prop;
-    if(prop.variant==='city-structure'){
+    if(prop.variant==='city-structure'||prop.variant==='city-detail'&&prop.cityKind==='house'){
       // Building footprints cast a rectangular projection, independent of the
       // non-colliding log carrier used by the terrain depth queue.
       if(['gate','arcade'].includes(prop.cityKind))continue;

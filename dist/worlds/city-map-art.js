@@ -1,6 +1,6 @@
 import { WorldArt } from '../world-art.js';
 import { drawCityBridge } from '../city-structure-art.js';
-import { drawCitySampleGround, drawCitySampleBlockedHouse } from './city-sample-ground.js';
+import { drawCitySampleGround, citySampleReplacesBackgroundHouse } from './city-sample-ground.js';
 
 // Floor tiles and the small map consume the baked union. Raised buildings are
 // deliberately left to Terrain's shared depth queue, including roof fading.
@@ -33,7 +33,7 @@ function blockedMass(c,layout,view,overview,art){
     if(urban){
       const inset=8+Math.floor(n*4)*3,w=240-inset*2;
       c.fillStyle=n>.5?'#7d8978':'#748371';c.fillRect(x,y,240,192);
-      if(art){if(!drawCitySampleBlockedHouse(c,layout,x,y)){const house=art._building(Math.floor(n*5));c.drawImage(house.canvas,x+inset-9,y-22,258-inset*2,218);}}
+      if(art){if(!citySampleReplacesBackgroundHouse(layout,x,y)){const house=art._building(Math.floor(n*5));c.drawImage(house.canvas,x+inset-9,y-22,258-inset*2,218);}}
       else{const yy=y+12+hash(gy+7,gx)*18,h=138+hash(gx+9,gy)*22;c.fillStyle=CITY_PALETTE.wall;c.fillRect(x+inset,yy,w,h+22);c.fillStyle=['#597784','#4c697a','#63808a','#55727d'][Math.floor(n*4)];c.beginPath();c.moveTo(x+inset,yy+18);c.lineTo(x+inset+12,yy);c.lineTo(x+inset+w-12,yy);c.lineTo(x+inset+w,yy+18);c.lineTo(x+inset+w,yy+h);c.lineTo(x+inset,yy+h);c.closePath();c.fill();c.strokeStyle=p.roofDark;c.lineWidth=3;c.stroke();c.strokeStyle='#b4c0b0';c.lineWidth=2;c.beginPath();c.moveTo(x+inset+12,yy+2);c.lineTo(x+inset+w-12,yy+2);c.stroke();}
     }else{
       c.fillStyle='#415f48';c.fillRect(x,y,240,192);
@@ -48,7 +48,10 @@ function overviewRoof(c,s){const x=s.x-s.width/2,y=s.y-s.depth/2;if(s.solid){c.f
 export class CityMapArt{
   constructor(makeCanvas=()=>document.createElement('canvas')){this.ground=new WorldArt(makeCanvas);}
   get cacheStats(){return this.ground.cacheStats;}
-  paintTile(c,layout,view){c.save();c.lineCap='round';c.lineJoin='round';blockedMass(c,layout,view,false,this.ground);water(c,layout,view,false);
+  paintTile(c,layout,view){c.save();c.lineCap='round';c.lineJoin='round';blockedMass(c,layout,view,false,this.ground);
+    // Paving continues beneath raised buildings. The collision union governs
+    // movement, not the color of the ground under a roof or foundation.
+    drawCitySampleGround(c,layout,view);water(c,layout,view,false);
     c.save();rings(c,layout.boundaries);c.clip('evenodd');
     for(let ty=Math.floor(view.minY/TILE);ty<=Math.floor(view.maxY/TILE);ty++)for(let tx=Math.floor(view.minX/TILE);tx<=Math.floor(view.maxX/TILE);tx++){const tile=this.ground._tile('city',Math.floor(hash(tx+41,ty+97)*3));c.drawImage(tile.canvas,tx*TILE,ty*TILE);}
     gardenFloor(c,layout,view,false);

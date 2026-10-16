@@ -39,7 +39,7 @@ for(const key of assetKeys.filter(key=>key!=='gate'))assert.equal(loads.get(key)
 for(const key of assetKeys)assert.equal(decodes.get(key),1,'one successful decode per native image');
 for(let i=0;i<8;i++)await art.preload();assert.equal(art.cacheStats.decodes,assetCount);assert.equal(art.cacheStats.bytes,nativeBytes.reduce((a,b)=>a+b,0));
 assert.deepEqual(art.cacheStats.decodeNaturalSizes.gate,{width:1482,height:1061});assert(art.getImage('ground'));assert(art.getImage('house'));
-assert(!Object.values(CITY_DETAIL_MANIFEST.props).some(prop=>prop.asset==='house'),'background house does not add a new depth prop or collision footprint');
+assert.deepEqual(Object.entries(CITY_DETAIL_MANIFEST.props).filter(([,prop])=>prop.asset==='house').map(([id])=>id),['city-sample:house:west','city-sample:house:east'],'whole house PNGs use only the two approved depth props');
 assert.deepEqual(cityDetailVisual(gate),preflightVisual,'culling and shadow metadata do not jump after preload');
 
 const drawn=[],stack=[],ctx={globalAlpha:.72,save(){stack.push(this.globalAlpha);},restore(){assert(stack.length);this.globalAlpha=stack.pop();},drawImage(...args){drawn.push({args,alpha:this.globalAlpha});}};
@@ -56,6 +56,40 @@ for(const [wallId,minSourceX,maxSourceX]of[['castle:南墙西:0:2',45,395],['cas
   const foot={minX:call[1]+minSourceX*sourceScale,maxX:call[1]+maxSourceX*sourceScale,minY:gate.y-20,maxY:gate.y+20},epsilon=1e-8;
   assert(foot.minX>=wall.x-wall.width/2-epsilon&&foot.maxX<=wall.x+wall.width/2+epsilon&&foot.minY>=wall.y-wall.depth/2-epsilon&&foot.maxY<=wall.y+wall.depth/2+epsilon,'tower feet sit entirely inside existing solid wall rectangles');
 }
+
+const {CITY_SAMPLE_HOUSES}=await import('./dist/worlds/city-sample-scene.js');
+const {RiftCollision}=await import('./dist/rift-collision.js'),originalCollision=new RiftCollision(layout);
+assert.equal(CITY_SAMPLE_HOUSES.length,2);
+assert.deepEqual(CITY_SAMPLE_HOUSES.map(({x,y,width,depth,height,sortY})=>({x,y,width,depth,height,sortY})),[
+  {x:-4410,y:-2340,width:210,depth:100,height:160,sortY:-2290},{x:-3990,y:-2340,width:210,depth:100,height:160,sortY:-2290}
+]);
+function crossesRect(a,b,rect){
+  let lo=0,hi=1;
+  for(const [axis,min,max]of[['x',rect.minX,rect.maxX],['y',rect.minY,rect.maxY]]){
+    const delta=b[axis]-a[axis];
+    if(Math.abs(delta)<1e-12){if(a[axis]<min||a[axis]>max)return false;continue;}
+    const p=(min-a[axis])/delta,q=(max-a[axis])/delta;lo=Math.max(lo,Math.min(p,q));hi=Math.min(hi,Math.max(p,q));if(lo>hi)return false;
+  }return true;
+}
+let houseFootSamples=0;
+for(const house of CITY_SAMPLE_HOUSES){
+  assert.equal(house.collision,false,'existing authored geometry remains the sole house-foot blocker');
+  const spec=CITY_DETAIL_MANIFEST.props[house.id];assert(spec&&spec.asset==='house');assert.equal(house.width,spec.width);assert.equal(house.depth,spec.depth);assert.equal(house.variant,spec.variant);
+  const rect={minX:house.x-house.width/2,maxX:house.x+house.width/2,minY:house.y-house.depth/2,maxY:house.y+house.depth/2};
+  for(const mask of[originalCollision.ground,originalCollision.high]){
+    for(let y=rect.minY;y<=rect.maxY;y+=5)for(let x=rect.minX;x<=rect.maxX;x+=5){assert(!mask.inside(x,y),'every house-foot sample lies in the original blocked union');houseFootSamples++;}
+    assert(!mask.query(rect.minX,rect.minY,rect.maxX,rect.maxY).some(edge=>crossesRect(edge.a,edge.b,rect)),'no walkable boundary enters the complete house rectangle between samples');
+    const adjacentX=house.x+(house.x<-4200?115:-115);assert(mask.inside(adjacentX,house.y),'negative control detects the nearby original walkable path');
+  }
+  let houseCall;
+  const houseContext={...ctx,clip(){throw new Error('house PNG must not inherit a floor/mass clip');},drawImage(...args){houseCall={args,alpha:this.globalAlpha};}};
+  assert(art.drawProp(houseContext,house,{canopyAlpha:.55}));assert.equal(houseCall.args.length,5,'draw the complete PNG; no source crop rectangle');assert.equal(houseCall.args[0],art.getImage('house'));
+  assert.deepEqual(houseCall.args.slice(1),[house.x-spec.anchorX,house.y-spec.anchorY,264,264]);assert(Math.abs(houseCall.alpha-.72*.55)<1e-12);assert.equal(houseContext.globalAlpha,.72);
+  assert(Math.abs(houseCall.args[1]+636/1254*264-house.x)<1e-10,'image foot center stays on the declared house x');
+  assert(Math.abs(houseCall.args[2]+1186/1254*264-house.y-50)<1e-10,'complete house-front foot lands at original y+50');
+  assert.equal(cityDetailVisual(house).sortY,house.sortY,'house enters the existing front-foot depth queue');
+}
+assert.equal(houseFootSamples,3612,'two complete 210x100 house feet are sampled in both original collision unions');
 for(const [id,entry]of Object.entries(CITY_DETAIL_MANIFEST.props)){
   const prop={id,region:CITY_DETAIL_MANIFEST.worldId,variant:entry.variant,width:entry.width,depth:entry.depth,height:entry.height??78,x:100,y:200,sortY:208};
   const visual=cityDetailVisual(prop);assert.equal(visual.sortY,208,'renderer keeps the existing depth queue');assert.equal(visual.maxBounds.minX,prop.x-entry.anchorX);assert.equal(visual.maxBounds.maxY,prop.y+entry.drawHeight-entry.anchorY);
@@ -82,14 +116,16 @@ const maskArt=new CityDetailArt({loadImage:async(url,key,spec)=>({key,naturalWid
   const canvas={width:0,height:0};let source;
   canvas.getContext=()=>({drawImage(image){source=image;maskDraws++;},getImageData(x,y,width,height){maskReads++;const data=new Uint8ClampedArray(width*height*4);for(let yy=0;yy<height;yy++)for(let xx=0;xx<width;xx++)data[(yy*width+xx)*4+3]=source.key==='gate'&&xx>width*.27&&xx<width*.73?0:255;return{data};}});return canvas;
 }});
-await maskArt.preload();assert.equal(maskReads,3);assert.equal(maskDraws,3);assert.equal(maskArt.cacheStats.maskBuilds,3,'gate, wall and foliage each receive one display-resolution mask');
-assert(maskArt.cacheStats.maskBytes>160000&&maskArt.cacheStats.maskBytes<175000,'alpha masks use one byte per display pixel');
+const maskSpecs=new Map(Object.values(CITY_DETAIL_MANIFEST.props).map(spec=>[spec.asset,spec])),maskCount=maskSpecs.size,expectedMaskBytes=[...maskSpecs.values()].reduce((sum,spec)=>sum+Math.ceil(spec.drawWidth)*Math.ceil(spec.drawHeight),0);
+await maskArt.preload();assert.equal(maskReads,maskCount);assert.equal(maskDraws,maskCount);assert.equal(maskArt.cacheStats.maskBuilds,4,'gate, wall, foliage and house each receive one display-resolution mask');
+assert.equal(maskArt.cacheStats.maskBytes,expectedMaskBytes,'alpha masks use exactly one byte per display pixel');
 assert.equal(maskArt.cacheStats.bytes,maskArt.cacheStats.imageBytes+maskArt.cacheStats.maskBytes);assert(maskArt.cacheStats.bytes<maskArt.cacheStats.limitBytes,'32 MiB budget includes every persistent alpha mask');
 maskArt.drawProp(ctx,gate,{canopyAlpha:.35,player:{x:gate.x,y:gate.y-19.8}});assert.equal(drawn.at(-1).alpha,.72,'transparent arch does not dim its towers');
 assert.equal(maskArt.cacheStats.lastAppliedOpacity[gate.id],1,'record actual PNG opacity after checking transparent pixels');
 maskArt.drawProp(ctx,gate,{canopyAlpha:.35,player:{x:gate.x-170,y:gate.y-19.8}});assert(Math.abs(drawn.at(-1).alpha-.72*.35)<1e-12,'an opaque column still fades when it covers the actual body');
 assert.equal(maskArt.cacheStats.lastAppliedOpacity[gate.id],.35);assert(Object.values(maskArt.cacheStats.lastAppliedOpacity).every(Number.isFinite));
 maskArt.drawProp(ctx,gate,{canopyAlpha:.35,player:{x:gate.x-170,y:gate.y-19.8},footY:gate.y-1000});assert.equal(maskArt.cacheStats.lastAppliedOpacity[gate.id],1,'explicit physical foot anchor controls the opacity sample');
+for(const house of CITY_SAMPLE_HOUSES){maskArt.drawProp(ctx,house,{canopyAlpha:.35,player:{x:house.x,y:house.y-19.8}});assert.equal(maskArt.cacheStats.lastAppliedOpacity[house.id],.35,'opaque house roof retains body occlusion fading');}
 for(let i=0;i<120;i++)maskArt.drawProp(ctx,gate,{canopyAlpha:.35,player:{x:gate.x+(i%2?0:-170),y:gate.y-19.8}});
-await maskArt.preload();assert.equal(maskReads,3,'warm renders never read canvas pixels');assert.equal(maskDraws,3,'warm renders never rebuild a mask');assert.equal(maskArt.cacheStats.decodes,assetCount);assert.equal(ctx.globalAlpha,.72);
-console.log('City detail artwork: native PNG hashes/sizes, Node-safe import, explicit load/decode failure and retry, exact seven-ID/world/footprint scope, real doorway/tower feet, depth/context restoration, transparent-arch/opaque-column fading, warm one-time masks and image+mask 32 MiB budget passed.');
+await maskArt.preload();assert.equal(maskReads,maskCount,'warm renders never read canvas pixels');assert.equal(maskDraws,maskCount,'warm renders never rebuild a mask');assert.equal(maskArt.cacheStats.decodes,assetCount);assert.equal(ctx.globalAlpha,.72);
+console.log('City detail artwork: native PNG hashes/sizes, Node-safe import, explicit load/decode failure and retry, exact nine-ID/world/footprint scope, true doorway/tower feet, complete unclipped house PNGs with 3612 blocked-foot samples plus exact boundary checks, depth/context restoration, pixel-based fading, warm one-time masks and image+mask 32 MiB budget passed.');

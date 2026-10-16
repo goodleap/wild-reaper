@@ -19,7 +19,9 @@ export const CITY_DETAIL_MANIFEST=freeze({
     'city-sample:foliage:west':{asset:'foliage',variant:'city-detail',width:44,depth:16,height:32,drawWidth:48,drawHeight:44,anchorX:24,anchorY:39},
     'city-sample:foliage:east':{asset:'foliage',variant:'city-detail',width:44,depth:16,height:32,drawWidth:48,drawHeight:44,anchorX:24,anchorY:39},
     'city-sample:foliage:west-front':{asset:'foliage',variant:'city-detail',width:44,depth:16,height:32,drawWidth:48,drawHeight:44,anchorX:24,anchorY:39},
-    'city-sample:foliage:east-front':{asset:'foliage',variant:'city-detail',width:44,depth:16,height:32,drawWidth:48,drawHeight:44,anchorX:24,anchorY:39}
+    'city-sample:foliage:east-front':{asset:'foliage',variant:'city-detail',width:44,depth:16,height:32,drawWidth:48,drawHeight:44,anchorX:24,anchorY:39},
+    'city-sample:house:west':{asset:'house',variant:'city-detail',width:210,depth:100,height:160,drawWidth:264,drawHeight:264,anchorX:636/1254*264,anchorY:1186/1254*264-50},
+    'city-sample:house:east':{asset:'house',variant:'city-detail',width:210,depth:100,height:160,drawWidth:264,drawHeight:264,anchorX:636/1254*264,anchorY:1186/1254*264-50}
   }
 });
 const assetEntries=Object.entries(CITY_DETAIL_MANIFEST.assets),LIMIT_BYTES=32*1024*1024;
