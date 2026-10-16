@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { BOSS_SPECIALIST_ART, drawSpecialistBossGround } from './dist/enemy-art/specialist-bosses.js';
+import { frostcrownAssets } from './dist/enemy-art/frostcrown-assets.js';
+
+await frostcrownAssets.preload({load:async()=>({width:1254,height:1254})});
 
 function recorder(){
   const calls=[],ctx={};let depth=0;
-  for(const method of ['beginPath','closePath','moveTo','lineTo','quadraticCurveTo','bezierCurveTo','arc','ellipse','fill','stroke','translate','rotate','scale'])ctx[method]=(...args)=>{
+  for(const method of ['beginPath','closePath','moveTo','lineTo','quadraticCurveTo','bezierCurveTo','arc','ellipse','fill','stroke','translate','rotate','scale','clip','transform','drawImage'])ctx[method]=(...args)=>{
     for(const value of args)if(typeof value==='number')assert(Number.isFinite(value),`${method} receives finite coordinates`);
     if(method==='ellipse')assert(args[2]>=0&&args[3]>=0,'ellipse radii remain nonnegative');
     calls.push([method,...args]);

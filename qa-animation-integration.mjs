@@ -5,6 +5,11 @@ import { MonsterArt } from './dist/monster-art.js';
 import { enemyAnimationPose, sampleEnemyPose, updateEnemyLocomotion } from './dist/enemy-animation.js';
 import { updateSpecialist, initializeSpecialist } from './dist/enemies/specialists.js';
 import { AbilityRuntime } from './dist/ability-runtime.js';
+import { frostcrownAssets } from './dist/enemy-art/frostcrown-assets.js';
+import { initBoss } from './dist/bosses.js';
+import { frostcrownBodyPose, frostcrownFacing } from './dist/enemy-body-geometry.js';
+
+await frostcrownAssets.preload({load:async()=>({width:1254,height:1254})});
 
 function arena(){
   const game=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false});
@@ -76,7 +81,7 @@ for(const type of ['prismguard','tidepriest','frostmage']){
 
 function context(){
   const calls=[],ctx={};
-  for(const method of ['save','restore','translate','rotate','scale','beginPath','closePath','moveTo','lineTo','quadraticCurveTo','bezierCurveTo','arc','ellipse','fill','stroke','clip','fillRect','drawImage'])ctx[method]=(...args)=>calls.push([method,...args]);
+  for(const method of ['save','restore','translate','rotate','scale','transform','beginPath','closePath','moveTo','lineTo','quadraticCurveTo','bezierCurveTo','arc','ellipse','fill','stroke','clip','fillRect','drawImage'])ctx[method]=(...args)=>calls.push([method,...args]);
   ctx.createLinearGradient=()=>({addColorStop(){}});return{ctx,calls};
 }
 {
@@ -92,6 +97,36 @@ function context(){
   assert(thawed.calls.some(c=>c[0]==='scale'&&c[1]===-1),'thaw restores current facing');
 }
 
+// Catch-up simulation may advance the deer several times between two browser
+// draws. Freezing must hold that simulated body, not an older rendered frame.
+{
+  const game=arena(),e=game._spawnEnemy('boss',1);initBoss(e,'frostcrown');
+  Object.assign(e,{x:330,y:0,specialCooldown:3600,visualFacing:0});game.player.invuln=1e9;game._rebuildGrid();
+  const art=new MonsterArt(()=>{const {ctx}=context();return{width:0,height:0,getContext:()=>ctx};});
+  const first=context();art.draw(first.ctx,e,{time:game._clock});
+  const oldImage=first.calls.find(call=>call[0]==='drawImage')[1],oldPose=art.lastPoses.get(e).animation.key;
+  for(let step=0;step<4;step++)game.update(.04);
+  assert(e.moving,'native pursuit advances during undrawn catch-up steps');
+  const simulated=frostcrownBodyPose(e),facing=frostcrownFacing(e);
+  assert.notEqual(simulated.key,oldPose,'the simulated body has advanced beyond the old rendered frame');
+  const status=game.abilities.statusFor(e);status.frozenUntil=game.abilities.clock+1;status.visualFrozen=true;
+  game.update(.04);
+  const frozenBody=frostcrownBodyPose(e,{frozen:true});assert.equal(frozenBody,simulated);
+  const frozen=context();art.draw(frozen.ctx,e,{time:game._clock,frozen:game.abilities.isFrozen(e)});
+  assert.equal(art.lastPoses.get(e).animation,frozenBody,'render and collision read the same frozen simulation pose');
+  assert.equal(art.lastPoses.get(e).flip,facing);
+  assert.notEqual(frozen.calls.find(call=>call[0]==='drawImage')[1],oldImage,'freezing cannot resurrect the stale pre-catch-up bitmap');
+  const position={x:e.x,y:e.y};
+  for(let step=0;step<4;step++)game.update(.04);
+  assert.deepEqual({x:e.x,y:e.y},position);assert.equal(frostcrownBodyPose(e),frozenBody);
+  const reduced=context();art.draw(reduced.ctx,e,{time:game._clock,frozen:true,reduced:true});
+  assert.equal(art.lastPoses.get(e).animation,frozenBody,'reduced motion cannot diverge from the held physical body');
+  status.frozenUntil=game.abilities.clock-.01;game.update(.04);
+  art.draw(context().ctx,e,{time:game._clock});
+  assert.equal(art.lastPoses.get(e).animation,frostcrownBodyPose(e),'native thaw returns render and body to the same sampled state');
+  assert(e.moving);
+}
+
 // A full mixed encounter must fit its recurring gait working set, not merely
 // stay under the byte cap by rebuilding and evicting every animation frame.
 {
@@ -102,8 +137,10 @@ function context(){
   const ctx=context().ctx;
   function frames(count){
     for(let frame=0;frame<count;frame++)for(const e of entities){
-      e.walkPhase=(frame%8+.1)*Math.PI/4;
-      art.draw(ctx,e,{time:(frame%8+.1)*Math.PI/4/11});
+      // Sixteen samples also visit the stone ape's odd-numbered support poses;
+      // eight samples silently exercised only half of its authored gait cache.
+      e.walkPhase=(frame%16+.1)*Math.PI/8;
+      art.draw(ctx,e,{time:(frame%16+.1)*Math.PI/8/11});
       assert(art.cacheStats.bytes<=art.cacheStats.limitBytes,'every mixed-frame draw respects the shared byte cap');
     }
   }

@@ -48,6 +48,7 @@ import { normalizeDebugOptions } from './debug-mode.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBosses } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, selectFriendlyTarget, damageFriendly, clearFriendlyPath } from './friendly-combat.js';
+import { isFrostcrownBody, frostcrownQueryBounds, frostcrownGroundContact, moveFrostcrownGround, snapshotFrostcrownBody } from './enemy-body-geometry.js';
 import { getConfigSection, getConfigSnapshot } from './content-config.js';
 export { HEROES, REGIONS, RELICS, COMPANIONS, WEAPON_BRANCHES, SUPER_SKILLS };
 
@@ -214,6 +215,10 @@ export class Game {
   }
   _damageMultiplier() { return resolveCharacterStats(this).damageMultiplier; }
   _inView(entity,margin=0) {
+    if(isFrostcrownBody(entity)){
+      const b=frostcrownQueryBounds(entity),x=this.player.x,y=this.player.y;
+      return b.maxX>=x-this.viewWidth*.5-margin&&b.minX<=x+this.viewWidth*.5+margin&&b.maxY>=y-this.viewHeight*.5-margin&&b.minY<=y+this.viewHeight*.5+margin;
+    }
     const dx=Math.max(0,Math.abs(entity.x-this.player.x)-this.viewWidth*.5-margin);
     const dy=Math.max(0,Math.abs(entity.y-this.player.y)-this.viewHeight*.5-margin);
     return dx*dx+dy*dy<=sq(entity.r||0);
@@ -296,20 +301,36 @@ export class Game {
   _rebuildGrid() {
     this._grid.clear();
     for(const e of this.enemies) if(e.hp>0) {
+      if(isFrostcrownBody(e)){
+        const b=frostcrownQueryBounds(e);
+        for(let x=Math.floor(b.minX/this._cell);x<=Math.floor(b.maxX/this._cell);x++)for(let y=Math.floor(b.minY/this._cell);y<=Math.floor(b.maxY/this._cell);y++){
+          const key=`${x},${y}`;if(!this._grid.has(key))this._grid.set(key,[]);this._grid.get(key).push(e);
+        }
+        continue;
+      }
       const key=`${Math.floor(e.x/this._cell)},${Math.floor(e.y/this._cell)}`;
       if(!this._grid.has(key)) this._grid.set(key,[]);
       this._grid.get(key).push(e);
     }
   }
   _nearby(x,y,r=70) {
-    const found=[];
+    const found=[];let frostSeen;
     for(let i=Math.floor((x-r)/this._cell);i<=Math.floor((x+r)/this._cell);i++)
       for(let j=Math.floor((y-r)/this._cell);j<=Math.floor((y+r)/this._cell);j++) {
-        const cell=this._grid.get(`${i},${j}`); if(cell) found.push(...cell);
+        const cell=this._grid.get(`${i},${j}`);if(cell)for(const e of cell){
+          if(isFrostcrownBody(e)){frostSeen??=new Set();if(frostSeen.has(e))continue;frostSeen.add(e);}
+          found.push(e);
+        }
       }
     return found;
   }
   _moveEntity(entity,dx,dy,isPlayer=false) {
+    if(isFrostcrownBody(entity)){
+      const moved=moveFrostcrownGround(this.terrain,entity,dx,dy,movementProfile(entity));
+      if(Number.isFinite(entity._walkStartX))entity._walkStartX+=moved.correctionX||0;
+      if(Number.isFinite(entity._walkStartY))entity._walkStartY+=moved.correctionY||0;
+      entity.x=moved.x;entity.y=moved.y;return {...moved,y:moved.y+groundOffset(entity)};
+    }
     const offset=groundOffset(entity,isPlayer||entity.isCompanion),moved=this.terrain.moveCircle(entity.x,entity.y+offset,dx,dy,entity.r,movementProfile(entity));
     entity.x=moved.x;entity.y=moved.y-offset;return moved;
   }
@@ -592,6 +613,7 @@ export class Game {
     }
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
+      if(isFrostcrownBody(e))e._bodyGeometryFrozen=this.abilities.isFrozen(e);
       e.hit=Math.max(0,e.hit-dt); e.attackCooldown=Math.max(0,e.attackCooldown-dt);
       e._weaponPushTime=updateWeaponKnockback(this,e,dt);
       if(!e.trainingDummy&&usesEnemyLocomotion(e)){e._walkStartX=e.x;e._walkStartY=e.y;}
@@ -618,6 +640,13 @@ export class Game {
       let count=0;
       for(const n of this._nearby(e.x,e.y,48)) {
         if(n.id<=e.id || count++>8) continue;
+        if(isFrostcrownBody(e)||isFrostcrownBody(n)){
+          const deer=isFrostcrownBody(e)?e:n,other=deer===e?n:e;
+          if(other.type==='boss'||other.trainingDummy||other.charge||other.guardActive===false||this.abilities.isFrozen(other))continue;
+          const otherFoot=friendlyFoot(other),contact=frostcrownGroundContact(deer,otherFoot.x,otherFoot.y,other.r*.76,.76);
+          if(contact){const force=Math.min(contact.overlap,30*dt)*.5;this._moveEntity(other,contact.nx*force,contact.ny*force);}
+          continue;
+        }
         const dx=e.x-n.x,dy=e.y-n.y,d=Math.hypot(dx,dy),overlap=(e.r+n.r)*.76-d;
         if(overlap>0 && d>.1) {
           const force=Math.min(overlap,30*dt)*.5;
@@ -631,6 +660,7 @@ export class Game {
     for(const e of this.enemies)if(e.hp>0&&!e.trainingDummy&&usesEnemyLocomotion(e)){
       const oldX=e._walkStartX??e.x,oldY=e._walkStartY??e.y;
       updateEnemyLocomotion(e,oldX,oldY,dt,this.abilities.isFrozen(e));
+      if(isFrostcrownBody(e))snapshotFrostcrownBody(e);
     }
     if(input.skill && this.canUseSkill('storm')&&p.skillCooldown<=0&&!this.abilities.isFrozen(p)) this._castStorm();
     for(const target of friendlyTargets(this)){
@@ -640,7 +670,8 @@ export class Game {
         if(e.hp<=0||e.trainingDummy||e.eventRole==='treasure'||e.guardActive===false||e.charge||e._chargeSegment||e.slam||e.slamRecovery>0||e.bloomAttack||e.bloomRecovery>0||e.specialist?.noContact||e.specialAttack||e.specialRecovery>0||this.abilities.isFrozen(e))continue;
         if(!isGrounded(target)&&isGrounded(e))continue;
         const enemyFoot=friendlyFoot(e);
-        if((foot.x-enemyFoot.x)**2+(foot.y-enemyFoot.y)**2<sq(target.r+e.r-3)&&clearFriendlyPath(this,e,target,movementProfile(e))){
+        const touching=isFrostcrownBody(e)?!!frostcrownGroundContact(e,foot.x,foot.y,Math.max(0,target.r-3)):(foot.x-enemyFoot.x)**2+(foot.y-enemyFoot.y)**2<sq(target.r+e.r-3);
+        if(touching&&clearFriendlyPath(this,e,target,movementProfile(e))){
           damageFriendly(this,target,e.damage,e);
           if(this.status==='dead')return;
           if(target.invuln>0||!isFriendlyActive(this,target))break;
@@ -661,6 +692,11 @@ export class Game {
     resolveBossPhase(this,'ranged');
     this._resolveEnemyAttacks(dt);
     if(this.status==='dead')return;
+    // Released casts/recovery can change planted hooves without another AI
+    // move. Reconcile only this illustrated body's final simulation pose.
+    for(const e of this.enemies)if(e.hp>0&&isFrostcrownBody(e)){
+      e._bodyGeometryFrozen=this.abilities.isFrozen(e);this._moveEntity(e,0,0);snapshotFrostcrownBody(e);
+    }
     this.enemies=this.enemies.filter(e=>e.hp>0 && (e.trainingDummy||e.type==='boss'||e.dungeonId||e.territoryId||e.expeditionId||e.elite||e.guardianId||e.eventId||e.rescueId||dist2(e,p)<sq(Math.max(this.viewWidth,this.viewHeight)*1.5+400)));
     this._collectDrops(this.gems,dt,'crystals');
     this._collectDrops(this.coins,dt,'gold');

@@ -1,13 +1,12 @@
 import { ENEMY_DEFS } from './enemy-definitions.js';
 import { bossDefinition } from './boss-definitions.js';
 import { hasEnemyAnimation } from './enemy-animation.js';
-import { BOSS_APPEARANCES, bossAppearanceId } from './boss-appearances.js';
 
 // Pure presentation metadata: no canvas, game state, or world generation.
 // Body extents, feet, immersion and sprite framing share the same identity.
 const define=(radius,foot,halfWidth,top,shadowWidth,shadowLength,bodyHeight,box,frames,extra={})=>Object.freeze({radius,foot,halfWidth,top,shadowWidth,shadowLength,bodyHeight,immersionBody:bodyHeight==null?null:Object.freeze([bodyHeight,radius]),box:Object.freeze(box),frames,bobFrequency:5,bobAmplitude:1.5,...extra});
 const boss=define(49,41,60,68,39,44,109,[128,120,64,73],3,{hitRecoil:.035,portraitScale:.78,portraitRadius:49});
-const BASE_ENEMY_VISUALS=Object.freeze({
+export const ENEMY_VISUALS=Object.freeze({
   slime:define(16,14,22,20,14,17,34,[48,40,24,23],1),
   bat:define(11,20,31,27,18,16,null,[66,52,33,30],5,{bobFrequency:14,bobAmplitude:3}),
   beetle:define(18,18,30,27,16,18,40,[64,54,32,30],3,{bobMode:'steps'}),
@@ -26,24 +25,18 @@ const BASE_ENEMY_VISUALS=Object.freeze({
   spiderling:define(11,12,22,17,12,13,29,[50,36,25,20],3,{bobMode:'steps'}),
   broodmother:define(49,39,75,46,43,41,85,[164,100,82,53],3,{hitRecoil:.035,portraitScale:.7,portraitRadius:49,edgeColor:'#e4b9ab',arrival:count=>`第 ${count} 位领主 · 织巢蛛后苏醒`}),
   deepcaller:define(49,40,66,61,41,42,101,[146,112,73,66],3,{hitRecoil:.035,portraitScale:.78,portraitRadius:49,edgeColor:'#a6dce0',arrival:count=>`第 ${count} 位领主 · 深潮巨章苏醒`}),
-  frostcrown:define(49,40,99,70,39,43,110,[208,132,104,79],3,{hitRecoil:.035,portraitScale:.72,portraitRadius:49,edgeColor:'#c2e7f4',arrival:count=>`第 ${count} 位领主 · 霜冠巨鹿苏醒`}),
+  frostcrown:define(49,40,71,96,39,43,110,[144,144,72,100],3,{cacheRatio:1.5,hitRecoil:.035,portraitScale:.72,portraitRadius:49,edgeColor:'#c2e7f4',arrival:count=>`第 ${count} 位领主 · 霜冠巨鹿苏醒`}),
   furnace:define(49,42,66,64,39,43,106,[144,128,72,74],3,{hitRecoil:.025,portraitScale:.8,portraitRadius:49,edgeColor:'#f1c28e',arrival:count=>`第 ${count} 位领主 · 熔炉巨像苏醒`}),
   boss,
   ancient:Object.freeze({...boss,edgeColor:'#ebbd91',barClass:null,arrival:count=>`第 ${count} 位荒野领主已苏醒 · 留意震地红圈`}),
   bloom:Object.freeze({...boss,edgeColor:'#ddb0e6',barClass:'bloom-boss',arrival:count=>`第 ${count} 位领主 · 孢冠苏醒，留意紫色预警`})
 });
-// Appearance entries supply sprite framing only. Physics/depth/immersion below
-// still resolve the original Boss metadata, including its exact foot anchor.
-export const ENEMY_VISUALS=Object.freeze({...BASE_ENEMY_VISUALS,
-  ...Object.fromEntries(Object.entries(BOSS_APPEARANCES).map(([id,appearance])=>[id,BASE_ENEMY_VISUALS[appearance.baseVisual]]))
-});
-export function enemyBaseArtId(entity){
+export function enemyArtId(entity){
   if(entity?.type==='boss')return bossDefinition(entity.bossKind||'ancient').visual;
   const type=typeof entity==='string'?entity:entity?.type;
   return ENEMY_DEFS[type]?.visual||type;
 }
-export function enemyArtId(entity){return bossAppearanceId(entity)||enemyBaseArtId(entity);}
-export function enemyVisual(entity){return ENEMY_VISUALS[enemyBaseArtId(entity)]||null;}
+export function enemyVisual(entity){return ENEMY_VISUALS[enemyArtId(entity)]||null;}
 export const ENEMY_BODY_HEIGHTS=Object.freeze(Object.fromEntries(Object.values(ENEMY_DEFS).filter(def=>ENEMY_VISUALS[def.visual]?.bodyHeight!=null).map(def=>{const visual=ENEMY_VISUALS[def.visual];return [def.id,Object.freeze([visual.bodyHeight,visual.radius])];})));
 export function enemyBob(entity,time,reduced=false){
   if(reduced||entity.trainingDummy)return 0;

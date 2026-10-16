@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { performance } from 'node:perf_hooks';
+import { frostcrownAssets } from './dist/enemy-art/frostcrown-assets.js';
+
+// The production bootstrap awaits decoding before importing the app. Keep the
+// same readiness boundary while this Node harness counts non-rasterized draws.
+await frostcrownAssets.preload({load:async()=>({width:1254,height:1254})});
 
 // Exercise the shipped frame/resize/modal handlers. Drawing is counted, not
 // rasterized: this checks scheduling and gameplay semantics, not browser FPS.

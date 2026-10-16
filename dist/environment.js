@@ -9,6 +9,7 @@ import { worldForId } from './world-definitions.js';
 import { biomeZone } from './biome-layout.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from './friendly-combat.js';
 import { containsWater, waterBounds, waterDepth, waterIntersectsCircle, waterIntersectsCapsule, getWaterContours, WATER_SHAPES } from './water-geometry.js';
+import { isFrostcrownBody, frostcrownGroundContact, frostcrownGroundSweep } from './enemy-body-geometry.js';
 export { isGrounded } from './regional-mechanisms.js';
 
 const CELL=520,TAU=Math.PI*2;
@@ -278,7 +279,7 @@ export class Environment {
     const damage=RULES.mushroom.enemyDamage*(1+Math.min(Math.max(g.time,0),RULES.mushroom.growthTimeCap)/RULES.mushroom.growthTimePeriod);
     // Raw damage avoids recursively creating bleeding, shock, or new attacks.
     // Snapshotting also survives treasure/event kill handlers replacing arrays.
-    const reaches=(entity,point)=>distance(point,prop)<=r+entity.r&&!g.terrain.firstBlocker(prop.x,prop.y,point.x,point.y,0,'projectile');
+    const reaches=(entity,point)=>(isFrostcrownBody(entity)?!!frostcrownGroundContact(entity,prop.x,prop.y,r):distance(point,prop)<=r+entity.r)&&!g.terrain.firstBlocker(prop.x,prop.y,point.x,point.y,0,'projectile');
     for(const enemy of [...g.enemies])if(enemy.hp>0&&reaches(enemy,this._foot(enemy,false)))g._hurtEnemy(enemy,damage,0,g.player,'mushroom');
     // The airborne blast reaches low-flying bodies, while solid walls stop it.
     for(const ally of friendlyTargets(g)){
@@ -297,7 +298,9 @@ export class Environment {
       // during debug teleports or a return to a saved scene.
       const from=previous&&distance(previous,point)<=Math.max(96,(entity.speed||0)*dt*3)?previous:point;
       for(const prop of props){
-        if(prop.state!=='idle'||segmentDistance(prop.x,prop.y,from.x,from.y,point.x,point.y)>(prop.r||17)+(entity.r||15))continue;
+        if(prop.state!=='idle')continue;
+        const touching=isFrostcrownBody(entity)?Number.isFinite(frostcrownGroundSweep(entity,{x:from.x,y:from.y,x2:point.x,y2:point.y},prop,prop.r||17)):segmentDistance(prop.x,prop.y,from.x,from.y,point.x,point.y)<=(prop.r||17)+(entity.r||15);
+        if(!touching)continue;
         const dx=point.x-from.x,dy=point.y-from.y,length=dx*dx+dy*dy;
         const t=length?Math.max(0,Math.min(1,((prop.x-from.x)*dx+(prop.y-from.y)*dy)/length)):0;
         if(!g.terrain.firstBlocker(prop.x,prop.y,from.x+dx*t,from.y+dy*t,0,'ground'))this._arm(prop,'contact');

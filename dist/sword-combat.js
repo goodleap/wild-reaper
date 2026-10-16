@@ -1,5 +1,6 @@
 import { groundOffset } from './terrain.js';
 import { recordHeroAction } from './hero-animation.js';
+import { isFrostcrownBody, frostcrownBodySweep, frostcrownBodyArc, frostcrownBodyCircle } from './enemy-body-geometry.js';
 
 const TAU=Math.PI*2;
 const angleDelta=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
@@ -8,6 +9,7 @@ export const SWORD_ENERGY_RULES=Object.freeze({radius:20,spawnDistance:35,stagge
 // Relative-motion sweep: fast waves and targets crossing between frames still
 // meet at their first occupied-circle contact, without extra simulation steps.
 export function swordEnergyContact(a,b,target,previous=target,radius=0) {
+  if(isFrostcrownBody(target))return frostcrownBodySweep(target,a,b,radius,previous,target);
   const ox=a.x-previous.x,oy=a.y-(previous.aimY??previous.y),
     dx=b.x-a.x-(target.x-previous.x),dy=b.y-a.y-((target.aimY??target.y)-(previous.aimY??previous.y)),
     r=radius+Math.max(0,target.r||0),c=ox*ox+oy*oy-r*r;
@@ -20,6 +22,7 @@ export function swordEnergyContact(a,b,target,previous=target,radius=0) {
 // Test the target's occupied circle, including the blade's end and both edges
 // of the sector. A wide monster can be grazed without its center entering it.
 export function intersectsSwordArc(origin,target,range,arc,angle) {
+  if(isFrostcrownBody(target))return frostcrownBodyArc(target,origin,range,arc,angle);
   const dx=target.x-origin.x,dy=(target.aimY??target.y)-origin.y,d=Math.hypot(dx,dy),r=Math.max(0,target.r||0);
   if(d>range+r)return false;
   if(d<=r||arc>=TAU)return true;
@@ -68,7 +71,8 @@ export class SwordCombat {
     const g=this.game;let target=null,best=Infinity;
     const consider=(e,eligible)=>{
       const d=Math.hypot(e.x-origin.x,(e.aimY??e.y)-origin.y);
-      if(d<=stats.range+(e.r||0)&&d<best&&eligible()){target=e;best=d;}
+      const inReach=isFrostcrownBody(e)?frostcrownBodyCircle(e,origin.x,origin.y,stats.range):d<=stats.range+(e.r||0);
+      if(inReach&&d<best&&eligible()){target=e;best=d;}
     };
     for(const e of g._nearby?.(origin.x,origin.y,stats.range+64)||g.enemies)consider(e,()=>this._canHit(e,origin));
     // Enemies have priority when in reach; a default sword can still open
@@ -179,7 +183,8 @@ export class SwordCombat {
         const old=this._enemyPoints.get(e)||e,start=delay/dt,finish=(delay+elapsed*fraction)/dt,
           previous={x:old.x+(e.x-old.x)*start,y:old.y+(e.y-old.y)*start},
           current={x:old.x+(e.x-old.x)*finish,y:old.y+(e.y-old.y)*finish,r:e.r};
-        if(swordEnergyContact(a,end,current,previous,wave.r)!==Infinity){
+        const contact=isFrostcrownBody(e)?frostcrownBodySweep(e,a,end,wave.r,previous,current):swordEnergyContact(a,end,current,previous,wave.r);
+        if(contact!==Infinity){
           // A shield still consumes this cast's physical contact even when no
           // HP damage remains; sibling waves must not peel it repeatedly.
           ledger.add(e);if(g._hitEnemy(e,wave.damage,wave.knockback,origin,'sword')>0)hit=true;

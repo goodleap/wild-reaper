@@ -1,14 +1,12 @@
 import { enemyDefinition } from './enemy-definitions.js';
 import { getConfigSection } from './content-config.js';
-import { bossAppearance } from './boss-appearances.js';
 
 const TAU=Math.PI*2;
 const clamp=n=>Math.max(0,Math.min(1,Number.isFinite(n)?n:0));
 const specialists=getConfigSection('enemies').specialistRules;
-const legacyBosses=getConfigSection('enemies').bosses;
-const strides=Object.freeze({rootbinder:92,boglurker:74,prismguard:86,tidepriest:80,shieldguard:90,stoneape:48,windhunter:90,frostmage:80,flamelizard:86,spiderling:35,broodmother:150,deepcaller:168,frostcrown:164,furnace:180});
+const strides=Object.freeze({rootbinder:92,boglurker:74,prismguard:86,tidepriest:80,shieldguard:90,stoneape:48,windhunter:90,frostmage:80,flamelizard:86,spiderling:35,broodmother:150,deepcaller:168,frostcrown:48,furnace:180});
 const kind=e=>e.type==='boss'?e.bossKind:e.type;
-export const hasEnemyAnimation=e=>Object.hasOwn(strides,kind(e))||bossAppearance(e)?.animated===true;
+export const hasEnemyAnimation=e=>Object.hasOwn(strides,kind(e));
 export const usesEnemyLocomotion=e=>hasEnemyAnimation(e)||enemyDefinition(e.type).locomotion===true;
 
 // Locomotion receives only displacement resolved after knockback. Attack poses
@@ -16,13 +14,12 @@ export const usesEnemyLocomotion=e=>hasEnemyAnimation(e)||enemyDefinition(e.type
 export function updateEnemyLocomotion(e,oldX,oldY,dt,frozen=false){
   const rule=specialists[e.type],state=e.specialist,a=e.specialAttack;
   const airborne=a?.kind==='leap'&&a.phase==='rush'||rule?.mode==='pounce'&&state?.phase==='active';
-  const appearance=bossAppearance(e),legacy=appearance&&['ancient','bloom'].includes(kind(e));
-  const planted=state&&['windup','recovery'].includes(state.phase)||a&&a.phase!=='rush'||e.specialRecovery>0||legacy&&(e.slam||e.slamRecovery>0||e.bloomAttack||e.bloomRecovery>0);
+  const planted=state&&['windup','recovery'].includes(state.phase)||a&&a.phase!=='rush'||e.specialRecovery>0;
   const traveled=Math.hypot(e.x-oldX,e.y-oldY);
   e.moving=dt>0&&traveled>.001&&!frozen&&!airborne&&!planted;
   e.walkSpeed=e.moving?traveled/dt:0;
   if(e.moving){
-    e.walkPhase=((e.walkPhase||0)+traveled*TAU/(strides[kind(e)]||appearance?.stride||TAU/(17/220)))%TAU;
+    e.walkPhase=((e.walkPhase||0)+traveled*TAU/(strides[kind(e)]||TAU/(17/220)))%TAU;
     e.visualFacing=Math.atan2(e.y-oldY,e.x-oldX);
   }
 }
@@ -30,7 +27,6 @@ export function updateEnemyLocomotion(e,oldX,oldY,dt,frozen=false){
 // This is a presentation adapter, never a second combat state machine.
 export function enemyAnimationPose(e,{time=0,reduced=false}={}){
   const a=e.specialAttack,s=e.specialist,rule=specialists[e.type],cast=e._visualCast;
-  const appearance=bossAppearance(e),legacy=appearance&&['ancient','bloom'].includes(kind(e));
   let mode=e.moving?'move':'idle',action='',progress=0;
   if(a){
     action=a.kind;
@@ -50,20 +46,14 @@ export function enemyAnimationPose(e,{time=0,reduced=false}={}){
   }else if(e.specialRecovery>0){
     mode='recovery';action=e.specialPose||'';
     progress=clamp(1-e.specialRecovery/Math.max(.001,e.specialRecoveryMax||e.specialRecovery));
-  }else if(legacy&&kind(e)==='ancient'&&e.slam){
-    mode='windup';action='slam';progress=clamp(1-e.slam.life/Math.max(.001,e.slam.maxLife));
-  }else if(legacy&&kind(e)==='ancient'&&e.slamRecovery>0){
-    mode='recovery';action='slam';progress=clamp(1-e.slamRecovery/legacyBosses.ancient.parameters.recovery);
-  }else if(legacy&&kind(e)==='bloom'&&e.bloomAttack){
-    mode='windup';action=e.bloomAttack.kind==='burst'?'burst':'fan';progress=clamp(1-e.bloomAttack.life/Math.max(.001,e.bloomAttack.maxLife));
-  }else if(legacy&&kind(e)==='bloom'&&e.bloomRecovery>0){
-    mode='recovery';action='bloomCast';progress=clamp(1-e.bloomRecovery/legacyBosses.bloom.parameters.recovery);
   }
   if(e.guardActive===false){mode='idle';action='';progress=0;}
   if(['idle','move'].includes(mode)&&e._weaponPushTime>0&&!e.moving){mode='hit';progress=clamp(1-(e.hit||0)/.12);}
   let cycle=e.walkPhase||0;
   if(e.type==='windhunter')cycle=(time*11+(Number(e.id)||0))%TAU;
-  if(reduced)cycle=0;
+  // The deer's silhouette also defines its narrow hit/contact contours. Keep
+  // its gameplay-relevant support pose aligned when decorative motion is low.
+  if(reduced&&kind(e)!=='frostcrown')cycle=0;
   if(mode==='idle'&&e.type!=='windhunter')cycle=0;
   return {mode,action,progress,cycle,moving:!!e.moving,...(e.type==='stoneape'?{gaitFrames:16}:{})};
 }

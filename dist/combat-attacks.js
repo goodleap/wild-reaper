@@ -7,6 +7,7 @@ import { WeaponTrail } from './weapon-trails.js';
 import { SwordCombat } from './sword-combat.js';
 import { recordHeroAction } from './hero-animation.js';
 import { clearWeaponKnockbackScene, weaponKnockbackDistance } from './weapon-knockback.js';
+import { isFrostcrownBody, frostcrownBodySweep, frostcrownBodyCircle, frostcrownGroundContact } from './enemy-body-geometry.js';
 
 const CONFIG=getConfigSection('combat').stats;
 const ARROW_RULES=CONFIG.weaponRules.arrow,PULSE_RULES=CONFIG.skillRules.pulse,LIGHTNING_RULES=CONFIG.skillRules.lightning;
@@ -141,7 +142,7 @@ export class CombatAttacks {
       first=wallHit;
       const nearby=g._nearby(x+dx*.5,y+dy*.5,Math.hypot(dx,dy)*.5+64);
       for(const e of nearby)if(!b.hitIds.has(e.id)&&canTarget(g,e,origin)) {
-        const t=circleImpact(x,y,dx,dy,e.x,e.y,b.r+e.r+3);
+        const t=isFrostcrownBody(e)?frostcrownBodySweep(e,{x,y},{x:x+dx,y:y+dy},b.r):circleImpact(x,y,dx,dy,e.x,e.y,b.r+e.r+3);
         if(t<first||(t===first&&impact&&!isSupply&&e.id<impact.id)){first=t;impact=e;isSupply=false;}
       }
       for(const prop of g.adventure?.props||[])if(prop.hp>0) {
@@ -228,8 +229,8 @@ export class CombatAttacks {
         // The existing local query also covers the short travelled segment;
         // a fast player cannot step a knife straight through a small target.
         for(const e of g._nearby(x+dx*.5,y+dy*.5,65+Math.hypot(dx,dy)*.5)) {
-          const contact=dist2(e,blade)<sq(e.r+blade.r);
-          const impact=contact?1:circleImpact(x,y,dx,dy,e.x,e.y,e.r+blade.r);
+          const contact=isFrostcrownBody(e)?frostcrownBodyCircle(e,blade.x,blade.y,blade.r):dist2(e,blade)<sq(e.r+blade.r);
+          const impact=contact?1:isFrostcrownBody(e)?frostcrownBodySweep(e,{x,y},{x:x+dx,y:y+dy},blade.r):circleImpact(x,y,dx,dy,e.x,e.y,e.r+blade.r);
           if(!Number.isFinite(impact))continue;
           const hitOrigin=contact?origin:{x:x+dx*impact,y:y+dy*impact,groundY:y+dy*impact+groundOffset(p,true)};
           if(!canTarget(g,e,hitOrigin,{source:'orbit',checkPath:true}))continue;
@@ -256,7 +257,7 @@ export class CombatAttacks {
     // The extended echo is part of the same cast, so a reachable enemy in its
     // outer band is also a useful target. Never spend a full cooldown on air.
     const reach=(stats.echo?stats.echoRadius:stats.radius),origin={x:p.x,y:p.y,groundY:p.y+groundOffset(p,true)};
-    const hasEnemy=g.enemies.some(e=>dist2(e,p)<sq(reach+e.r)&&canTarget(g,e,origin,{requireView:true,source:'pulse',checkPath:true,canHitFlying:false}));
+    const hasEnemy=g.enemies.some(e=>(isFrostcrownBody(e)?!!frostcrownGroundContact(e,origin.x,origin.groundY,reach):dist2(e,p)<sq(reach+e.r))&&canTarget(g,e,origin,{requireView:true,source:'pulse',checkPath:true,canHitFlying:false}));
     const hasSupply=!hasEnemy&&(g.adventure?.props||[]).some(prop=>prop.hp>0&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
     const hasVine=!hasEnemy&&!hasSupply&&(g.environment?.mechanisms?.props||[]).some(prop=>prop.type==='vine'&&(prop.state==='windup'||prop.state==='active')&&sq(prop.x-p.x)+sq((prop.aimY??prop.y)-p.y)<sq(reach+prop.r)&&g._inView({x:prop.x,y:prop.aimY??prop.y})&&propPath(g,origin,prop,'pulse'));
     if(!hasEnemy&&!hasSupply&&!hasVine){g._pulse=.06;return;}
@@ -300,7 +301,7 @@ export class CombatAttacks {
     const g=this.game,origin={x,y,groundY:y+groundOffset(g.player,true)};
     g._effect(x,y,'ring',control?.65:echo?.6:.48,radius,control?'#9fe5cf':echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:origin.groundY,evolved:g.evolutions.pulse,echo,control,branch:g.branches.pulse});
     const source=echo?'echo':'pulse';
-    for(const e of g.enemies)if(dist2(origin,e)<sq(radius+e.r)&&canTarget(g,e,origin,{source,checkPath:true,canHitFlying:false})) {
+    for(const e of g.enemies)if((isFrostcrownBody(e)?!!frostcrownGroundContact(e,x,origin.groundY,radius):dist2(origin,e)<sq(radius+e.r))&&canTarget(g,e,origin,{source,checkPath:true,canHitFlying:false})) {
       const dealt=g._hitEnemy(e,damage,knockback,origin,source);
       if(dealt>0&&e.hp>0&&e.type!=='boss') {
         if(e.charge||e._chargeSegment){e.charge=null;e._chargeSegment=null;e.chargeCooldown=Math.max(e.chargeCooldown||0,PULSE_RULES.interruptCooldown);}

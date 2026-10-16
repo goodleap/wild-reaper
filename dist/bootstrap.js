@@ -12,6 +12,8 @@ try{
   loading.update({completed:1,total:3,stage:'正在读取内容配置'});
   await loadContentConfig({onProgress:({completed,total,stage})=>loading.update({completed:1+(total>0?completed/total:0),total:3,stage})});
   loading.update({completed:2,total:3,stage:'正在准备画面与操作'});
+  const {frostcrownAssets}=await import('./enemy-art/frostcrown-assets.js');
+  await frostcrownAssets.preload();
   await import('./app.js');
   loading.update({completed:3,total:3,stage:'准备完成'});
   await waitForPaint();

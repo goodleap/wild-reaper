@@ -3,6 +3,7 @@ import { friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from 
 import { isGrounded } from './height-rules.js';
 import { recordHeroAction } from './hero-animation.js';
 import { beamCapsule, capsuleHitsCircle } from './attack-capsule.js';
+import { isFrostcrownBody, frostcrownBodySweep, frostcrownBodyCircle, frostcrownBodyArc, frostcrownGroundContact } from './enemy-body-geometry.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const point=e=>({x:e.x,y:e.y});
@@ -201,7 +202,8 @@ export class AbilityRuntime {
       for(const target of this.targets(effect)){
         if(effect.hit.has(target)||!this.eligible(effect,target))continue;
         const dx=target.x-start.x,dy=target.y-start.y,along=dx*Math.cos(effect.angle)+dy*Math.sin(effect.angle),across=-dx*Math.sin(effect.angle)+dy*Math.cos(effect.angle);
-        if(along>=-target.r-12&&along<=step+target.r+12&&Math.abs(across)<=p.radius+target.r&&this.clearPath(effect.origin,target,effect.profile)){
+        const inside=isFrostcrownBody(target)?Number.isFinite(frostcrownBodySweep(target,start,end,p.radius)):along>=-target.r-12&&along<=step+target.r+12&&Math.abs(across)<=p.radius+target.r;
+        if(inside&&this.clearPath(effect.origin,target,effect.profile)){
           effect.hit.add(target);this.hit(effect,target);
         }
       }
@@ -212,7 +214,7 @@ export class AbilityRuntime {
     // before a wall can still be struck without hitting those behind it.
     let first=Infinity,victim=null;
     for(const target of this.targets(effect))if(this.eligible(effect,target)){
-      const t=segmentHit(start,end,target,p.radius+(target.r||10));if(t<first){first=t;victim=target;}
+      const t=isFrostcrownBody(target)?frostcrownBodySweep(target,start,end,p.radius):segmentHit(start,end,target,p.radius+(target.r||10));if(t<first){first=t;victim=target;}
     }
     const contact=victim?{x:start.x+(end.x-start.x)*first,y:start.y+(end.y-start.y)*first}:end;
     if(!this.clearPath(projected(effect,start),projected(effect,contact),effect.profile,p.radius)){effect.remaining=0;return;}
@@ -231,10 +233,11 @@ export class AbilityRuntime {
       const repeat=['field','cone'].includes(effect.shape);
       if(repeat?(effect.lastHit.get(target)||-Infinity)>this.clock-p.tickInterval:effect.hit.has(target))continue;
       const dx=target.x-center.x,dy=target.y-center.y,d=Math.hypot(dx,dy);let inside=false;
-      if(effect.shape==='cone')inside=d<=p.range+(target.r||0)&&Math.abs(angleDifference(Math.atan2(dy,dx),effect.angle))<=p.spread+(target.r||0)/Math.max(20,d);
+      if(effect.shape==='cone')inside=isFrostcrownBody(target)?frostcrownBodyArc(target,center,p.range,p.spread*2,effect.angle):d<=p.range+(target.r||0)&&Math.abs(angleDifference(Math.atan2(dy,dx),effect.angle))<=p.spread+(target.r||0)/Math.max(20,d);
       else if(effect.shape==='beam'){
-        inside=capsuleHitsCircle(beamCapsule(center.x,center.y,effect.angle,p.range,p.radius),target.x,target.y,target.r||0);
-      }else inside=d<=radius+(target.r||0);
+        const beam=beamCapsule(center.x,center.y,effect.angle,p.range,p.radius);
+        inside=isFrostcrownBody(target)?Number.isFinite(frostcrownBodySweep(target,beam,{x:beam.x2,y:beam.y2},beam.r)):capsuleHitsCircle(beam,target.x,target.y,target.r||0);
+      }else inside=isFrostcrownBody(target)?effect.profile==='ground'?!!frostcrownGroundContact(target,center.x,center.y+(effect.groundOffset||0),radius):frostcrownBodyCircle(target,center.x,center.y,radius):d<=radius+(target.r||0);
       if(!inside||!this.clearPath(projected(effect,center),target,effect.profile))continue;
       if(repeat)effect.lastHit.set(target,this.clock);else effect.hit.add(target);
       this.hit(effect,target);

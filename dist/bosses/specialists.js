@@ -3,6 +3,7 @@ import { enemyDefinition } from '../enemy-definitions.js';
 import { groundOffset } from '../terrain.js';
 import { isGrounded } from '../height-rules.js';
 import { selectFriendlyTarget, friendlyTargets, friendlyFoot, isFriendlyActive, damageFriendly } from '../friendly-combat.js';
+import { isFrostcrownBody, frostcrownGroundSweep } from '../enemy-body-geometry.js';
 
 const rules=e=>bossDefinition(e.bossKind).parameters;
 const foot=e=>({x:e.x,y:e.y+groundOffset(e)});
@@ -189,7 +190,8 @@ function chargeImpact(game,e,a,p){
   for(const target of friendlyTargets(game)){
     if(a.hitIds.has(target)||!isFriendlyActive(game,target)||!isGrounded(target))continue;
     const at=friendlyFoot(target),t=len2?Math.max(0,Math.min(1,((at.x-line.x)*dx+(at.y-line.y)*dy)/len2)):0;
-    if(Math.hypot(at.x-line.x-dx*t,at.y-line.y-dy*t)>e.r+target.r||!clearLine(game,foot(e),at))continue;
+    const contact=isFrostcrownBody(e)?Number.isFinite(frostcrownGroundSweep(e,line,at,target.r)):Math.hypot(at.x-line.x-dx*t,at.y-line.y-dy*t)<=e.r+target.r;
+    if(!contact||!clearLine(game,foot(e),at))continue;
     a.hitIds.add(target);damageFriendly(game,target,e.damage*p.chargeDamage,e);
   }
 }

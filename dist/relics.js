@@ -1,4 +1,5 @@
 import { getConfigSection } from './content-config.js';
+import { isFrostcrownBody, frostcrownGroundContact } from './enemy-body-geometry.js';
 // Run-only relics are awarded at a portal, at most once per unique item.
 // The world owns the portal transition; this module owns only its reward.
 const economy=getConfigSection('economy');
@@ -109,7 +110,9 @@ export class Relics {
     const r=RELIC_RULES.herbRadius,damage=RELIC_RULES.herbDamage*g._damageMultiplier();
     g._effect(p.x,p.y,'ring',.55,r,'#b9dda5');
     // Raw damage avoids applying bleed/shock or invoking another herb effect.
-    for(const enemy of g.enemies)if(enemy.hp>0&&Math.hypot(enemy.x-p.x,enemy.y-p.y)<=r+enemy.r)
+    // The existing ring is drawn at p.x/p.y in the ground effects pass; keep
+    // that exact center rather than moving its coverage by either actor's foot.
+    for(const enemy of g.enemies)if(enemy.hp>0&&(isFrostcrownBody(enemy)?!!frostcrownGroundContact(enemy,p.x,p.y,r):Math.hypot(enemy.x-p.x,enemy.y-p.y)<=r+enemy.r))
       g._hurtEnemy(enemy,damage,12,p,'relic');
     return true;
   }

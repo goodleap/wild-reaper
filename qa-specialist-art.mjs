@@ -3,11 +3,14 @@ import { MonsterArt } from './dist/monster-art.js';
 import { ENEMY_ART } from './dist/enemy-art/registry.js';
 import { ENEMY_VISUALS } from './dist/enemy-visuals.js';
 import { bossPhaseLabel, bossWindingUp, drawBossGround } from './dist/enemy-presentation.js';
+import { frostcrownAssets } from './dist/enemy-art/frostcrown-assets.js';
+
+await frostcrownAssets.preload({load:async()=>({width:1254,height:1254})});
 
 function recordingContext(){
   let depth=0;const calls=[];
   const ctx={};
-  for(const method of ['beginPath','closePath','moveTo','lineTo','quadraticCurveTo','bezierCurveTo','arc','ellipse','fill','stroke','clip','fillRect','translate','rotate','scale','drawImage'])ctx[method]=(...args)=>{
+  for(const method of ['beginPath','closePath','moveTo','lineTo','quadraticCurveTo','bezierCurveTo','arc','ellipse','fill','stroke','clip','fillRect','translate','rotate','scale','transform','drawImage'])ctx[method]=(...args)=>{
     for(const value of args)if(typeof value==='number')assert(Number.isFinite(value),`${method} must only receive finite coordinates`);
     calls.push([method,...args]);
   };

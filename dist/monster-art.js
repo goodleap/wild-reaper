@@ -3,7 +3,9 @@ import { ENEMY_VISUALS, enemyArtId } from './enemy-visuals.js';
 import { clamp } from './enemy-art/drawing.js';
 import { enemyAnimationPose, sampleEnemyPose } from './enemy-animation.js';
 
-const PIXEL_LIMIT=6*1024*1024/4;
+// Includes every recurring gait of four bosses and ten specialist species,
+// including the sixteen-frame ape and the higher-resolution deer texture.
+const PIXEL_LIMIT=7*1024*1024/4;
 // A bounded shared sprite cache. Species painting, poses and overlays live in
 // their own modules and have no access to simulation state or randomness.
 export class MonsterArt {
@@ -17,7 +19,7 @@ export class MonsterArt {
     const visual=ENEMY_VISUALS[kind],[w,h,ox,oy]=visual.box,canvas=this.makeCanvas();
     // Large animated bodies have many poses; use a bounded backing resolution
     // so several concurrent encounters fit beside the ordinary-enemy cache.
-    const ratio=animation?(w>=124?1:1.5):2;
+    const ratio=visual.cacheRatio??(animation?(w>=124?1:1.5):2);
     canvas.width=Math.ceil(w*ratio);canvas.height=Math.ceil(h*ratio);
     const c=canvas.getContext('2d');c.scale(ratio,ratio);c.translate(ox,oy);c.lineJoin='round';c.lineCap='round';
     const phase=visual.frames===1?0:pose/(visual.frames-1)*2-1;
@@ -30,8 +32,10 @@ export class MonsterArt {
   draw(c,e,{time=0,reduced=false,dense=false,frozen=false,playerX=e.x+1}={}){
     const kind=enemyArtId(e),art=ENEMY_ART[kind],visual=ENEMY_VISUALS[kind];if(!art||!visual)return false;
     if(art.animated){
-      const prior=this.lastPoses.get(e),animation=frozen&&prior?prior.animation:sampleEnemyPose(enemyAnimationPose(e,{time,reduced}));
-      const flip=frozen&&prior?prior.flip:art.facing?.(e,{playerX,facings:this.beetleFacing})??1;
+      const prior=this.lastPoses.get(e),sharedPose=art.samplePose?.(e,{time,reduced,frozen});
+      const animation=sharedPose??(frozen&&prior?prior.animation:sampleEnemyPose(enemyAnimationPose(e,{time,reduced})));
+      const flip=sharedPose?art.facing?.(e,{playerX,facings:this.beetleFacing,frozen})??1:
+        frozen&&prior?prior.flip:art.facing?.(e,{playerX,facings:this.beetleFacing})??1;
       const paintTime=frozen&&prior?prior.time:time;
       this.lastPoses.set(e,{animation,flip,time:paintTime});
       const image=this._sprite(kind,0,false,1,animation);

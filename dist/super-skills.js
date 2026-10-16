@@ -4,6 +4,7 @@ import { SUPER_SKILL_DEFS, ALL_SUPER_SKILL_DEFS } from './combat-catalog.js';
 import { scalePlayerDamage } from './combat-stats.js';
 import { isGrounded } from './height-rules.js';
 import { SWORD_FLIGHT_RULES, swordFormationAnchor, createSwordFlight, advanceSwordFlight } from './sword-flight.js';
+import { isFrostcrownBody, frostcrownBodySweep, frostcrownGroundContact } from './enemy-body-geometry.js';
 
 const freeze=Object.freeze;
 export const SUPER_SKILLS=SUPER_SKILL_DEFS;
@@ -183,8 +184,13 @@ export class SuperSkills {
   }
   _areaTargets(field,limit=SUPER_RULES.maxTargets) {
     const profile=field.profile||PROPAGATION[field.skillId]||'projectile';
-    return this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,field)&&distance(field,this._foot(enemy))<=field.r+enemy.r&&this._lineClear(field,this._foot(enemy),0,profile))
+    return this.game.enemies.filter(enemy=>(profile!=='ground'||isGrounded(enemy))&&this._visible(enemy,field)&&this._areaContact(field,enemy)&&this._lineClear(field,this._foot(enemy),0,profile))
       .sort((a,b)=>this._compareTargets(a,b,field)).slice(0,limit);
+  }
+  _areaContact(field,enemy) {
+    // Field centers are authored on the ground plane for every propagation
+    // profile. The profile controls walls/flight, not an extra foot offset.
+    return isFrostcrownBody(enemy)?!!frostcrownGroundContact(enemy,field.x,field.y,field.r):distance(field,this._foot(enemy))<=field.r+enemy.r;
   }
   _damage(enemy,amount,origin,kind='super') {
     // Raw damage deliberately bypasses bleed, shock and lightning refunds.
@@ -257,7 +263,7 @@ export class SuperSkills {
       if(!this._visible(enemy,residue.origin)||!this._lineClear(residue.origin,this._foot(enemy),0,'ground'))continue;
       // The field owns all in-area ticks. Residue only pays after leaving it.
       const field=this.fields.find(field=>field.id===residue.fieldId&&field.life>1e-9);
-      if(field&&distance(field,this._foot(enemy))<=field.r+enemy.r)continue;
+      if(field&&this._areaContact(field,enemy))continue;
       if(this._damage(enemy,residue.damage,residue.origin)>0&&enemy.hp>0){
         enemy.superSlowUntil=Math.max(enemy.superSlowUntil||0,g._clock+TIMING.erosionSlowDuration);
         enemy.superSlowFactor=enemy.type==='boss'?TIMING.erosionBossMoveRatio:TIMING.erosionMoveRatio;
@@ -290,7 +296,7 @@ export class SuperSkills {
         length=lo;
       }
       const end={x:visual.x+dx*length,y:visual.y+dy*length};
-      const targets=g.enemies.filter(enemy=>this._visible(enemy,origin)&&segmentDistance(enemy.x,enemy.y,visual.x,visual.y,end.x,end.y)<=enemy.r+width&&this._lineClear(origin,this._foot(enemy)))
+      const targets=g.enemies.filter(enemy=>this._visible(enemy,origin)&&(isFrostcrownBody(enemy)?Number.isFinite(frostcrownBodySweep(enemy,visual,end,width)):segmentDistance(enemy.x,enemy.y,visual.x,visual.y,end.x,end.y)<=enemy.r+width)&&this._lineClear(origin,this._foot(enemy)))
         .sort((a,b)=>distance(visual,a)-distance(visual,b)).slice(0,SUPER_RULES.maxTargets);
       g._effect(visual.x,visual.y,'superRay',.48,width,'#89ddd8',undefined,{x2:end.x,y2:end.y,renderGroundY:origin.y,renderEndGroundY:end.y+origin.y-visual.y,skillId:'runeArrow',seed:++this._id});
       for(const enemy of targets)this._damage(enemy,shot.damage,origin,'runeArrow');

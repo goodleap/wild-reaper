@@ -11,6 +11,7 @@ import { COMPANIONS, COMPANION_RULES, COMPANION_FOLLOW_RULES, companionDefinitio
 export { COMPANIONS } from './companion-catalog.js';
 import { OBJECTIVE_RULES, canStartObjective, majorFightActive, objectivePointSafe } from './event-scheduling.js';
 import { activateCombatGroup, retreatPoint, enemyGroupProvoked } from './combat-tactics.js';
+import { isFrostcrownBody, frostcrownGroundContact } from './enemy-body-geometry.js';
 
 const TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -426,11 +427,11 @@ export class Companions {
   _quake(x,y,r,damage,echo,seed) {
     const g=this.game,source=echo?'companionEcho':'companionPulse',origin={x,y:y-groundOffset(g.player,true),groundY:y};
     g._effect(x,y,'ring',echo?.6:.48,r,echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:y,evolved:true,echo,branch:'echoes',ally:true,seed});
-    for(const enemy of g._nearby(x,y,r+50))if(g.combat.canTarget(enemy,origin,{requireView:true,checkPath:true,source,canHitFlying:false})&&Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r)
+    for(const enemy of g._nearby(x,y,r+50))if(g.combat.canTarget(enemy,origin,{requireView:true,checkPath:true,source,canHitFlying:false})&&(isFrostcrownBody(enemy)?!!frostcrownGroundContact(enemy,x,y,r):Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r))
       g._hitEnemy(enemy,damage,echo?skills.warden.echoKnockback:skills.warden.knockback,origin,source);
   }
   _castQuake(active) {
-    const g=this.game,foot=this._foot(active),rule=skills.warden,enemies=g._nearby(foot.x,foot.y,rule.radius).filter(e=>g.combat.canTarget(e,active,{requireView:true,checkPath:true,source:'companionPulse',canHitFlying:false})&&distance(this._foot(e),foot)<rule.radius+e.r);
+    const g=this.game,foot=this._foot(active),rule=skills.warden,enemies=g._nearby(foot.x,foot.y,rule.radius).filter(e=>g.combat.canTarget(e,active,{requireView:true,checkPath:true,source:'companionPulse',canHitFlying:false})&&(isFrostcrownBody(e)?!!frostcrownGroundContact(e,foot.x,foot.y,rule.radius):distance(this._foot(e),foot)<rule.radius+e.r));
     if(!enemies.length)return false;
     const damage=rule.damage*(1+Math.floor(g.time/rule.growthPeriod)*rule.growth);
     this._quake(foot.x,foot.y,rule.radius,damage,false,active.id);
@@ -438,7 +439,7 @@ export class Companions {
   }
   _castGolem(active) {
     const g=this.game,foot=this._foot(active),rule=skills.golem;
-    const targets=g._nearby(foot.x,foot.y,rule.queryRange).filter(e=>g.combat.canTarget(e,active,{checkPath:true,source:'companionGolem',canHitFlying:false})&&distance(this._foot(e),foot)<rule.radius+e.r);
+    const targets=g._nearby(foot.x,foot.y,rule.queryRange).filter(e=>g.combat.canTarget(e,active,{checkPath:true,source:'companionGolem',canHitFlying:false})&&(isFrostcrownBody(e)?!!frostcrownGroundContact(e,foot.x,foot.y,rule.radius):distance(this._foot(e),foot)<rule.radius+e.r));
     if(!targets.length)return false;
     targets.sort((a,b)=>(b.type==='boss')-(a.type==='boss')||distance(a,active)-distance(b,active));
     const target=targets.includes(active._combatTarget)?active._combatTarget:targets[0],angle=Math.atan2(target.y-active.y,target.x-active.x);active.castFacing=angle;active.facing=angle;active.castFace=.48;
