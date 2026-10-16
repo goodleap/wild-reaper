@@ -24,6 +24,7 @@ import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
 import { WorldArt } from './world-art.js';
 import { CityStructureArt } from './city-structure-art.js';
+import { cityDetailArt } from './city-detail-art.js';
 import { WorldLayoutArt } from './worlds/world-layout-art.js';
 import { createRiftLayout } from './worlds/rift-layout.js';
 import { drawRiftOverview, drawRiftLandmark, drawRiftCaveGround, drawRiftCaveExits, drawRiftCaveWall } from './worlds/rift-art.js';
@@ -439,6 +440,7 @@ function startGame(){
   activeStartPromise=(async()=>{
     try{
       await paintLoading();
+      if(options.worldId==='clockshadow-city')await cityDetailArt.preload();
       const preparedGame=new Game(options);syncViewport(preparedGame);
       sceneLoadingView.update({completed:1,total:4,stage:'正在准备地图'});
       await paintLoading();
@@ -867,7 +869,7 @@ function updateStoryDialogueHUD(live){
     storyDialogueOpen=false;storyDialogueKey=null;clearInput();renderSchedule.invalidate();
     if(live)canvas.focus({preventScroll:true});
   }
-  const objective=live&&story?.active&&!blocking;
+  const objective=!!(live&&story?.active&&!blocking);
   show('story-objective',objective);
   if(!objective)return;
   $('story-objective-text').textContent=story.objective||'沿路前进';
@@ -1436,6 +1438,7 @@ function drawDeadTree(prop,mainPlayer){regionalArt.drawDeadTree(ctx,prop,treeCan
 function drawRuinsStone(prop){regionalArt.drawRuinsStone(ctx,prop);}
 function drawRuinsWall(prop){regionalArt.drawRuinsWall(ctx,prop);}
 function drawTerrain(prop,mainPlayer){if(prop.visual===false)return;if(prop.variant==='castle-wall'||prop.variant==='hut-wall'){drawDungeonWall(prop,mainPlayer);return;}if(prop.structureId)return;
+  if(cityDetailArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer),player:mainPlayer,footY:mainPlayer?mainPlayer.y+groundOffset(mainPlayer,true):undefined}))return;
   if(prop.variant==='city-structure'){cityStructureArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer)});return;}
   worldLayoutArt.drawTreeFooting(ctx,prop);
   if(drawExpeditionProp(ctx,prop))return;

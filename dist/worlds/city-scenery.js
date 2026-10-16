@@ -1,6 +1,7 @@
 // Baked rectangular foundations already belong to both city collision masks.
 // Their depth-sorted artwork is a separate, immutable view of the same records.
 import { RiftCollision, riftPointInPolygon } from '../rift-collision.js';
+import { CITY_SAMPLE_FOLIAGE } from './city-sample-scene.js';
 const cache=new WeakMap();
 const identity=text=>[...String(text)].reduce((value,char)=>(Math.imul(value,31)+char.charCodeAt(0))>>>0,17);
 const hash=n=>{const value=Math.sin(n*127.1+41.7)*43758.5453;return value-Math.floor(value);};
@@ -59,5 +60,6 @@ export function createCityScenery(layout,collision,island){
       }
     }
   }
-  const result=Object.freeze([...props,...vegetation]);cache.set(layout,result);return result;
+  const sample=layout.worldId==='clockshadow-city'?CITY_SAMPLE_FOLIAGE:[];
+  const result=Object.freeze([...props,...vegetation,...sample]);cache.set(layout,result);return result;
 }

@@ -1,5 +1,6 @@
 import { WorldArt } from '../world-art.js';
 import { drawCityBridge } from '../city-structure-art.js';
+import { drawCitySampleGround, drawCitySampleBlockedHouse } from './city-sample-ground.js';
 
 // Floor tiles and the small map consume the baked union. Raised buildings are
 // deliberately left to Terrain's shared depth queue, including roof fading.
@@ -32,7 +33,7 @@ function blockedMass(c,layout,view,overview,art){
     if(urban){
       const inset=8+Math.floor(n*4)*3,w=240-inset*2;
       c.fillStyle=n>.5?'#7d8978':'#748371';c.fillRect(x,y,240,192);
-      if(art){const house=art._building(Math.floor(n*5));c.drawImage(house.canvas,x+inset-9,y-22,258-inset*2,218);}
+      if(art){if(!drawCitySampleBlockedHouse(c,layout,x,y)){const house=art._building(Math.floor(n*5));c.drawImage(house.canvas,x+inset-9,y-22,258-inset*2,218);}}
       else{const yy=y+12+hash(gy+7,gx)*18,h=138+hash(gx+9,gy)*22;c.fillStyle=CITY_PALETTE.wall;c.fillRect(x+inset,yy,w,h+22);c.fillStyle=['#597784','#4c697a','#63808a','#55727d'][Math.floor(n*4)];c.beginPath();c.moveTo(x+inset,yy+18);c.lineTo(x+inset+12,yy);c.lineTo(x+inset+w-12,yy);c.lineTo(x+inset+w,yy+18);c.lineTo(x+inset+w,yy+h);c.lineTo(x+inset,yy+h);c.closePath();c.fill();c.strokeStyle=p.roofDark;c.lineWidth=3;c.stroke();c.strokeStyle='#b4c0b0';c.lineWidth=2;c.beginPath();c.moveTo(x+inset+12,yy+2);c.lineTo(x+inset+w-12,yy+2);c.stroke();}
     }else{
       c.fillStyle='#415f48';c.fillRect(x,y,240,192);
@@ -51,6 +52,7 @@ export class CityMapArt{
     c.save();rings(c,layout.boundaries);c.clip('evenodd');
     for(let ty=Math.floor(view.minY/TILE);ty<=Math.floor(view.maxY/TILE);ty++)for(let tx=Math.floor(view.minX/TILE);tx<=Math.floor(view.maxX/TILE);tx++){const tile=this.ground._tile('city',Math.floor(hash(tx+41,ty+97)*3));c.drawImage(tile.canvas,tx*TILE,ty*TILE);}
     gardenFloor(c,layout,view,false);
+    drawCitySampleGround(c,layout,view);
     for(const {value:patch,bounds:b}of records(layout).patches){if(!overlaps(b,view))continue;trace(c,patch.points);c.fillStyle='#8fa66d88';c.fill();}
     c.save();c.beginPath();for(const p of layout.passages||[]){if(p.from===p.to||p.kind==='secret'||p.kind==='cave')continue;route(c,p);c.lineWidth=Math.min(p.width*.7,150);c.strokeStyle=p.mainRoute?'#d1cbb042':'#a7b39138';c.stroke();}c.restore();
     c.restore();for(const {value:p,bounds:b}of records(layout).bridges)if(overlaps(b,view,12))drawCityBridge(c,p);c.restore();return true;

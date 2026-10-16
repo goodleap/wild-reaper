@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { harness } from './qa-app-harness.mjs';
+import { harness as createHarness } from './qa-app-harness.mjs';
 import { WORLD_IDS } from './dist/world-definitions.js';
 import { createRiftLayout } from './dist/worlds/rift-layout.js';
 import { groundOffset } from './dist/terrain.js';
 
 // Exercise the normal preparation handlers and their real Game instances.
 // Canvas is mocked here; browser layout and performance need browser checks.
+// Image fetching is mocked with the other rendering dependencies; decode and
+// failure/retry behavior have their own asset QA and real Chromium capture.
+const harness=(search='',options={})=>createHarness(search,{...options,moduleOverrides:{cityDetailArt:{preload:async()=>{},drawProp:()=>false,ready:false}}});
 const worlds=[
   {id:'forest',radio:'world-rift-forest',preview:'world-preview',name:'裂谷林海',width:7200,height:5400},
   {id:'verdant-rift',radio:'world-verdant-rift',preview:'world-preview-verdant-rift',name:'苍翠断脊',width:14400,height:10800},
@@ -30,6 +33,7 @@ const assertDestination=(h,world)=>{
   assert.equal(layout.bounds.maxX-layout.bounds.minX,world.width);assert.equal(layout.bounds.maxY-layout.bounds.minY,world.height);
   assert.equal(game.player.x,layout.spawn.x);assert.equal(game.player.y+groundOffset(game.player,true),layout.spawn.y);
   assert.equal(node(h,'terrain-name').textContent,world.name);
+  assert(node(h,'story-objective').classList.contains('hidden'),'ordinary exploration never displays an empty story objective');
   assert.equal(h.run('viewWidth'),540,'normal world selection retains standard camera width');
 };
 

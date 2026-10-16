@@ -13,7 +13,7 @@ for(const match of source.matchAll(/^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)[
   for(const specifier of match[1].split(',').map(value=>value.trim())){const [exported,local=exported]=specifier.split(/\s+as\s+/);modules[local]=exports[exported];}
 }
 source=source.replace(/^import[^\n]+;\s*$/gm,'');
-export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=false}={}){
+export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=false,moduleOverrides={}}={}){
   let viewport={width:393,height:717,left:0,top:0},scheduled=0,clockReads=0,drawImages=0,now=1000,nextTask=0;
   const frames=new Map(),timers=new Map();
   const requestFrame=callback=>{scheduled++;const id=++nextTask;frames.set(id,callback);return id;};
@@ -95,7 +95,7 @@ export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=
   globalThis.document=document;
   const window={location:{search},devicePixelRatio:2,addEventListener:(type,handler)=>listen(`window:${type}`,handler)};
   const navigator={userAgent:'QA frame integration'};
-  const sandbox={...modules,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},matchMedia:query=>({matches:query==='(pointer: coarse)'&&coarse}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value))},requestAnimationFrame:requestFrame,cancelAnimationFrame:id=>frames.delete(id),setTimeout:setTimer,clearTimeout:id=>timers.delete(id),console:consoleImpl};
+  const sandbox={...modules,...moduleOverrides,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},matchMedia:query=>({matches:query==='(pointer: coarse)'&&coarse}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value))},requestAnimationFrame:requestFrame,cancelAnimationFrame:id=>frames.delete(id),setTimeout:setTimer,clearTimeout:id=>timers.delete(id),console:consoleImpl};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
   // The harness loads the app after configuration directly. Mirror the boot
   // module's successful control release before simulating user interaction.

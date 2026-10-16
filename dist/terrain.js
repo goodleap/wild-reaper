@@ -1,5 +1,6 @@
 import { RiftCollision, sweepCircleVsCapsule } from './rift-collision.js';
 import { createRiftScenery } from './worlds/rift-scenery.js';
+import { cityDetailVisual } from './city-detail-art.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
@@ -55,6 +56,7 @@ export function rockShadowParts(prop){
   fragmentShadows.set(prop,{radius:prop.r,parts});return parts;
 }
 export function sceneryVisual(prop){
+  const detail=cityDetailVisual(prop);if(detail)return Object.freeze(detail);
   if(prop.variant==='city-structure')return Object.freeze(cityStructureVisual(prop));
   const s=prop.scale||1;
   if(prop.type==='tree'){
