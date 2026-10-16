@@ -42,10 +42,17 @@ function localURL(value,base=documentURL){
 }
 const relativeURL=url=>'./'+url.href.slice(documentURL.href.length);
 const assetHashes=new Map();
+const assetBuffers=new Map();
+function assetBuffer(url){
+  if(!assetBuffers.has(url.pathname)){
+    const file=resolve(dist,decodeURIComponent(url.pathname.slice(documentURL.pathname.length)));
+    assetBuffers.set(url.pathname,readFileSync(file));
+  }
+  return assetBuffers.get(url.pathname);
+}
 function versionedURL(url){
   if(!assetHashes.has(url.pathname)){
-    const file=resolve(dist,decodeURIComponent(url.pathname.slice(documentURL.pathname.length)));
-    assetHashes.set(url.pathname,createHash('sha256').update(readFileSync(file)).digest('hex').slice(0,12));
+    assetHashes.set(url.pathname,createHash('sha256').update(assetBuffer(url)).digest('hex').slice(0,12));
   }
   const updated=new URL(url);
   updated.searchParams.set('v',version);
@@ -62,26 +69,64 @@ function moduleFiles(directory,prefix=''){
 
 // One import map keeps the entry and every transitive module in the same release.
 // A query on app.js alone does not propagate to its relative imports.
+const moduleSources=moduleFiles(dist).map(file=>{
+  const url=localURL('./'+file.split('/').map(encodeURIComponent).join('/'));
+  return [file,assetBuffer(url).toString('utf8')];
+});
+// Node's parser distinguishes static imports/re-exports from dynamic imports,
+// comments and strings. These modules are only parsed, never linked or executed.
+const staticSpecifiers=new Map(JSON.parse(execFileSync(process.execPath,[
+  '--experimental-vm-modules','--no-warnings','--input-type=module','-e',
+  `import { readFileSync } from 'node:fs';
+   import { SourceTextModule } from 'node:vm';
+   const sources=JSON.parse(readFileSync(0,'utf8'));
+   process.stdout.write(JSON.stringify(sources.map(([file,source])=>[file,new SourceTextModule(source,{identifier:file}).dependencySpecifiers])));`
+],{cwd:root,input:JSON.stringify(moduleSources),encoding:'utf8'})));
 const imports={};
-for(const file of moduleFiles(dist)){
+const staticGraph=new Map();
+for(const [file,source] of moduleSources){
   const url=localURL('./'+file.split('/').map(encodeURIComponent).join('/'));
   imports[relativeURL(url)]=versionedURL(url);
-  const source=readFileSync(resolve(dist,file),'utf8');
-  const staticImports=/(?:^|\n)[\t ]*(?:import\s*(?:(?:[^'";]*?)\bfrom\s*)?|export\s+[^'";]*?\bfrom\s*)(['"])([^'"\r\n]+)\1/g;
+  const dependencies=[];
+  staticGraph.set(url.pathname,dependencies);
   const dynamicImports=/\bimport\s*\(\s*(['"])([^'"\r\n]+)\1\s*\)/g;
-  for(const match of [...source.matchAll(staticImports),...source.matchAll(dynamicImports)]){
-    const specifier=match[2];
+  const specifiers=[...staticSpecifiers.get(file).map(specifier=>[specifier,true]),...Array.from(source.matchAll(dynamicImports),match=>[match[2],false])];
+  for(const [specifier,isStatic] of specifiers){
     if(external(specifier))continue;
     if(!specifier.startsWith('.'))throw new Error(`Expected a relative local module import in ${file}: ${specifier}`);
     const dependency=localURL(specifier,url);
     imports[relativeURL(dependency)]=versionedURL(dependency);
+    if(isStatic)dependencies.push(dependency);
   }
 }
+
+// Boot observes these existing requests. Only the static closure of each stage
+// contributes bytes; unrelated modules and later dynamic imports stay outside it.
+function bootGroup(entry){
+  const resources=new Map();
+  function visit(url){
+    const key=relativeURL(url);
+    if(resources.has(key))return;
+    const dependencies=staticGraph.get(url.pathname);
+    if(!dependencies)throw new Error(`Missing local release module: ${key}`);
+    resources.set(key,assetBuffer(url).length);
+    for(const dependency of dependencies)visit(dependency);
+  }
+  visit(localURL(entry));
+  return [...resources].sort(([a],[b])=>a.localeCompare(b,'en'));
+}
+const bootResources={
+  groups:{config:bootGroup('./content-config.js'),art:bootGroup('./enemy-art/frostcrown-assets.js'),app:bootGroup('./app.js')},
+  assets:Object.fromEntries(['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png'].map(file=>[file,assetBuffer(localURL(file)).length]))
+};
 
 let updated=html.replace(slot,`$1${version}$2`);
 const releaseMaps=[...updated.matchAll(/[ \t]*<script\b(?=[^>]*\bid=(["'])release-imports\1)[^>]*>[\s\S]*?<\/script>[ \t]*\r?\n?/gi)];
 if(releaseMaps.length>1)throw new Error('Expected at most one release import map.');
 if(releaseMaps.length)updated=updated.replace(releaseMaps[0][0],'');
+const bootMetadata=[...updated.matchAll(/[ \t]*<script\b(?=[^>]*\bid=(["'])boot-resources\1)[^>]*>[\s\S]*?<\/script>[ \t]*\r?\n?/gi)];
+if(bootMetadata.length>1)throw new Error('Expected at most one boot resource manifest.');
+if(bootMetadata.length)updated=updated.replace(bootMetadata[0][0],'');
 let moduleCount=0;
 updated=updated.replace(/<(script|link)\b[^>]*>/gi,tag=>{
   const script=/^<script\b/i.test(tag);
@@ -98,8 +143,9 @@ updated=updated.replace(/<(script|link)\b[^>]*>/gi,tag=>{
 });
 if(!moduleCount)throw new Error('Expected at least one local module entry script.');
 const orderedImports=Object.fromEntries(Object.entries(imports).sort(([a],[b])=>a.localeCompare(b,'en')));
-const json=JSON.stringify({imports:orderedImports}).replaceAll('<','\\u003c').replaceAll('\u2028','\\u2028').replaceAll('\u2029','\\u2029');
-const importMap=`<script type="importmap" id="release-imports">${json}</script>`;
+const inlineJSON=value=>JSON.stringify(value).replaceAll('<','\\u003c').replaceAll('\u2028','\\u2028').replaceAll('\u2029','\\u2029');
+const importMap=`<script type="importmap" id="release-imports">${inlineJSON({imports:orderedImports})}</script>`;
+const resourceManifest=`<script type="application/json" id="boot-resources">${inlineJSON(bootResources)}</script>`;
 const firstModule=/<script\b[^>]*>/gi;
 let entry;
 while((entry=firstModule.exec(updated))){
@@ -108,7 +154,7 @@ while((entry=firstModule.exec(updated))){
   const indentation=updated.slice(lineStart,entry.index);
   const insertion=/^[ \t]*$/.test(indentation)?lineStart:entry.index;
   const prefix=insertion===lineStart?indentation:'';
-  updated=updated.slice(0,insertion)+prefix+importMap+'\n'+updated.slice(insertion);
+  updated=updated.slice(0,insertion)+prefix+importMap+'\n'+prefix+resourceManifest+'\n'+updated.slice(insertion);
   break;
 }
 if(updated!==html)writeFileSync(path,updated);

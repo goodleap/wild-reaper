@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createLoadingView,waitForPaint} from './dist/loading-ui.js';
 
-function fixture(){
+function fixture(options={}){
   let now=0,next=0;const jobs=new Map(),nodes=new Map();
   const element=id=>{if(nodes.has(id))return nodes.get(id);const classes=new Set(id.endsWith('-loading')||id.endsWith('-actions')?['hidden']:[]);const node={id,style:{},attributes:{},classList:{add:(...values)=>values.forEach(v=>classes.add(v)),remove:(...values)=>values.forEach(v=>classes.delete(v)),contains:value=>classes.has(value),toggle:(value,on)=>on?classes.add(value):classes.delete(value)},setAttribute(key,value){this.attributes[key]=String(value);},focus(){this.focused=true;}};nodes.set(id,node);return node;};
   const document={getElementById:element};
   const setTimer=(fn,delay=0)=>{const id=++next;jobs.set(id,{fn,at:now+delay});return id;},clearTimer=id=>jobs.delete(id);
   const advance=ms=>{now+=ms;for(const [id,job] of [...jobs])if(job.at<=now){jobs.delete(id);job.fn();}};
-  return {view:createLoadingView(document,{setTimer,clearTimer}),element,advance,jobs,setTimer};
+  return {view:createLoadingView(document,{...options,setTimer,clearTimer}),element,advance,jobs,setTimer};
 }
 {
   const {view,element,advance,jobs}=fixture();view.start();advance(249);
@@ -21,6 +21,44 @@ function fixture(){
   view.update({completed:2,total:5,stage:'读取配置'});
   assert.equal(element('boot-loading-fill').style.transform,'scaleX(0.4)');assert.equal(element('boot-loading-track').attributes['aria-valuenow'],'40');assert.equal(element('boot-loading-label').textContent,'读取配置');
   view.finish();assert(element('boot-loading').classList.contains('is-complete'));advance(179);assert(!element('boot-loading').classList.contains('hidden'));advance(1);assert(element('boot-loading').classList.contains('hidden'));
+}
+{
+  const {view,element}=fixture();
+  view.start('boot',{delay:0,stage:'读取配置',detail:'读取清单'});
+  assert.equal(element('boot-loading-label').textContent,'读取配置');
+  assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'读取配置');
+  view.update({completed:1,total:2,stage:'准备界面',detail:'导入应用模块'});
+  assert.equal(element('boot-loading-label').textContent,'准备界面','ordinary loading hides diagnostic detail');
+  assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'准备界面');
+}
+{
+  const {view,element,advance}=fixture({debug:true});
+  view.start('boot',{delay:0,stage:'读取配置',detail:'读取清单'});
+  assert.equal(element('boot-loading-label').textContent,'读取配置（读取清单）');
+  assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'读取配置（读取清单）');
+  view.update({completed:1,total:2,stage:'准备界面',detail:'导入应用模块'});
+  assert.equal(element('boot-loading-label').textContent,'准备界面（导入应用模块）');
+  assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'准备界面（导入应用模块）');
+  assert.equal(element('boot-loading-fill').style.transform,'scaleX(0.5)');
+  view.update({stage:'准备界面'});
+  assert.equal(element('boot-loading-label').textContent,'准备界面','missing detail clears the previous diagnostic step');
+  view.update({stage:'准备界面',detail:'连接交互'});view.finish();
+  assert.equal(element('boot-loading-label').textContent,'准备完成');
+  assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'准备完成');
+  advance(180);view.start('boot',{delay:0,stage:'读取配置'});
+  assert.equal(element('boot-loading-label').textContent,'读取配置','a later start does not inherit diagnostic detail');
+  view.update({stage:'读取配置',detail:'读取清单'});view.fail('配置读取失败',{onRetry:()=>{}});
+  assert.equal(element('boot-loading-label').textContent,'配置读取失败','failure text replaces diagnostic detail');
+  assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'配置读取失败');
+}
+{
+  const {view,element,advance}=fixture({debug:true});
+  view.start('boot',{stage:'读取配置',detail:'读取清单'});view.finish();advance(1000);
+  assert(element('boot-loading').classList.contains('hidden'));
+  assert.equal(element('boot-loading-label').textContent,'准备完成','instant completion clears hidden diagnostic detail');
+  view.start('scene',{stage:'准备场景',detail:'生成地图'});view.finish({fade:false});
+  assert(element('scene-loading').classList.contains('hidden'));
+  assert.equal(element('scene-loading-track').attributes['aria-valuetext'],'准备完成');
 }
 {
   const {view,element,advance}=fixture();view.start('boot');advance(250);view.finish();view.start('scene');advance(1000);
@@ -38,7 +76,7 @@ function fixture(){
   await Promise.resolve();assert(!done);frame();await Promise.resolve();assert(!done,'map work cannot run inside the loading RAF');advance(0);await painted;assert(done);
 }
 const bootstrap=fs.readFileSync(new URL('./dist/bootstrap.js',import.meta.url),'utf8');
-assert.equal([...bootstrap.matchAll(/^import .* from /gm)].length,1,'only the loading view is in the initial dependency graph');
+assert.deepEqual([...bootstrap.matchAll(/^import .* from '([^']+)'/gm)].map(match=>match[1]),['./loading-ui.js','./boot-progress.js','./debug-search.js'],'only lightweight loading utilities are in the initial dependency graph');
 assert(bootstrap.indexOf("loading.start('boot'")<bootstrap.indexOf("await import('./content-config.js')"));
 assert(bootstrap.indexOf('await loadContentConfig')<bootstrap.indexOf("await import('./app.js')"));
 const html=fs.readFileSync(new URL('./dist/index.html',import.meta.url),'utf8');

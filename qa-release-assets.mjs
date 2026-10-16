@@ -26,9 +26,14 @@ function release(html,count){
   const maps=[...html.matchAll(/<script type="importmap" id="release-imports">([\s\S]*?)<\/script>/g)];
   assert.equal(maps.length,1);
   const imports=JSON.parse(maps[0][1]).imports;
+  const manifests=[...html.matchAll(/<script type="application\/json" id="boot-resources">([\s\S]*?)<\/script>/g)];
+  assert.equal(manifests.length,1,'one inline boot resource manifest is generated');
+  const boot=JSON.parse(manifests[0][1]);
+  assert.deepEqual(Object.keys(boot.groups),['config','art','app']);
   const entry=html.match(/<script type="module" src="([^"]+)"><\/script>/);
   assert.ok(entry,'versioned module entry exists');
   assert.ok(maps[0].index<entry.index,'import map must precede module loading');
+  assert.ok(maps[0].index<manifests[0].index&&manifests[0].index<entry.index,'boot metadata accompanies the import map before module loading');
   const entryURL=entry[1].replaceAll('&amp;','&');
   assert.equal(entryURL,`./bootstrap.js?v=v0.0.${count}&h=${assetHash('bootstrap.js')}`);
   assert.equal(html.match(/id="game-version"[^>]*>([^<]+)</)?.[1],`v0.0.${count}`);
@@ -40,7 +45,18 @@ function release(html,count){
     assert.deepEqual(resolved.searchParams.getAll('v'),[`v0.0.${count}`]);
     assert.deepEqual(resolved.searchParams.getAll('h'),[assetHash(decodeURIComponent(resolved.pathname.slice('/wild-reaper/'.length)))]);
   }
-  return {imports,entry:entryURL,styles};
+  for(const [group,resources] of Object.entries(boot.groups)){
+    assert.ok(resources.length>0,`${group} includes its entry module`);
+    assert.equal(new Set(resources.map(([file])=>file)).size,resources.length,`${group} counts shared and cyclic dependencies once`);
+    for(const [file,bytes] of resources){
+      assert.ok(Object.hasOwn(imports,file),'boot module paths share the import map keys');
+      const url=new URL(file,'https://example.test/wild-reaper/');
+      assert.equal(bytes,readFileSync(resolve(temporary,'dist',decodeURIComponent(url.pathname.slice('/wild-reaper/'.length)))).length,`${file} reports exact on-disk bytes`);
+    }
+  }
+  assert.deepEqual(Object.keys(boot.assets),['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png']);
+  for(const [file,bytes] of Object.entries(boot.assets))assert.equal(bytes,readFileSync(resolve(temporary,'dist',file)).length,`${file} reports exact asset bytes`);
+  return {imports,entry:entryURL,styles,boot};
 }
 function moduleFiles(directory,prefix=''){
   return readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?moduleFiles(join(directory,entry.name),prefix+entry.name+'/'):entry.name.endsWith('.js')?[prefix+entry.name]:[]);
@@ -59,10 +75,37 @@ try{
   cpSync(resolve(root,'scripts/build-content-config.mjs'),resolve(temporary,'scripts/build-content-config.mjs'));
   writeFileSync(resolve(temporary,'package.json'),JSON.stringify({type:'module'}));
   cpSync(resolve(root,'dist'),resolve(temporary,'dist'),{recursive:true});
+  stamp(51);
+  const baseline=release(readPage(),51);
   mkdirSync(resolve(temporary,'dist/release-fixture'));
   writeFileSync(resolve(temporary,'dist/release-fixture/child.js'),"import { value } from '../shared edge.js';\nexport { value };\n");
   writeFileSync(resolve(temporary,'dist/shared edge.js'),'export const value=51;\n');
   writeFileSync(resolve(temporary,'dist/safe<edge.js'),'export const value=51;\n');
+  const fixtures={
+    'boot-entry.js':`import './cycle.js'; export { value } from '../shared edge.js';
+export * from './reexport.js';
+export * as named from './namespace.js';
+const later=()=>import('./dynamic-only.js');
+const example=\`\nimport './comment-only.js';\n\`;
+/*
+import './comment-only.js';
+*/
+`,
+    'cycle.js':"import './boot-entry.js';\nexport const marker='循环😀';\n",
+    'reexport.js':"export { value } from '../safe<edge.js';\n",
+    'namespace.js':"export const title='霜冠雪原😀';\n",
+    'dynamic-only.js':"import './dynamic-child.js';\nexport const later=1;\n",
+    'dynamic-child.js':'export const later=2;\n',
+    'comment-only.js':'export const ignored=1;\n',
+    'unused.js':'export const unused=1;\n',
+    'app-only.js':"import './app-child.js';\n",
+    'app-child.js':"export const label='应用依赖';\n"
+  };
+  for(const [file,source] of Object.entries(fixtures))writeFileSync(resolve(temporary,'dist/release-fixture',file),source);
+  for(const [file,specifier] of [['content-config.js','./release-fixture/boot-entry.js'],['enemy-art/frostcrown-assets.js','../release-fixture/boot-entry.js'],['app.js','./release-fixture/app-only.js']]){
+    const path=resolve(temporary,'dist',file);
+    writeFileSync(path,readFileSync(path,'utf8')+`\nimport '${specifier}';\n`);
+  }
   writeFileSync(page,readPage().replace('</head>','<link rel="stylesheet" href="./style.css?theme=forest&amp;v=v0.0.3#hud">\n</head>'));
 
   stamp(51);
@@ -74,6 +117,14 @@ try{
     assert.equal(version51.imports[key],`${key}?v=v0.0.51&h=${assetHash(file)}`,`${file} is bound to this release and its exact content`);
   }
   assert.ok(!first.match(/<script type="importmap"[^>]*>[^]*?safe<edge/),'asset names cannot introduce HTML in an inline map');
+  assert.ok(!first.match(/<script type="application\/json" id="boot-resources">[^]*?safe<edge/),'boot metadata also escapes HTML-sensitive paths');
+  const common=['./release-fixture/boot-entry.js','./release-fixture/cycle.js','./release-fixture/reexport.js','./release-fixture/namespace.js','./shared%20edge.js','./safe%3Cedge.js'];
+  for(const group of ['config','art','app']){
+    const expected=new Set([...baseline.boot.groups[group].map(([file])=>file),...common,...(group==='app'?['./release-fixture/app-only.js','./release-fixture/app-child.js']:[])]);
+    assert.deepEqual(new Set(version51.boot.groups[group].map(([file])=>file)),expected,`${group} is exactly its static closure, excluding dynamic imports, comment/string examples and unused modules`);
+  }
+  assert.ok(readFileSync(resolve(temporary,'dist/release-fixture/namespace.js')).length>fixtures['namespace.js'].length,'the byte fixture differs from JavaScript string length');
+  for(const file of ['dynamic-only.js','dynamic-child.js','comment-only.js','unused.js'])assert.ok(version51.imports['./release-fixture/'+file],'excluded boot resources retain normal release import mapping');
 
   for(const documentURL of ['https://game.example/','https://goodleap.github.io/wild-reaper/','https://goodleap.github.io/wild-reaper/index.html?debug']){
     const entry=new URL(version51.entry,documentURL).href;
@@ -106,6 +157,7 @@ try{
   assert.equal(revised.entry,version51.entry,'unchanged entry keeps its content identity');
   assert.notEqual(revised.styles[2],version51.styles[2],'same-version CSS correction bypasses its previous cache key');
   assert.notEqual(revised.imports['./combat-stats.js'],version51.imports['./combat-stats.js'],'same-version transitive module correction bypasses its previous cache key');
+  assert.ok(new Map(revised.boot.groups.app).get('./combat-stats.js')>new Map(version51.boot.groups.app).get('./combat-stats.js'),'same-version changes refresh boot byte sizes');
   const revisedHTML=readPage();
   stamp(51);
   assert.equal(readPage(),revisedHTML,'corrected release is also idempotent');
@@ -120,6 +172,16 @@ try{
   stamp(53,/Missing local release asset/);
   assert.equal(readPage(),valid,'missing transitive modules fail before writing');
   rmSync(resolve(temporary,'dist/release-fixture/missing.js'));
+  const image=resolve(temporary,'dist/assets/units/frostcrown-0d4e3d938dc5e6e0.png');
+  const imageBytes=readFileSync(image);
+  rmSync(image);
+  stamp(53,/Missing local release asset/);
+  assert.equal(readPage(),valid,'missing boot assets fail before writing');
+  writeFileSync(image,imageBytes);
+  writeFileSync(page,valid.replace('</head>','<script type="application/json" id="boot-resources">{}</script>\n</head>'));
+  const duplicateMetadata=readPage();
+  stamp(53,/at most one boot resource manifest/);
+  assert.equal(readPage(),duplicateMetadata,'ambiguous boot metadata fails before writing');
   writeFileSync(page,valid.replace('href="./style.css?','href="./missing.css?'));
   const missingCSS=readPage();
   stamp(53,/Missing local release asset/);
@@ -128,7 +190,7 @@ try{
   stamp(53,/Missing local release asset/);
 
   assert.equal(readFileSync(resolve(root,'dist/index.html'),'utf8'),originalHTML,'QA must not stamp the working checkout');
-  console.log('Release assets QA passed: entry, CSS and transitive module cache identities, relative hosting, idempotency and missing-asset guards.');
+  console.log('Release assets QA passed: entry, CSS and transitive module cache identities, static boot closures and byte sizes, relative hosting, idempotency and missing-asset guards.');
 }finally{
   rmSync(temporary,{recursive:true,force:true});
 }

@@ -1,4 +1,5 @@
 import { WORLD_IDS } from './world-definitions.js';
+import { isDebugEnabled } from './debug-search.js';
 
 export const DEBUG_OPTION_DEFS=Object.freeze([
   {id:'fullLoadout',label:'全部武器、技能满级',description:'仅当前角色可用能力；奖励卡片自动选第一项',defaultValue:false},
@@ -22,7 +23,6 @@ export function normalizeDebugOptions(options,enabled=true) {
 // Unrelated truthy strings do not enable developer tools.
 export function debugConfigFromSearch(search='') {
   const params=search instanceof URLSearchParams?search:new URLSearchParams(search);
-  const value=params.get('debug')?.toLowerCase();
-  const enabled=value==='full'||value===''||value==='1'||value==='true',world=params.get('world');
+  const enabled=isDebugEnabled(params),world=params.get('world');
   return Object.freeze({enabled,...(enabled&&WORLD_IDS.includes(world)?{world}:{})});
 }

@@ -39,7 +39,7 @@ const badCases=[
   ['milestone-progress',()=>{const pack=changed();pack.sections.codex.milestones[0].progressKey='execute';return response(pack);}],
   ['milestone-target',()=>{const pack=changed();pack.sections.codex.milestones[0].target=0;return response(pack);}],
   ['milestone-duplicate',()=>{const pack=changed();pack.sections.codex.milestones[1].id=pack.sections.codex.milestones[0].id;return response(pack);}],
-  ['large-response',()=>({ok:true,headers:{get:()=>String(3*1024*1024)},text:async()=>{throw Error('body must not be read');}})],
+  ['large-response',()=>({ok:true,headers:{get:name=>name==='content-length'?String(3*1024*1024):null},text:async()=>{throw Error('body must not be read');}})],
   ['prototype-key',()=>({ok:true,text:async()=>JSON.stringify(changed()).replace('"schemaVersion":2','"__proto__":{},"schemaVersion":2')})]
 ];
 for(const [label,fetchImpl] of badCases){
@@ -54,6 +54,32 @@ for(const [label,fetchImpl] of badCases){
   await api.loadContentConfig({timeoutMs:5,fetchImpl:(_url,options)=>{signal=options.signal;return new Promise(()=>{});}});
   assert(signal.aborted,'timeout aborts the pending transport');
   assert.equal(api.getConfigLoadStatus().fallback,true);assert.match(api.getConfigLoadStatus().reason,/timed out/);
+}
+{
+  const api=await fresh(),pack=changed(),bytes=new TextEncoder().encode(JSON.stringify(pack)),downloads=[],progress=[];let calls=0;
+  await api.loadContentConfig({url:'https://configuration.invalid/content',expectedBytes:bytes.length,
+    fetchImpl:()=>{calls++;return new Response(new ReadableStream({start(controller){controller.enqueue(bytes.slice(0,15));controller.enqueue(bytes.slice(15));controller.close();}}),{headers:{'content-length':'12','content-encoding':'gzip'}});},
+    onDownloadProgress:event=>downloads.push(event),onProgress:event=>progress.push(event)});
+  assert.equal(calls,1);assert.equal(api.getConfigSnapshot().contentVersion,pack.contentVersion);
+  assert.deepEqual(downloads.find(event=>event.loaded===15),{loaded:15,total:bytes.length,done:false});
+  assert.deepEqual(downloads.at(-1),{loaded:bytes.length,total:bytes.length,done:true});
+  assert.deepEqual(progress.map(event=>event.completed),[0,1,2,3],'byte progress preserves the existing stage API');
+}
+{
+  const api=await fresh(),downloads=[],progress=[];let release,signal;
+  await api.loadContentConfig({timeoutMs:5,onDownloadProgress:event=>downloads.push(event),onProgress:event=>progress.push(event),
+    fetchImpl:(_url,options)=>{signal=options.signal;return new Promise(resolve=>{release=resolve;});}});
+  const count=downloads.length;release(response(changed()));await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  assert(signal.aborted);assert.equal(downloads.length,count,'late responses cannot move the finished loading UI');
+  assert.deepEqual(progress.map(event=>event.completed),[0,2,3]);assert.equal(api.getConfigSnapshot().contentVersion,bundledConfig.contentVersion);
+}
+{
+  const api=await fresh(),downloads=[];let signal,cancelled=false;
+  await api.loadContentConfig({timeoutMs:5,onDownloadProgress:event=>downloads.push(event),fetchImpl:(_url,options)=>{
+    signal=options.signal;return new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('{'));},cancel(){cancelled=true;}}));
+  }});
+  assert(signal.aborted&&cancelled);assert(downloads.some(event=>event.loaded===1));assert(downloads.every(event=>!event.done));
+  assert.equal(api.getConfigLoadStatus().fallback,true,'a body timeout falls back coherently');
 }
 {
   const api=await fresh(),pack=changed();
