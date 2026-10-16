@@ -50,15 +50,53 @@ for(const offset of [-2,2,-1,1,0]){
 const contact=new Terrain({obstacles:[wall('contact',0,0,140,Math.PI/2)]});
 const wallStart=walk(contact,{x:-31.1,y:0},{x:150,y:0});
 
-// A cached path on the other side of a thin wall is not a valid connection,
-// even if the foot moved less than the retry distance while a plan is cooling.
+// A newly blocked attachment replans immediately after a successful route;
+// retry throttling belongs only to failed searches, never normal movement.
 const divider=new Terrain({obstacles:[wall('divider',0,0,140,Math.PI/2,1)]}),attached=new NavigationRoute(divider);
 assert(attached.update({x:-17,y:0},{x:-100,y:0},{radius:19,bodyRadius:15,time:0}).complete);
 const crossed=attached.update({x:17,y:0},{x:-100,y:0},{radius:19,bodyRadius:15,time:.1});
-assert.equal(crossed.complete,false,'blocked attachment cannot advertise the stale complete route during retry cooldown');
-assert.deepEqual(storyRouteMarks(crossed),[]);
+assert.equal(crossed.complete,true,'a usable detour does not wait for a successful-plan cooldown');
+assert(crossed.path.some(point=>Math.abs(point.y)>150),'the replacement goes around the divider');
+for(let i=1;i<crossed.path.length;i++)assert(attached.navigation.clearSegment(crossed.path[i-1],crossed.path[i],15,'ground'),'replacement never connects through the thin wall');
 const recovered=attached.update({x:17,y:0},{x:-100,y:0},{radius:19,bodyRadius:15,time:1});
 assert(recovered.complete&&recovered.path.some(point=>Math.abs(point.y)>150),'replanning later restores an actual detour round the divider');
+assert(recovered.opacity>crossed.opacity,'a necessary route replacement fades in without retaining an invalid old road');
+
+// Lateral movement used to keep the ribbon at y=0 until crossing a 100-unit
+// threshold, then replace the entire road. The live prefix must move every
+// frame while the distant arrows and the chosen road retain their anchors.
+const open=new Terrain({obstacles:[]}),continuous=new NavigationRoute(open),goal={x:1000,y:0};
+let lastNear=null,farMarks=null;
+for(let y=0;y<=160;y+=4){
+  const from={x:0,y},options={radius:19,bodyRadius:15,time:y/320},guide=continuous.update(from,goal,options);
+  assert(guide.complete);assert.deepEqual(guide.routePath[0],from);
+  assert.equal(continuous.update(from,goal,options),guide,'same-frame consumers share one route snapshot');
+  const near=pointOnRoute(guide.routePath,guide.lengths,70);
+  if(lastNear)assert(distance(near,lastNear)<8,'nearby guidance changes continuously, including across the former replan threshold');
+  lastNear=near;
+  for(let i=1;i<guide.path.length;i++)assert(continuous.navigation.clearSegment(guide.path[i-1],guide.path[i],15,'ground'));
+  const marks=storyRouteMarks(guide).filter(mark=>mark.x>600).map(mark=>[+mark.x.toFixed(5),+mark.y.toFixed(5)]);
+  if(farMarks)assert.deepEqual(marks,farMarks,'lateral updates preserve distant world-space arrow positions');
+  farMarks=marks;
+}
+assert.equal(continuous.plans,1,'continuous near-field updates do not search the whole route every frame');
+
+const movingGoal=new NavigationRoute(open);
+for(let i=0;i<30;i++){
+  const target={x:1000,y:i},guide=movingGoal.update({x:i*2,y:0},target,{radius:19,bodyRadius:15,time:i/60});
+  assert.deepEqual(guide.routePath.at(-1),target,'a moving clear destination updates every frame, without an eight-unit step');
+}
+assert.equal(movingGoal.plans,1,'small destination movement updates only the clear final leg');
+
+const fading=new NavigationRoute(open);let previousOpacity=1;
+for(let x=0;x<=20;x+=2){
+  const guide=fading.update({x,y:0},goal,{radius:19,bodyRadius:15,time:x/320});
+  const mark=storyRouteMarks(guide).find(mark=>Math.abs(mark.x-28)<.001),opacity=mark?.opacity??0;
+  assert(opacity<=previousOpacity,'an arrow passed by the hero fades monotonically instead of popping off');
+  if(x)assert(previousOpacity-opacity<.15,'fade progresses in small per-movement steps');
+  previousOpacity=opacity;
+}
+assert.equal(previousOpacity,0);
 
 const sealed=new Terrain({obstacles:[wall('left',-100,0,100,Math.PI/2),wall('right',100,0,100,Math.PI/2),wall('top',0,-100,100),wall('bottom',0,100,100)]});
 const impossible=new NavigationRoute(sealed);
@@ -67,6 +105,13 @@ for(let frame=0;frame<120;frame++){
   assert.equal(result.complete,false);assert.deepEqual(storyRouteMarks(result),[],'an unreachable destination never gets a fake guidance ribbon');
 }
 assert(impossible.plans<=3,'unreachable routes retry at a bounded cadence instead of blocking every frame');
+const unreachableMoving=new NavigationRoute(sealed);
+for(let frame=0;frame<120;frame++){
+  const result=unreachableMoving.update({x:250,y:0},{x:0,y:frame*.1},{radius:19,bodyRadius:15,time:frame/60});
+  assert.equal(result.complete,false);
+}
+assert(unreachableMoving.plans<=3,'minor target motion inside an unreachable area does not bypass failed-search throttling');
+assert(unreachableMoving.update({x:250,y:0},{x:280,y:0},{radius:19,bodyRadius:15,time:2}).complete,'a materially changed reachable destination is not held by the failure delay');
 
 const game=new Game({mode:'world',debug:true,debugWorld:'forest'}),layout=game.terrain.island.layout;
 const forest=walk(game.terrain,layout.areas.find(a=>a.id==='01').center,layout.areas.find(a=>a.id==='03').center);

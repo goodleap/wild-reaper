@@ -17,15 +17,18 @@ export function routeRibbonMarks(guide){
   const path=guide?.routePath||guide?.path;if(guide?.complete===false||!Array.isArray(path)||path.length<2)return [];
   if(guide.kind==='hold'&&finite(guide.target)&&distance(guide.path?.[0]||path[0],guide.target)<=(guide.arrivalRadius||0))return [];
   const result=[],rules=ROUTE_RIBBON_RULES,progress=guide.progress||0,total=guide.lengths?.at(-1)||path.slice(1).reduce((sum,p,i)=>sum+distance(path[i],p),0);
-  // Fixed world-distance marks remain still while the hero moves. Only marks
-  // already passed disappear; viewport culling never shortens the route data.
-  let travelled=0,next=rules.firstMark+Math.max(0,Math.ceil((progress+20-rules.firstMark)/rules.spacing))*rules.spacing;
+  // The local connection changes length while the remaining road keeps its
+  // world-distance anchors. Passed marks fade continuously near the feet.
+  const offset=guide.markOffset||0,fadeStart=12,fadeEnd=54;
+  const first=Math.ceil((progress+fadeStart+offset-rules.firstMark)/rules.spacing);
+  let travelled=0,next=rules.firstMark+(guide.markOffset===undefined?Math.max(0,first):first)*rules.spacing-offset;
   for(let i=1;i<path.length;i++){
     const from=path[i-1],to=path[i];if(!finite(from)||!finite(to))break;
     const length=distance(from,to);if(length<.01)continue;
     while(next<=travelled+length){
       const fraction=(next-travelled)/length;
-      result.push({x:from.x+(to.x-from.x)*fraction,y:from.y+(to.y-from.y)*fraction,angle:Math.atan2(to.y-from.y,to.x-from.x),opacity:Math.min(1,Math.max(.25,(total-next)/70)),along:next});
+      const fade=Math.min(1,Math.max(0,(next-progress-fadeStart)/(fadeEnd-fadeStart)));
+      result.push({x:from.x+(to.x-from.x)*fraction,y:from.y+(to.y-from.y)*fraction,angle:Math.atan2(to.y-from.y,to.x-from.x),opacity:fade*fade*(3-2*fade)*Math.min(1,Math.max(.25,(total-next)/70))*(guide.opacity??1),along:next});
       next+=rules.spacing;
     }
     travelled+=length;
