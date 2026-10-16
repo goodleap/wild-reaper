@@ -56,11 +56,12 @@ export class CombatResolution {
   // points are already ground coordinates; callers can supply groundY for a
   // body-space effect, a prop, or a projectile segment.
   clearPath(origin,target,{source='arrow',profile=attackProfile(source),radius=0,targetGroundY}={}){
-    if(profile==='overhead'||!this.game.terrain?.firstBlocker)return true;
+    const terrain=this.game.terrain,blocks=terrain?.hasBlocker??terrain?.firstBlocker;
+    if(profile==='overhead'||!blocks)return true;
     const a=this.groundPoint(origin),b=this.groundPoint(target);
     if(Number.isFinite(targetGroundY))b.y=targetGroundY;
     else if(source==='arrow'&&Number.isFinite(origin?.y))b.y=target.y+a.y-origin.y;
-    return !this.game.terrain.firstBlocker(a.x,a.y,b.x,b.y,radius,profile);
+    return !blocks.call(terrain,a.x,a.y,b.x,b.y,radius,profile);
   }
 
   // One pure target gate is reused for acquisition, attack validation and

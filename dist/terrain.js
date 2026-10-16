@@ -238,6 +238,10 @@ export class Terrain {
     if(this._fixed)return [...this._fixed.filter(intersects),...this._structures.filter(intersects)];
     const result=this._structures.filter(intersects);
     const seen=new Set();for(let x=Math.floor(minX/CELL);x<=Math.floor(maxX/CELL);x++)for(let y=Math.floor(minY/CELL);y<=Math.floor(maxY/CELL);y++)for(const o of this._layoutIndex.get(`${x},${y}`)||[])if(!seen.has(o.id)&&intersects(o)){seen.add(o.id);result.push(o);}
+    // Authored outline worlds own all scenery through the layout index.
+    // _worldCell returns no procedural props here; do not walk/update an LRU
+    // of empty cells for every movement, visibility and weapon query.
+    if(this.rift)return result;
     // A neighboring cell can own a long prop that crosses a query edge.
     for(let tx=Math.floor((minX-110)/CELL);tx<=Math.floor((maxX+110)/CELL);tx++)
       for(let ty=Math.floor((minY-110)/CELL);ty<=Math.floor((maxY+110)/CELL);ty++)
@@ -250,8 +254,8 @@ export class Terrain {
   }
   isDry(x,y,r=0) {return !this.island||this.island.isDry(x,y,r);}
   isNaturalFree(x,y,r=0) {return (!this.island||this.island.naturalCircleFree(x,y,r))&&this.isFree(x,y,r);}
-  isFree(x,y,r=0,profile='ground',items=null) {
-    if(this.island&&!this.island.contains(x,y,r)||this.rift&&!this.rift.circleFree(x,y,r,profile))return false;
+  isFree(x,y,r=0,profile='ground',items=null,boundaryCache=null) {
+    if(this.island&&!this.island.contains(x,y,r)||this.rift&&!this.rift.circleFree(x,y,r,profile,boundaryCache))return false;
     return !(items??this.query(x-r,y-r,x+r,y+r)).some(o=>{if(!blocksObstacle(o,profile))return false;if(o.water)return waterIntersectsCircle(o.water,x,y,Math.max(0,r-.001));const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
   }
   _resolve(x,y,r,items,fromX=x,fromY=y) {
@@ -275,8 +279,8 @@ export class Terrain {
     }
     return {x,y,blocked};
   }
-  resolveCircle(x,y,r,profile='ground') {
-    if(this.isFree(x,y,r,profile))return {x,y,blocked:false};
+  resolveCircle(x,y,r,profile='ground',boundaryCache=null) {
+    if(this.isFree(x,y,r,profile,null,boundaryCache))return {x,y,blocked:false};
     const originalX=x,originalY=y;let blocked=false;
     if(this.rift){const boundary=this.rift.constrain(x,y,r,profile);x=boundary.x;y=boundary.y;blocked=boundary.blocked;}
     if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked||=coast.blocked;}
@@ -285,7 +289,7 @@ export class Terrain {
       x=resolved.x;y=resolved.y;blocked||=resolved.blocked;
       if(this.rift){const boundary=this.rift.constrain(x,y,r,profile);x=boundary.x;y=boundary.y;blocked||=boundary.blocked;}
       if(this.island){const coast=this.island.constrain(x,y,r);x=coast.x;y=coast.y;blocked||=coast.blocked;}
-      if(this.isFree(x,y,r,profile))return {x,y,blocked};
+      if(this.isFree(x,y,r,profile,null,boundaryCache))return {x,y,blocked};
     }
     // Only relevant to overlapping injected obstacles; procedural props are sparse.
     for(let radius=24;radius<=1024;radius+=24)for(let i=0;i<24;i++){
@@ -305,14 +309,15 @@ export class Terrain {
     Object.assign(cache,{terrain:this,revision:this.structureRevision,profile,coverage,items,hooks:undefined});return cache;
   }
   moveCircle(x,y,dx,dy,r,profile='ground',queryCache=null) {
+    const boundaryCache=this.rift?(queryCache?(queryCache.boundary??={}):{}):null;
     let nearby=queryCache?this._movementQuery(x,y,dx,dy,r,profile,queryCache):null;
-    const start=nearby&&this.isFree(x,y,r,profile,nearby.items)?{x,y,blocked:false}:this.resolveCircle(x,y,r,profile);x=start.x;y=start.y;
+    const start=nearby&&this.isFree(x,y,r,profile,nearby.items,boundaryCache)?{x,y,blocked:false}:this.resolveCircle(x,y,r,profile,boundaryCache);x=start.x;y=start.y;
     const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(3,Math.min(6,r*.45))));
     const sx=dx/steps,sy=dy/steps;let blocked=start.blocked;
     let coverage={minX:Math.min(x,x+dx)-r-110,minY:Math.min(y,y+dy)-r-110,maxX:Math.max(x,x+dx)+r+110,maxY:Math.max(y,y+dy)+r+110};
     if(queryCache){nearby=this._movementQuery(x,y,dx,dy,r,profile,queryCache);coverage=nearby.coverage;}
     let items=nearby?.items??this.query(coverage.minX,coverage.minY,coverage.maxX,coverage.maxY).filter(o=>blocksObstacle(o,profile));
-    if(!items.length&&(!this.rift||!this.rift.firstBlocker(x,y,x+dx,y+dy,r,profile))&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
+    if(!items.length&&(!this.rift||!this.rift.hasBlocker(x,y,x+dx,y+dy,r,profile,boundaryCache))&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
     let hooks=this.rift&&items.length?(nearby?(nearby.hooks??=movementHooks(this,items)):movementHooks(this,items)):undefined;
     for(let i=0;i<steps;i++) {
       if(this.rift){
@@ -322,7 +327,7 @@ export class Terrain {
           items=this.query(coverage.minX,coverage.minY,coverage.maxX,coverage.maxY).filter(o=>blocksObstacle(o,profile));
           hooks=items.length?movementHooks(this,items):undefined;
         }
-        const next=this.rift.step(x,y,x+sx,y+sy,r,profile,hooks);blocked||=next.blocked;
+        const next=this.rift.step(x,y,x+sx,y+sy,r,profile,hooks,boundaryCache);blocked||=next.blocked;
         if((!this.island||this.island.contains(next.x,next.y,r))&&(!hooks||hooks.circleFree(next.x,next.y,r))){x=next.x;y=next.y;}
         else blocked=true;
         continue;
@@ -333,6 +338,17 @@ export class Terrain {
       else blocked=true;
     }
     return {x,y,blocked};
+  }
+  hasBlocker(x1,y1,x2,y2,r=0,profile='ground') {
+    if(profile==='overhead')return false;
+    if(this.rift?.hasBlocker(x1,y1,x2,y2,r,profile))return true;
+    for(const o of this.query(Math.min(x1,x2)-r,Math.min(y1,y2)-r,Math.max(x1,x2)+r,Math.max(y1,y2)+r)) {
+      if(!blocksObstacle(o,profile))continue;
+      if(o.water){if(waterIntersectsCapsule(o.water,x1,y1,x2,y2,r))return true;continue;}
+      const a=axis(o),rr=r+o.r;
+      if(segmentDistanceSq(x1,y1,x2,y2,a.ax,a.ay,a.bx,a.by)<rr*rr)return true;
+    }
+    return false;
   }
   firstBlocker(x1,y1,x2,y2,r=0,profile='ground') {
     let found=this.rift?.firstBlocker(x1,y1,x2,y2,r,profile)??null,best=Infinity;const dx=x2-x1,dy=y2-y1,length=dx*dx+dy*dy||1;

@@ -152,7 +152,8 @@ export class SuperSkills {
     // Falling attacks can clear outdoor cover, but still respect an interior's
     // walls in addition to the explored-room gate applied by _visible.
     const effective=profile==='overhead'&&this.game.dungeon?.active?'projectile':profile;
-    return !this.game.terrain?.firstBlocker(from.x,from.y,to.x,to.y,r,effective);
+    const terrain=this.game.terrain,blocks=terrain?.hasBlocker??terrain?.firstBlocker;
+    return effective==='overhead'||!blocks?.call(terrain,from.x,from.y,to.x,to.y,r,effective);
   }
   _compareTargets(a,b,origin,priority=true) {
     return (priority?targetTier(b)-targetTier(a):0)||distance(origin,this._foot(a))-distance(origin,this._foot(b));

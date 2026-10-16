@@ -29,7 +29,7 @@ export class RiftNavigation{
   nearby(point){const nodes=new Set();for(const group of this.groups)if(riftPointInPolygon(point,group.points))for(const node of group.nodes)nodes.add(node);return nodes.size?nodes:new Set([...this.nodes].sort((a,b)=>distance(point,a)-distance(point,b)).slice(0,16));}
   edgeClear(a,b,r,profile){
     const radius=Math.ceil(r),key=`${profile}:${radius}:${a.id}:${b.id}`;
-    if(!this.edgeCache.has(key)){this.edgeCache.set(key,!this.terrain.rift.firstBlocker(a.x,a.y,b.x,b.y,radius,profile));if(this.edgeCache.size>3000)this.edgeCache.delete(this.edgeCache.keys().next().value);}
+    if(!this.edgeCache.has(key)){this.edgeCache.set(key,!this.terrain.rift.hasBlocker(a.x,a.y,b.x,b.y,radius,profile));if(this.edgeCache.size>3000)this.edgeCache.delete(this.edgeCache.keys().next().value);}
     // Only immutable outlines are cached. A door constrains the legs that
     // physically touch it, including rounded endcaps, in its current state.
     return this.edgeCache.get(key)&&this.gatesClear(a,b,radius,profile);
@@ -43,7 +43,7 @@ export class RiftNavigation{
     }
     return true;
   }
-  clear(a,b,r,profile){return !this.terrain.rift.firstBlocker(a.x,a.y,b.x,b.y,r,profile)&&this.gatesClear(a,b,r,profile);}
+  clear(a,b,r,profile){return !this.terrain.rift.hasBlocker(a.x,a.y,b.x,b.y,r,profile)&&this.gatesClear(a,b,r,profile);}
   route(start,target,r,profile){
     if(this.clear(start,target,r,profile))return [target];
     const frontier=[],costs=new Map(),parents=new Map(),targetLinks=new Map();

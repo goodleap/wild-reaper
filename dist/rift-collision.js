@@ -121,7 +121,47 @@ class BoundaryMask{
     for(let x=Math.floor(minX/CELL);x<=Math.floor(maxX/CELL);x++)for(let y=Math.floor(minY/CELL);y<=Math.floor(maxY/CELL);y++)for(const edge of this.grid.get(key(x,y))||[]){if(seen.has(edge))continue;seen.add(edge);result.push(edge);}
     return result;
   }
-  circleFree(x,y,r=0){return this.inside(x,y)&&!this.query(x-r,y-r,x+r,y+r).some(e=>distanceSq(x,y,e.a,e.b)<Math.max(0,r-.001)**2);}
+  _localEdges(minX,minY,maxX,maxY,cache){
+    if(!cache)return this.query(minX,minY,maxX,maxY);
+    const left=Math.floor(minX/CELL),top=Math.floor(minY/CELL),right=Math.floor(maxX/CELL),bottom=Math.floor(maxY/CELL);
+    if(cache.mask===this&&cache.left===left&&cache.top===top&&cache.right===right&&cache.bottom===bottom)return cache.edges;
+    // Only immutable outline candidates are shared. Exact position, radius,
+    // inclusion and sweep checks still run for every movement and crowd push.
+    // Query already includes whole grid cells. Reuse exactly that same range:
+    // extra padding increases narrow-phase work on dense forest outlines.
+    // Flooring the upper endpoint includes its neighbor at an exact grid line.
+    const edges=this.query(minX,minY,maxX,maxY);
+    Object.assign(cache,{mask:this,left,top,right,bottom,edges});return edges;
+  }
+  _inside(x,y,cache){
+    if(!cache)return this.inside(x,y);
+    const sameMask=cache.insideMask===this;
+    if(sameMask){
+      if(cache.insideX===x&&cache.insideY===y)return cache.insideValue;
+      if(cache.previousInsideX===x&&cache.previousInsideY===y)return cache.previousInsideValue;
+    }
+    const value=this.inside(x,y);
+    cache.previousInsideX=sameMask?cache.insideX:NaN;cache.previousInsideY=sameMask?cache.insideY:NaN;cache.previousInsideValue=cache.insideValue;
+    cache.insideMask=this;cache.insideX=x;cache.insideY=y;cache.insideValue=value;
+    return value;
+  }
+  circleFree(x,y,r=0,cache=null){return this._inside(x,y,cache)&&!this._localEdges(x-r,y-r,x+r,y+r,cache).some(e=>distanceSq(x,y,e.a,e.b)<Math.max(0,r-.001)**2);}
+  hasBlocker(ax,ay,bx,by,r=0,cache=null){
+    const a={x:ax,y:ay},b={x:bx,y:by},limit=Math.max(1e-10,(r-.001)**2);
+    const minX=Math.min(ax,bx)-r,minY=Math.min(ay,by)-r,maxX=Math.max(ax,bx)+r,maxY=Math.max(ay,by)+r;
+    if(cache){
+      if(this._localEdges(minX,minY,maxX,maxY,cache).some(edge=>segmentDistanceSq(a,b,edge.a,edge.b)<=limit))return true;
+    }else{
+      // Visibility only needs a boolean, not the closest blocking edge. Stop
+      // before collecting the rest of a long ray's broad-phase rectangle.
+      const seen=new Set();
+      for(let x=Math.floor(minX/CELL);x<=Math.floor(maxX/CELL);x++)for(let y=Math.floor(minY/CELL);y<=Math.floor(maxY/CELL);y++)for(const edge of this.grid.get(key(x,y))||[]){
+        if(seen.has(edge))continue;seen.add(edge);
+        if(segmentDistanceSq(a,b,edge.a,edge.b)<=limit)return true;
+      }
+    }
+    return this.edges.length>0&&(!this._inside(ax,ay,cache)||!this._inside(bx,by,cache));
+  }
   firstBlocker(ax,ay,bx,by,r=0){
     const a={x:ax,y:ay},b={x:bx,y:by};let found=null,best=Infinity;
     for(const edge of this.query(Math.min(ax,bx)-r,Math.min(ay,by)-r,Math.max(ax,bx)+r,Math.max(ay,by)+r)){
@@ -132,18 +172,18 @@ class BoundaryMask{
     if(!found&&(!this.inside(ax,ay)||!this.inside(bx,by)))found=this.nearest(ax,ay)?.edge??null;
     return found;
   }
-  firstContact(ax,ay,bx,by,r=0){
+  firstContact(ax,ay,bx,by,r=0,cache=null){
     const dx=bx-ax,dy=by-ay,tolerance=CONTACT_EPS/Math.max(1,Math.hypot(dx,dy));let time=Infinity,contacts=[];
-    for(const edge of this.query(Math.min(ax,bx)-r-SKIN,Math.min(ay,by)-r-SKIN,Math.max(ax,bx)+r+SKIN,Math.max(ay,by)+r+SKIN)){
+    for(const edge of this._localEdges(Math.min(ax,bx)-r-SKIN,Math.min(ay,by)-r-SKIN,Math.max(ax,bx)+r+SKIN,Math.max(ay,by)+r+SKIN,cache)){
       const hit=sweepCircleVsCapsule(ax,ay,bx,by,r,edge);if(!hit)continue;
       if(hit.time<time-tolerance){time=hit.time;contacts=[hit];}
       else if(Math.abs(hit.time-time)<=tolerance){time=Math.min(time,hit.time);contacts.push(hit);}
     }
     return contacts.length?{time,contacts}:null;
   }
-  _contacts(x,y,r){
+  _contacts(x,y,r,cache=null){
     const contacts=[],range=r+SKIN*3+CONTACT_EPS;
-    for(const edge of this.query(x-range,y-range,x+range,y+range)){
+    for(const edge of this._localEdges(x-range,y-range,x+range,y+range,cache)){
       const q=nearest(x,y,edge.a,edge.b),dx=x-q.x,dy=y-q.y,d=Math.hypot(dx,dy);
       if(d>range||d<1e-12)continue;
       const nx=dx/d,ny=dy/d;
@@ -173,24 +213,25 @@ class BoundaryMask{
     }
     return best??{x,y,blocked:true};
   }
-  step(fromX,fromY,x,y,r,hooks={}){
+  step(fromX,fromY,x,y,r,hooks={},cache=null){
     return slideCircleContacts(fromX,fromY,x,y,r,{
-      circleFree:(x,y,r)=>this.circleFree(x,y,r)&&(hooks.circleFree?.(x,y,r)??true),
-      firstBlocker:(ax,ay,bx,by,r)=>this.firstBlocker(ax,ay,bx,by,r)||hooks.firstBlocker?.(ax,ay,bx,by,r),
-      firstContact:(ax,ay,bx,by,r)=>mergeContacts([this.firstContact(ax,ay,bx,by,r),hooks.firstContact?.(ax,ay,bx,by,r)],Math.hypot(bx-ax,by-ay)),
-      contacts:(x,y,r)=>[...this._contacts(x,y,r),...(hooks.contacts?.(x,y,r)??[])]
+      circleFree:(x,y,r)=>this.circleFree(x,y,r,cache)&&(hooks.circleFree?.(x,y,r)??true),
+      firstBlocker:(ax,ay,bx,by,r)=>this.hasBlocker(ax,ay,bx,by,r,cache)||hooks.firstBlocker?.(ax,ay,bx,by,r),
+      firstContact:(ax,ay,bx,by,r)=>mergeContacts([this.firstContact(ax,ay,bx,by,r,cache),hooks.firstContact?.(ax,ay,bx,by,r)],Math.hypot(bx-ax,by-ay)),
+      contacts:(x,y,r)=>[...this._contacts(x,y,r,cache),...(hooks.contacts?.(x,y,r)??[])]
     });
   }
 }
 export class RiftCollision{
   constructor(layout){this.ground=new BoundaryMask(layout.boundaries,'ground');this.high=new BoundaryMask(layout.solidBoundaries??layout.boundaries,'high');}
   mask(profile='ground'){return ['air','projectile','sight'].includes(profile)?this.high:profile==='overhead'?null:this.ground;}
-  circleFree(x,y,r,profile){return this.mask(profile)?.circleFree(x,y,r)??true;}
+  circleFree(x,y,r,profile,cache=null){return this.mask(profile)?.circleFree(x,y,r,cache)??true;}
+  hasBlocker(ax,ay,bx,by,r,profile,cache=null){return this.mask(profile)?.hasBlocker(ax,ay,bx,by,r,cache)??false;}
   firstBlocker(ax,ay,bx,by,r,profile){return this.mask(profile)?.firstBlocker(ax,ay,bx,by,r)??null;}
   firstContact(ax,ay,bx,by,r,profile){return this.mask(profile)?.firstContact(ax,ay,bx,by,r)??null;}
   constrain(x,y,r,profile){return this.mask(profile)?.constrain(x,y,r)??{x,y,blocked:false};}
-  step(ax,ay,x,y,r,profile,hooks){
-    const mask=this.mask(profile);if(mask)return mask.step(ax,ay,x,y,r,hooks);
+  step(ax,ay,x,y,r,profile,hooks,cache=null){
+    const mask=this.mask(profile);if(mask)return mask.step(ax,ay,x,y,r,hooks,cache);
     return hooks?slideCircleContacts(ax,ay,x,y,r,{circleFree:()=>true,firstBlocker:()=>null,firstContact:()=>null,contacts:()=>[],...hooks}):{x,y,blocked:false};
   }
 }

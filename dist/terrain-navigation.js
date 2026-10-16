@@ -68,7 +68,7 @@ export class TerrainNavigation {
     }
   }
   clearSegment(a,b,r,profile='ground'){
-    return (!this.terrain.island||this.terrain.island.containsCapsule(a.x,a.y,b.x,b.y,r))&&!this.terrain.firstBlocker(a.x,a.y,b.x,b.y,r,profile);
+    return (!this.terrain.island||this.terrain.island.containsCapsule(a.x,a.y,b.x,b.y,r))&&!this.terrain.hasBlocker(a.x,a.y,b.x,b.y,r,profile);
   }
   free(layer,x,y){
     const id=key(x,y);if(layer.cells.has(id))return layer.cells.get(id);
