@@ -75,7 +75,7 @@ for(const world of worlds){
   selectMode(h,'dungeon');selectMode(h,'world');assert(node(h,world.radio).checked,'mode switching retains world choice');
   click(h,'prepare-back-button');click(h,'start-button');assert(node(h,world.radio).checked);
   click(h,'prepare-start-button');await h.flush();assertDestination(h,world);
-  click(h,'map-button');assert.match(node(h,'map-legend').textContent,world.id==='clockshadow-city'?/城墙、建筑与深水.*城门、街巷和石桥/:world.id==='ember-realm-large'?/灰紫岩壁.*熔岩峡谷.*桥/:/深绿密林、山壁与深水/);click(h,'close-map');
+  click(h,'map-button');assert.match(node(h,'map-legend').textContent,world.id==='clockshadow-city'?/城墙、建筑与深水.*城门、街巷和石桥/:world.id==='ember-realm-large'?/密林、岩脊与熔岩.*山径、缺口和岩桥/:/深绿密林、山壁与深水/);click(h,'close-map');
   const previousGame=h.run('game');quiet(h);h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();
   assertDestination(h,world);assert.notEqual(h.run('game'),previousGame);assert.equal(saved(h).worldId,world.id);
   h.run('home();');click(h,'start-button');assert(node(h,world.radio).checked);
