@@ -25,6 +25,9 @@ import { RegionalArt } from './regional-art.js';
 import { WorldArt } from './world-art.js';
 import { CityStructureArt } from './city-structure-art.js';
 import { cityDetailArt } from './city-detail-art.js';
+import { cityArtLibrary } from './city-art-library.js';
+import { CityNativeStructureArt } from './city-native-structure-art.js';
+import { drawNativeCityLandmark, drawNativeCitySettlement, nativeCitySettlementVisual } from './city-native-landmark-art.js';
 import { WorldLayoutArt } from './worlds/world-layout-art.js';
 import { createRiftLayout } from './worlds/rift-layout.js';
 import { drawRiftOverview, drawRiftLandmark, drawRiftCaveGround, drawRiftCaveExits, drawRiftCaveWall } from './worlds/rift-art.js';
@@ -92,6 +95,7 @@ const companionArt=new CompanionArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
 const worldArt=new WorldArt(()=>document.createElement('canvas'));
 const cityStructureArt=new CityStructureArt();
+const cityNativeArt=new CityNativeStructureArt({library:cityArtLibrary});
 const worldLayoutArt=new WorldLayoutArt(()=>document.createElement('canvas'));
 const worldSiteArt=new WorldSiteArt(()=>document.createElement('canvas'));
 const worldHazardArt=new WorldHazardArt(()=>document.createElement('canvas'));
@@ -440,7 +444,7 @@ function startGame(){
   activeStartPromise=(async()=>{
     try{
       await paintLoading();
-      if(options.worldId==='clockshadow-city')await cityDetailArt.preload();
+      if(options.worldId==='clockshadow-city')await cityArtLibrary.preload();
       const preparedGame=new Game(options);syncViewport(preparedGame);
       sceneLoadingView.update({completed:1,total:4,stage:'正在准备地图'});
       await paintLoading();
@@ -1209,7 +1213,8 @@ function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[],adventureProps=[
     // Query complete visible cache tiles plus caster reach. A fractional camera
     // shift inside this grid must not keep changing its collection of props.
     const minX=Math.floor(b.minX/tile)*tile,minY=Math.floor(b.minY/tile)*tile,maxX=Math.ceil(b.maxX/tile)*tile,maxY=Math.ceil(b.maxY/tile)*tile;
-    terrain=game.terrain.query(minX-260,minY-260,maxX+260,maxY+260);
+    const reach=game.worldId==='clockshadow-city'?320:260;
+    terrain=game.terrain.query(minX-reach,minY-reach,maxX+reach,maxY+reach);
     adventureProps=adventureSceneProps((minX+maxX)/2,(minY+maxY)/2,maxX-minX,maxY-minY);
   }
   shadowRenderer.draw(ctx,{width,height,scaleX:scaleX*(game?worldZoom:1),scaleY:scaleY*(game?worldZoom:1),offsetX,offsetY,actors:actorShadowShapes(actors),staticShapes:staticShadowShapes(terrain,adventureProps,sceneKey),sceneKey,
@@ -1229,7 +1234,8 @@ function drawActors(actors){for(const actor of sortActors(actors))drawActor(acto
 // Solid terrain shares one world-space source with movement collision. The
 // old decorative trees are retained only on the title screen.
 function terrainInView(camX,camY){const {width,height}=sceneViewport();
-  return game?.terrain?.query(camX-width/2-260,camY-height/2-260,camX+width/2+260,camY+height/2+260)||[];
+  const reach=game?.worldId==='clockshadow-city'?320:260;
+  return game?.terrain?.query(camX-width/2-reach,camY-height/2-reach,camX+width/2+reach,camY+height/2+reach)||[];
 }
 function sceneVisible(entity){return sceneEntityVisible(entity,game?.dungeon?.active?game.dungeon.vision:null);}
 function observeSceneDialogue(dt){
@@ -1396,7 +1402,10 @@ function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
     if(prop.visual===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.structureId)continue;
     const {x,y,r,type,scale=1}=prop;
-    if(prop.variant==='city-structure'||prop.variant==='city-detail'&&prop.cityKind==='house'){
+    if(prop.variant==='city-native'&&['oak','cypress','apple','shrub','ivy','rubble'].includes(prop.cityArt?.sprite)){
+      const visual=prop.visual||{},offset=visual.shadowOffset??12,cx=x+SUN.x*offset,cy=y+SUN.y*offset;
+      mask.moveTo(cx+(visual.shadowWidth??r)*Math.cos(SUN_ANGLE),cy+(visual.shadowWidth??r)*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,visual.shadowWidth??r,visual.shadowLength??r,SUN_ANGLE,0,TAU);mask.closePath();
+    }else if(prop.variant==='city-structure'||prop.variant==='city-native'||prop.variant==='city-detail'&&prop.cityKind==='house'){
       // Building footprints cast a rectangular projection, independent of the
       // non-colliding log carrier used by the terrain depth queue.
       if(['gate','arcade'].includes(prop.cityKind))continue;
@@ -1439,6 +1448,7 @@ function drawRuinsStone(prop){regionalArt.drawRuinsStone(ctx,prop);}
 function drawRuinsWall(prop){regionalArt.drawRuinsWall(ctx,prop);}
 function drawTerrain(prop,mainPlayer){if(prop.visual===false)return;if(prop.variant==='castle-wall'||prop.variant==='hut-wall'){drawDungeonWall(prop,mainPlayer);return;}if(prop.structureId)return;
   if(cityDetailArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer),player:mainPlayer,footY:mainPlayer?mainPlayer.y+groundOffset(mainPlayer,true):undefined}))return;
+  if(cityNativeArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer),player:mainPlayer,footY:mainPlayer?mainPlayer.y+groundOffset(mainPlayer,true):undefined}))return;
   if(prop.variant==='city-structure'){cityStructureArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer)});return;}
   worldLayoutArt.drawTreeFooting(ctx,prop);
   if(drawExpeditionProp(ctx,prop))return;
@@ -1461,7 +1471,10 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   props.push(...(game?.environment?.props||[]).filter(prop=>prop.state!=='spent'&&visible(prop)));
   if(!game.dungeon?.active)for(const portal of game.regions?.portals||[])if(visible({...portal,y:portal.y-30}))props.push({...portal,type:'portal',...(portal.natural?{kind:'exit',angle:Math.atan2(-(portal.arrivalDirection?.y||0),-(portal.arrivalDirection?.x||0)),isRiftLandmark:true}:{}),sortY:portal.y});
   if(!game.dungeon?.active)for(const site of game.riftExploration?.sites||[])if(visible(site))props.push({...site,type:site.kind==='chest'?'treasure':site.kind,state:site.kind==='chest'?(site.state==='claimed'?'opened':'unlocked'):site.state,isRiftLandmark:site.kind!=='chest',sortY:site.y});
-  if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type!=='merchant'&&Math.abs(site.x-camX)<viewWidth/2+200&&Math.abs(site.y-camY)<viewHeight/2+230)props.push({...site,isSettlement:true});
+  if(!game.dungeon?.active)for(const site of game.settlements?.sites||[]){
+    const visual=game.worldId==='clockshadow-city'?nativeCitySettlementVisual(site):null;
+    if(site.type!=='merchant'&&Math.abs(site.x-camX)<viewWidth/2+200&&Math.abs(site.y-camY)<viewHeight/2+(visual?350:230))props.push({...site,isSettlement:true,...(visual?{visual,sortY:visual.sortY}:{})});
+  }
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest)&&sceneVisible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
   if(game.dungeon?.active?.kind==='hut')for(const prop of game.dungeon.active.props||[])if(visible(prop))props.push({...prop,isHutFurniture:true,sortY:prop.y+(prop.type==='rug'?-1000:0)});
   if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[]){const special=site.type==='stonevault'||site.type==='dogcamp'||site.appearance==='golemaltar';props.push(...(special?companionArt.props(site):site.type==='hunt'?encounterArt.props(site):relicArt.props(site)).filter(visible));}
@@ -1472,7 +1485,7 @@ function drawAdventureShadowPaths(mask,props){
   for(const prop of props){if(prop.isHutFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'||prop.type==='companionSitePart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
     mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();}
 }
-function drawAdventureProp(prop){if(prop.isRiftLandmark&&drawRiftLandmark(ctx,prop))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
+function drawAdventureProp(prop){if(prop.isRiftLandmark&&(drawNativeCityLandmark(ctx,prop,{library:cityArtLibrary})||drawRiftLandmark(ctx,prop)))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
   if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'){relicArt.drawProp(ctx,prop,combatOptions);return;}
   if(prop.type==='huntMarker'){encounterArt.drawMarker(ctx,prop,combatOptions);return;}
   if(prop.isSettlement){drawSettlement(prop);return;}if(prop.isDungeonTreasure){drawDungeonChest(prop);return;}
@@ -1817,6 +1830,7 @@ function drawSmallHut(site){
 }
 function drawSettlement(site){
   if(site.type==='merchant')return;
+  if(game.worldId==='clockshadow-city'&&drawNativeCitySettlement(ctx,site,{library:cityArtLibrary,player:game.player,footY:game.player.y+groundOffset(game.player,true)}))return;
   if(worldSiteArt.drawSettlement(ctx,site,{...combatOptions,player:game.player}))return;
   if(site.type==='supply'||site.type==='occupied'){drawSmallHut(site);return;}
   const {x,y,type}=site,w=site.width||140,depth=site.depth||70,castle=type==='castle',marsh=site.region==='marsh',ruins=site.region==='ruins';

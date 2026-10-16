@@ -8,7 +8,7 @@ import { groundOffset } from './dist/terrain.js';
 // Canvas is mocked here; browser layout and performance need browser checks.
 // Image fetching is mocked with the other rendering dependencies; decode and
 // failure/retry behavior have their own asset QA and real Chromium capture.
-const harness=(search='',options={})=>createHarness(search,{...options,moduleOverrides:{cityDetailArt:{preload:async()=>{},drawProp:()=>false,ready:false}}});
+const harness=(search='',options={})=>createHarness(search,{...options,moduleOverrides:{cityDetailArt:{preload:async()=>{},drawProp:()=>false,ready:false},cityArtLibrary:{preload:async()=>{},draw:()=>true,coversPlayer:()=>true}}});
 const worlds=[
   {id:'forest',radio:'world-rift-forest',preview:'world-preview',name:'裂谷林海',width:7200,height:5400},
   {id:'verdant-rift',radio:'world-verdant-rift',preview:'world-preview-verdant-rift',name:'苍翠断脊',width:14400,height:10800},

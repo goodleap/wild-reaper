@@ -2,6 +2,9 @@
 // Their depth-sorted artwork is a separate, immutable view of the same records.
 import { RiftCollision, riftPointInPolygon } from '../rift-collision.js';
 import { CITY_SAMPLE_FOLIAGE, CITY_SAMPLE_HOUSES } from './city-sample-scene.js';
+import { createNativeCityProps, decorateNativeCityProp, createNativeCityBridgeProps, CITY_NATIVE_PRESERVED_IDS } from '../city-native-structure-art.js';
+import { createCityBlockScenery } from './city-block-scenery.js';
+import { createCityGreenScenery } from './city-green-scenery.js';
 const cache=new WeakMap();
 const identity=text=>[...String(text)].reduce((value,char)=>(Math.imul(value,31)+char.charCodeAt(0))>>>0,17);
 const hash=n=>{const value=Math.sin(n*127.1+41.7)*43758.5453;return value-Math.floor(value);};
@@ -20,7 +23,8 @@ export function createCityScenery(layout,collision,island){
       region:layout.worldId,type:square?'rock':'log',variant:'city-structure',
       r:short/2,halfLength:square?0:(long-short)/2,angle:depth>width?Math.PI/2:0,
       scale:1,seed:identity(structure.id)/4294967296,
-      collision:false,heightBand:'high',sortY:structure.y+depth/2
+      collision:false,heightBand:'high',sortY:structure.y+depth/2,
+      visual:CITY_NATIVE_PRESERVED_IDS.includes(structure.id)?undefined:false
     });
   });
   const mask=collision??new RiftCollision(layout),vegetation=[];
@@ -61,5 +65,13 @@ export function createCityScenery(layout,collision,island){
     }
   }
   const sample=layout.worldId==='clockshadow-city'?[...CITY_SAMPLE_FOLIAGE,...CITY_SAMPLE_HOUSES]:[];
-  const result=Object.freeze([...props,...vegetation,...sample]);cache.set(layout,result);return result;
+  const blocks=createCityBlockScenery(layout),greens=createCityGreenScenery(layout,blocks);
+  const ambient=vegetation.map(prop=>decorateNativeCityProp({...prop,region:layout.worldId,variant:'city-native',cityKind:prop.riftShrub?'shrub':'oak',cityArt:prop.riftShrub?'shrub':'oak',width:prop.riftShrub?44:38,depth:prop.riftShrub?16:28,height:prop.riftShrub?32:125}));
+  const streetDetails=blocks.map(prop=>{
+    if(prop.cityArt!=='shrub'||['02','13','S1'].includes(prop.area)||prop.seed>=.16)return prop;
+    const lamp=prop.seed<.09;
+    return{...prop,cityArt:lamp?'lamp':'cart',cityKind:lamp?'lamp':'cart',height:lamp?72:12,heightBand:lamp?'high':'low'};
+  });
+  const native=[...createNativeCityProps(layout),...createNativeCityBridgeProps(layout),...streetDetails.map(prop=>decorateNativeCityProp(prop)),...greens.map(prop=>decorateNativeCityProp(prop))];
+  const result=Object.freeze([...props,...ambient,...sample,...native]);cache.set(layout,result);return result;
 }
