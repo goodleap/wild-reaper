@@ -4,6 +4,7 @@ import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
 import { worldForId } from './world-definitions.js';
+import { SNOW_ROCK_PROFILES } from './snow-scenery-art.js';
 import { biomeZone } from './biome-layout.js';
 import { layoutTerrainCell, layoutWet, patchContains } from './worlds/world-layout.js';
 import { getWaterContours, waterBounds, containsWater, waterIntersectsCircle, waterIntersectsCapsule } from './water-geometry.js';
@@ -56,6 +57,10 @@ export function rockShadowParts(prop){
 export function sceneryVisual(prop){
   const s=prop.scale||1;
   if(prop.type==='tree'){
+    if(prop.variant==='world-snowshrub'||prop.variant==='world-snowgrass'){
+      const grass=prop.variant==='world-snowgrass';
+      return Object.freeze({halfWidth:(grass?24:36)*s,top:(grass?34:39)*s,bottom:14*s,canopyX:0,canopyY:-15*s,canopyRx:(grass?20:32)*s,canopyRy:21*s,shadowWidth:(grass?10:22)*s,shadowLength:15*s});
+    }
     if(prop.riftShrub)return Object.freeze({halfWidth:56*s,top:59*s,bottom:17*s,canopyX:0,canopyY:-28*s,canopyRx:50*s,canopyRy:28*s,shadowWidth:36*s,shadowLength:24*s});
     const themed=WORLD_TREE_PROFILES[prop.variant];
     if(themed)return Object.freeze({halfWidth:(Math.abs(themed.x)+themed.rx+8)*s,top:(-themed.y+themed.ry+8)*s,bottom:24*s,canopyX:themed.x*s,canopyY:themed.y*s,canopyRx:themed.rx*s,canopyRy:themed.ry*s,shadowWidth:themed.rx*.58*s,shadowLength:(-themed.y+themed.ry)*.43*s});
@@ -63,12 +68,20 @@ export function sceneryVisual(prop){
     return Object.freeze({halfWidth:(Math.abs(p.x)+p.rx*cw+8)*s,top:Math.max(140*(prop.treeForm===4?1:0),-p.y+p.ry*ch+7)*s,bottom:24*s,canopyX:p.x*s,canopyY:p.y*s,canopyRx:(p.rx*cw+4)*s,canopyRy:(p.ry*ch+3)*s,shadowWidth:(p.rx*.62)*s,shadowLength:Math.max(32,(-p.y+p.ry)*.42)*s});
   }
   if(prop.variant==='world-building')return Object.freeze({halfWidth:prop.halfLength+prop.r+5,top:115*prop.r/30,bottom:prop.r+6,shadowWidth:prop.halfLength*.7+prop.r,shadowLength:52*prop.r/30,shadowOffset:prop.r*.4});
-  if(prop.variant==='world-city-wall'||prop.variant==='world-ridge'){
+  if(prop.variant==='world-city-wall'||prop.variant==='world-ridge'||prop.variant==='world-snowruin'){
     const dx=Math.abs(Math.cos(prop.angle||0))*prop.halfLength,dy=Math.abs(Math.sin(prop.angle||0))*prop.halfLength,height=prop.variant==='world-ridge'?60:48;
     return Object.freeze({halfWidth:dx+prop.r+7,top:dy+prop.r+height+6,bottom:dy+prop.r+6,shadowWidth:dx+prop.r,shadowLength:height*.65,shadowOffset:prop.r*.3});
   }
+  if(prop.variant==='world-snowlog'){
+    const along=(prop.halfLength||0)+prop.r*.85,across=prop.r*1.6,c=Math.abs(Math.cos(prop.angle||0)),n=Math.abs(Math.sin(prop.angle||0));
+    return Object.freeze({halfWidth:c*along+n*across+2,top:n*along+c*across+2,bottom:n*along+c*across+2,shadowWidth:prop.r,shadowLength:prop.r*1.7});
+  }
   if(prop.type==='log')return Object.freeze({halfWidth:Math.abs(Math.cos(prop.angle||0))*(prop.halfLength+prop.r)+28,top:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,bottom:Math.abs(Math.sin(prop.angle||0))*(prop.halfLength+prop.r)+28,shadowWidth:prop.r,shadowLength:prop.r*1.7});
   if(prop.type==='rock'&&prop.variant?.startsWith('world-')){
+    if(prop.variant==='world-ice'||prop.variant==='world-snowrock'){
+      const p=SNOW_ROCK_PROFILES[(prop.rockForm||0)%5],scale=prop.r/36;
+      return Object.freeze({halfWidth:p.halfWidth*scale+2,top:p.top*scale+2,bottom:p.bottom*scale+2,shadowWidth:prop.r*.9,shadowLength:prop.r*.7+p.top*scale*.2,shadowOffset:prop.r*.46+p.top*scale*.12});
+    }
     const top=([52,34,64,45,48][prop.rockForm||0]/36)*prop.r;
     return Object.freeze({halfWidth:prop.r+3,top:top+2,bottom:prop.r+2,shadowWidth:prop.r*.9,shadowLength:prop.r*.7+top*.2,shadowOffset:prop.r*.46+top*.12});
   }

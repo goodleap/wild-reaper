@@ -3,7 +3,8 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
   if(!layout||layout.kind!=='rift-forest'||layout.revision!==1)fail('identity');
   const legacy=worldId==='forest';
   if(legacy&&(layout.id!=='rift-forest:1'||layout.worldId&&layout.worldId!=='forest'))fail('identity');
-  if(!legacy&&(worldId!=='verdant-rift'||layout.worldId!==worldId||layout.id!==`${worldId}:1`))fail('identity');
+  if(!legacy&&(!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(worldId)||layout.worldId!==worldId||layout.id!==`${worldId}:1`))fail('identity');
+  if(layout.artTheme!=null&&!['forest','snow'].includes(layout.artTheme))fail('artTheme');
   const array=(value,key,min,max)=>{if(!Array.isArray(value)||value.length<min||value.length>max)fail(key);return value;};
   const number=(value,key,min=-10000,max=10000)=>{if(!Number.isFinite(value)||value<min||value>max)fail(key);};
   const text=(value,key)=>{if(typeof value!=='string'||!value||value.length>128)fail(key);};
@@ -31,7 +32,7 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
     if(!layout.landmarks||typeof layout.landmarks!=='object'||Array.isArray(layout.landmarks))fail('landmarks');
     inBounds(layout.landmarks.spawn,'landmark.spawn');if(Math.hypot(layout.spawn.x-layout.landmarks.spawn.x,layout.spawn.y-layout.landmarks.spawn.y)>.001)fail('landmark.spawn');
     for(const [id,p] of Object.entries(layout.landmarks)){inBounds(p,'landmark.'+id);if(p.area!=null&&!ids.has(p.area))fail('landmark.area');}
-    for(const area of layout.areas){inBounds(area.center,'area.center');text(area.kind,'area.kind');if(area.material!=null&&!['rock','forest'].includes(area.material))fail('area.material');for(const p of area.points)inBounds(p,'area.point');}
+    for(const area of layout.areas){inBounds(area.center,'area.center');text(area.kind,'area.kind');if(area.material!=null&&!['rock','forest'].includes(area.material))fail('area.material');if(area.snowTerrain!=null&&(layout.artTheme!=='snow'||!['snow','ice'].includes(area.snowTerrain)))fail('area.snowTerrain');for(const p of area.points)inBounds(p,'area.point');}
     for(const passage of layout.passages){for(const p of [...passage.points,...passage.waypoints])inBounds(p,'passage.point');}
     for(const key of ['boundaries','solidBoundaries','lakes'])for(const ring of layout[key])for(const p of ring.points)inBounds(p,key+'.point');
     const interactions=layout.interactions;if(!interactions||typeof interactions!=='object')fail('interactions');
@@ -49,6 +50,10 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
     }
     if(gates.size!==gateIds.size)fail('gate interaction');
     for(const chest of array(interactions.chests,'interactions.chests',0,32)){site(chest,'chest');inBounds(chest,'chest');}
+    const decorationIds=new Set();for(const decoration of array(layout.decorations??[],'decorations',0,64)){
+      text(decoration.id,'decoration.id');text(decoration.name,'decoration.name');if(decorationIds.has(decoration.id))fail('duplicate decoration');decorationIds.add(decoration.id);inBounds(decoration,'decoration');if(!['stele','ruins','sanctuary'].includes(decoration.kind))fail('decoration.kind');
+      if(decoration.area!=null&&!ids.has(decoration.area))fail('decoration.area');if(decoration.scale!=null)number(decoration.scale,'decoration.scale',.3,3);
+    }
     for(const [id,p] of Object.entries(layout.plan??{})){inBounds(p,'plan.'+id);number(p.r,'plan.radius',50,500);}
     const encounterIds=new Set();for(const encounter of layout.encounters??[]){inBounds(encounter,'encounter');if(encounterIds.has(encounter.id))fail('duplicate encounter');encounterIds.add(encounter.id);}
     for(const patch of layout.patches??[]){inBounds(patch.center,'patch.center');for(const p of patch.points)inBounds(p,'patch.point');}

@@ -172,7 +172,8 @@ const sceneLoadingView=createLoadingView(document,{setTimer:setTimeout,clearTime
 const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer:setTimeout});
 const explorableWorlds=Object.freeze([
   Object.freeze({id:'forest',name:'裂谷林海',radioId:'world-rift-forest',previewId:'world-preview',description:'从南岸营地出发，探索 18 片相连区域。沿桥梁和山口寻找通路，发现隐秘洞穴与荒野领主。'}),
-  Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'})
+  Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'}),
+  Object.freeze({id:'frostmirror-highlands',name:'霜镜高地',radioId:'world-frostmirror-highlands',previewId:'world-preview-frostmirror-highlands',description:'从归雪营地出发，穿越雪松林谷、霜镜冰湖与覆雪遗迹。沿裂隙桥、山口和地下洞道探索回环，寻找冰封圣所与雪原领主。'})
 ]);
 const explorationWorld=id=>explorableWorlds.find(world=>world.id===id)||explorableWorlds[0];
 let selectedMode='world',selectedWorldId='forest',selectedDungeonId='survival',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
@@ -334,7 +335,7 @@ function drawWorldPreview(){
     const portrait=$(world.previewId),context=portrait.getContext('2d'),layout=createRiftLayout(world.id);
     portrait.width=800;portrait.height=600;
     const {minX,minY,maxX,maxY}=layout.bounds,scale=Math.min(portrait.width/(maxX-minX),portrait.height/(maxY-minY))*.96;
-    context.clearRect(0,0,portrait.width,portrait.height);context.fillStyle='#203c34';context.fillRect(0,0,portrait.width,portrait.height);
+    context.clearRect(0,0,portrait.width,portrait.height);context.fillStyle=layout.artTheme==='snow'?'#718c9d':'#203c34';context.fillRect(0,0,portrait.width,portrait.height);
     context.save();context.translate(portrait.width/2,portrait.height/2);context.scale(scale,scale);context.translate(-(minX+maxX)/2,-(minY+maxY)/2);
     // Keep landmark symbols legible when the high-resolution card is reduced.
     drawRiftOverview(context,layout,{scale:scale/2,labels:false,landmarks:true});context.restore();
@@ -564,7 +565,7 @@ function renderExpandedMap(){
   result.markers.forEach((marker,index)=>add(landmarkLabel(marker),`${landmarkState(marker)} · 距离 ${Math.round(marker.distance)}`,index+1));
   if(!result.markers.length)add(game.terrain?.island&&!indoor?'尚未发现岛上地标':'附近尚无已发现地标',indoor?'沿门口继续探索，迷雾会随视野展开。':'靠近建筑后会记录位置；已完成的建筑仍会保留。');
   $('map-legend').textContent=indoor?'箭头：你与朝向　门：出口　箱子：宝箱　菱形：已发现首领。墙体缺口为通路，暗处保留探索记忆。':'箭头：你　拱门：传送门　双翼：天使　屋顶：小屋　城垛：城堡　菱形：遗迹。灰雾尚未探索；绿门可往返，红门有首领。';
-  if(!indoor&&game.terrain.island?.layout?.kind==='rift-forest')$('map-legend').textContent='箭头：你　路标：相邻世界　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。深绿密林、山壁与深水不可步行；沿缺口和桥梁探索。';
+  if(!indoor&&game.terrain.island?.layout?.kind==='rift-forest')$('map-legend').textContent=game.terrain.island.layout.artTheme==='snow'?'箭头：你　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。浅蓝冰面可步行；密林、山壁与深蓝裂水不可步行，沿山口和桥梁探索。':'箭头：你　路标：相邻世界　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。深绿密林、山壁与深水不可步行；沿缺口和桥梁探索。';
   if(game.expedition&&!indoor){$('map-note').textContent='时间已暂停 · 副本全图 · 沿路线完成目标后撤离';$('map-legend').textContent='箭头：你与朝向　旗帜：当前目标与出口　边框：可行走区域。';target.setAttribute('aria-label','副本地图：显示路线、当前目标与撤离点');}else if(!indoor)$('map-legend').textContent+='　圆点：怪物领域。';
   if(game.debug&&indoor)$('map-legend').textContent='箭头：你与朝向　门：出口　箱子：宝箱　菱形：首领。地标预览不解锁房间视野；墙体随探索显示。';
 }
@@ -777,7 +778,7 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='stonevaultOpened'))notify('岩灵击碎封石 · 秘藏入口已打开',2);
   else if(events.some(event=>event.type==='rescueAppeared'))notify('发现受困旅人 · 循指引清除围困怪物',1);
   else if(events.some(event=>event.type==='companionLeft')){const left=events.find(event=>event.type==='companionLeft');notify(`${left.name}离队${left.reason==='unpaid'?' · 金币不足':''}`,1);}
-  else if(events.some(event=>event.type==='regionEnter'))notify(game.stage?`已抵达${game.stage.currentIsland.name} · ${game.stage.currentIsland.role==='boss'?'挑战核心首领，也可返回外岛继续准备':'自由准备，外岛首领为可选挑战'}`:`已抵达${game.region.name} · ${game.terrain.island?.layout?.kind==='rift-forest'?'沿林间通路探索各片区域':'探索岛屿，寻找野生传送门'}`,2);
+  else if(events.some(event=>event.type==='regionEnter'))notify(game.stage?`已抵达${game.stage.currentIsland.name} · ${game.stage.currentIsland.role==='boss'?'挑战核心首领，也可返回外岛继续准备':'自由准备，外岛首领为可选挑战'}`:`已抵达${game.region.name} · ${game.terrain.island?.layout?.kind==='rift-forest'?(game.terrain.island.layout.artTheme==='snow'?'沿雪原通路探索各片区域':'沿林间通路探索各片区域'):'探索岛屿，寻找野生传送门'}`,2);
   else if(events.some(event=>event.type==='portalOpened'))notify(game.stage?'传送门已激活 · 两座岛屿可往返':`传送门已激活 · 已开 ${game.regions.defeatedConnectionsCount??0} 条通路 · 可往返`,2);
   else if(events.some(event=>event.type==='encounterComplete'))notify('林间挑战完成 · 资源已入账，靠近拾取补给',2);
   else if(events.some(event=>event.type==='treasureOpened'))notify('守卫宝箱已开启 · 金币与灵晶已入账',2);
@@ -1383,7 +1384,7 @@ function drawTerrainShadowPaths(mask,props){
       mask.moveTo(ax+dy*radius,ay-dx*radius);mask.lineTo(bx+dy*radius,by-dx*radius);
       mask.arc(bx,by,radius,angle-Math.PI/2,angle+Math.PI/2);mask.lineTo(ax-dy*radius,ay+dx*radius);
       mask.arc(ax,ay,radius,angle+Math.PI/2,angle+Math.PI*1.5);mask.closePath();
-    }else if(type==='rock'&&prop.rockForm===3&&prop.variant!=='pillar'){
+    }else if(type==='rock'&&prop.rockForm===3&&prop.variant!=='pillar'&&!prop.variant?.startsWith('world-')){
       for(const points of rubbleShadowPaths(prop)||[]){
         mask.moveTo(x+points[0].x,y+points[0].y);
         for(let i=1;i<points.length;i++)mask.lineTo(x+points[i].x,y+points[i].y);
@@ -1431,7 +1432,7 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   if(adventure?.treasure&&visible(adventure.treasure))props.push({...adventure.treasure,type:'treasure'});
   props.push(...(game?.environment?.props||[]).filter(prop=>prop.state!=='spent'&&visible(prop)));
   if(!game.dungeon?.active)for(const portal of game.regions?.portals||[])if(visible({...portal,y:portal.y-30}))props.push({...portal,type:'portal',...(portal.natural?{kind:'exit',angle:Math.atan2(-(portal.arrivalDirection?.y||0),-(portal.arrivalDirection?.x||0)),isRiftLandmark:true}:{}),sortY:portal.y});
-  if(!game.dungeon?.active)for(const site of game.riftExploration?.sites||[])if(visible(site))props.push({...site,type:site.kind==='chest'?'treasure':site.kind,state:site.kind==='chest'?(site.state==='claimed'?'opened':'unlocked'):site.state,isRiftLandmark:site.kind!=='chest',sortY:site.y});
+  if(!game.dungeon?.active)for(const site of [...(game.riftExploration?.sites||[]),...(game.riftExploration?.decorations||[])])if(visible(site))props.push({...site,type:site.kind==='chest'?'treasure':site.kind,state:site.kind==='chest'?(site.state==='claimed'?'opened':'unlocked'):site.state,isRiftLandmark:site.kind!=='chest',sortY:site.y});
   if(!game.dungeon?.active)for(const site of game.settlements?.sites||[])if(site.type!=='merchant'&&Math.abs(site.x-camX)<viewWidth/2+200&&Math.abs(site.y-camY)<viewHeight/2+230)props.push({...site,isSettlement:true});
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest)&&sceneVisible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
   if(game.dungeon?.active?.kind==='hut')for(const prop of game.dungeon.active.props||[])if(visible(prop))props.push({...prop,isHutFurniture:true,sortY:prop.y+(prop.type==='rug'?-1000:0)});
@@ -1805,7 +1806,7 @@ function drawSettlement(site){
 function drawDungeonBackground(camX,camY){const {width,height}=sceneViewport();const dungeon=game.dungeon.active;if(dungeon.kind==='cave')drawRiftCaveGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='hut')hutArt.drawGround(ctx,dungeon,camX,camY,width,height);else regionalArt.drawDungeonGround(ctx,dungeon,camX,camY,width,height);}
 function drawDungeonWall(prop,mainPlayer){
   dungeonWallArt.draw(ctx,prop,mainPlayer,game.dungeon.vision,game._clock,(target,wall)=>{
-    if(game.dungeon?.active?.kind==='cave')drawRiftCaveWall(target,wall);
+    if(game.dungeon?.active?.kind==='cave')drawRiftCaveWall(target,game.dungeon.active.artTheme==='snow'?{...wall,artTheme:'snow'}:wall);
     else if(wall.variant==='hut-wall')hutArt.drawWall(target,wall,false);
     else regionalArt.drawDungeonWall(target,wall,false);
   });

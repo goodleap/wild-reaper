@@ -1,7 +1,8 @@
-import { REGIONS } from './world-definitions.js';
+import { REGIONS, worldForId } from './world-definitions.js';
 // The visible shore and gameplay water share one contour. Large pools are
 // rasterized in small world-space tiles, never as an enlarged tiny puddle.
 import { getWaterContours, traceWaterPath, waterBounds, containsWater } from './water-geometry.js';
+import { paintSnowSurface } from './snow-surface-art.js';
 
 const TAU=Math.PI*2,TILE=192,BLEED=2,PAD=24,PIXEL_LIMIT=2*1024*1024;
 const WORLD_WATER=Object.freeze(Object.fromEntries(REGIONS.filter(world=>world.art.water).map(world=>[world.id,world.art.water])));
@@ -37,6 +38,7 @@ export class WaterArt {
     this.cache.set(key,item);this.pixels+=item.pixels;this.builds++;return item;
   }
   _paint(c,shape,region,tile){
+    if(region==='snow'&&shape.local.kind!=='lava'){paintSnowSurface(c,shape,tile);return;}
     if(WORLD_WATER[region]||['ice','lava','snow'].includes(shape.local.kind)){this._paintTheme(c,shape,region,tile);return;}
     const {local,b,shore}=shape,marsh=region==='marsh',deep=local.deep===true,seed=Math.round((local.seed||0)*1e6);
     // A narrow dry earthen bank is outside the exact water contour. The broad
@@ -113,7 +115,8 @@ export class WaterArt {
   }
   draw(c,mud,options={}){
     if(!valid(mud))return false;
-    const shape=this._shape(mud),region=(options.region==='marsh'||WORLD_WATER[options.region])?options.region:'forest',b=shape.b;
+    const snowTheme=options.theme==='snow'||worldForId(options.region)?.authored?.artTheme==='snow';
+    const shape=this._shape(mud),region=snowTheme?'snow':(options.region==='marsh'||WORLD_WATER[options.region])?options.region:'forest',b=shape.b;
     // Small and medium shores are retina crisp. Broad water uses the same
     // world-pixel density as the ground, preventing a lake from evicting its
     // own tiles on every frame. Edge tiles allocate only their actual extent.

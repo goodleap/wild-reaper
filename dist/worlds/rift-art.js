@@ -1,5 +1,8 @@
 import { SceneryArt } from '../scenery-art.js';
 import { RiftCollision } from '../rift-collision.js';
+import { SnowMapArt, drawSnowOverview } from './snow-map-art.js';
+import { drawSnowLandmark, paintSnowRidge } from '../snow-structure-art.js';
+import { paintSnowGround } from '../snow-surface-art.js';
 // The authored valley uses the same polygons for art, collision and maps.
 // Detailed floor and deep forest are rasterized only in visible, bounded tiles.
 // The complete trees and shrubs at the forest edge use the world depth queue.
@@ -135,6 +138,7 @@ function groundDetails(c,layout,view,scenery){
 }
 
 export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,viewBounds}={}){
+  if(layout?.artTheme==='snow')return drawSnowOverview(c,layout,{scale,labels,landmarks,viewBounds});
   if(layout?.kind!=='rift-forest')return false;c.save();c.lineJoin='round';c.lineCap='round';base(c,layout,{viewBounds,overview:true});
   if(landmarks){for(const [key,mark]of Object.entries(layout.landmarks||{})){if(!Number.isFinite(mark.x)||!Number.isFinite(mark.y)||viewBounds&&!overlaps({minX:mark.x,minY:mark.y,maxX:mark.x,maxY:mark.y},viewBounds))continue;
     if(/^boss/.test(key)){c.save();c.translate(mark.x,mark.y);c.beginPath();for(let i=0;i<10;i++){const a=i*Math.PI/5-Math.PI/2,r=(i%2?3:7)/scale;c[i?'lineTo':'moveTo'](Math.cos(a)*r,Math.sin(a)*r);}c.closePath();c.fillStyle='#d85742';c.strokeStyle='#713e31';c.lineWidth=1/scale;c.fill();c.stroke();c.restore();}
@@ -146,10 +150,11 @@ export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,
 }
 
 export class RiftArt {
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.scenery=new SceneryArt(makeCanvas);this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;}
-  get cacheStats(){const sprites=this.scenery.cacheStats;return {entries:this.cache.size+sprites.entries,pixels:this.pixels+sprites.pixels,bytes:this.pixels*4+sprites.bytes,limitBytes:PIXEL_LIMIT*4+sprites.limitBytes,builds:this.builds+sprites.builds};}
+  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.scenery=new SceneryArt(makeCanvas);this.snowArt=null;this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;}
+  get cacheStats(){const sprites=this.scenery.cacheStats,snow=this.snowArt?.cacheStats;return {entries:this.cache.size+sprites.entries+(snow?.entries||0),pixels:this.pixels+sprites.pixels+(snow?.pixels||0),bytes:this.pixels*4+sprites.bytes+(snow?.bytes||0),limitBytes:PIXEL_LIMIT*4+sprites.limitBytes+(snow?.limitBytes||0),builds:this.builds+sprites.builds+(snow?.builds||0)};}
   _tile(layout,tx,ty){let id=this.ids.get(layout);if(!id){id=++this.nextId;this.ids.set(layout,id);}const key=`${id}:${tx}:${ty}`;let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
-    const canvas=this.makeCanvas(),side=TILE+BLEED*2;canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);
+    const canvas=this.makeCanvas(),side=TILE+BLEED*2;canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';
+    if(layout.artTheme==='snow'){this.snowArt??=new SnowMapArt(this.makeCanvas);this.snowArt.paintTile(c,layout,view);}else{base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);}
     image={canvas,pixels:side*side};while(this.pixels+image.pixels>PIXEL_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);}this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
   }
   drawGround(c,island,{camX=0,camY=0,width=1100,height=700}={}){const layout=island?.layout;if(layout?.kind!=='rift-forest')return false;const left=camX-width/2,top=camY-height/2;c.save();for(let ty=Math.floor(top/TILE);ty<=Math.floor((top+height)/TILE);ty++)for(let tx=Math.floor(left/TILE);tx<=Math.floor((left+width)/TILE);tx++){const image=this._tile(layout,tx,ty);c.drawImage(image.canvas,BLEED,BLEED,TILE,TILE,tx*TILE-left,ty*TILE-top,TILE,TILE);}c.restore();return true;}
@@ -158,6 +163,7 @@ export class RiftArt {
 // Dynamic doorway/shortcut state is deliberately separate from cached floor.
 // Call from the existing world depth queue at the landmark's ground anchor.
 export function drawRiftLandmark(c,site){
+  if(site?.artTheme==='snow')return drawSnowLandmark(c,site);
   if(!['cave','shortcut','exit'].includes(site?.kind))return false;const p=RIFT_PALETTE;c.save();c.translate(site.x,site.y);
   if(site.kind==='cave'){
     c.fillStyle='#34443755';c.beginPath();c.ellipse(0,4,52,15,0,0,TAU);c.fill();
@@ -176,15 +182,19 @@ export function drawRiftLandmark(c,site){
 }
 
 const caveTiles=new Map();
-function caveTile(variant){let canvas=caveTiles.get(variant);if(canvas)return canvas;canvas=document.createElement('canvas');canvas.width=canvas.height=384;const c=canvas.getContext('2d');c.fillStyle='#77725e';c.fillRect(0,0,384,384);for(let i=0;i<280;i++){const x=hash(i+variant*13,72)*384,y=hash(i+91,variant)*384,n=hash(i,variant+87);c.fillStyle=i%3?'#a49b7744':'#3e49413b';c.beginPath();c.ellipse(x,y,.7+n*3,.5+n*1.3,-.2,0,TAU);c.fill();if(i%17===0){strokeLine(c,x-5,y,x+7,y-2,'#a5a08160',1);strokeLine(c,x+7,y-2,x+12,y+2,'#4c554756',.8);}}caveTiles.set(variant,canvas);return canvas;}
+function caveTile(variant,theme){const key=theme==='snow'?`snow:${variant}`:variant;let canvas=caveTiles.get(key);if(canvas)return canvas;canvas=document.createElement('canvas');canvas.width=canvas.height=384;const c=canvas.getContext('2d');if(theme==='snow'){paintSnowGround(c,{variant,size:384,surface:'ice'});caveTiles.set(key,canvas);return canvas;}c.fillStyle='#77725e';c.fillRect(0,0,384,384);for(let i=0;i<280;i++){const x=hash(i+variant*13,72)*384,y=hash(i+91,variant)*384,n=hash(i,variant+87);c.fillStyle=i%3?'#a49b7744':'#3e49413b';c.beginPath();c.ellipse(x,y,.7+n*3,.5+n*1.3,-.2,0,TAU);c.fill();if(i%17===0){strokeLine(c,x-5,y,x+7,y-2,'#a5a08160',1);strokeLine(c,x+7,y-2,x+12,y+2,'#4c554756',.8);}}caveTiles.set(key,canvas);return canvas;}
 export function drawRiftCaveGround(c,state,camX,camY,width,height){
-  c.save();c.fillStyle='#26352f';c.fillRect(0,0,width,height);const b=state.bounds,left=camX-width/2,top=camY-height/2;if(!b){c.restore();return;}c.beginPath();c.rect(b.minX-left,b.minY-top,b.maxX-b.minX,b.maxY-b.minY);c.clip();for(let ty=Math.floor(Math.max(b.minY,top)/384);ty<=Math.floor(Math.min(b.maxY,top+height)/384);ty++)for(let tx=Math.floor(Math.max(b.minX,left)/384);tx<=Math.floor(Math.min(b.maxX,left+width)/384);tx++)c.drawImage(caveTile(Math.floor(hash(tx+7,ty)*4)),tx*384-left,ty*384-top);c.restore();
+  c.save();c.fillStyle=state.artTheme==='snow'?'#233c50':'#26352f';c.fillRect(0,0,width,height);const b=state.bounds,left=camX-width/2,top=camY-height/2;if(!b){c.restore();return;}c.beginPath();c.rect(b.minX-left,b.minY-top,b.maxX-b.minX,b.maxY-b.minY);c.clip();for(let ty=Math.floor(Math.max(b.minY,top)/384);ty<=Math.floor(Math.min(b.maxY,top+height)/384);ty++)for(let tx=Math.floor(Math.max(b.minX,left)/384);tx<=Math.floor(Math.min(b.maxX,left+width)/384);tx++)c.drawImage(caveTile(Math.floor(hash(tx+7,ty)*4),state.artTheme),tx*384-left,ty*384-top);c.restore();
 }
 export function drawRiftCaveExits(c,state){
   for(const exit of state.riftExits||[]){c.save();c.translate(exit.x,exit.y);for(let i=0;i<5;i++){const y=-16+i*7,w=38+i*3;c.fillStyle=['#b2a68a','#a6997e','#9a9075','#89836c','#817e66'][i];c.fillRect(-w*.5,y,w,7);strokeLine(c,-w*.5,y+6,w*.5,y+6,'#4b5547',1);strokeLine(c,-w*.5,y,w*.5,y,'#d1c4a7',.8);}c.textAlign='center';c.font=`600 10px ${FONT}`;c.fillStyle='#e8dab3';c.lineWidth=3;c.strokeStyle='#27372e';c.strokeText(exit.name||'返回地面',0,38);c.fillText(exit.name||'返回地面',0,38);c.restore();}
 }
 export function drawRiftCaveWall(c,wall){
   const angle=wall.angle||0,half=wall.halfLength||0,r=wall.r||14,dx=Math.cos(angle)*half,dy=Math.sin(angle)*half,nx=-Math.sin(angle)*r,ny=Math.cos(angle)*r,ax=wall.x-dx,ay=wall.y-dy,bx=wall.x+dx,by=wall.y+dy;
+  if(wall.artTheme==='snow'){
+    const outline=[[ax-nx,ay-ny],[bx-nx,by-ny],[bx+nx,by+ny],[ax+nx,ay+ny]],upper=outline.map(([x,y])=>[x,y-32]);
+    paintSnowRidge(c,{outline,upper,height:32,variant:Math.floor((wall.seed||0)*5),ice:true});return;
+  }
   c.save();c.lineCap='round';strokeLine(c,ax,ay,bx,by,'#3b453b',r*2+2);c.beginPath();c.moveTo(ax+nx,ay+ny);c.lineTo(bx+nx,by+ny);c.lineTo(bx+nx,by+ny-32);c.lineTo(ax+nx,ay+ny-32);c.closePath();c.fillStyle='#5c5d4e';c.fill();c.beginPath();c.moveTo(ax-nx,ay-ny);c.lineTo(bx-nx,by-ny);c.lineTo(bx-nx,by-ny-32);c.lineTo(ax-nx,ay-ny-32);c.closePath();c.fillStyle='#686658';c.fill();strokeLine(c,ax,ay-32,bx,by-32,'#9b927c',r*2);strokeLine(c,ax-nx*.5,ay-ny*.5-34,bx-nx*.5,by-ny*.5-34,'#b6aa8e',3);
   const len=half*2||1;for(let d=8;d<len;d+=23){const t=d/len,x=ax+(bx-ax)*t,y=ay+(by-ay)*t,n=hash(d,wall.seed||0);strokeLine(c,x+nx*.7,y+ny*.7-29,x+nx*.8+3,y+ny*.8-6-n*8,'#424b3f88',1.2);strokeLine(c,x-nx*.6,y-ny*.6-33,x+nx*.5,y+ny*.5-34,'#d3c5a466',1);}c.restore();
 }

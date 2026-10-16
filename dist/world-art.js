@@ -1,5 +1,8 @@
-import { REGIONS } from './world-definitions.js';
+import { REGIONS, worldForId } from './world-definitions.js';
 import { biomeZone, CITY_BLOCK, CITY_STREET_HALF_WIDTH } from './biome-layout.js';
+import { paintSnowPine, paintSnowRock, paintSnowShrub, paintSnowGrass, paintSnowLog } from './snow-scenery-art.js';
+import { paintSnowGround } from './snow-surface-art.js';
+import { paintSnowRidge } from './snow-structure-art.js';
 
 // Theme artwork is generated once in bounded, world-independent sprite tiles.
 // Raised artwork uses the same foot anchors and silhouettes as Terrain.
@@ -10,7 +13,7 @@ const poly=(c,points,fill,edge=null,width=1)=>{c.beginPath();points.forEach(([x,
 const stroke=(c,points,color,width=1)=>{c.beginPath();points.forEach(([x,y],i)=>c[i?'lineTo':'moveTo'](x,y));c.strokeStyle=color;c.lineWidth=width;c.stroke();};
 const oval=(c,x,y,rx,ry,color,angle=0)=>{c.beginPath();c.ellipse(x,y,rx,ry,angle,0,TAU);c.fillStyle=color;c.fill();};
 export const WORLD_ART_PALETTES=Object.freeze(Object.fromEntries(REGIONS.filter(world=>world.art.ground).map(world=>[world.id,world.art.ground])));
-const forms=['world-palm','world-pine','world-snowpine','world-charred','world-reef','world-ice','world-basalt','world-building','world-city-wall','world-ridge','world-driftwood'];
+const forms=['world-palm','world-pine','world-snowpine','world-charred','world-reef','world-ice','world-basalt','world-building','world-city-wall','world-ridge','world-driftwood','world-snowrock','world-snowshrub','world-snowgrass','world-snowlog','world-snowruin'];
 function flake(c,x,y,size,color){stroke(c,[[x-size,y],[x+size,y]],color,.6);stroke(c,[[x,y-size*.5],[x,y+size*.5]],color,.6);}
 function texturedFace(c,points,r,count,light,dark){c.save();poly(c,points,null);c.clip();for(let i=0;i<count;i++){const x=-100+r()*200,y=-150+r()*190;stroke(c,[[x,y],[x+1+r()*4,y-.5+r()]],i%3?dark:light,.5+r()*.7);}c.restore();}
 function wood(c,points,color,r){poly(c,points,color,'#443e32',1);texturedFace(c,points,r,160,'#d0b68a70','#382f2870');}
@@ -20,6 +23,7 @@ export class WorldArt{
   get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
   _image(key,w,h,dpr,paint){let value=this.cache.get(key);if(value){this.cache.delete(key);this.cache.set(key,value);return value;}const canvas=this.makeCanvas();canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.lineCap='round';c.lineJoin='round';paint(c);value={canvas,w,h,pixels:canvas.width*canvas.height};while(this.pixels+value.pixels>PIXEL_LIMIT&&this.cache.size){const first=this.cache.keys().next().value;this.pixels-=this.cache.get(first).pixels;this.cache.delete(first);}this.cache.set(key,value);this.pixels+=value.pixels;this.builds++;return value;}
   _tile(region,v,zone=0,road=false){return this._image(`ground:${region}:${v}:${zone}:${road}`,TILE,TILE,1,c=>{
+    if(region==='snow'){paintSnowGround(c,{variant:v,zone,size:TILE});return;}
     const p=WORLD_ART_PALETTES[region],r=rng(801+v*71+zone*313+Object.keys(WORLD_ART_PALETTES).indexOf(region)*191);
     c.fillStyle=p.floor;c.fillRect(0,0,TILE,TILE);
     if(region==='city'){
@@ -46,6 +50,7 @@ export class WorldArt{
     for(let i=0;i<630;i++){const x=r()*256,y=r()*256;c.fillStyle=i%3?p.light+'17':p.dark+'2c';c.fillRect(x,y,.5+r()*1.5,.4+r()*.7);}
   });}
   drawGround(c,region,camX,camY,w,h,{seed=0}={}){
+    if(worldForId(region).authored?.artTheme==='snow')region='snow';
     if(!WORLD_ART_PALETTES[region])return false;
     c.fillStyle=WORLD_ART_PALETTES[region].floor;c.fillRect(0,0,w,h);
     const ox=w*.5-camX,oy=h*.5-camY,minX=Math.floor(-ox/TILE),maxX=Math.ceil((w-ox)/TILE),minY=Math.floor(-oy/TILE),maxY=Math.ceil((h-oy)/TILE);
@@ -57,6 +62,7 @@ export class WorldArt{
     return true;
   }
   _tree(kind,v,crown){return this._image(`tree:${kind}:${v}:${crown}`,184,184,2,c=>{
+    if(kind==='world-snowpine'){c.translate(92,158);paintSnowPine(c,v,crown);return;}
     c.translate(92,158);const r=rng(717+v*131),palm=kind==='world-palm',snow=kind==='world-snowpine',charred=kind==='world-charred';
     if(!crown){
       const points=palm?[[-10,4],[-4,-27],[2,-52],[1,-77],[12,-83],[14,-55],[7,-24],[9,5]]:[[-12,5],[-7,-18],[-6,-61],[1,-96],[7,-62],[7,-17],[13,6]];
@@ -82,6 +88,7 @@ export class WorldArt{
     }
   });}
   _stone(kind,v,region){return this._image(`stone:${kind}:${v}:${region}`,108,150,2,c=>{
+    if(kind==='world-ice'||kind==='world-snowrock'){c.translate(54,111);paintSnowRock(c,v,kind==='world-snowrock'?'rock':'ice');return;}
     c.translate(54,111);const r=rng(119+v*97),ice=kind==='world-ice',reef=kind==='world-reef',mountain=region==='mountain',h=[46,28,58,39,42][v%5],outline=[[-33,7],[-31,-h*.42],[-16,-h],[7,-h-6],[27,-h*.55],[35,5],[22,26],[-6,31]];
     const dark=ice?'#538d98':reef?(mountain?'#52675f':'#686e60'):'#32373b',mid=ice?'#85bec3':reef?(mountain?'#85948a':'#999c84'):'#555557',light=ice?'#d2e9de':reef?(mountain?'#bac5b3':'#cbc5a0'):'#858074';
     poly(c,outline,mid,dark,1.5);poly(c,[[-31,-h*.42],[-16,-h],[7,-h-6],[27,-h*.55],[4,-h*.32],[-9,-h*.5]],light);poly(c,[[4,-h*.32],[27,-h*.55],[35,5],[22,26],[3,26]],dark);poly(c,[[-31,-h*.42],[-9,-h*.5],[4,-h*.32],[3,26],[-6,31],[-33,7]],mid);texturedFace(c,outline,r,240,ice?'#edfff169':'#cfbf9636',ice?'#3f85932a':'#151f244a');stroke(c,[[-31,-h*.42],[-16,-h],[7,-h-6]],light,1.6);
@@ -109,6 +116,7 @@ export class WorldArt{
       c.translate(halfW,above);const random=rng(681+v*73),nx=-Math.sin(a)*rr,ny=Math.cos(a)*rr;
       if(drift){c.save();c.rotate(a);wood(c,[[-l-rr*.8,-rr*.5],[-l+10,-rr],[l,-rr*.8],[l+rr*.5,0],[l,rr*.7],[-l,rr*.6]],'#b8a27a',random);for(let y=-rr*.65;y<rr*.5;y+=rr*.3)stroke(c,[[-l+5,y],[-l*.25,y+2],[l-7,y-1]],'#675f4780',1);oval(c,-l,0,rr*.45,rr*.8,'#d4c297');for(let i=1;i<3;i++){c.beginPath();c.ellipse(-l,0,rr*.11*i,rr*.22*i,0,0,TAU);c.strokeStyle='#96825c';c.lineWidth=.7;c.stroke();}c.restore();return;}
       const outline=ridge?Array.from({length:10},(_,i)=>{const t=i*TAU/10,side=Math.cos(t)<0?-1:1;const along=side*l+Math.cos(t)*rr,across=Math.sin(t)*rr;return[along*Math.cos(a)-across*Math.sin(a),along*Math.sin(a)+across*Math.cos(a)];}):[[-dx-nx,-dy-ny],[-dx+nx,-dy+ny],[dx+nx,dy+ny],[dx-nx,dy-ny]],upper=outline.map(([x,y],i)=>[x,y-height*(ridge?.81+hash(i+v,37)*.18:1)]);
+      if(region==='snow'&&(ridge||kind==='world-snowruin')){paintSnowRidge(c,{outline,upper,height,variant:v});return;}
       poly(c,outline,ridge?(volcanic?'#333337':'#47554f'):'#5e6758','#3f4b41',1.2);
       // Draw visible front faces in ground depth order; the height stays vertical.
       for(let i=0;i<outline.length;i++){const j=(i+1)%outline.length;if((outline[i][1]+outline[j][1])*.5<-.001)continue;const pts=[upper[i],upper[j],outline[j],outline[i]];poly(c,pts,ridge?(volcanic?['#51494a','#61544d','#474449'][i%3]:['#6b7971','#7d8d7f','#607367'][i%3]):'#94947c','#404e43',1);texturedFace(c,pts,random,180,'#c8cbb045','#2d3d3557');for(let y=12;y<height;y+=14)stroke(c,[[upper[i][0],upper[i][1]+y],[upper[j][0],upper[j][1]+y]],ridge?'#364a412b':'#4c5c4780',.85);}
@@ -118,7 +126,14 @@ export class WorldArt{
   }
   drawProp(c,prop,{canopyAlpha=1}={}){
     const kind=prop?.variant;if(!forms.includes(kind))return false;const v=Number.isInteger(prop.treeForm)?prop.treeForm:Number.isInteger(prop.rockForm)?prop.rockForm:Math.floor((prop.seed||0)*5)%5;
-    if(prop.type==='tree'){
+    if(kind==='world-snowshrub'||kind==='world-snowgrass'){
+      const grass=kind==='world-snowgrass',image=this._image(`snow-cover:${kind}:${v}`,80,68,2,target=>{target.translate(40,48);(grass?paintSnowGrass:paintSnowShrub)(target,v);}),s=prop.scale||1;
+      c.save();c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));c.drawImage(image.canvas,prop.x-40*s,prop.y-48*s,image.w*s,image.h*s);c.restore();
+    }else if(kind==='world-snowlog'){
+      const half=prop.halfLength||55,radius=prop.r||16,w=Math.ceil((half+radius)*2+8),h=Math.ceil(radius*3+8),key=`snow-log:${v}:${half}:${radius}`;
+      const image=this._image(key,w,h,2,target=>{target.translate(w/2,radius*1.7+4);paintSnowLog(target,v,half,radius);});
+      c.save();c.translate(prop.x,prop.y);c.rotate(prop.angle||0);c.drawImage(image.canvas,-w/2,-radius*1.7-4,w,h);c.restore();
+    }else if(prop.type==='tree'){
       const s=prop.scale||1,trunk=this._tree(kind,v,false),crown=this._tree(kind,v,true);c.save();c.translate(prop.x,prop.y);c.scale(s,s);c.drawImage(trunk.canvas,-92,-158,184,184);c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));c.drawImage(crown.canvas,-92,-158,184,184);c.restore();
     }else if(kind==='world-building'){
       const image=this._building(v),sx=((prop.halfLength||60)+(prop.r||30))/90,sy=(prop.r||30)/30;c.save();c.globalAlpha*=Math.max(0,Math.min(1,canopyAlpha));c.drawImage(image.canvas,prop.x-109*sx,prop.y-145*sy,image.w*sx,image.h*sy);c.restore();

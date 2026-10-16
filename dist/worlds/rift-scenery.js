@@ -54,6 +54,7 @@ export function createRiftScenery(layout,collision,island){
   }
 
   for(const area of layout.areas){
+    if(layout.artTheme==='snow'&&area.snowTerrain==='ice')continue;
     const seed=identity(area.id),stone=rocks.has(area.kind),masonry=ruins.has(area.kind),bounds={minX:Math.min(...area.points.map(p=>p.x)),maxX:Math.max(...area.points.map(p=>p.x)),minY:Math.min(...area.points.map(p=>p.y)),maxY:Math.max(...area.points.map(p=>p.y))};
     const target=area.kind==='quarry'?5:area.kind==='grove'?3:2;let groups=0;
     for(let attempt=0;attempt<130&&groups<target;attempt++){
@@ -98,5 +99,8 @@ export function createRiftScenery(layout,collision,island){
       travelled+=length;
     }
   }
-  const result=Object.freeze([...props,...edgeProps].map(Object.freeze));sceneryCache.set(layout,result);return result;
+  // Theme skins share the same deterministic placements and physical bodies.
+  // Forest maps retain their existing props byte for byte.
+  const themed=layout.artTheme==='snow'?[...props,...edgeProps].map(prop=>({...prop,region:'snow',artTheme:'snow',variant:prop.riftShrub?'world-snowshrub':prop.type==='tree'?'world-snowpine':prop.type==='rock'?'world-ice':prop.variant==='world-city-wall'?'world-snowruin':prop.variant})): [...props,...edgeProps];
+  const result=Object.freeze(themed.map(Object.freeze));sceneryCache.set(layout,result);return result;
 }

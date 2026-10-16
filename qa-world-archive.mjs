@@ -12,7 +12,7 @@ assert.deepEqual(WORLD_ARCHIVE_WORLDS.map(({id,name})=>({id,name})),REGIONS.map(
 const byId=new Map(WORLD_ARCHIVE_LOCATIONS.map(item=>[item.id,item]));
 assert.equal(byId.size,WORLD_ARCHIVE_LOCATIONS.length,'stable unique location IDs');
 for(const id of ['castle','hunt','rescue','owlroost','golemaltar','rune','stonevault','occupied','supply','merchant','angel','dogcamp','shipwreck','belltower','mine','icealtar','furnace'])assert.ok(byId.has(id),`${id} documented`);
-assert.equal(WORLD_ARCHIVE_WORLDS.length,9);
+assert.equal(WORLD_ARCHIVE_WORLDS.length,10);
 for(const world of WORLD_ARCHIVE_WORLDS)for(const key of ['theme','risk','tip'])assert.ok(world[key]?.length>0,`${world.id} has actual gameplay reference`);
 assert.ok(byId.get('rune').feature.includes(`${REGIONAL_MECHANISM_RULES.runeDuration} 秒`));
 assert.ok(byId.get('dogcamp').trigger.includes(`${ARMY_SITE_RULES.dogCost} 金币`));
@@ -46,6 +46,7 @@ assert.match(archivePanelHTML({}, {tab:'world',worldCategory:'relics',worldSelec
 assert.match(worldArchiveHTML({selectedId:'marsh'}),/关卡模式：[\s\S]*往返[\s\S]*自由探索：[\s\S]*跨世界通道/,'the guide distinguishes trial travel from guarded world connections');
 assert.match(worldArchiveHTML({selectedId:'forest'}),/自然山口和长桥[\s\S]*无需击败驻门首领/,'the original authored map describes natural travel');
 assert.match(worldArchiveHTML({selectedId:'verdant-rift'}),/世界选择[\s\S]*独立地图[\s\S]*没有跨世界出口/,'the new authored map describes its actual independent entry');
+assert.match(worldArchiveHTML({selectedId:'frostmirror-highlands'}),/浅蓝完整冰面可正常步行[\s\S]*世界选择[\s\S]*没有跨世界出口/,'the snow destination describes walkable ice and independent entry');
 assert(!worldArchiveHTML({selectedId:'verdant-rift'}).match(/archive-small-note[^>]*>[^<]*击败驻门首领/),'the new world does not promise guardian-locked exits');
 assert.match(worldArchiveHTML(),/具体位置留待每局冒险中探索/);
 
@@ -91,4 +92,4 @@ for(const {stack} of contexts)assert.equal(stack.length,0,'all painter transform
 const css=fs.readFileSync(new URL('./dist/archive.css',import.meta.url),'utf8');
 assert.match(css,/world-archive-grid\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
 assert.match(css,/world-archive-detail:focus-visible/);
-console.log('World codex checked: 9 worlds/17 locations, natural/standalone travel descriptions, nonempty authored portrait, isolated guide selection, bounded warm cache and finite geometry.');
+console.log('World codex checked: 10 worlds/17 locations, natural/standalone travel descriptions, nonempty authored portrait, isolated guide selection, bounded warm cache and finite geometry.');

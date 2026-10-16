@@ -36,7 +36,7 @@ const expected={
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const legacyWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(WORLD_IDS,[...legacyWorldIds,'verdant-rift'],'append the new map without renumbering existing worlds');
+assert.deepEqual(WORLD_IDS,[...legacyWorldIds,'verdant-rift','frostmirror-highlands'],'append the new map without renumbering existing worlds');
 for(const [id,hash]of Object.entries(expected.exports)){
   const module=await import(`./dist/${id}.js`),data=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(module).filter(([,value])=>typeof value!=='function'))));
   if(data.WORLD_IDS)data.WORLD_IDS=data.WORLD_IDS.slice(0,8);
@@ -62,10 +62,10 @@ for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
   assert.equal(digest(out),expected.traces[world.id],`${world.id}: exact deterministic terrain placements`);
   assert(Object.isFrozen(world)&&Object.isFrozen(world.terrain));
 }
-assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,9);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
+assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,10);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
-assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['forest','verdant-rift'],'both fixed maps retain separate identities');
+assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['forest','verdant-rift','frostmirror-highlands'],'all fixed maps retain separate identities');
 assert.equal(sections.worlds.definitions[0].authored.areas.length,18);
 const verdant=sections.worlds.definitions.find(world=>world.id==='verdant-rift');
 assert.equal(verdant.authored.worldId,verdant.id);assert.equal(verdant.authored.id,'verdant-rift:1');
@@ -100,4 +100,4 @@ for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
   assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
 }
-console.log('World configuration checked: 9 world identities, 8 unchanged stages, 10 unchanged legacy routes, separate authored maps and unchanged legacy values/terrain traces; invalid cross-references rejected.');
+console.log('World configuration checked: 10 world identities, 8 unchanged stages, 10 unchanged legacy routes, separate authored maps and unchanged legacy values/terrain traces; invalid cross-references rejected.');

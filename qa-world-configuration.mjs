@@ -20,10 +20,18 @@ const baseline={
 };
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const fingerprint=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+// Snow rock artwork now has distinct sprite envelopes. Compare its physical
+// generation against the original fixture using only the former visual bounds;
+// every position, body, reservation and random choice remains fingerprinted.
+const legacySnowVisual=prop=>{
+  if(prop.variant!=='world-ice')return prop;
+  const top=([52,34,64,45,48][prop.rockForm||0]/36)*prop.r;
+  return {...prop,visual:{halfWidth:prop.r+3,top:top+2,bottom:prop.r+2,shadowWidth:prop.r*.9,shadowLength:prop.r*.7+top*.2,shadowOffset:prop.r*.46+top*.12}};
+};
 const forest=worldForId('forest').authored;
 assert.equal(fingerprint(forest),'8ea13ab1b15b2e5e625794cb63cd16cec37482658a188aa3c1df710c9d439e80','the complete v0.0.102 forest geometry, routes and content remain unchanged');
 assert.equal(new Set(WORLD_IDS).size,REGIONS.length,'world IDs must be unique');
-assert.deepEqual(WORLD_IDS,['forest',...Object.keys(baseline),'verdant-rift'],'existing world indices are persistent and the new world is appended');
+assert.deepEqual(WORLD_IDS,['forest',...Object.keys(baseline),'verdant-rift','frostmirror-highlands'],'existing world indices are persistent and the new world is appended');
 assert.equal(worldForId('__unregistered__'),REGIONS[0]);
 for(const [index,world] of REGIONS.entries()){
   assert.equal(worldForId(world.id),world);assert.equal(regionFor(index),world);
@@ -52,10 +60,10 @@ for(const [index,world] of REGIONS.entries()){
     const env=new Environment(game,{generation:false});game.environment=env;
     digest.update(JSON.stringify({points:island.points,plan:island.plan,routes:island.routes,layout:island.layout}));
     for(let tx=-4;tx<=4;tx++)for(let ty=-4;ty<=4;ty++){
-      digest.update(JSON.stringify(terrain._cell(tx,ty)));
+      const props=terrain._cell(tx,ty);digest.update(JSON.stringify(world.id==='snow'?props.map(legacySnowVisual):props));
       if((tx+ty)%3===0)digest.update(JSON.stringify([env._mudAt(tx,ty),env._mushroomsAt(tx,ty),env.mechanisms._candidate(tx,ty),env.worldHazards._candidate(tx,ty)]));
     }
   }
   assert.equal(digest.digest('hex'),baseline[world.id],`${world.id}: existing generation changed`);
 }
-console.log('World configuration: 9 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 7 original procedural generation hashes passed.');
+console.log('World configuration: 10 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 7 original procedural generation hashes passed (snow sprite bounds normalized to the former visual fixture).');

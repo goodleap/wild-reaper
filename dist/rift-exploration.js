@@ -17,7 +17,7 @@ function legacyInteractions(layout){
 // retain these instances; revisiting never replenishes a claimed objective.
 export class RiftExploration {
   constructor(game,{generation=true}={}){
-    this.game=game;this.sites=[];
+    this.game=game;this.sites=[];this.decorations=[];
     const layout=game.terrain.island?.layout;
     if(!generation||game.stage||game.expedition||layout?.kind!=='rift-forest')return;
     this.layout=layout;this.shortcutOpen=false;
@@ -30,6 +30,8 @@ export class RiftExploration {
       game.terrain.setRiftGate?.(descriptor.id,false);
     }
     for(const chest of spec.chests)this.sites.push({...chest,id:`rift:${this.namespace}${chest.id}`,key:chest.id,kind:'chest',state:'closed',r:22});
+    if(layout.artTheme==='snow')for(const site of this.sites){site.artTheme='snow';site.region='snow';}
+    this.decorations=(layout.decorations||[]).map(item=>({...item,id:`rift:${this.namespace}decoration:${item.id}`,artTheme:layout.artTheme,region:layout.artTheme,collision:false,r:0,state:'scenery'}));
   }
   _near(site,r=105){return distance(foot(this.game),site)<=r;}
   _clearApproach(site){const p=foot(this.game);return !this.game.terrain.firstBlocker(p.x,p.y,site.x,site.y,0,'sight');}
@@ -70,6 +72,7 @@ export class RiftExploration {
   }
   createCaveState(dungeon,site){
     const state=dungeon._makeState(site),mouths=this.sites.filter(s=>s.kind==='cave'&&s.caveId===site.caveId);
+    if(this.layout.artTheme==='snow')state.artTheme='snow';
     state.kind='cave';state.name=site.name;state.treasureName=this.namespace?'洞穴遗藏':'暗河遗藏';
     // A paired mouth occupies a distant explored room of the existing seeded
     // maze. A challenge cave keeps only its original surface return opening.
