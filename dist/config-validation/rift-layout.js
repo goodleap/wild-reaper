@@ -3,7 +3,9 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
   if(!layout||layout.kind!=='rift-forest'||layout.revision!==1)fail('identity');
   const legacy=worldId==='forest';
   if(legacy&&(layout.id!=='rift-forest:1'||layout.worldId&&layout.worldId!=='forest'))fail('identity');
-  if(!legacy&&(worldId!=='verdant-rift'||layout.worldId!==worldId||layout.id!==`${worldId}:1`))fail('identity');
+  if(!legacy&&(!/^[a-z][a-z0-9-]{0,63}$/.test(worldId)||layout.worldId!==worldId||layout.id!==`${worldId}:1`))fail('identity');
+  if(layout.artTheme!=null&&!['forest','city'].includes(layout.artTheme))fail('artTheme');
+  const city=layout.artTheme==='city';
   const array=(value,key,min,max)=>{if(!Array.isArray(value)||value.length<min||value.length>max)fail(key);return value;};
   const number=(value,key,min=-10000,max=10000)=>{if(!Number.isFinite(value)||value<min||value>max)fail(key);};
   const text=(value,key)=>{if(typeof value!=='string'||!value||value.length>128)fail(key);};
@@ -22,7 +24,7 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
     if(!['trail','secret','bridge','shortcut','cave','exit'].includes(passage.kind))fail('passage.kind');
     if(passage.gateId){text(passage.gateId,'gateId');if(gateIds.has(passage.gateId))fail('duplicate gate');gateIds.add(passage.gateId);point(passage.gate,'gate');for(const key of ['ax','ay','bx','by'])number(passage.gate[key],'gate.'+key);number(passage.gate.r,'gate.r',1,50);}
   }
-  for(const key of ['boundaries','solidBoundaries'])for(const ring of array(layout[key],key,1,64)){polygon(ring.points,key+'.points');if(typeof ring.hole!=='boolean')fail(key+'.hole');}
+  for(const key of ['boundaries','solidBoundaries'])for(const ring of array(layout[key],key,1,city?512:64)){polygon(ring.points,key+'.points');if(typeof ring.hole!=='boolean')fail(key+'.hole');}
   for(const lake of array(layout.lakes,'lakes',1,32)){text(lake.id,'lake.id');polygon(lake.points,'lake.points');if(typeof lake.hole!=='boolean')fail('lake.hole');}
   if(legacy)for(const key of ['spawn','cave05','cave15','shortcut08','shortcut13','shortcutGate','boss11','boss17','exitNorth','exitSouth','exitWest','treasure18','treasure07'])point(layout.landmarks?.[key],'landmark.'+key);
   else {
@@ -49,6 +51,19 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
     }
     if(gates.size!==gateIds.size)fail('gate interaction');
     for(const chest of array(interactions.chests,'interactions.chests',0,32)){site(chest,'chest');inBounds(chest,'chest');}
+    if(city||layout.cityStructures!=null){
+      if(!city)fail('cityStructures.artTheme');
+      const structureIds=new Set(),kinds=['house','keep','wing','barracks','warehouse','stable','workshop','cathedral','school','belltower','wall','tower','arcade','gate','statue','fountain','market','cart','lamp','banner','planter','ruin','sewer'];
+      for(const structure of array(layout.cityStructures,'cityStructures',1,1024)){
+        text(structure.id,'cityStructure.id');if(structureIds.has(structure.id))fail('duplicate cityStructure');structureIds.add(structure.id);
+        if(!kinds.includes(structure.cityKind))fail('cityStructure.cityKind');inBounds(structure,'cityStructure');
+        number(structure.width,'cityStructure.width',8,2400);number(structure.depth,'cityStructure.depth',8,2400);number(structure.height,'cityStructure.height',0,700);
+        if(structure.x-structure.width/2<bounds.minX||structure.x+structure.width/2>bounds.maxX||structure.y-structure.depth/2<bounds.minY||structure.y+structure.depth/2>bounds.maxY)fail('cityStructure.bounds');
+        if(!ids.has(structure.area))fail('cityStructure.area');if(typeof structure.solid!=='boolean')fail('cityStructure.solid');
+        if(typeof structure.style==='number'){number(structure.style,'cityStructure.style',0,5);if(!Number.isInteger(structure.style))fail('cityStructure.style');}
+        else if(!/^keep-(nw|ne|sw|se)$/.test(structure.style))fail('cityStructure.style');
+      }
+    }
     for(const [id,p] of Object.entries(layout.plan??{})){inBounds(p,'plan.'+id);number(p.r,'plan.radius',50,500);}
     const encounterIds=new Set();for(const encounter of layout.encounters??[]){inBounds(encounter,'encounter');if(encounterIds.has(encounter.id))fail('duplicate encounter');encounterIds.add(encounter.id);}
     for(const patch of layout.patches??[]){inBounds(patch.center,'patch.center');for(const p of patch.points)inBounds(p,'patch.point');}

@@ -43,7 +43,7 @@ function openPortal(g) {
 function standAtPortal(g,portal=g.portal) {const door=portalDoor(portal);g.player.x=door.x;g.player.y=door.y-groundOffset(g.player,true);}
 function usePortal(g,portal=g.portal) {standAtPortal(g,portal);return g.enterPortal(portal.id);}
 
-assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift'],'new exploration worlds append without shifting existing numeric identities');
+assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'],'new exploration worlds append without shifting existing numeric identities');
 const swampGate=arena(),water=[{id:'gate-water',x:1120,y:0,rx:80,ry:45},{id:'guardian-water',x:0,y:1235,rx:80,ry:45}];
 swampGate.environment={muds:water,props:[],isHazardFree:()=>true};
 const clearGate=swampGate.regions._safePoint({x:0,y:0},true);

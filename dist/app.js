@@ -23,6 +23,7 @@ import { armyPanelHTML } from './army-panel.js';
 import { HutArt } from './hut-art.js';
 import { RegionalArt } from './regional-art.js';
 import { WorldArt } from './world-art.js';
+import { CityStructureArt } from './city-structure-art.js';
 import { WorldLayoutArt } from './worlds/world-layout-art.js';
 import { createRiftLayout } from './worlds/rift-layout.js';
 import { drawRiftOverview, drawRiftLandmark, drawRiftCaveGround, drawRiftCaveExits, drawRiftCaveWall } from './worlds/rift-art.js';
@@ -89,6 +90,7 @@ const humanoidArt=new HumanoidArt(()=>document.createElement('canvas'));
 const companionArt=new CompanionArt(()=>document.createElement('canvas'));
 const regionalArt=new RegionalArt(()=>document.createElement('canvas'));
 const worldArt=new WorldArt(()=>document.createElement('canvas'));
+const cityStructureArt=new CityStructureArt();
 const worldLayoutArt=new WorldLayoutArt(()=>document.createElement('canvas'));
 const worldSiteArt=new WorldSiteArt(()=>document.createElement('canvas'));
 const worldHazardArt=new WorldHazardArt(()=>document.createElement('canvas'));
@@ -174,7 +176,8 @@ const sceneLoadingView=createLoadingView(document,{setTimer:setTimeout,clearTime
 const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer:setTimeout});
 const explorableWorlds=Object.freeze([
   Object.freeze({id:'forest',name:'裂谷林海',radioId:'world-rift-forest',previewId:'world-preview',description:'从南岸营地出发，探索 18 片相连区域。沿桥梁和山口寻找通路，发现隐秘洞穴与荒野领主。'}),
-  Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'})
+  Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'}),
+  Object.freeze({id:'clockshadow-city',name:'钟影旧都',radioId:'world-clockshadow-city',previewId:'world-preview-clockshadow-city',description:'从南郊驿站出发，沿双层城墙、石桥和运河探索古城。穿过市场、工坊与钟楼广场，进入可探索的旧城堡庭院，寻找地下通道、隐秘庭院与古城领主。'})
 ]);
 const explorationWorld=id=>explorableWorlds.find(world=>world.id===id)||explorableWorlds[0];
 let selectedMode='world',selectedWorldId='forest',selectedDungeonId='survival',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
@@ -567,7 +570,7 @@ function renderExpandedMap(){
   result.markers.forEach((marker,index)=>add(landmarkLabel(marker),`${landmarkState(marker)} · 距离 ${Math.round(marker.distance)}`,index+1));
   if(!result.markers.length)add(game.terrain?.island&&!indoor?'尚未发现岛上地标':'附近尚无已发现地标',indoor?'沿门口继续探索，迷雾会随视野展开。':'靠近建筑后会记录位置；已完成的建筑仍会保留。');
   $('map-legend').textContent=indoor?'箭头：你与朝向　门：出口　箱子：宝箱　菱形：已发现首领。墙体缺口为通路，暗处保留探索记忆。':'箭头：你　拱门：传送门　双翼：天使　屋顶：小屋　城垛：城堡　菱形：遗迹。灰雾尚未探索；绿门可往返，红门有首领。';
-  if(!indoor&&game.terrain.island?.layout?.kind==='rift-forest')$('map-legend').textContent='箭头：你　路标：相邻世界　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。深绿密林、山壁与深水不可步行；沿缺口和桥梁探索。';
+  if(!indoor&&game.terrain.island?.layout?.kind==='rift-forest')$('map-legend').textContent=game.terrain.island.layout.artTheme==='city'?'箭头：你　洞口：地下通道　箱子：宝藏　菱形：首领或遗迹。城墙、建筑与深水不可步行；沿城门、街巷和石桥探索。':'箭头：你　路标：相邻世界　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。深绿密林、山壁与深水不可步行；沿缺口和桥梁探索。';
   if(game.expedition&&!indoor){$('map-note').textContent='时间已暂停 · 副本全图 · 沿路线完成目标后撤离';$('map-legend').textContent='箭头：你与朝向　旗帜：当前目标与出口　边框：可行走区域。';target.setAttribute('aria-label','副本地图：显示路线、当前目标与撤离点');}else if(!indoor)$('map-legend').textContent+='　圆点：怪物领域。';
   if(game.debug&&indoor)$('map-legend').textContent='箭头：你与朝向　门：出口　箱子：宝箱　菱形：首领。地标预览不解锁房间视野；墙体随探索显示。';
 }
@@ -780,7 +783,7 @@ function announceCombatEvents(events){
   else if(events.some(event=>event.type==='stonevaultOpened'))notify('岩灵击碎封石 · 秘藏入口已打开',2);
   else if(events.some(event=>event.type==='rescueAppeared'))notify('发现受困旅人 · 循指引清除围困怪物',1);
   else if(events.some(event=>event.type==='companionLeft')){const left=events.find(event=>event.type==='companionLeft');notify(`${left.name}离队${left.reason==='unpaid'?' · 金币不足':''}`,1);}
-  else if(events.some(event=>event.type==='regionEnter'))notify(game.stage?`已抵达${game.stage.currentIsland.name} · ${game.stage.currentIsland.role==='boss'?'挑战核心首领，也可返回外岛继续准备':'自由准备，外岛首领为可选挑战'}`:`已抵达${game.region.name} · ${game.terrain.island?.layout?.kind==='rift-forest'?'沿林间通路探索各片区域':'探索岛屿，寻找野生传送门'}`,2);
+  else if(events.some(event=>event.type==='regionEnter'))notify(game.stage?`已抵达${game.stage.currentIsland.name} · ${game.stage.currentIsland.role==='boss'?'挑战核心首领，也可返回外岛继续准备':'自由准备，外岛首领为可选挑战'}`:`已抵达${game.region.name} · ${game.terrain.island?.layout?.kind==='rift-forest'?(game.terrain.island.layout.artTheme==='city'?'沿街巷、城门和石桥探索古城':'沿林间通路探索各片区域'):'探索岛屿，寻找野生传送门'}`,2);
   else if(events.some(event=>event.type==='portalOpened'))notify(game.stage?'传送门已激活 · 两座岛屿可往返':`传送门已激活 · 已开 ${game.regions.defeatedConnectionsCount??0} 条通路 · 可往返`,2);
   else if(events.some(event=>event.type==='encounterComplete'))notify('林间挑战完成 · 资源已入账，靠近拾取补给',2);
   else if(events.some(event=>event.type==='treasureOpened'))notify('守卫宝箱已开启 · 金币与灵晶已入账',2);
@@ -1189,7 +1192,7 @@ function staticShadowShapes(terrain,adventureProps,sceneKey){
     const visual=prop.visual||{};
     // Values that affect the projection, rather than transient HP or animation,
     // allow cloned props and regenerated terrain cells to reuse the same mask.
-    const signature=JSON.stringify([prop.type,prop.variant,prop.x,prop.y,prop.r,prop.scale,prop.angle,prop.halfLength,prop.rockForm,prop.visual===false,prop.structureId,visual.shadowOffset,visual.shadowWidth,visual.shadowLength,prop.isHutFurniture,prop.isSettlement,prop.width,prop.depth,prop.shadowWidth,prop.shadowHeight,prop.shadowRevision]);
+    const signature=JSON.stringify([prop.type,prop.variant,prop.x,prop.y,prop.r,prop.scale,prop.angle,prop.halfLength,prop.rockForm,prop.visual===false,prop.structureId,visual.shadowOffset,visual.shadowWidth,visual.shadowLength,prop.isHutFurniture,prop.isSettlement,prop.width,prop.depth,prop.height,prop.cityKind,prop.shadowWidth,prop.shadowHeight,prop.shadowRevision]);
     const key=kind+':'+(prop.id??`${prop.type}:${prop.x}:${prop.y}`);
     const shape=shadowGeometry.get(key,signature,target=>draw(target,[prop]));if(!shape.empty)shapes.push(shape);
   }
@@ -1391,7 +1394,15 @@ function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
     if(prop.visual===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.structureId)continue;
     const {x,y,r,type,scale=1}=prop;
-    if(type==='log'){
+    if(prop.variant==='city-structure'){
+      // Building footprints cast a rectangular projection, independent of the
+      // non-colliding log carrier used by the terrain depth queue.
+      if(['gate','arcade'].includes(prop.cityKind))continue;
+      const halfWidth=prop.width/2,halfDepth=prop.depth/2,length=(prop.height||0)*.65,dx=SUN.x*length,dy=SUN.y*length;
+      const left=x-halfWidth,right=x+halfWidth,top=y-halfDepth,bottom=y+halfDepth;
+      mask.moveTo(left,top);mask.lineTo(right,top);mask.lineTo(right,bottom);
+      mask.lineTo(right+dx,bottom+dy);mask.lineTo(left+dx,bottom+dy);mask.lineTo(left+dx,top+dy);mask.closePath();
+    }else if(type==='log'){
       const offset=r*.7,angle=prop.angle||0,dx=Math.cos(angle),dy=Math.sin(angle),radius=r*1.08;
       const cx=x+SUN.x*offset,cy=y+SUN.y*offset,ax=cx-dx*prop.halfLength,ay=cy-dy*prop.halfLength,bx=cx+dx*prop.halfLength,by=cy+dy*prop.halfLength;
       mask.moveTo(ax+dy*radius,ay-dx*radius);mask.lineTo(bx+dy*radius,by-dx*radius);
@@ -1425,6 +1436,7 @@ function drawDeadTree(prop,mainPlayer){regionalArt.drawDeadTree(ctx,prop,treeCan
 function drawRuinsStone(prop){regionalArt.drawRuinsStone(ctx,prop);}
 function drawRuinsWall(prop){regionalArt.drawRuinsWall(ctx,prop);}
 function drawTerrain(prop,mainPlayer){if(prop.visual===false)return;if(prop.variant==='castle-wall'||prop.variant==='hut-wall'){drawDungeonWall(prop,mainPlayer);return;}if(prop.structureId)return;
+  if(prop.variant==='city-structure'){cityStructureArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer)});return;}
   worldLayoutArt.drawTreeFooting(ctx,prop);
   if(drawExpeditionProp(ctx,prop))return;
   if(worldArt.drawProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer)}))return;
@@ -1815,7 +1827,7 @@ function drawSettlement(site){
 function drawDungeonBackground(camX,camY){const {width,height}=sceneViewport();const dungeon=game.dungeon.active;if(dungeon.kind==='cave')drawRiftCaveGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='hut')hutArt.drawGround(ctx,dungeon,camX,camY,width,height);else regionalArt.drawDungeonGround(ctx,dungeon,camX,camY,width,height);}
 function drawDungeonWall(prop,mainPlayer){
   dungeonWallArt.draw(ctx,prop,mainPlayer,game.dungeon.vision,game._clock,(target,wall)=>{
-    if(game.dungeon?.active?.kind==='cave')drawRiftCaveWall(target,wall);
+    if(game.dungeon?.active?.kind==='cave')drawRiftCaveWall(target,game.dungeon.active.artTheme?{...wall,artTheme:game.dungeon.active.artTheme}:wall);
     else if(wall.variant==='hut-wall')hutArt.drawWall(target,wall,false);
     else regionalArt.drawDungeonWall(target,wall,false);
   });

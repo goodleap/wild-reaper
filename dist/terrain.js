@@ -7,6 +7,7 @@ import { worldForId } from './world-definitions.js';
 import { biomeZone } from './biome-layout.js';
 import { layoutTerrainCell, layoutWet, patchContains } from './worlds/world-layout.js';
 import { getWaterContours, waterBounds, containsWater, waterIntersectsCircle, waterIntersectsCapsule } from './water-geometry.js';
+import { cityStructureVisual } from './city-structure-art.js';
 const CELL=520, TAU=Math.PI*2, EPS=.02;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -54,6 +55,7 @@ export function rockShadowParts(prop){
   fragmentShadows.set(prop,{radius:prop.r,parts});return parts;
 }
 export function sceneryVisual(prop){
+  if(prop.variant==='city-structure')return Object.freeze(cityStructureVisual(prop));
   const s=prop.scale||1;
   if(prop.type==='tree'){
     if(prop.riftShrub)return Object.freeze({halfWidth:56*s,top:59*s,bottom:17*s,canopyX:0,canopyY:-28*s,canopyRx:50*s,canopyRy:28*s,shadowWidth:36*s,shadowLength:24*s});

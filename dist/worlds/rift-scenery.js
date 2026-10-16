@@ -1,4 +1,5 @@
 import { riftPointInPolygon } from '../rift-collision.js';
+import { createCityScenery } from './city-scenery.js';
 
 const TAU=Math.PI*2;
 const hash=n=>{const value=Math.sin(n*127.1+41.7)*43758.5453;return value-Math.floor(value);};
@@ -23,6 +24,7 @@ function separated(prop,placed,clearance=55){
 // The fixed world keeps repeatable local groups independently of terrain-cell
 // load order. Paths, event arenas and entrances remain the authored authority.
 export function createRiftScenery(layout,collision,island){
+  if(layout.artTheme==='city')return createCityScenery(layout,collision,island);
   if(sceneryCache.has(layout))return sceneryCache.get(layout);
   const props=[],solid=[];
   const safe=(prop,area)=>{
