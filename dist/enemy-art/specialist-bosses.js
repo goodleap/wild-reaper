@@ -1,4 +1,6 @@
 import { TAU, clamp, poly, line, oval, grad, star } from './drawing.js';
+import { paint as deepcaller, paintAttackArm as tentacle } from './deepcaller.js';
+import { paint as frostcrown } from './frostcrown.js';
 
 const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
 const mix=(a,b,t)=>a+(b-a)*t;
@@ -66,91 +68,6 @@ function broodmother(c,p,flip=1,pose={}){
     for(const side of [-1,1])line(c,[[side*9,-30-abdomenLift],[side*27,-8],[side*(38+strength*8),19]],'#dcd2df',.8);
   }
   if(spawn&&s.prepare>0)for(const side of [-1,1])oval(c,side*12,-14,2+s.prepare,3,'#dbc5bb');
-  c.restore();
-}
-
-function curvePoint(a,b,d,t){const u=1-t;return [u*u*a[0]+2*u*t*b[0]+t*t*d[0],u*u*a[1]+2*u*t*b[1]+t*t*d[1]];}
-function tentacle(c,a,b,d,width,{back=false,suckers=true}={}){
-  const points=Array.from({length:7},(_,i)=>curvePoint(a,b,d,i/6));
-  for(let i=0;i<6;i++){
-    const w=width*(1-i*.105);
-    line(c,[points[i],points[i+1]],back?'#365b72':'#335f75',w+2);
-    line(c,[points[i],points[i+1]],back?'#638d9f':'#7bb4be',w);
-    line(c,[[points[i][0]-.6,points[i][1]-1],[points[i+1][0]-.6,points[i+1][1]-1]],'#b0d4d1',Math.max(.7,w*.17));
-    if(suckers&&i>1&&i<5)oval(c,points[i][0],points[i][1]+2,Math.max(1,w*.17),Math.max(.75,w*.12),'#d5ddc3');
-  }
-}
-function deepcaller(c,p,flip=1,pose={}){
-  const s=state(p,pose),attack=s.action==='tentacles',wave=s.action==='tidalWave',vortex=s.action==='vortex';
-  const ready=s.prepare,release=s.release,rest=s.rest;
-  const sway=s.moving?Math.sin(s.cycle)*1.3:0;
-  // Far arms appear behind the mantle; front arms keep their own traction
-  // cycle and tapered silhouette instead of moving as a single fringe.
-  for(const back of [true,false]){
-    for(let i=0;i<4;i++){
-      const x=(i-1.5)*(back?17:14),side=x<0?-1:1;
-      const phase=s.cycle+i*Math.PI*.5+(back?Math.PI:0),push=s.moving?Math.sin(phase)*8:0,lift=s.moving?Math.max(0,Math.cos(phase))*5:0;
-      const raise=attack?(ready*25*(i%2?.8:1)+release*(i%2?5:18)):wave?ready*17:vortex?ready*12:0;
-      const spread=wave?(ready*8+release*12):0;
-      const end=[x+side*(20+Math.abs(x)*.35+spread)+push*.35,(back?14:31)-lift-raise+rest*3];
-      const bend=[x+side*(18+spread)-push,(back?26:46)-raise*.45];
-      tentacle(c,[x,(back?0:15)+sway],bend,end,back?11:13,{back});
-      if(vortex&&(ready||release))line(c,[[end[0]-side*3,end[1]],[end[0]-side*10,end[1]-5]],'#d0ece2',1.2);
-    }
-    if(back){
-      c.save();c.translate(0,sway+(wave?ready*2-release*2:0));
-      oval(c,0,-9,36,38,grad(c,-35,29,29,-48,['#345f7c','#699da9','#b3d5cb']));
-      poly(c,[[-27,-24],[-20,-48],[-9,-43],[0,-59],[10,-44],[23,-49],[28,-25]],'#7aabb9','#345b76',1.5);
-      line(c,[[-20,-35],[-12,-27],[0,-30],[13,-26],[21,-36]],'#d4e3d4',1.7);
-      for(const side of [-1,1]){
-        line(c,[[side*28,-18],[side*23,-2],[side*27,12]],'#477d91',1.3);
-        oval(c,side*13,1,7,7.5,'#dce7d1');oval(c,side*12,2,2.7,rest>0?3:5,'#244657');
-        line(c,[[side*6,-7+ready*2],[side*20,-10]],'#487c91',2.5);
-      }
-      oval(c,0,18,5+release*2,3+release*2,'#36586f');crystal(c,0,-27,8,'#ead9a5');
-      c.restore();
-    }
-  }
-}
-
-function deerLeg(c,x,phase,s,back){
-  const run=s.mode==='rush',stride=s.moving?Math.sin(phase)*(run?15:7):0,lift=s.moving?Math.max(0,Math.cos(phase))*(run?11:5):0;
-  const preparing=s.action==='frostCharge'?s.prepare:0,braking=s.action==='frostCharge'?s.rest:0;
-  const fore=x>0,ring=s.action==='frostRing'?s.prepare*3:0,hoofX=x+stride+(fore?braking*12+ring:-preparing*5-ring),hoofY=36-lift;
-  const kneeX=x+stride*.38+(fore?-4:5)+(fore?preparing*3:-preparing*2),kneeY=22-lift*.35;
-  joint(c,[[x,7],[kneeX,kneeY],[hoofX,hoofY-4]],6.5,back?'#64899d':'#8bb2bf',back?'#98bfca':'#d0e6df');
-  poly(c,[[hoofX-4,hoofY-6],[hoofX+3,hoofY-6],[hoofX+7,hoofY-1],[hoofX+6,hoofY+1],[hoofX-5,hoofY+1]],back?'#45677c':'#587f94','#334e68',.9);
-}
-function antler(c,x,side,glow){
-  const color=glow?'#ddfff4':'#b9dce0';
-  joint(c,[[x,-39],[x+side*4,-51],[x+side*12,-62]],3.5,'#89b8cd',color);
-  line(c,[[x+side*4,-50],[x+side*15,-49],[x+side*19,-57]],color,2.8);
-  line(c,[[x+side*10,-60],[x+side*7,-67]],'#e5f5ed',2.3);
-  crystal(c,x+side*12,-61,3.2,glow?'#effff1':'#c8e8e5');
-}
-function frostcrown(c,p,flip=1,pose={}){
-  const s=state(p,pose),charging=s.action==='frostCharge',ice=s.action==='frostbolt'||s.action==='frostRing'||s.action==='shatter';
-  const low=charging?(s.prepare*.47+(s.mode==='rush'?.61:0)+s.rest*.25):s.action==='frostbolt'?s.prepare*.15-s.release*.13:s.action==='shatter'?s.prepare*.1:s.action==='frostRing'?-s.prepare*.12-s.release*.08:0;
-  c.save();c.scale(flip,1);
-  const phases=[0,Math.PI,Math.PI,0];
-  deerLeg(c,-19,s.cycle+phases[0],s,true);deerLeg(c,25,s.cycle+phases[1],s,true);
-  const bodyY=charging?s.prepare*2+(s.mode==='rush'?1:0):s.moving?-Math.abs(Math.sin(s.cycle*2)):0;
-  c.save();c.translate(0,bodyY);
-  oval(c,-5,-3,41,23,grad(c,-45*flip,22,40*flip,-28,['#4e7896','#91bac6','#e1eddf']));
-  poly(c,[[-38,-6],[-50,-10],[-55,-6],[-42,2]],'#b8d4d1','#527b91',.9);
-  line(c,[[-30,-12],[-10,-17],[12,-13]],'#d2e5db',1.5);
-  for(const [x,y]of[[-25,-7],[-12,-10],[1,-8]])crystal(c,x,y,3,'#b9dce0');
-  c.save();c.translate(23,-6);c.rotate(low);c.translate(-23,6);
-  poly(c,[[20,4],[22,-28],[33,-44],[45,-40],[47,-13],[34,9]],grad(c,21*flip,9,47*flip,-43,['#6b96ad','#aeced0','#eff5e5']),'#476b85',1.4);
-  poly(c,[[22,-15],[28,-29],[36,-14],[31,3]],'#c8e6e5');
-  oval(c,49,-32,17,10.5,'#c8ded8');poly(c,[[59,-36],[69,-31],[65,-25],[52,-24]],'#a5c7cc','#547c92',1);
-  poly(c,[[34,-38],[24,-46],[33,-48],[40,-40]],'#b3d4d8','#567d91',.8);
-  eye(c,52,-35,2.2,'#26475d');line(c,[[59,-27],[66,-27]],'#547e8d',1);
-  antler(c,34,-1,ice&&(s.prepare+s.release)>.4);antler(c,44,1,ice&&(s.prepare+s.release)>.4);
-  crystal(c,32,-13,7,ice?'#e7fff0':'#d0ece7');
-  c.restore();c.restore();
-  deerLeg(c,-29,s.cycle+phases[2],s,false);deerLeg(c,13,s.cycle+phases[3],s,false);
-  if(s.action==='shatter'&&(s.prepare||s.release))crystal(c,13,26-s.prepare*5,4,'#e2fff2');
   c.restore();
 }
 
@@ -226,7 +143,7 @@ const art=(kind,paint,color,extra={})=>Object.freeze({paint,animated:true,poseWa
   frequency:3,overlay:overlay(kind,color),windingUp:e=>e.bossKind===kind&&(e.specialAttack||e._visualCast)?.phase==='windup',phaseLabel:e=>label(e,kind),...extra});
 export const BOSS_SPECIALIST_ART=Object.freeze({
   broodmother:art('broodmother',broodmother,'#e7b7a8'),
-  deepcaller:art('deepcaller',deepcaller,'#bcebea'),
+  deepcaller:art('deepcaller',deepcaller,'#bcebea',{facing:profile}),
   frostcrown:art('frostcrown',frostcrown,'#e1f9ff',{facing:profile}),
   furnace:art('furnace',furnace,'#ffd699')
 });

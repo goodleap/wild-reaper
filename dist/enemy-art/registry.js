@@ -7,6 +7,7 @@ import spore from './spore.js';
 import ancient from './ancient.js';
 import bloom from './bloom.js';
 import { SPECIALIST_ART } from './specialists.js';
+import { BOSS_APPEARANCE_ART } from './boss-appearance-art.js';
 
 // Painting and pose callbacks are content modules; the renderer owns caching.
-export const ENEMY_ART=Object.freeze({slime,bat,beetle,brute,boar,spore,ancient,bloom,...SPECIALIST_ART});
+export const ENEMY_ART=Object.freeze({slime,bat,beetle,brute,boar,spore,ancient,bloom,...SPECIALIST_ART,...BOSS_APPEARANCE_ART});

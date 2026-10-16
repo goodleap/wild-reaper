@@ -139,6 +139,6 @@ export function drawArchiveArt(container){
     monsterArt ||= new MonsterArt();
     const visual=enemyVisual(entry),scale=Math.min(visual?.portraitScale??1.38,112/(2*(visual?.halfWidth||30)),96/((visual?.top||35)+(visual?.foot||20)));
     ctx.translate(64,56+((visual?.top||35)-(visual?.foot||20))*scale/2);ctx.scale(scale,scale);
-    monsterArt.draw(ctx,{type:entry.type,bossKind:entry.bossKind,id:0,x:0,y:0,r:visual?.portraitRadius??18,hp:1,hit:0,walkPhase:0,visualFacing:0},{time:0,reduced:true,playerX:1});ctx.restore();
+    monsterArt.draw(ctx,{type:entry.type,bossKind:entry.bossKind,archiveId:entry.id,id:0,x:0,y:0,r:visual?.portraitRadius??18,hp:1,hit:0,walkPhase:0,visualFacing:0},{time:0,reduced:true,playerX:1});ctx.restore();
   }
 }
