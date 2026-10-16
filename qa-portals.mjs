@@ -43,7 +43,7 @@ function openPortal(g) {
 function standAtPortal(g,portal=g.portal) {const door=portalDoor(portal);g.player.x=door.x;g.player.y=door.y-groundOffset(g.player,true);}
 function usePortal(g,portal=g.portal) {standAtPortal(g,portal);return g.enterPortal(portal.id);}
 
-assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'],'new exploration worlds append without shifting existing numeric identities');
+assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city','ember-realm-large'],'new exploration worlds append without shifting the ten existing numeric identities');
 const swampGate=arena(),water=[{id:'gate-water',x:1120,y:0,rx:80,ry:45},{id:'guardian-water',x:0,y:1235,rx:80,ry:45}];
 swampGate.environment={muds:water,props:[],isHazardFree:()=>true};
 const clearGate=swampGate.regions._safePoint({x:0,y:0},true);
@@ -226,7 +226,9 @@ assert.equal(huntEvent.progress,0,'summoned enemies cannot farm hunt progress');
 const ordinary=monster(hunt,'slime',100,5.8);hunt._hurtEnemy(ordinary,ordinary.hp+1);assert.equal(huntEvent.progress,1);
 
 const populations=[];
-for(const region of REGIONS) {
+// This fixture retains the ten existing regional population recipes. The
+// region sample's authored encounters are checked by its launch coverage.
+for(const region of REGIONS.slice(0,10)) {
   const g=arena();g.region=region;g.time=90;g._updatePressure=()=>{};const counts={};const savedRandom=Math.random;
   try {
     for(let i=0;i<240;i++) {

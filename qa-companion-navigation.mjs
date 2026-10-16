@@ -48,7 +48,9 @@ function exited(g,site,member){
 // All authored roost positions have different grid offsets. Closed gates must
 // remain closed; opening them must expose a traversable route without changing
 // the global outdoor grid density, for flying and grounded companion bodies.
-for(const region of WORLD_IDS){
+const completeWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'];
+assert.deepEqual(WORLD_IDS,[...completeWorldIds,'ember-realm-large'],'the partial region sample does not replace any existing recruitment fixture');
+for(const region of completeWorldIds){
   const g=world(region),site=g.relicSites.sites.find(s=>s.kind==='owl'),navigation=terrainNavigation(g.terrain),target={x:site.x,y:site.y-280};
   assert.equal(navigation.find(site,target,13,'air'),null,`${region}: a closed prison has no exit`);
   g.relicSites.openGate(site.id);
@@ -79,6 +81,31 @@ for(const [region,kind,multiple] of [['marsh','owl',true],['ruins','owl',false],
   assert(g.companions.members.includes(member));completed.push({region,kind,members:g.companions.members.length,waitSeconds:frames*.025});
 }
 
+// The explicitly partial ember scene has no recruitment prison. Exercise
+// actual grounded/flying followers on its real bridge and mine roads rather
+// than adding a fictitious owl site to satisfy a complete-world fixture.
+const sample=new Game({mode:'world',worldId:'ember-realm-large'}),sampleLayout=sample.terrain.island.layout;
+sample.enemies=[];sample.gold=10000;sample.player.xpNext=sample.crystalsNext=Infinity;sample.player.invuln=1e9;
+assert.equal(sampleLayout.emberScene?.sample,true);assert.equal(sampleLayout.artTheme,'ember');
+assert.equal(sample.relicSites.sites.length,0,'the sample does not promise unmade recruitment sites');
+for(const [kind,dx,dy] of [['owl',-40,0],['warden',20,10]])assert(sample.companions.recruit(kind,{x:sampleLayout.spawn.x+dx,y:sampleLayout.spawn.y+dy,sourceId:`qa:sample-follow:${kind}`}));
+const roads=sampleLayout.emberScene.roads;
+const sampleTrail=[
+  sampleLayout.spawn,
+  ...roads.find(road=>road.id==='west-approach').points.slice(1),
+  ...sampleLayout.passages.find(passage=>passage.kind==='bridge').waypoints,
+  ...roads.find(road=>road.id==='mine-main').points.slice(1)
+];
+for(const trail of [sampleTrail,[...sampleTrail].reverse()]){
+  for(const waypoint of trail)walkPlayer(sample,waypoint);
+  let frames=0;
+  const caughtUp=()=>sample.companions.members.every(member=>distance(foot(member),foot(sample.player))<=member.followDistance+80);
+  while(!caughtUp()&&frames++<800)tick(sample);
+  assert(caughtUp(),'both real sample followers complete the bridge/mine route in each direction');
+}
+assert.equal(sample.companions.members.length,2,'the same actual followers finish the sample route');
+completed.push({region:sample.worldId,partial:true,members:sample.companions.members.length,waypoints:sampleTrail.length,directions:2});
+
 // A short straight-line distance through the back wall must not suppress the
 // move order. Previously an owl could stay in the cage indefinitely at 150u.
 const near=world('marsh'),nearRescue=rescue(near,'owl');
@@ -95,4 +122,4 @@ assert(tight.terrain.isFree(foot(member).x,foot(member).y,member.r,'air'));
 assert(!tight.terrain.isFree(foot(member).x,foot(member).y,member.r+3,'air'),'fixture starts legally against the inner wall');
 for(let i=0;i<800&&!exited(tight,site,member);i++)tick(tight);
 assert(exited(tight,site,member),'a touching body can recover its route without teleporting');
-console.log(JSON.stringify({companionNavigation:'passed',completed,coverage:'all-world gates, real rescues, moving leader, duplicate flyers with grounded ally, nearby leader behind wall, touching-body attachment, bounded searches and collision replay'}));
+console.log(JSON.stringify({companionNavigation:'passed',completed,coverage:'all ten complete-world gates, real rescues, sample bridge/mine followers in both directions, moving leader, duplicate flyers with grounded ally, nearby leader behind wall, touching-body attachment, bounded searches and collision replay'}));

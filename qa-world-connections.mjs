@@ -7,7 +7,8 @@ import { REGIONS, WORLD_IDS, WORLD_CONNECTIONS, worldNeighbors } from './dist/wo
 import { portalDoor } from './dist/portal-geometry.js';
 
 const legacyIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(WORLD_IDS,[...legacyIds,'verdant-rift','clockshadow-city']);
+assert.deepEqual(WORLD_IDS,[...legacyIds,'verdant-rift','clockshadow-city','ember-realm-large']);
+const existingRegions=REGIONS.slice(0,10);
 assert.deepEqual(WORLD_CONNECTIONS,[[0,1],[1,2],[0,2],[0,3],[3,4],[4,5],[5,6],[6,7],[7,2],[4,2]],'all ten legacy world connections retain their identities');
 assert.equal(new Set(WORLD_CONNECTIONS.map(([a,b])=>worldConnectionId(a,b))).size,WORLD_CONNECTIONS.length);
 const reachable=new Set([0]),queue=[0];
@@ -17,8 +18,12 @@ for(const index of queue)for(const target of worldNeighbors(index)){
 }
 assert.deepEqual([...reachable].sort((a,b)=>a-b),legacyIds.map((_,index)=>index),'the original connected component is preserved');
 assert.deepEqual(worldNeighbors(8),[],'the independent new map is entered through world selection');
+assert.deepEqual(worldNeighbors(9),[],'the independent city retains its selection identity');
+assert.deepEqual(worldNeighbors(10),[],'the region sample cannot create a hidden world connection');
 const outlines=new Set();
-for(const [index,region] of REGIONS.entries())for(const seed of [0,index,17,91]) {
+// Keep complete-world generation/route regression fixtures on their original
+// ten destinations. The new region sample has its own scoped route checks.
+for(const [index,region] of existingRegions.entries())for(const seed of [0,index,17,91]) {
   const island=new Island({region:region.id,seed}),portals=worldNeighbors(index).map(target=>island.plan[`portal:${target}`]);
   if(seed===0)outlines.add(JSON.stringify(region.authored?region.authored.boundaries:island.points));
   assert.equal(island.points.length,region.authored?4:128,'authored maps retain rectangular bounds; procedural coasts retain their bounded geometry');
@@ -56,11 +61,11 @@ for(const [index,region] of REGIONS.entries())for(const seed of [0,index,17,91])
   for(const point of pending)for(const next of links.get(point)||[])if(!connected.has(next)){connected.add(next);pending.push(next);}
   for(const [name,point] of Object.entries(island.plan))assert(connected.has(key(point.x,point.y+96)),`${region.id}/${seed}: route network misses ${name}`);
 }
-assert.equal(outlines.size,REGIONS.length,'every world has its own authored terrain or procedural outline');
+assert.equal(outlines.size,existingRegions.length,'every existing complete world has its own authored terrain or procedural outline');
 
 // Catalog position is identity, never an exponential difficulty multiplier.
 const guardianHp=[];
-for(const [regionIndex,region] of REGIONS.entries()){
+for(const [regionIndex,region] of existingRegions.entries()){
   const fixture={_features:{adventure:true},regionIndex,region,time:0,easy:false,_spawnEnemy:()=>({id:1,r:49,type:'boss'}),_moveEntity:()=>{}};
   const regions=new Regions(fixture),portal={id:'test',x:900,y:0};let guardian;
   fixture._initializeRegionalBoss=boss=>{guardian=boss;};regions._spawnGuardian(portal);guardianHp.push(guardian.maxHp);

@@ -7,7 +7,11 @@ import { MonsterTerritories } from './dist/monster-territories.js';
 
 const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
 const report=[];
-for(const region of WORLD_IDS){
+const completeWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'];
+assert.deepEqual(WORLD_IDS,[...completeWorldIds,'ember-realm-large']);
+// Keep full-map Boss/population/reward fixtures on the ten complete maps.
+// qa-ember-geometry.mjs and the scoped checks below cover the partial sample.
+for(const region of completeWorldIds){
   const g=new Game({mode:'world',debug:true,debugOptions:{testFacilities:false},debugWorld:region});
   const layout=g.terrain.island.layout;
   assert(layout,`${region}: the formal world uses the shared layout`);
@@ -79,6 +83,17 @@ for(const region of WORLD_IDS){
   }
   report.push({region,groups:g.territories.groups.length,guards:guards.length,lakes:layout.lakes.length,shores});
 }
+const sample=new Game({mode:'world',worldId:'ember-realm-large'}),sampleLayout=sample.terrain.island.layout;
+assert.equal(sampleLayout.emberScene?.sample,true,'reduced encounter counts are supported only by the explicitly partial ember sample');
+assert.equal(sampleLayout.artTheme,'ember');assert.equal(sample.territories.groups.length,sampleLayout.encounters.length,'the sample creates exactly its authored encounter reservations');
+assert(sampleLayout.encounters.length>0,'the region sample has an actual encounter');
+assert.equal(sample.territories.groups.filter(group=>group.kind==='boss').length,0,'the sample does not claim a complete-map Boss population');
+assert.equal(sample.regions.portals.length,0);
+for(const group of sample.territories.groups)for(const enemy of group.members){
+  assert(sample.terrain.isFree(enemy.territoryHome.x,enemy.territoryHome.y,enemy.r),'sample encounter members retain the same full-body spawn check');
+  assert.equal(enemy.guardActive,false,'sample encounters wait in their own territory');
+}
+report.push({region:sample.worldId,partial:true,groups:sample.territories.groups.length,guards:sample.territories.groups.filter(group=>group.kind==='guard').length,lakes:sampleLayout.lakes.length});
 const debugForest=new Game({mode:'world',debug:true,debugWorld:'forest'});
 assert(debugForest.territories.groups.filter(group=>group.kind==='guard').every(group=>group.members.some(enemy=>enemy.affix)),'debug facilities also retain the guarded junction elites');
 console.log(JSON.stringify({mapEncounters:'passed',worlds:report}));

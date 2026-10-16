@@ -3,6 +3,7 @@ import { RiftCollision } from '../rift-collision.js';
 import { CityMapArt, drawCityOverview } from './city-map-art.js';
 import { paintCityGround, paintCityWall } from '../city-scenery-art.js';
 import { drawCityLandmark } from '../city-structure-art.js';
+import { EmberMapArt, drawEmberOverview } from './ember-map-art.js';
 // The authored valley uses the same polygons for art, collision and maps.
 // Detailed floor and deep forest are rasterized only in visible, bounded tiles.
 // The complete trees and shrubs at the forest edge use the world depth queue.
@@ -138,6 +139,7 @@ function groundDetails(c,layout,view,scenery){
 }
 
 export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,viewBounds}={}){
+  if(layout?.artTheme==='ember')return drawEmberOverview(c,layout,{scale,labels,landmarks,viewBounds});
   if(layout?.artTheme==='city')return drawCityOverview(c,layout,{scale,labels,landmarks,viewBounds});
   if(layout?.kind!=='rift-forest')return false;c.save();c.lineJoin='round';c.lineCap='round';base(c,layout,{viewBounds,overview:true});
   if(landmarks){for(const [key,mark]of Object.entries(layout.landmarks||{})){if(!Number.isFinite(mark.x)||!Number.isFinite(mark.y)||viewBounds&&!overlaps({minX:mark.x,minY:mark.y,maxX:mark.x,maxY:mark.y},viewBounds))continue;
@@ -153,7 +155,7 @@ export class RiftArt {
   constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.scenery=new SceneryArt(makeCanvas);this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;}
   get cacheStats(){const sprites=this.scenery.cacheStats,city=this.cityArt?.cacheStats;return {entries:this.cache.size+sprites.entries+(city?.entries||0),pixels:this.pixels+sprites.pixels+(city?.pixels||0),bytes:this.pixels*4+sprites.bytes+(city?.bytes||0),limitBytes:PIXEL_LIMIT*4+sprites.limitBytes+(city?.limitBytes||0),builds:this.builds+sprites.builds+(city?.builds||0)};}
   _tile(layout,tx,ty){let id=this.ids.get(layout);if(!id){id=++this.nextId;this.ids.set(layout,id);}const key=`${id}:${tx}:${ty}`;let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
-    const canvas=this.makeCanvas(),side=TILE+BLEED*2;canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else{base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);}
+    const canvas=this.makeCanvas(),side=TILE+BLEED*2;canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else if(layout.artTheme==='ember'){this.emberArt??=new EmberMapArt(this.makeCanvas);this.emberArt.paintTile(c,layout,view);}else{base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);}
     image={canvas,pixels:side*side};while(this.pixels+image.pixels>PIXEL_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);}this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
   }
   drawGround(c,island,{camX=0,camY=0,width=1100,height=700}={}){const layout=island?.layout;if(layout?.kind!=='rift-forest')return false;const left=camX-width/2,top=camY-height/2;c.save();for(let ty=Math.floor(top/TILE);ty<=Math.floor((top+height)/TILE);ty++)for(let tx=Math.floor(left/TILE);tx<=Math.floor((left+width)/TILE);tx++){const image=this._tile(layout,tx,ty);c.drawImage(image.canvas,BLEED,BLEED,TILE,TILE,tx*TILE-left,ty*TILE-top,TILE,TILE);}c.restore();return true;}

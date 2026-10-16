@@ -10,8 +10,9 @@ import { worldArchiveHTML } from './dist/world-archive.js';
 
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city']);
+assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city','ember-realm-large']);
 assert.equal(digest(sections.worlds.definitions.slice(0,9)),'ee9da7fa416564219527b75690d9606ff786479d1307aedba72aafefb4edd2ad','all nine existing complete world definitions remain unchanged');
+assert.equal(digest(sections.worlds.definitions.slice(0,10)),'c1d617ff5f2783b37bb2867754917d5671b7ca1e37012a56648886d8102df628','adding the region sample also preserves the complete city definition');
 assert.equal(digest(sections.worlds.connections),'d552ca4f4ec835d24603a2cf5a2578ebe6d737a7ce5426177655e08712f89980','existing connections remain byte-for-value unchanged');
 assert.deepEqual(worldNeighbors(9),[],'the new city has an independent world selection');
 assert(validateWorlds(sections));

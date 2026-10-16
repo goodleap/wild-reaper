@@ -23,7 +23,7 @@ const fingerprint=value=>createHash('sha256').update(JSON.stringify(canonical(va
 const forest=worldForId('forest').authored;
 assert.equal(fingerprint(forest),'8ea13ab1b15b2e5e625794cb63cd16cec37482658a188aa3c1df710c9d439e80','the complete v0.0.102 forest geometry, routes and content remain unchanged');
 assert.equal(new Set(WORLD_IDS).size,REGIONS.length,'world IDs must be unique');
-assert.deepEqual(WORLD_IDS,['forest',...Object.keys(baseline),'verdant-rift','clockshadow-city'],'existing world indices are persistent and the new world is appended');
+assert.deepEqual(WORLD_IDS,['forest',...Object.keys(baseline),'verdant-rift','clockshadow-city','ember-realm-large'],'all ten existing world indices are persistent and the region sample is appended');
 assert.equal(worldForId('__unregistered__'),REGIONS[0]);
 for(const [index,world] of REGIONS.entries()){
   assert.equal(worldForId(world.id),world);assert.equal(regionFor(index),world);
@@ -58,4 +58,4 @@ for(const [index,world] of REGIONS.entries()){
   }
   assert.equal(digest.digest('hex'),baseline[world.id],`${world.id}: existing generation changed`);
 }
-console.log('World configuration: 10 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 7 original procedural generation hashes passed.');
+console.log('World configuration: 11 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 7 original procedural generation hashes passed.');

@@ -2,6 +2,7 @@ import { RiftCollision, sweepCircleVsCapsule } from './rift-collision.js';
 import { createRiftScenery } from './worlds/rift-scenery.js';
 import { cityDetailVisual } from './city-detail-art.js';
 import { nativeCityVisual } from './city-native-structure-art.js';
+import { emberVisual } from './ember-art.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
@@ -58,6 +59,7 @@ export function rockShadowParts(prop){
 }
 export function sceneryVisual(prop){
   if(prop.visual===false)return false;
+  const ember=emberVisual(prop);if(ember)return Object.freeze(ember);
   const detail=cityDetailVisual(prop);if(detail)return Object.freeze(detail);
   const native=nativeCityVisual(prop);if(native)return Object.freeze(native);
   if(prop.variant==='city-structure')return Object.freeze(cityStructureVisual(prop));

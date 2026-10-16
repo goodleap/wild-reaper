@@ -71,7 +71,12 @@ function reachablePaths(game,goals,radius=22){
 }
 
 const reports=[],networks=new Set();let lakeChecks=0;
-for(const region of WORLD_IDS)for(const seed of [0,7,17]){
+const completeWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'];
+assert.deepEqual(WORLD_IDS,[...completeWorldIds,'ember-realm-large'],'the partial sample appends without changing the complete-world fixtures');
+// These population/loop/objective requirements describe the ten complete
+// maps. The explicitly partial ember scene is checked against its real
+// targets below and by qa-ember-geometry.mjs, not invented full-map content.
+for(const region of completeWorldIds)for(const seed of [0,7,17]){
   const game=world(region,seed),terrain=game.terrain,island=terrain.island,layout=island.layout;
   game.viewWidth=540;game.viewHeight=540*717/393;
   assert(layout,`${region}: authored world layout exists`);
@@ -153,5 +158,17 @@ for(const region of WORLD_IDS)for(const seed of [0,7,17]){
   assert.deepEqual(population(world(region,seed)),population(game),'population does not depend on camera size or combat randomness');
   reports.push({region,seed,goals:goals.length,territories:game.territories.groups.length,...reachability,mainSweeps});
 }
-assert.equal(networks.size,WORLD_IDS.length,'worlds have their own route geometry');
-console.log(JSON.stringify({worldLayout:'passed',worlds:WORLD_IDS.length,seeds:[0,7,17],bodyRadii:[15,22,49],lakeChecks,reports}));
+assert.equal(networks.size,completeWorldIds.length,'the ten complete worlds have their own route geometry');
+const sample=new Game({mode:'world',worldId:'ember-realm-large'}),sampleLayout=sample.terrain.island.layout;
+assert.equal(sampleLayout.worldId,'ember-realm-large');assert.equal(sampleLayout.artTheme,'ember');assert.equal(sampleLayout.emberScene?.sample,true,'the reduced content scope must be explicitly declared as a sample');
+const sampleGoals=[
+  ...sampleLayout.areas.map(area=>({id:`area:${area.id}`,...area.center})),
+  ...sample.settlements.sites.map(site=>({id:site.id,...site.door})),
+  ...sample.relicSites.sites.map(site=>({id:site.id,...site.door})),
+  ...sample.riftExploration.sites.filter(site=>site.kind!=='shortcut').map(site=>({id:site.id,x:site.x,y:site.y}))
+];
+assert(sampleGoals.length>0,'the sample exposes real targets for the general body-sweep check');
+const sampleReachability=reachablePaths(sample,sampleGoals);
+for(const route of sampleLayout.routes)assert(!sample.terrain.rift.firstBlocker(route.ax,route.ay,route.bx,route.by,22),`${route.id}: the sample's actual route retains companion-body clearance`);
+reports.push({region:sample.worldId,partial:true,goals:sampleGoals.length,territories:sample.territories.groups.length,...sampleReachability});
+console.log(JSON.stringify({worldLayout:'passed',completeWorlds:completeWorldIds.length,partialWorlds:1,seeds:[0,7,17],bodyRadii:[15,22,49],lakeChecks,reports}));
