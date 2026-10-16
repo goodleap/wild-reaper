@@ -92,6 +92,10 @@ export class Game {
     this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:this.stage?.currentIsland})});
     this.sceneContent=new SceneContent(this,{story:this.mode==='story'});
     const worldContent=this.sceneContent.allows('worldContent');
+    // Fixed Ember locations own their population; existing worlds retain
+    // their original ambient generation and residents.
+    const emberScene=this.terrain.island?.layout?.emberScene;
+    const ambientContent=worldContent&&!emberScene,residentContent=worldContent&&!emberScene?.sample;
     this._islandWorlds=!!this.terrain.island;
     this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
@@ -135,24 +139,24 @@ export class Game {
     this._moveEntity(this.player,0,0,true);
     if(worldContent&&!this._worldExploration&&!this.expedition)for(let i=0;i<EXPLORATION_SPAWN.initialCount;i++)this._spawnEnemy(EXPLORATION_SPAWN.initialType,adventure?undefined:EXPLORATION_SPAWN.testStartRadius+i*EXPLORATION_SPAWN.testRadiusStep);
     this.adventure=null;
-    this.encounters=encounters?new Encounters(this,{generation:worldContent}):null;
+    this.encounters=encounters?new Encounters(this,{generation:ambientContent}):null;
     this.combat=new CombatResolution(this);this.attacks=new CombatAttacks(this);
     this.combatStatus=new CombatStatus(this);
     // Reserve the nearby debug entrance before environmental hazards choose
     // their positions. The ordinary world keeps its original generation order.
     if(this.debugOptions.testFacilities&&settlements)this.settlements=new Settlements(this);
-    this.environment=environment?new Environment(this,{generation:worldContent}):null;
+    this.environment=environment?new Environment(this,{generation:ambientContent}):null;
     // Natural water is fixed before smaller supplies choose their habitat.
-    this.adventure=adventure?new Adventure(this,{generation:worldContent}):null;
+    this.adventure=adventure?new Adventure(this,{generation:ambientContent}):null;
     this.relics=new Relics(this);this.barrier=new GuardianBarrier(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:worldContent&&elites});
-    this.companions=new Companions(this,{generation:worldContent&&companions});
+    this.companions=new Companions(this,{generation:ambientContent&&companions});
     this.superSkills=new SuperSkills(this);this.progression=new CombatProgression(this,{costForTier:crystalCost});this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
     this.abilities=new AbilityRuntime(this);this._abilityCooldowns={fireball:.4,frostbolt:.7};
-    this.settlements??=new Settlements(this,{generation:worldContent&&settlements});
+    this.settlements??=new Settlements(this,{generation:residentContent&&settlements});
     this.waveDirector=new WaveDirector(this);
     this.discoveredMap=new Set();if(worldContent)this.regions.initialize();
     this.riftExploration=new RiftExploration(this,{generation:worldContent});
-    this.relicSites=new RelicSites(this,{generation:!!(worldContent&&adventure&&(encounters||companions))});
+    this.relicSites=new RelicSites(this,{generation:!!(residentContent&&adventure&&(encounters||companions))});
     if(this.mode!=='story')this.settlements.ensureAngels?.();
     this.territories=new MonsterTerritories(this,worldContent?{}:{generation:false});
     this.expedition?.initialize();
@@ -513,21 +517,21 @@ export class Game {
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;
     if(!this.regions.restoreWorld(this.mapId)) {
-      const seed=nextIsland?.seed??this.regionIndex,generate=!this.stage?.isBossIsland;
+      const seed=nextIsland?.seed??this.regionIndex,generate=!this.stage?.isBossIsland,emberScene=this.region.authored?.emberScene,ambient=generate&&!emberScene,residents=generate&&!emberScene?.sample;
       this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:nextIsland})});this.enemies=[];this.gems=[];this.coins=[];
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.riftExploration=null;this.discoveredMap=new Set();
-      this.companions.camps=[];this.companions.generation=generate&&this._features.companions;this.companions.nextAt=this.time+35;
+      this.companions.camps=[];this.companions.generation=ambient&&this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();
       const worldSpawn=this.terrain.island?.layout?.spawn;
       if(worldSpawn){p.x=worldSpawn.x;p.y=worldSpawn.y-groundOffset(p,true);}
       this._moveEntity(p,0,0,true);
-      if(this._features.environment)this.environment=new Environment(this,{generation:generate});
-      if(this._features.adventure)this.adventure=new Adventure(this,{generation:generate});
-      if(generate&&this._features.encounters)this.encounters=new Encounters(this);
-      this.settlements=new Settlements(this,{generation:generate&&this._features.settlements});
+      if(this._features.environment)this.environment=new Environment(this,{generation:ambient});
+      if(this._features.adventure)this.adventure=new Adventure(this,{generation:ambient});
+      if(generate&&this._features.encounters)this.encounters=new Encounters(this,{generation:ambient});
+      this.settlements=new Settlements(this,{generation:residents&&this._features.settlements});
       this.regions.initialize(portal,fromIndex);
       this.riftExploration=new RiftExploration(this);
-      this.relicSites=new RelicSites(this,{generation:!!(generate&&this._features.adventure&&(this._features.encounters||this._features.companions))});
+      this.relicSites=new RelicSites(this,{generation:!!(residents&&this._features.adventure&&(this._features.encounters||this._features.companions))});
       this.territories=new MonsterTerritories(this);
     }
     if(this.adventure){this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;}

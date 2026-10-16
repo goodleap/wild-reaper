@@ -1,11 +1,13 @@
+import { getWaterContours, WATER_SHAPES, waterIntersectsCircle, waterIntersectsCapsule } from '../water-geometry.js';
+
 export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,worldId='forest'){
   const fail=key=>{throw new TypeError(`Invalid world configuration: ${path}.${key}`);};
   if(!layout||layout.kind!=='rift-forest'||layout.revision!==1)fail('identity');
   const legacy=worldId==='forest';
   if(legacy&&(layout.id!=='rift-forest:1'||layout.worldId&&layout.worldId!=='forest'))fail('identity');
   if(!legacy&&(!/^[a-z][a-z0-9-]{0,63}$/.test(worldId)||layout.worldId!==worldId||layout.id!==`${worldId}:1`))fail('identity');
-  if(layout.artTheme!=null&&!['forest','city'].includes(layout.artTheme))fail('artTheme');
-  const city=layout.artTheme==='city';
+  if(layout.artTheme!=null&&!['forest','city','ember'].includes(layout.artTheme))fail('artTheme');
+  const city=layout.artTheme==='city',ember=layout.artTheme==='ember';
   const array=(value,key,min,max)=>{if(!Array.isArray(value)||value.length<min||value.length>max)fail(key);return value;};
   const number=(value,key,min=-10000,max=10000)=>{if(!Number.isFinite(value)||value<min||value>max)fail(key);};
   const text=(value,key)=>{if(typeof value!=='string'||!value||value.length>128)fail(key);};
@@ -20,7 +22,7 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
   const passageIds=new Set(),gateIds=new Set();for(const passage of array(layout.passages,'passages',legacy?20:0,legacy?64:128)){
     text(passage.id,'passage.id');if(passageIds.has(passage.id))fail('duplicate passage');passageIds.add(passage.id);
     if(!ids.has(passage.from)||(passage.to!==null&&!ids.has(passage.to)))fail('passage endpoints');
-    number(passage.width,'passage.width',100,400);polygon(passage.points,'passage.points');array(passage.waypoints,'passage.waypoints',2,32).forEach(p=>point(p,'passage.waypoint'));
+    number(passage.width,'passage.width',100,ember&&layout.emberScene?.sample===false?500:400);polygon(passage.points,'passage.points');array(passage.waypoints,'passage.waypoints',2,32).forEach(p=>point(p,'passage.waypoint'));
     if(!['trail','secret','bridge','shortcut','cave','exit'].includes(passage.kind))fail('passage.kind');
     if(passage.gateId){text(passage.gateId,'gateId');if(gateIds.has(passage.gateId))fail('duplicate gate');gateIds.add(passage.gateId);point(passage.gate,'gate');for(const key of ['ax','ay','bx','by'])number(passage.gate[key],'gate.'+key);number(passage.gate.r,'gate.r',1,50);}
   }
@@ -75,9 +77,89 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
     const reached=new Set([layout.areas[0].id]);for(const id of reached)for(const next of adjacent.get(id))reached.add(next);
     if(reached.size!==ids.size)fail('disconnected areas');
   }
-  for(const key of [...reservations,...neighbors.map(index=>`portal:${index}`)]){point(layout.plan?.[key],'plan.'+key);number(layout.plan[key].r,'plan.radius',50,500);if(key.startsWith('portal:')){point(layout.plan[key].arrivalDirection,'plan.arrivalDirection');const direction=layout.plan[key].arrivalDirection;if(Math.abs(Math.hypot(direction.x,direction.y)-1)>.001)fail('arrivalDirection unit length');}}
-  for(const encounter of array(layout.encounters,'encounters',10,32)){text(encounter.id,'encounter.id');point(encounter,'encounter');number(encounter.r,'encounter.r',75,400);number(encounter.tier,'encounter.tier',0,4);if(!['combat','guard','boss'].includes(encounter.kind))fail('encounter.kind');if(encounter.kind==='boss'&&!bossIds.has(encounter.bossKind))fail('encounter.bossKind');if(encounter.name)text(encounter.name,'encounter.name');if(encounter.count!=null){number(encounter.count,'encounter.count',1,12);if(!Number.isInteger(encounter.count))fail('encounter.count');}if(encounter.strength!=null)number(encounter.strength,'encounter.strength',1,3);}
-  for(const patch of array(layout.patches,'patches',1,32)){polygon(patch.points,'patch.points');point(patch.center,'patch.center');number(patch.density,'patch.density',0,1);}
+  if(!ember||layout.emberScene?.sample===false)for(const key of [...reservations,...neighbors.map(index=>`portal:${index}`)]){point(layout.plan?.[key],'plan.'+key);number(layout.plan[key].r,'plan.radius',50,500);if(key.startsWith('portal:')){point(layout.plan[key].arrivalDirection,'plan.arrivalDirection');const direction=layout.plan[key].arrivalDirection;if(Math.abs(Math.hypot(direction.x,direction.y)-1)>.001)fail('arrivalDirection unit length');}}
+  for(const encounter of array(layout.encounters,'encounters',ember?1:10,ember&&layout.emberScene?.sample===true?2:32)){text(encounter.id,'encounter.id');point(encounter,'encounter');number(encounter.r,'encounter.r',75,400);number(encounter.tier,'encounter.tier',0,4);if(!['combat','guard','boss'].includes(encounter.kind))fail('encounter.kind');if(encounter.kind==='boss'&&!bossIds.has(encounter.bossKind))fail('encounter.bossKind');if(encounter.name)text(encounter.name,'encounter.name');if(encounter.count!=null){number(encounter.count,'encounter.count',1,12);if(!Number.isInteger(encounter.count))fail('encounter.count');}if(encounter.strength!=null)number(encounter.strength,'encounter.strength',1,3);}
+  for(const patch of array(layout.patches,'patches',ember?0:1,32)){polygon(patch.points,'patch.points');point(patch.center,'patch.center');number(patch.density,'patch.density',0,1);}
+  if(ember){
+    const scene=layout.emberScene,full=scene?.revision===2&&scene?.sample===false;
+    if(worldId!=='ember-realm-large'||!scene||!full&&(scene.revision!==1||scene.sample!==true))fail('emberScene.identity');
+    if(neighbors.length)fail('emberScene.world connections');
+    if(full){
+      if(layout.name!=='熔火之境'||layout.areas.length!==17||layout.passages.length!==23||layout.interactions.caves.length!==3||layout.interactions.chests.length!==10||layout.interactions.gates.length)fail('emberScene.full scope');
+      if(Object.keys(layout.plan??{}).length!==reservations.length||Object.keys(layout.plan??{}).some(key=>!reservations.includes(key)))fail('emberScene.full reservations');
+      if(new Set(layout.interactions.caves.map(c=>c.caveId)).size!==3)fail('emberScene.independent caves');
+      if(layout.encounters.filter(e=>e.kind==='boss').length!==2||layout.encounters.length<12)fail('emberScene.full encounters');
+    } else {
+      if(Object.keys(layout.plan??{}).length)fail('emberScene.sample reservations');
+      if(layout.areas.length!==2||layout.passages.length!==1||layout.interactions.caves.length!==1||layout.interactions.chests.length!==1||layout.interactions.gates.length)fail('emberScene.sample scope');
+      if(layout.encounters.some(e=>e.kind!=='combat'))fail('emberScene.sample encounter');
+    }
+    const sb=full?bounds:scene.sampleBounds;if(!sb||sb.minX>=sb.maxX||sb.minY>=sb.maxY)fail('emberScene.sampleBounds');
+    for(const k of ['minX','maxX','minY','maxY'])number(sb[k],'emberScene.bounds.'+k,k.endsWith('X')?bounds.minX:bounds.minY,k.endsWith('X')?bounds.maxX:bounds.maxY);
+    const local=(p,key)=>{point(p,key);if(p.x<sb.minX||p.x>sb.maxX||p.y<sb.minY||p.y>sb.maxY)fail(key+'.bounds');};
+    for(const ring of [...layout.boundaries,...layout.solidBoundaries,...layout.lakes])for(const p of ring.points)local(p,'emberScene.ring');
+    if(JSON.stringify(scene.groundRings)!==JSON.stringify(layout.boundaries)||JSON.stringify(scene.highOpenRings)!==JSON.stringify(layout.solidBoundaries))fail('emberScene.shared geometry');
+    if(JSON.stringify(scene.lavaRings)!==JSON.stringify(layout.lakes.map(({kind,...ring})=>ring)))fail('emberScene.shared lava');
+    const bridges=full?array(scene.bridges,'emberScene.bridges',3,3):[scene.bridge],bridgeIds=new Set(),bridgePassages=layout.passages.filter(p=>p.kind==='bridge');
+    if(full&&JSON.stringify(scene.bridge)!==JSON.stringify(bridges[0]))fail('emberScene.primary bridge');
+    if(bridgePassages.length!==bridges.length)fail('emberScene.bridge count');
+    for(const [index,bridge] of bridges.entries()){
+      if(!bridge||bridgeIds.has(bridge.id))fail('emberScene.bridge identity');bridgeIds.add(bridge.id);text(bridge.id,'emberScene.bridge.id');
+      const passage=full?bridgePassages.find(p=>p.id===bridge.connection):bridgePassages[0],width=[160,220,240][index],span=[900,1100,1050][index];
+      if(!passage||bridge.width!==width||passage.width!==width||passage.kind!=='bridge')fail('emberScene.bridge width');
+      array(bridge.deck,'emberScene.bridge.deck',2,2).forEach(p=>local(p,'emberScene.bridge.deck'));
+      if(Math.abs(Math.hypot(bridge.deck[1].x-bridge.deck[0].x,bridge.deck[1].y-bridge.deck[0].y)-span)>.001)fail('emberScene.bridge span');
+      polygon(bridge.points,'emberScene.bridge.points');local(bridge.center,'emberScene.bridge.center');
+      if(Math.hypot((bridge.deck[0].x+bridge.deck[1].x)/2-bridge.center.x,(bridge.deck[0].y+bridge.deck[1].y)/2-bridge.center.y)>.001)fail('emberScene.bridge center');
+      if(JSON.stringify(bridge.points)!==JSON.stringify(passage.points)||JSON.stringify(bridge.deck)!==JSON.stringify(passage.deck))fail('emberScene.shared bridge');
+    }
+    if(full){
+      const zoneIds=new Set();
+      for(const zone of array(scene.zones,'emberScene.zones',17,17)){
+        text(zone.id,'emberScene.zone.id');if(zoneIds.has(zone.id))fail('emberScene.zone duplicate');zoneIds.add(zone.id);
+        const area=layout.areas.find(a=>a.id===zone.area);if(!area||zoneIds.size>17||scene.zones.filter(z=>z.area===zone.area).length!==1)fail('emberScene.zone area');
+        text(zone.kind,'emberScene.zone.kind');text(zone.paletteKind,'emberScene.zone.paletteKind');
+        if(zone.kind!==area.kind||zone.paletteKind!==area.paletteKind||JSON.stringify(zone.points)!==JSON.stringify(area.points))fail('emberScene.shared zone');
+      }
+    }
+    const surfaceIds=new Set();
+    // These are ordinary existing wading surfaces, separate from the deep
+    // chasm rings. Their exact shared contour must stay on real dry ground.
+    const inside=(p,ring)=>{let result=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)result=!result;}return result;};
+    const groundPoint=p=>layout.boundaries.reduce((value,ring)=>inside(p,ring.points)?!value:value,false);
+    for(const surface of array(scene.surfaces??[],'emberScene.surfaces',full?1:0,full?4:0)){
+      text(surface.id,'emberScene.surface.id');if(surfaceIds.has(surface.id))fail('emberScene.surface duplicate');surfaceIds.add(surface.id);
+      local(surface,'emberScene.surface');number(surface.rx,'emberScene.surface.rx',30,500);number(surface.ry,'emberScene.surface.ry',30,500);number(surface.angle,'emberScene.surface.angle',-Math.PI,Math.PI);number(surface.seed,'emberScene.surface.seed',0,1);number(surface.scale,'emberScene.surface.scale',.375,6.25);
+      if(surface.type!=='mud'||surface.kind!=='lava'||surface.paintedByWorld!==true||!WATER_SHAPES.includes(surface.shape)||surface.island||Math.abs(surface.scale-surface.rx/80)>.0001)fail('emberScene.surface identity');
+      const contour=getWaterContours(surface);if(contour.outer.length!==48||contour.holes.length||!groundPoint(surface))fail('emberScene.surface geometry');
+      for(const p of contour.outer){local(p,'emberScene.surface.point');if(!groundPoint(p))fail('emberScene.surface ground');}
+      for(const ring of layout.boundaries)for(let i=0;i<ring.points.length;i++){const a=ring.points[i],b=ring.points[(i+1)%ring.points.length];if(waterIntersectsCapsule(surface,a.x,a.y,b.x,b.y,49))fail('emberScene.surface boundary clearance');}
+      const targets=[{...layout.spawn,r:180},...Object.values(layout.plan),...layout.encounters,...layout.interactions.caves.flatMap(s=>[s,{...s.approach,r:90}]),...layout.interactions.chests.flatMap(s=>[s,{...s.approach,r:75}])];
+      if(targets.some(p=>waterIntersectsCircle(surface,p.x,p.y,(p.r??90)+49)))fail('emberScene.surface objective separation');
+      for(const road of scene.roads)for(let i=1;i<road.points.length;i++)if(waterIntersectsCapsule(surface,road.points[i-1].x,road.points[i-1].y,road.points[i].x,road.points[i].y,road.width/2+49))fail('emberScene.surface route separation');
+    }
+    const propIds=new Set(),kinds=['basalt','shrub','tree','ore','crate','cart','lamp','shelter','fence','bridge-rail','cave-pillar','camp-tent','crane','forge','totem','arch','arch-pier','arch-lintel','dead-tree','crystal','bench','well','anvil','banner','barrel','sign'];
+    for(const prop of array(scene.props,'emberScene.props',1,full?2000:160)){
+      text(prop.id,'emberScene.prop.id');if(propIds.has(prop.id))fail('emberScene.prop duplicate');propIds.add(prop.id);
+      if(prop.variant!=='ember-native'||!kinds.includes(prop.emberKind)||!['tree','rock','log'].includes(prop.type)||typeof prop.collision!=='boolean')fail('emberScene.prop identity');
+      local(prop,'emberScene.prop');number(prop.width,'emberScene.prop.width',4,full?1200:1000);number(prop.depth,'emberScene.prop.depth',4,200);number(prop.height,'emberScene.prop.height',1,200);number(prop.visualWidth,'emberScene.prop.visualWidth',4,full?1400:1000);
+      if(prop.width<prop.depth||prop.r!==prop.depth/2||prop.halfLength!==(prop.width-prop.depth)/2||prop.angle!==0||prop.collision&&prop.halfLength>0&&prop.type!=='log'||prop.type==='log'&&prop.halfLength===0)fail('emberScene.prop footprint');
+      if(prop.area!=='bridge'&&!ids.has(prop.area))fail('emberScene.prop area');
+      if(prop.emberKind==='arch-lintel'&&prop.collision!==false)fail('emberScene.arch clearance');
+    }
+    const roadIds=new Set();
+    for(const road of array(scene.roads,'emberScene.roads',1,full?80:12)){text(road.id,'emberScene.road.id');if(roadIds.has(road.id))fail('emberScene.road duplicate');roadIds.add(road.id);number(road.width,'emberScene.road.width',40,180);array(road.points,'emberScene.road.points',2,16).forEach(p=>local(p,'emberScene.road.point'));if(road.material!=null&&!['sand','stone','ash','ochre'].includes(road.material))fail('emberScene.road material');}
+    const detailIds=new Set();
+    for(const detail of array(scene.details??[],'emberScene.details',0,full?256:0)){
+      text(detail.id,'emberScene.detail.id');if(detailIds.has(detail.id))fail('emberScene.detail duplicate');detailIds.add(detail.id);
+      if(!ids.has(detail.area)||!['rail','steps','spring','workyard','altar'].includes(detail.kind))fail('emberScene.detail identity');
+      const polygonDetail=['spring','workyard','altar'].includes(detail.kind);number(detail.width,'emberScene.detail.width',polygonDetail?0:1,800);number(detail.seed,'emberScene.detail.seed',0,1);array(detail.points,'emberScene.detail.points',polygonDetail?3:2,32).forEach(p=>local(p,'emberScene.detail.point'));
+    }
+    for(const site of [...layout.interactions.caves,...layout.interactions.chests]){
+      local(site,'emberScene.site');local(site.approach,'emberScene.site.approach');if(!ids.has(site.area))fail('emberScene.site area');
+      if(Math.hypot(site.x-site.approach.x,site.y-site.approach.y)>(site.caveId?90:65))fail('emberScene.site approach distance');
+    }
+  }
   for(const key of ['ground','brush','forest','ridge','water','waterLight','bridge'])if(!/^#[0-9a-fA-F]{6}$/.test(layout.palette?.[key]))fail('palette.'+key);
   return true;
 }

@@ -7,7 +7,11 @@ import { MonsterTerritories } from './dist/monster-territories.js';
 
 const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
 const report=[];
-for(const region of WORLD_IDS){
+const completeWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city','ember-realm-large'];
+assert.deepEqual(WORLD_IDS,completeWorldIds);
+// Every complete map exercises real finite populations, open Boss rewards
+// and persistence. Fixed ember chests replace random supply generation.
+for(const region of completeWorldIds){
   const g=new Game({mode:'world',debug:true,debugOptions:{testFacilities:false},debugWorld:region});
   const layout=g.terrain.island.layout;
   assert(layout,`${region}: the formal world uses the shared layout`);
@@ -40,12 +44,19 @@ for(const region of WORLD_IDS){
     g.regions.openPortal(current);assert.equal(g.regions._rewardQueue.length,0,'reward cannot be claimed twice');
     assert.equal(g.superSkills.pending,null);
   }
-  const secret=layout.clearings.find(c=>c.kind==='secret');assert(secret,`${region}: an exploration branch has supplies`);
-  place(g,secret);g.adventure._refreshSupplies(true);
-  const crate=g.adventure.props.find(p=>p.id===`supply:layout:${secret.id}`);assert(crate,`${region}: hidden supply is usable`);
-  assert(g.adventure.hitSupply(crate,crate.hp));
-  place(g,{x:0,y:0});g.adventure._refreshSupplies(true);place(g,secret);g.adventure._refreshSupplies(true);
-  assert(!g.adventure.props.some(p=>p.id===crate.id),'returning never regenerates a consumed supply');
+  const secret=layout.clearings.find(c=>c.kind==='secret');assert(secret,`${region}: an optional exploration branch remains`);
+  if(region==='ember-realm-large'){
+    assert.equal(layout.emberScene.sample,false);assert.equal(g.adventure.generation,false,'the authored world excludes unconstrained random supplies');
+    const chest=g.riftExploration.sites.find(site=>site.kind==='chest');assert(chest);place(g,chest);
+    const gold=g.gold;assert(g.riftExploration.interact(chest.id));assert(g.gold>gold);assert.equal(chest.state,'claimed');
+    assert.equal(g.riftExploration.interact(chest.id),false,'a fixed exploration reward is claimed once');
+  }else{
+    place(g,secret);g.adventure._refreshSupplies(true);
+    const crate=g.adventure.props.find(p=>p.id===`supply:layout:${secret.id}`);assert(crate,`${region}: hidden supply is usable`);
+    assert(g.adventure.hitSupply(crate,crate.hp));
+    place(g,{x:0,y:0});g.adventure._refreshSupplies(true);place(g,secret);g.adventure._refreshSupplies(true);
+    assert(!g.adventure.props.some(p=>p.id===crate.id),'returning never regenerates a consumed supply');
+  }
   const origin=g.regionIndex,out=g.regions.portals[0];
   if(worldNeighbors(origin).length){
     assert(out,'connected worlds retain a physical exit');assert(g._switchRegion(out));

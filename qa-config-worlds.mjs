@@ -36,7 +36,8 @@ const expected={
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const legacyWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(WORLD_IDS,[...legacyWorldIds,'verdant-rift','clockshadow-city'],'append the new map without renumbering existing worlds');
+const existingWorldIds=[...legacyWorldIds,'verdant-rift','clockshadow-city'];
+assert.deepEqual(WORLD_IDS,[...existingWorldIds,'ember-realm-large'],'append the ember world without renumbering the ten existing worlds');
 for(const [id,hash]of Object.entries(expected.exports)){
   const module=await import(`./dist/${id}.js`),data=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(module).filter(([,value])=>typeof value!=='function'))));
   if(data.WORLD_IDS)data.WORLD_IDS=data.WORLD_IDS.slice(0,8);
@@ -62,15 +63,23 @@ for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
   assert.equal(digest(out),expected.traces[world.id],`${world.id}: exact deterministic terrain placements`);
   assert(Object.isFrozen(world)&&Object.isFrozen(world.terrain));
 }
-assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,10);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
+assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,11);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
-assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['forest','verdant-rift','clockshadow-city'],'all fixed maps retain separate identities');
+assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['forest','verdant-rift','clockshadow-city','ember-realm-large'],'all fixed maps and the ember world retain separate identities');
 assert.equal(sections.worlds.definitions[0].authored.areas.length,18);
 const verdant=sections.worlds.definitions.find(world=>world.id==='verdant-rift');
 assert.equal(verdant.authored.worldId,verdant.id);assert.equal(verdant.authored.id,'verdant-rift:1');
 assert.equal(verdant.authored.bounds.maxX-verdant.authored.bounds.minX,14400);assert.equal(verdant.authored.bounds.maxY-verdant.authored.bounds.minY,10800);
 assert(!sections.worlds.connections.some(edge=>edge.includes(verdant.id)),'the new world is an independent starting choice');
+const ember=sections.worlds.definitions.find(world=>world.id==='ember-realm-large');
+assert.equal(ember.authored.worldId,ember.id);assert.equal(ember.authored.id,'ember-realm-large:1');assert.equal(ember.authored.artTheme,'ember');
+assert.equal(ember.authored.emberScene?.sample,false,'the full ember world replaces the partial preview');
+assert.equal(ember.authored.emberScene.revision,2);assert.equal(ember.authored.areas.length,17);assert.equal(ember.authored.passages.length,23);
+assert.equal(ember.authored.passages.filter(p=>p.kind==='bridge').length,3);assert.equal(ember.authored.interactions.caves.length,3);assert.equal(ember.authored.interactions.chests.length,10);
+assert.equal(ember.authored.encounters.filter(e=>e.kind==='boss').length,2);assert.equal(Object.keys(ember.authored.plan).length,12);
+assert.equal(ember.authored.bounds.maxX-ember.authored.bounds.minX,14400);assert.equal(ember.authored.bounds.maxY-ember.authored.bounds.minY,10800);
+assert(!sections.worlds.connections.some(edge=>edge.includes(ember.id)),'the ember world does not add travel routes to an existing world');
 const reject=(edit,label)=>{const bad=structuredClone(sections);edit(bad);assert.throws(()=>validateWorlds(bad),undefined,label);};
 reject(s=>s.worlds.definitions[0].terrain.generatorId='remote-code','unregistered behavior');
 reject(s=>s.worlds.order.reverse(),'persistent numeric world identities');
@@ -100,4 +109,4 @@ for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
   assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
 }
-console.log('World configuration checked: 10 world identities, 8 unchanged stages, 10 unchanged legacy routes, separate authored maps and unchanged legacy values/terrain traces; invalid cross-references rejected.');
+console.log('World configuration checked: 11 world identities with the ten existing indices preserved, 8 unchanged stages, 10 unchanged legacy routes, separate authored maps/ember world and unchanged legacy values/terrain traces; invalid cross-references rejected.');

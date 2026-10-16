@@ -81,7 +81,7 @@ export class Settlements {
       const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
       const site={...def,id:`site:${mapIdentity(this.game)}:${def.type}`,x,y,sortY:y,door:{x,y:y+(settlementType(def)?.doorOffset??30)},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
       if(!this._validSite(site,{nearSpawn}))continue;
-      if(site.type==='supply')site.name=WORLD_HUT_NAMES[region]||WORLD_HUT_NAMES.forest;
+      if(site.type==='supply')site.name=WORLD_HUT_NAMES[region]||(this.game.terrain.island?.layout?.artTheme==='ember'?def.name:WORLD_HUT_NAMES.forest);
       if(site.type==='merchant') {
         site.relicId=RELICS[Math.floor(this._hash(index+199,63)*RELICS.length)].id;
         site.stock={...economy.shop.stock};

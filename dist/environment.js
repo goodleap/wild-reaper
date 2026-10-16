@@ -54,6 +54,9 @@ export class Environment {
     // Authored lakes belong to the stable world layout. Their bounds may span
     // several terrain cells, so neither lookup nor painting uses a cell radius.
     this._fixedWater=game.terrain?.island?.layout?.kind==='rift-forest';
+    // Authored shallow surfaces use the existing water and damage rules even
+    // when unplanned ambient generation is disabled for a fixed world.
+    this.muds=(game.terrain?.island?.layout?.emberScene?.surfaces||[]).map(surface=>({...surface}));
     // This map's deep-water polygons and bridge cutouts share the baked
     // terrain mask. Legacy wading pools must not repaint or close its paths.
     this._macroWaters=this._fixedWater?[]:game.terrain?.island?.layout?.lakes??[];
