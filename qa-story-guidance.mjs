@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { drawStoryGuideGround, drawStoryGuidePointer, storyRouteMarks, storyGuidePointerPlacement, STORY_GUIDANCE_RULES } from './dist/story-guidance.js';
+import { drawStoryGuideGround, storyRouteMarks, STORY_GUIDANCE_RULES } from './dist/story-guidance.js';
 import { WorldMap, landmarkState } from './dist/world-map.js';
 import { visitSceneUnits } from './dist/unit-counts.js';
 import { dialogueSpeakers } from './dist/scene-dialogue.js';
@@ -10,10 +10,14 @@ import { harness } from './qa-app-harness.mjs';
 // The final objective is beyond this verified local route and must not be joined.
 const guide={target:{x:900,y:0},waypoint:{x:0,y:220},path:[{x:0,y:0},{x:0,y:220},{x:360,y:220}],kind:'travel',label:'沿小路会合',shortLabel:'会合处',arrivalRadius:160};
 const marks=storyRouteMarks(guide);
-assert(marks.length>1&&marks.length<=STORY_GUIDANCE_RULES.maxMarks);
+assert(marks.length>10,'larger dense guidance covers the complete route, including offscreen portions');
 assert(marks.every(mark=>mark.x===0&&mark.y<=220||mark.y===220&&mark.x<=360),'marks follow the L-shaped road instead of a diagonal shortcut');
 assert.equal(marks[0].angle,Math.PI/2);
 assert(marks.some(mark=>mark.angle===0));
+assert.equal(STORY_GUIDANCE_RULES.spacing,42);
+const shifted=storyRouteMarks({...guide,routePath:guide.path,progress:6});
+assert.deepEqual(shifted,marks,'small hero movement does not slide the ground arrows');
+assert(marks.at(-1).x>300,'the route is not cut off at the old 460-unit drawing horizon');
 assert.deepEqual(storyRouteMarks(null),[]);
 assert.deepEqual(storyRouteMarks({...guide,path:[{x:0,y:0}],waypoint:null}),[],'no guessed route while navigation waits for its budget');
 assert.deepEqual(storyRouteMarks({...guide,kind:'hold',target:{x:0,y:100},arrivalRadius:230}),[],'inside the guardian aura, hold position instead of continuing to its centre');
@@ -27,14 +31,8 @@ drawStoryGuideGround(ctx,{...guide,kind:'hold',areaRadius:230,arrivalRadius:230}
 assert.equal(arcs.at(-1)[2],230,'the hold marker agrees with the actual guard radius');
 drawStoryGuideGround(ctx,{...guide,kind:'hold',arrivalRadius:160});
 assert.equal(arcs.at(-1)[2],27,'a conversation is a small destination marker, not a large guard aura');
-assert.equal(drawStoryGuidePointer(ctx,guide,null),false);
-assert(drawStoryGuidePointer(ctx,guide,{x:340,y:170,angle:1},{width:393}));
-assert.deepEqual(labels,['会合处']);assert.equal(balance,0);
-const exclusion={x:280,y:145,width:100,height:65},edge={x:340,y:170,angle:1};
-const relocated=storyGuidePointerPlacement(guide,edge,{width:393,height:717,avoid:[exclusion]});
-assert(relocated&&relocated.y!==edge.y,'a boss body or dialogue at the screen edge moves the pointer into free space');
-assert(relocated.rect.y+relocated.rect.height<=exclusion.y||relocated.rect.y>=exclusion.y+exclusion.height);
-assert.equal(storyGuidePointerPlacement(guide,edge,{width:393,height:717,avoid:[{x:0,y:0,width:393,height:717}]}),null,'a crowded screen keeps the ground route and objective instead of covering combat');
+assert.equal(balance,0,'ground drawing restores canvas state for later units');
+assert.deepEqual(labels,[],'the ground ribbon renders no location direction labels');
 
 // Stale or debug-revealed world data must not leak into a chapter's rendering,
 // discovery, unit tally or ambient conversations, including targetless phases.
@@ -68,10 +66,10 @@ assert.equal(h.run('adventureSceneProps(game.player.x,game.player.y).length'),0)
 h.run(`game.story.getGuide=()=>({kind:'travel',shortLabel:'天使',target:{x:game.player.x+2000,y:game.player.y},waypoint:null,path:[]});drawObjectivePointers();`);
 assert.equal(h.run('guideLabels.length'),0,'a final target cannot substitute for an unavailable navigable waypoint');
 h.run(`game.story.getGuide=()=>({kind:'travel',shortLabel:'天使',target:{x:game.player.x,y:game.player.y+2000},waypoint:{x:game.player.x+2000,y:game.player.y},path:[]});drawObjectivePointers();`);
-assert.equal(h.run('guideLabels[0]'),'天使');
+assert.equal(h.run('guideLabels.length'),0,'story ground guidance replaces duplicate location labels and edge pointers');
 h.run(`game.story=savedStory;ctx.fillText=savedText;game.enemies=[{id:'leader',type:'boss',storyEnemy:true,storyLeader:true,name:'追猎统领',bossKind:'ancient',x:game.player.x+50,y:game.player.y,hp:20,maxHp:20}];updateHUD();`);
 assert.match(node('boss-name').textContent,/追猎统领 · 追兵领队/);
 const source=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8'),render=source.slice(source.indexOf('function renderGame()'),source.indexOf('function drawStoryRealmGround()'));
 assert(render.indexOf('drawStoryGuideGround')<render.indexOf('drawEnemyTelegraphs()'));
 assert(render.indexOf('drawStoryGuideGround')<render.indexOf('drawScene(actors'));
-console.log('Story guidance: route-aware ground marks, visible destinations, hold radii, larger edge pointers, targetless scene isolation, owned units/dialogue/map markers and leader HUD passed.');
+console.log('Story guidance: complete dense translucent ground route, fixed mark spacing, visible destinations, hold radii, no duplicate location pointers, targetless scene isolation, owned units/dialogue/map markers and leader HUD passed.');

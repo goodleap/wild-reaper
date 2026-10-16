@@ -25,12 +25,14 @@ assert.equal(node(h,'hero-traveler-v2').checked,true);
 assert.equal(node(h,'weapon-sword').checked,true);
 assert.equal(node(h,'hero-princess-v2').parentElement.classList.contains('hidden'),true);
 assert.equal(node(h,'weapon-arrow').disabled,true);
+assert.equal(node(h,'prepare-screen').classList.contains('story-preparation'),true);
 assert.match(node(h,'prepare-summary').textContent,/序章.*帅气王子.*长剑/);
 assert.match(node(h,'story-availability').textContent,/开头重来/);
 choose(h,'mode-world');
 assert.equal(node(h,'hero-princess-v2').checked,true,'story restriction preserves the free-play hero preference');
 assert.equal(node(h,'weapon-arrow').checked,true);
 assert.equal(node(h,'weapon-arrow').disabled,false);
+assert.equal(node(h,'prepare-screen').classList.contains('story-preparation'),false);
 assert.equal(node(h,'world-mode-title').textContent,'裂谷林海');
 assert.equal(node(h,'world-verdant-rift').checked,true);
 assert.equal(node(h,'world-verdant-rift').parentElement.classList.contains('hidden'),false);
@@ -53,14 +55,16 @@ assert.equal(h.run('archive.data.totals.runs'),1);
 h.run('game.story.advanceDialogue?.(true);updateHUD();');
 h.listeners['document:pointerdown']({target:node(h,'game-canvas'),pointerType:'touch'});
 h.run(`const dialogueStory=game.story;let advances=0,skips=0;
-  const fixtureLines=[{id:'a',speaker:'prince',name:'王子',text:'先看清退路。',index:1,total:2},{id:'b',speaker:'princess',name:'公主',text:'沿小路走，我与你一起。',index:2,total:2,nextLabel:'一起突围'}];
+  const fixtureLines=[{id:'a',speaker:'prince',name:'王子',text:'先看清退路。',index:1,total:2},{id:'b',speaker:'princess',name:'公主',text:'沿小路走，我与你一起。',index:2,total:3,nextLabel:'一起突围'},{id:'c',speaker:'princess',name:'公主',text:'跟上我。',index:3,total:3,nextLabel:'一起突围'}];
   game.story={active:true,objective:'沿小路与公主会合',actors:[],get dialogueBlocking(){return fixtureLines.length>0;},getDialogue:()=>fixtureLines[0]||null,
     advanceDialogue:skip=>{advances++;if(skip){skips++;fixtureLines.length=0;}else fixtureLines.shift();},
     getProgress:()=>({label:'求援',value:4,max:10,detail:'守住光环'}),getGuide:()=>({kind:'travel',target:{x:900,y:0},waypoint:{x:game.player.x,y:game.player.y+80},path:[{x:game.player.x,y:game.player.y},{x:game.player.x,y:game.player.y+80}]})};
   keys.add('KeyD');keys.add('Space');skillRequested=true;touch={id:4,dx:1,dy:0};updateHUD();`);
 assert.equal(hidden(h,'story-dialogue-overlay'),false);
+node(h,'story-dialogue-panel').onclick({target:node(h,'story-dialogue-next')});
+assert.equal(h.run('advances'),0,'a bubbled button click cannot also advance the panel');
 assert.equal(node(h,'story-dialogue-name').textContent,'王子');
-assert.equal(node(h,'story-dialogue-count').textContent,'1 / 2');
+assert.equal(h.document.querySelectorAll('#story-dialogue-count,#story-dialogue-title').length,0,'dialogue omits page chrome');
 assert.equal(h.document.activeElement.id,'story-dialogue-panel','touch opens a neutral surface, never the skip/back control');
 assert(h.run('keys.size===0&&!skillRequested&&!touch&&!gameSurfaceActive()'));
 assert(h.run('blockedTransitionKeys.has("KeyD")'),'held movement cannot resume across the conversation');
@@ -84,6 +88,9 @@ h.listeners['window:keyup']({code:'Space'});
 assert(storyKey('KeyM').defaultPrevented);assert.equal(h.run('mapOpen'),false);
 assert(storyKey('Enter').defaultPrevented);assert.equal(node(h,'story-dialogue-name').textContent,'公主');
 assert.equal(node(h,'story-dialogue-next').textContent,'一起突围');
+h.fire(node(h,'story-dialogue-panel'),'click',{target:node(h,'story-dialogue-text')});
+assert.equal(h.run('advances'),2,'clicking the dialogue text advances exactly one line');
+assert.equal(node(h,'story-dialogue-text').textContent,'跟上我。');
 click(h,'story-dialogue-pause');assert.equal(h.run('paused'),true);h.run('updateHUD()');
 assert.equal(hidden(h,'story-dialogue-overlay'),true);assert.equal(hidden(h,'pause-overlay'),false);
 click(h,'resume-button');assert.equal(hidden(h,'story-dialogue-overlay'),false);
@@ -97,14 +104,34 @@ assert(h.run('keys.has("KeyD")'),'A fresh movement press works after release and
 h.listeners['window:keyup']({code:'KeyD'});
 
 assert.equal(node(h,'story-progress-track').getAttribute('aria-valuenow'),'40');
-assert.equal(hidden(h,'story-route-arrow'),false,'nearby verified waypoint still has persistent screen guidance');
-assert.match(node(h,'story-route-arrow').style.transform,/1\.570/);
+assert.equal(h.document.querySelectorAll('#story-route-arrow').length,0,'ground ribbon is the only route direction display');
 h.run(`const originalObserve=sceneDialogue.observe;let ambientCalls=0;sceneDialogue.observe=()=>ambientCalls++;
   observeSceneDialogue(.1);game.story.active=false;observeSceneDialogue(.1);`);
 assert.equal(h.run('ambientCalls'),0,'story mode suppresses all ambient dialogue, including after the chapter ends');
 assert.equal(h.run('renderSceneDialogue(0,0,[],[]).length'),0);
 h.run(`game.mode='world';observeSceneDialogue(.1);game.mode='story';sceneDialogue.observe=originalObserve;game.story=dialogueStory;updateHUD();`);
 assert.equal(h.run('ambientCalls'),1,'exploration continues to use generic speech normally');
+// Script markers remain attached to the current actor, and do not react to
+// unrelated attacks. A hidden actor never gets a through-wall speech marker.
+h.run(`const speechActor={x:196,y:330},speechItems=[{id:'speaker',actor:speechActor,text:'…'}];
+  const markerA=drawScriptedSceneDialogue(ctx,speechItems,{project:(x,y)=>({x,y}),width:393,height:717});
+  const markerB=drawScriptedSceneDialogue(ctx,speechItems,{project:(x,y)=>({x,y}),width:393,height:717});`);
+assert.equal(h.run('JSON.stringify(markerA[0].rect)'),h.run('JSON.stringify(markerB[0].rect)'));
+assert.equal(h.run(`drawScriptedSceneDialogue(ctx,speechItems,{project:(x,y)=>({x,y}),width:393,height:717,isVisible:()=>false}).length`),0);
+h.run(`speechActor.x+=15;speechActor.y+=20;const movedMarker=drawScriptedSceneDialogue(ctx,speechItems,{project:(x,y)=>({x,y}),width:393,height:717});`);
+assert.equal(h.run('movedMarker[0].rect.x-markerA[0].rect.x'),15);
+assert.equal(h.run('movedMarker[0].rect.y-markerA[0].rect.y'),20);
+h.run(`const edgeActor={x:30,y:330},edgeLine={id:'summon',actor:edgeActor,text:'守望者，请回应古老的誓约，护住此地！'},speechOptions={project:(x,y)=>({x,y}),width:393,height:717};
+  const edgeA=drawScriptedSceneDialogue(ctx,[edgeLine],speechOptions);`);
+assert.equal(h.run('edgeA.length'),1,'a visible edge speaker can place the text into available screen space');
+assert(h.run('edgeA[0].rect.x>=6'));
+h.run(`edgeActor.x+=30;const edgeB=drawScriptedSceneDialogue(ctx,[{...edgeLine}],speechOptions);`);
+assert.equal(h.run('edgeB[0].rect.x-edgeA[0].rect.x'),30,'same line follows actor with its first chosen offset');
+assert.equal(h.run(`drawScriptedSceneDialogue(ctx,[edgeLine],{...speechOptions,isVisible:()=>false}).length`),0,'placement does not reveal a concealed actor');
+h.run(`edgeActor.x=220;const newSpeech=drawScriptedSceneDialogue(ctx,[{...edgeLine,id:'next-speech'}],speechOptions);`);
+assert(h.run('Math.abs(newSpeech[0].rect.x+newSpeech[0].rect.width/2-newSpeech[0].anchor.x)<1'),'a new line may choose its own initial placement');
+
+
 
 // Generic progression announcements must not tell the chapter player to
 // leave the scripted objective for tribulation/rewards that are unavailable.
@@ -157,9 +184,10 @@ assert.match(node(h,'start-tribulation').textContent,/投入 2 张/);
 h.run(`const pointerLabels=[],savedSceneLabel=ctx.fillText,savedStory=game.story;
   ctx.fillText=text=>pointerLabels.push(text);game.story={active:true,step:'conversation',getGuide:()=>({target:{x:game.player.x+1000,y:game.player.y},waypoint:{x:game.player.x+1000,y:game.player.y},shortLabel:'天使',label:'返回守望天使身边继续交谈'})};
   drawObjectivePointers();ctx.fillText=savedSceneLabel;game.story=savedStory;`);
-assert.equal(h.run('pointerLabels[0]'),'天使');
+assert.equal(h.run('pointerLabels.length'),0,'story does not draw duplicate location or edge pointers');
 assert.equal(h.run('pointerLabels.some(text=>text.startsWith("公主"))'),false);
 const css=fs.readFileSync(new URL('./dist/story-ui.css',import.meta.url),'utf8');
+assert.match(css,/\.story-preparation \.hero-option,\.story-preparation \.weapon-option\{flex-grow:0;flex-basis:max/,'single story selections preserve standard card sizes');
 assert.match(css,/@media\(pointer:coarse\).*?bottom:calc\(176px/s,'mobile action sits above the joystick');
 // Completing the final conversation fades into a chapter victory screen.
 // The frame scheduler must keep advancing the fade after its commit changes
@@ -169,6 +197,14 @@ click(ending,'start-button');choose(ending,'mode-story');click(ending,'prepare-s
 ending.run(`game.story.flow.go('conversation');updateHUD();`);
 assert.equal(hidden(ending,'story-dialogue-overlay'),false);
 click(ending,'story-dialogue-skip');
+assert.equal(ending.run('game.sceneTransition.active'),false,'skipping the conclusion still awaits deliberate departure');
+assert.equal(node(ending,'story-dialogue-next').textContent,'正式启航');
+assert.equal(hidden(ending,'story-dialogue-skip'),true);
+click(ending,'story-dialogue-panel');
+node(ending,'story-dialogue-panel').focus();
+ending.listeners['window:keydown']({code:'Enter',key:'Enter',target:node(ending,'story-dialogue-panel'),repeat:false,preventDefault(){this.defaultPrevented=true;}});
+assert.equal(ending.run('game.sceneTransition.active'),false,'clicking the general dialogue surface cannot depart');
+click(ending,'story-dialogue-next');
 assert.equal(ending.run('game.sceneTransition.active'),true);
 assert.equal(hidden(ending,'end-overlay'),true);
 for(let i=0;i<30;i++)ending.tick(20);
@@ -176,14 +212,25 @@ assert.equal(ending.run('game.status'),'victory');
 assert.equal(ending.run('game.sceneTransition.active'),false);
 assert.equal(hidden(ending,'end-overlay'),false);
 assert.equal(node(ending,'end-title').textContent,'序章 · 林海余烬 · 通关');
-assert.equal(node(ending,'end-kicker').textContent,'CHAPTER COMPLETE');
+assert.equal(hidden(ending,'end-kicker'),true);
 assert(!node(ending,'end-description').textContent.includes('副本'));
 assert.equal(hidden(ending,'story-dialogue-overlay'),true);
 assert.equal(hidden(ending,'story-objective'),true);
+assert.equal(hidden(ending,'restart-button'),true);
+assert.equal(hidden(ending,'end-archive-button'),true);
+assert.equal(hidden(ending,'end-stats'),true);
+assert.equal(node(ending,'home-button').textContent,'返回主界面');
+assert.equal(ending.document.activeElement.id,'home-button');
 assert.equal(ending.run('archive.data.stories.prologue.clears'),1);
 assert.equal(ending.run('game.sceneContent.allows("worldContent")'),false,'chapter never restores ordinary exploration behind its ending');
 assert.equal(ending.run('game.story.disposed'),true);
 ending.run('endGame()');assert.equal(ending.run('archive.data.stories.prologue.clears'),1);
 click(ending,'home-button');assert.equal(ending.run('game'),null);
+click(ending,'start-button');choose(ending,'mode-world');click(ending,'prepare-start-button');await ending.flush();
+ending.run(`game.status='dead';endGame();`);
+assert.equal(hidden(ending,'restart-button'),false,'ordinary endings restore their full controls after a story clear');
+assert.equal(hidden(ending,'end-archive-button'),false);
+assert.equal(hidden(ending,'end-stats'),false);
+assert.equal(node(ending,'end-overlay').classList.contains('story-victory'),false);
 
-console.log('Story UI: three modes, chapter preview/selection, fixed but extensible loadout, free-mode preference restoration, active action consumption, accumulated buff readout, fixed blocking dialogue/input, ambient speech suppression, verified-route HUD, chapter victory fade/archive, explicit tribulation materials and exit cleanup passed.');
+console.log('Story UI: three modes, chapter preview/selection, fixed but extensible loadout, free-mode preference restoration, active action consumption, accumulated buff readout, fixed blocking dialogue/input, ambient speech suppression, ground-only route direction, explicit departure and single-button victory/archive, explicit tribulation materials and exit cleanup passed.');

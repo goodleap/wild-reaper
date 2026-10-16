@@ -29,7 +29,7 @@ npm run test:forest-maintenance
 
 剧情、主角气泡与段位渡劫的集中回归为 `npm run test:story`。剧情配置维护于 `dist/config/story.json`，段位与渡劫配置维护于 `dist/config/realms.json`，修改后同样需要 `npm run build:config`。剧情只记录整章完成结果，退出或死亡后重新开始该章；现有浏览器档案会迁移到独立的 v3 存储键，保留旧版数据。药效构筑只用于当前演出，档案始终观察正式构筑。
 
-剧情内容的生成、交互和显示共用 `scene-content.js` 的场景权限；章节完成动作通过场景淡出提交通关，并结束本局；不会生成普通探索内容。`story-pursuit.js` 读取章节追兵配置并复用敌人和首领行为；`story-navigation.js` 为演员站位与 `story-guidance.js` 提供同一条可行路线。普通伙伴和剧情演员共用 `follow-movement.js`，修改共享跟随或寻路时同时运行 `npm run test:party`。剧情回归覆盖内容隔离与恢复、连续增援、演员跟随、路线指引、对白暂停、药物交接、通关结算及整章流程。
+剧情内容的生成、交互和显示共用 `scene-content.js` 的场景权限；章节完成动作通过场景淡出提交通关，并结束本局；不会生成普通探索内容。`story-pursuit.js` 读取章节追兵配置并复用敌人和首领行为；`navigation-route.js` 缓存并校验完整路线，`story-navigation.js` 将其同时提供给演员移动和 `route-ribbon.js` 地面渲染。`unit-arrival.js` 提供共享显形效果，剧情与普通天使共用 `sites/angel-guardian.js` 的守护行为。普通伙伴和剧情演员共用 `follow-movement.js`，修改共享跟随或寻路时同时运行 `npm run test:party`。剧情回归覆盖内容隔离与恢复、连续增援、演员跟随、路线指引、对白暂停、药物交接、通关结算及整章流程。
 
 修改按钮焦点、弹层或快捷键时运行 `npm run test:focus`，并在浏览器验证鼠标关闭地图后空格施法、触摸准备页和 Tab 导航。输入方式与返回焦点由 `dist/focus-navigation.js` 统一处理；保留文本输入与键盘控件的原生操作。
 

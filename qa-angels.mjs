@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
 import { Settlements, ANGEL_RULES } from './dist/settlements.js';
+import { updateAngelGuardian } from './dist/sites/angel-guardian.js';
 
 // Healing fixtures use 100 max HP independently of the selected hero's stats.
 function arena(){const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,environment:false,encounters:false,elites:false,companions:false,settlements:false});g.enemies=[];g.events=[];g.effects=[];g.nextBossAt=Infinity;g.player.hp=g.player.maxHp=100;g.player.xpNext=Infinity;g.crystalsNext=Infinity;return g;}
@@ -77,5 +78,16 @@ restored.regions.saveWorld();restored.settlements=new Settlements(restored,{gene
 assert(restored.regions.restoreWorld(0));
 assert.deepEqual(restored.settlements.sites.filter(s=>s.type==='angel'),[originalSpawn,independent],'restoration removes gate IDs and anchors while retaining other angels');
 restored.settlements.ensureAngels();assert.equal(restored.settlements.sites.length,2,'cleanup is stable when generation is disabled');
+
+// A scripted guardian uses the identical behavior with isolated encounter
+// settings. It need not be registered as ordinary world content to protect.
+const scripted=arena(),arrived={id:'story:guardian',type:'angel',x:0,y:0,r:15};feet(scripted,180,0);scripted.player.hp=40;
+const pursuit=enemy(scripted,180,25,1000);
+updateAngelGuardian(scripted,arrived,1,{rules:{guardRadius:220,healingPerSecond:.08}});
+assert.equal(scripted.player.hp,48);assert.equal(pursuit.hp,1000-ANGEL_RULES.damage);assert.equal(arrived.castFace,.25);
+assert.equal(scripted.settlements.sites.length,0,'scripted guarding does not restore ordinary sites');
+assert.equal(ANGEL_RULES.guardRadius,150);assert.equal(ANGEL_RULES.healingPerSecond,.03,'encounter overrides do not mutate ordinary settings');
+scripted.player.hp=40;updateAngelGuardian(scripted,arrived,1,{heal:false,attack:false,rules:{guardRadius:220}});assert.equal(scripted.player.hp,40);assert.equal(pursuit.hp,1000-ANGEL_RULES.damage,'visual climax can independently silence ordinary extra strikes');
+scripted.status='paused';updateAngelGuardian(scripted,arrived,1,{rules:{guardRadius:220}});assert.equal(scripted.player.hp,40,'scripted guarding respects pause');
 
 console.log('Angels: persistent spawn guardian, no portal guardians or gate aura, restored-world cleanup, deduplication, flying state, continuous capped nonstacking aura, pause/castle/wall isolation, shared 150-unit guard boundary, offscreen-guardian phone protection, local splash lightning, 0.1-second cooldowns and ordinary kill rewards passed.');

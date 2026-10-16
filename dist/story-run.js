@@ -8,11 +8,14 @@ import { resetLocomotion } from './locomotion.js';
 import { ANGEL_RULES } from './site-definitions.js';
 import { StoryNavigation } from './story-navigation.js';
 import { StoryPursuit } from './story-pursuit.js';
+import { updateAngelGuardian } from './sites/angel-guardian.js';
+import { beginUnitArrival, unitArrivalComplete } from './unit-arrival.js';
+import { createJudgmentPlan, judgmentBatch } from './judgment-layout.js';
 
 export const STORY_DEFINITIONS=getConfigSection('story').definitions;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const foot=entity=>({x:entity.x,y:Number.isFinite(entity.groundY)?entity.groundY:entity.y+groundOffset(entity,!!entity.heroId)});
-const objectives={awakening:'林海余烬',search:'离开营地 · 沿路前往林间谷地',escape:'追兵发现了你 · 沿路逃往公主所在的谷地',escort:'跟随公主 · 前往前方突围路口',pill:'燃脉丸已拿到 · 点击「服药」击退追兵',burst:'掩护公主求援 · 留在她附近迎击追兵',fading:'药力消退 · 沿路撤入守望光环',sanctuary:'守住光环 · 为天使引雷争取时间',judgment:'天雷降临 · 留在守护之内',conversation:'危机解除',complete:'沿林海追查押运队，寻找祭场线索'};
+const objectives={awakening:'林海余烬',search:'离开营地',escape:'甩开追兵，与公主会合',escort:'跟随公主突围',pill:'燃脉丸已拿到 · 点击「服药」击退追兵',burst:'跟随公主 · 前往召唤地点',fading:'药力消退 · 跟紧公主',sanctuary:'守住光环 · 为天使引雷争取时间',judgment:'天雷降临 · 留在守护之内',conversation:'危机解除',complete:'序章完成'};
 const conversations=new Set(['awakening','escort','pill','sanctuary','conversation']);
 const titles={awakening:'序章 · 林海余烬',escort:'林间相逢',pill:'燃脉丸',sanctuary:'守望者降临',conversation:'余烬未熄'};
 const continueLabels={awakening:'开始行动',escort:'一起突围',pill:'接过燃脉丸',sanctuary:'守住光环',conversation:'正式启航'};
@@ -28,7 +31,7 @@ export class StoryRun {
     this.actors=[];this.dialogue=[];this.completed=false;this.disposed=false;this.initialized=false;this.pillUsed=false;
     this.temporary=new TemporaryBuild(game);this.flow=new StoryFlow(this.definition.steps,step=>this._enter(step));
     this._lineId=0;this._lineState=new Map();
-    this._clock=0;this._prayerProgress=0;this._sanctuaryProgress=0;this._helpReady=false;this._dialogueTotal=0;
+    this._clock=0;this._prayerProgress=0;this._sanctuaryProgress=0;this._summoning=false;this._helpReady=false;this._dialogueTotal=0;
     this.navigation=new StoryNavigation(game,this);
     this.pursuit=new StoryPursuit(game,this,this.definition.pursuit);
   }
@@ -38,8 +41,10 @@ export class StoryRun {
   get dialogueBlocking(){return this.active&&this.dialogue.length>0;}
   get dialogueExclusive(){return false;}
   get objective(){
-    if(this.step==='burst'&&this._helpReady)return this.temporary.remaining<=6?'药力即将消退 · 立即撤向守望光环':'求援已有回应 · 趁药力仍在，跟公主撤向光环';
-    if(this.step==='fading'&&!this._helpReady)return '靠近公主 · 掩护她完成求援';
+    if(['burst','fading'].includes(this.step)){
+      if(this._helpReady)return this.step==='burst'?(this.temporary.remaining<=6?'药力即将消退 · 留在天使守护之内':'守望者已降临 · 在光环内迎击追兵'):'进入守望光环';
+      if(this._summoning)return this.angel?'守望者正在降临':'掩护公主完成召唤';
+    }
     if(this.step==='sanctuary'&&!this._inAura())return '返回光环 · 离开守护范围会中断引雷';
     return objectives[this.step]||'';
   }
@@ -47,7 +52,7 @@ export class StoryRun {
   get objectivePoint() {
     if(['search','escape'].includes(this.step))return this.anchors?.meeting;
     if(this.step==='escort')return this.anchors?.pill;
-    if(['burst','fading'].includes(this.step))return this._helpReady?this.angel||this.anchors?.refuge:this.princess?foot(this.princess):null;
+    if(['burst','fading'].includes(this.step))return this.angel||this.anchors?.refuge;
     if(['sanctuary','judgment'].includes(this.step))return this.angel||this.anchors?.refuge;
     return null;
   }
@@ -56,9 +61,19 @@ export class StoryRun {
     return {...line,name:speakerNames[line.speaker],index:this._dialogueTotal-this.dialogue.length+1,total:this._dialogueTotal,
       title:titles[this.step]||this.name,nextLabel:this.dialogue.length===1?continueLabels[this.step]||'继续':'继续'};
   }
+  getSceneDialogue(){
+    if(!this.active)return [];
+    const line=this.getDialogue();
+    if(line){const actor=line.speaker==='player'?this.game.player:this[line.speaker];return actor?[{id:line.id,speaker:line.speaker,text:'…',actor}]:[];}
+    if(this._summoning&&!this._helpReady&&this.princess)return [{id:`${this.id}:summon`,speaker:'princess',text:this.definition.summonLine,actor:this.princess}];
+    return [];
+  }
   advanceDialogue(skip=false){
     if(!this.dialogueBlocking)return false;
-    const lines=skip?this.dialogue.splice(0):[this.dialogue.shift()];
+    // Skipping the conclusion reaches its final invitation. Departure still
+    // requires a separate, deliberate activation of the final control.
+    if(skip&&this.step==='conversation'&&this.dialogue.length===1)return false;
+    const lines=skip?this.dialogue.splice(0,this.step==='conversation'?this.dialogue.length-1:this.dialogue.length):[this.dialogue.shift()];
     for(const line of lines){const state=this._lineState.get(line.id);state.presented=!skip;state.finished=true;state.skipped=skip;}
     if(!this.dialogue.length){
       const g=this.game;g.player.invuln=Math.max(g.player.invuln||0,1.5);
@@ -70,11 +85,12 @@ export class StoryRun {
   }
   getProgress(){
     if(!this.active||this.dialogueBlocking)return null;
-    if(['burst','fading'].includes(this.step)&&!this._helpReady){
+    if(['burst','fading'].includes(this.step)&&this._summoning&&!this._helpReady){
+      if(this.angel)return {label:'守望者降临',value:Math.max(0,this.game._clock-this.angel.arrival.startedAt),max:this.angel.arrival.duration,detail:'守住召唤地点'};
       const nearby=this.princess&&distance(foot(this.game.player),foot(this.princess))<=this.rules.prayerRadius;
-      return {label:'公主求援',value:this._prayerProgress,max:this.rules.prayerDuration,detail:nearby?'守在公主附近，为她完成祈愿争取时间':'靠近公主，继续掩护求援'};
+      return {label:'公主召唤',value:this._prayerProgress,max:this.rules.prayerDuration,detail:nearby?'掩护公主，等待守望者回应':'返回公主身边，继续掩护召唤'};
     }
-    if(this.step==='burst')return {label:'燃脉药效',value:this.temporary.remaining,max:this.rules.pillDuration,detail:`还剩 ${Math.ceil(this.temporary.remaining)} 秒 · 前往光环，准备撤退`};
+    if(this.step==='burst')return {label:'燃脉药效',value:this.temporary.remaining,max:this.rules.pillDuration,detail:`还剩 ${Math.ceil(this.temporary.remaining)} 秒 · ${this._helpReady?'留在守护范围':'沿引导带跟随公主'}`};
     if(this.step==='sanctuary')return {label:'天使引雷',value:this._sanctuaryProgress,max:this.rules.sanctuaryWaveSeconds*2,detail:this._inAura()?`守住光环 · 还需 ${Math.ceil(this.rules.sanctuaryWaveSeconds*2-this._sanctuaryProgress)} 秒`:'引雷暂停 · 回到光环内'};
     if(this.step==='judgment')return {label:'天雷降临',value:Math.max(0,this._clock-(this._judgmentStartedAt??this._clock)),max:this.rules.judgmentDuration,detail:'守护仍在 · 追兵即将溃散'};
     return null;
@@ -92,6 +108,7 @@ export class StoryRun {
     if(!meeting||!refuge||!searchPath?.length||!escapePath?.length)throw new Error(`Story ${this.id} requires its configured walkable anchors`);
     this.anchors={wake:{...origin},meeting:{...meeting},refuge:{...refuge},pill:{...escapePath[Math.floor(escapePath.length*.42)]}};
     this.paths={search:searchPath,escape:escapePath};
+    this.anchors.refuge=this._safePoint(refuge,{radius:18,max:100})||refuge;
     this._sceneTerrain=g.terrain;this._sceneMapId=g.mapId;
     g.canonicalBuild??=g.build;this.initialized=true;this._createPrincess();this.flow.start();
     g._emit?.('storyStarted',{storyId:this.id,name:this.name});return true;
@@ -115,9 +132,12 @@ export class StoryRun {
       // the shield so the player can continue the indicated escape route.
       g.player.invuln=Math.max(g.player.invuln||0,1.2);
     }
-    if(step==='sanctuary'){this._createAngel();this._sanctuaryProgress=0;}
+    if(step==='sanctuary'){this._createAngel({instant:true});this._sanctuaryProgress=0;}
     if(step==='judgment'){
+      this._judgmentStartedAt=this._clock;
       this._judgmentAt=this._clock+this.rules.judgmentWindup;
+      this._judgmentPlan=createJudgmentPlan({width:g.viewWidth,height:g.viewHeight,duration:this.rules.judgmentDuration-this.rules.judgmentWindup,seed:916}).map(point=>({...point,at:point.at+this.rules.judgmentWindup}));
+      this._judgmentVisualTime=-1;
       if(this.angel){this.angel.castFace=this.rules.judgmentWindup+.4;g._effect?.(this.angel.x,this.angel.y,'ring',this.rules.judgmentWindup,this.rules.guardRadius,'#f4edc0');}
     }
     if(step==='conversation'){
@@ -158,13 +178,20 @@ export class StoryRun {
     this.princess={id:'story:princess',storyActor:true,name:'公主',heroId:'princess',appearanceId:hero.appearanceId||'princess-v2',x:point.x,y:point.y-19.8,groundOffset:19.8,r:15,hp:1,maxHp:1,speed:hero.baseSpeed,facing:0,following:true};
     resetLocomotion(this.princess);this.actors.push(this.princess);return this.princess;
   }
-  _createAngel() {
+  _createAngel({instant=false}={}) {
     if(this.angel)return this.angel;
-    const point=this._safePoint(this.anchors.refuge,{radius:16,max:100})||this.anchors.refuge;
-    this.angel={id:'story:angel',storyActor:true,type:'angel',kind:'angel',name:'守望天使',x:point.x,y:point.y,r:15,hp:1,maxHp:1,flying:true,guardRadius:this.rules.guardRadius,auraRadius:this.rules.guardRadius,healing:true,castFace:1,seed:916};
-    this.actors.push(this.angel);this.game._effect?.(point.x,point.y,'ring',1.4,this.rules.guardRadius,'#f4edc0');return this.angel;
+    const point=this.anchors.refuge;
+    this.angel={id:'story:angel',storyActor:true,type:'angel',kind:'angel',name:'守望天使',x:point.x,y:point.y,r:15,hp:1,maxHp:1,flying:true,guardRadius:this.rules.guardRadius,auraRadius:this.rules.guardRadius,healing:false,castFace:0,seed:916};
+    this.actors.push(this.angel);
+    if(instant)this._helpReady=true;
+    else beginUnitArrival(this.game,this.angel,{duration:this.rules.arrivalDuration,radius:70});
+    return this.angel;
   }
-  updateActors(dt){if(this.active&&!this.dialogueBlocking)this.navigation.updatePrincess(dt);}
+  updateActors(dt){
+    if(!this.active||this.dialogueBlocking||!Number.isFinite(dt)||dt<=0)return;
+    if(this.princess)this.princess.castFace=Math.max(0,(this.princess.castFace||0)-dt);
+    this.navigation.updatePrincess(dt);
+  }
   beforeEnemy(enemy,dt) {
     return this.active&&this.pursuit.beforeEnemy(enemy,dt);
   }
@@ -177,8 +204,8 @@ export class StoryRun {
     return this._living().some(enemy=>enemy.hp<enemy._storyInitialHp||distance(foot(enemy),p)<=this.rules.noticeRange&&!g.terrain.firstBlocker(enemy.x,foot(enemy).y,p.x,p.y,0,'sight'));
   }
   _near(point,radius=this.rules.arrivalRadius){return distance(foot(this.game.player),point)<=radius;}
-  _inAura(){const p=foot(this.game.player);return !!this.angel&&distance(p,this.angel)<=this.rules.guardRadius&&!this.game.terrain.firstBlocker(this.angel.x,this.angel.y,p.x,p.y,0,'sight');}
-  get guardReduction(){return this.active&&['sanctuary','judgment'].includes(this.step)&&this._inAura()?this.rules.guardReduction:0;}
+  _inAura(){const p=foot(this.game.player);return !!this.angel&&this._helpReady&&distance(p,this.angel)<=this.rules.guardRadius&&!this.game.terrain.firstBlocker(this.angel.x,this.angel.y,p.x,p.y,0,'sight');}
+  get guardReduction(){return this.active&&this._inAura()?this.rules.guardReduction:0;}
   update(dt) {
     if(!this.active||this.game.status!=='playing'||!Number.isFinite(dt)||dt<=0)return;
     if(this.game.terrain!==this._sceneTerrain||this.game.mapId!==this._sceneMapId){this.cleanup('sceneChange');return;}
@@ -188,15 +215,16 @@ export class StoryRun {
     if(wasBoosted&&!this.temporary.active&&this.step==='burst')this.flow.go('fading');
     this.pursuit.update(dt);
     if(['burst','fading'].includes(this.step)&&!this._helpReady&&this.princess){
-      const nearby=distance(foot(g.player),foot(this.princess))<=this.rules.prayerRadius;
-      if(nearby){
+      if(!this._summoning&&this._near(this.anchors.refuge,180)&&distance(foot(this.princess),this.anchors.refuge)<100)this._summoning=true;
+      const nearby=this._summoning&&distance(foot(g.player),foot(this.princess))<=this.rules.prayerRadius;
+      if(nearby&&!this.angel){
         this._prayerProgress=Math.min(this.rules.prayerDuration,this._prayerProgress+dt);this.princess.castFace=.25;
         if(this._clock>=(this._nextPrayerPulse||0)){g._effect?.(this.princess.x,foot(this.princess).y,'ring',.9,38,'#d4e9c5');this._nextPrayerPulse=this._clock+1.2;}
       }
-      if(this._prayerProgress>=this.rules.prayerDuration){this._helpReady=true;this._createAngel();g._emit?.('storyAidReady',{storyId:this.id});}
+      if(this._prayerProgress>=this.rules.prayerDuration&&!this.angel)this._createAngel();
+      if(this.angel&&unitArrivalComplete(this.angel,g._clock)){this._helpReady=true;g._emit?.('storyAidReady',{storyId:this.id});}
     }
-    if(this.angel) {this.angel.castFace=Math.max(0,this.angel.castFace-dt);this.angel.healing=this._inAura();}
-    if(this.guardReduction>0)g.player.hp=Math.min(g.player.maxHp,g.player.hp+g.player.maxHp*this.rules.guardHealing*dt);
+    if(this.angel&&this._helpReady)updateAngelGuardian(g,this.angel,dt,{rules:{guardRadius:this.rules.guardRadius,healingPerSecond:this.rules.guardHealing},attack:this.step!=='judgment'});
     switch(this.step) {
       case 'awakening':
         if(this._linesFinished('awakening'))this.flow.next();
@@ -219,16 +247,12 @@ export class StoryRun {
         break;
       case 'judgment':
         if(this._clock>=this._judgmentAt) {
-          if(!this._judgmentStartedAt){this._judgmentStartedAt=this._clock;this._judgment();this._nextJudgmentStrike=this._clock;}
-          if(this._clock>=this._nextJudgmentStrike) {
-            this._showJudgmentStrikes();this._nextJudgmentStrike=this._clock+ANGEL_RULES.attackInterval;
-          }
-          if(this._clock-this._judgmentStartedAt>=this.rules.judgmentDuration) {
-            // Idempotent fallback for a late script spawn. Dead enemies cannot
-            // pay XP or kill credit again during the continuing spectacle.
-            for(const enemy of this._living())g.combat.storyJudgment(enemy,{x:this.angel.x,y:this.angel.y,groundY:this.angel.y});
-            this.flow.next();
-          }
+          if(!this._judgmentApplied){this._judgment();this._judgmentApplied=true;}
+          this._showJudgmentStrikes();
+        }
+        if(this._clock-this._judgmentStartedAt+1e-8>=this.rules.judgmentDuration){
+          for(const enemy of this._living())g.combat.storyJudgment(enemy,{x:this.angel.x,y:this.angel.y,groundY:this.angel.y});
+          this.flow.next();
         }
         break;
 
@@ -263,11 +287,6 @@ export class StoryRun {
     const living=[...g.enemies].filter(enemy=>enemy.hp>0);
     const origin={x:this.angel.x,y:this.angel.y-19.8,groundY:this.angel.y};
     for(const enemy of living)g.combat.storyJudgment(enemy,origin);
-    this._judgmentPoints=living.map(enemy=>foot(enemy));
-    if(this._judgmentPoints.length<8)for(let i=0;i<8;i++) {
-      const angle=i*Math.PI/4,p=foot(g.player);
-      this._judgmentPoints.push({x:p.x+Math.cos(angle)*Math.min(300,g.viewWidth*.4),y:p.y+Math.sin(angle)*Math.min(200,g.viewHeight*.35)});
-    }
     g._emit?.('storyJudgment',{damage:this.rules.judgmentDamage,count:living.length});
   }
   _showJudgmentStrikes() {
@@ -279,11 +298,13 @@ export class StoryRun {
       this._clearHostileAttacks();
       const origin={x:this.angel.x,y:this.angel.y-19.8,groundY:this.angel.y};
       for(const enemy of arriving)g.combat.storyJudgment(enemy,origin);
-      this._judgmentPoints=[...this._judgmentPoints,...arriving.map(enemy=>foot(enemy))].slice(-64);
     }
-    // Several old landing points fill the existing scene. Every individual
-    // bolt retains the ordinary angel's original .18-second animation.
-    for(const point of this._judgmentPoints)g._effect?.(point.x,point.y,'angelStrike',.18,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:this.angel.x,sourceY:this.angel.y,angelId:this.angel.id,storyJudgment:true});
+    // Visual coverage belongs to the camera, not the size or clustering of an
+    // enemy army. Sparse timed strikes never limit the actual defeat result.
+    const elapsed=this._clock-this._judgmentStartedAt;
+    const points=judgmentBatch(this._judgmentPlan,this._judgmentVisualTime,elapsed,{x:g.player.x,y:g.player.y,width:g.viewWidth,height:g.viewHeight});
+    for(const point of points)g._effect?.(point.x,point.y,'angelStrike',.18,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:this.angel.x,sourceY:this.angel.y,angelId:this.angel.id,seed:point.seed,storyJudgment:true});
+    this._judgmentVisualTime=elapsed;
   }
   _complete() {
     if(this.completed)return;

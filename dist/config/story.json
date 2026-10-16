@@ -8,7 +8,8 @@
       "weaponIds": ["sword"],
       "anchors": {"wakeArea": "01", "meetingArea": "02", "refugeArea": "03", "searchPassage": "01-02", "escapePassage": "02-03"},
       "steps": ["awakening", "search", "escape", "escort", "pill", "burst", "fading", "sanctuary", "judgment", "conversation", "complete"],
-      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 20, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 4, "judgmentWindup": 1, "prayerDuration": 12, "prayerRadius": 260},
+      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 20, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 3, "judgmentWindup": 0.3, "prayerDuration": 3, "prayerRadius": 260, "arrivalDuration": 1.1},
+      "summonLine": "守望者，请回应古老的誓约，护住此地！",
       "pursuit": {
         "totalLimit": 80,
         "leaderLimit": 2,
@@ -204,7 +205,7 @@
             "endWindow": {
               "startedAt": "_judgmentStartedAt",
               "durationRule": "judgmentDuration",
-              "stopBeforeEndSeconds": 1
+              "stopBeforeEndSeconds": 0.5
             }
           },
           "conversation": {
@@ -231,8 +232,8 @@
         ],
         "pill": [
           {"speaker": "princess", "text": "拿着这颗燃脉丸。服下后能激发潜力，但药力只有二十秒。"},
-          {"speaker": "princess", "text": "我需要你在附近掩护，才能完成求援。收到回应，我们立刻撤往光环。"},
-          {"speaker": "player", "text": "我来挡住追兵。药力消退之前，一起撤！"}
+          {"speaker": "princess", "text": "前面的誓约之地能唤来守望者。跟紧我，到那里再掩护我召唤。"},
+          {"speaker": "player", "text": "你带路，我来击退追兵！"}
         ],
         "burst": [{"speaker": "player", "text": "这股力量……王庭剑阵，随我破敌！"}],
         "fading": [
@@ -240,7 +241,7 @@
           {"speaker": "princess", "text": "别逞强！往采石盆地走，守望者已回应祈愿！"}
         ],
         "sanctuary": [
-          {"speaker": "angel", "text": "求援我已听见。到光环里来，我会护住你们。"},
+          {"speaker": "angel", "text": "药力已尽。留在光环里，我会护住你们。"},
           {"speaker": "angel", "text": "留在守护之内，坚持到引雷完成。离开光环，誓约便会中断。"}
         ],
         "judgment": [{"speaker": "angel", "text": "此雷为护生而降——退开！"}],

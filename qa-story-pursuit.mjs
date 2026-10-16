@@ -135,22 +135,25 @@ for(const profile of ['soldier','guard','mage','captain']){
   story.flow.go('fading');assert.equal(director.targetPopulation,64);
   story.flow.go('sanctuary');assert.equal(director.targetPopulation,72);simulate(game,director,4);
   story.flow.go('judgment');assert.equal(director.targetPopulation,72);
+  assert.equal(story._judgmentStartedAt,story._clock,'The three-second cast window begins on stage entry, including windup.');
   const beforeStrike=director.sequence;
   for(const enemy of director.living())game.combat.storyJudgment(enemy,{x:game.player.x,y:game.player.y});
   simulate(game,director,1);
   assert(director.living().length>0&&director.sequence>beforeStrike,'Entering judgment and clearing the crowd must not close the reinforcement source.');
-  story._judgmentStartedAt=story._clock;
   for(const enemy of director.living())game.combat.storyJudgment(enemy,{x:game.player.x,y:game.player.y});
-  simulate(game,director,2.5);
-  assert(director.living().length>0,'Actual arrivals continue while more than one second of the angel ultimate remains.');
-  story._clock=story._judgmentStartedAt+story.rules.judgmentDuration-1;
-  const finalSecond=director.sequence;
-  director.update(.1);
-  assert(director.stopped,'The configured battle window closes exactly at its final second.');
+  assert.equal(story.rules.judgmentDuration,3);
+  assert.equal(director.settings.endWindow.stopBeforeEndSeconds,.5);
+  simulate(game,director,1.2);
+  assert(director.living().length>0&&!director.stopped,'Actual arrivals continue with more than half a second of the angel ultimate remaining.');
+  story._clock=story._judgmentStartedAt+story.rules.judgmentDuration-.5001;director.update(.00001);
+  assert(!director.stopped,'Reinforcement remains eligible immediately before the cutoff.');
+  story._clock=story._judgmentStartedAt+story.rules.judgmentDuration-.5;
+  const cutoffSequence=director.sequence;director.update(.00001);
+  assert(director.stopped,'The configured battle window closes exactly half a second before the end.');
   for(const enemy of director.living())game.combat.storyJudgment(enemy,{x:game.player.x,y:game.player.y});
   simulate(game,director,20);
   assert.equal(director.living().length,0,'The real judgment clears infantry and the Boss together.');
-  assert.equal(director.sequence,finalSecond,'The last second and aftermath never admit another enemy.');
+  assert.equal(director.sequence,cutoffSequence,'The last half second and aftermath never admit another enemy.');
   director.clear('exit');director.clear('exit');assert.equal(director.living().length,0);
 }
 
@@ -213,4 +216,4 @@ for(const mutate of [
 for(const mutate of [chapter=>chapter.rules.judgmentWindup=0,chapter=>chapter.dialogueScopes.pill='forever',chapter=>delete chapter.dialogueScopes.escape]){
   const sections=structuredClone(getConfigSnapshot().sections);mutate(sections.story.definitions[0]);assert.throws(()=>validateStory(sections));
 }
-console.log('Story pursuit QA passed: reachable offscreen patrols, medicine-triggered army growth, sustained Boss pursuit, bounded retirement and the final-second cutoff.');
+console.log('Story pursuit QA passed: reachable offscreen patrols, medicine-triggered army growth, sustained Boss pursuit, bounded retirement and the final-half-second cutoff.');

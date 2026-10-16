@@ -17,7 +17,9 @@ export function validateStory(sections) {
     for(const key of ['wakeArea','meetingArea','refugeArea'])if(!layout?.areas?.some(area=>area.id===entry.anchors?.[key]))fail(`${path}.anchors.${key}`);
     for(const key of ['searchPassage','escapePassage'])if(!layout?.passages?.some(passage=>passage.id===entry.anchors?.[key]))fail(`${path}.anchors.${key}`);
     const rules=entry.rules;
-    for(const key of ['noticeRange','arrivalRadius','pillDuration','moveSpeedBonus','damageReductionBonus','damageReductionCap','guardRadius','guardReduction','guardHealing','sanctuaryWaveSeconds','judgmentDamage','judgmentDuration','judgmentWindup','prayerDuration','prayerRadius'])if(!Number.isFinite(rules?.[key])||rules[key]<=0)fail(`${path}.rules.${key}`);
+    for(const key of ['noticeRange','arrivalRadius','pillDuration','moveSpeedBonus','damageReductionBonus','damageReductionCap','guardRadius','guardReduction','guardHealing','sanctuaryWaveSeconds','judgmentDamage','judgmentDuration','judgmentWindup','prayerDuration','prayerRadius','arrivalDuration'])if(!Number.isFinite(rules?.[key])||rules[key]<=0)fail(`${path}.rules.${key}`);
+    if(rules.judgmentWindup>=rules.judgmentDuration)fail(`${path}.rules.judgmentWindup`);
+    if(typeof entry.summonLine!=='string'||!entry.summonLine.trim()||entry.summonLine.length>48||/[\r\n<>]/.test(entry.summonLine))fail(`${path}.summonLine`);
     if(rules.damageReductionBonus>=1||rules.damageReductionCap>=1||rules.damageReductionBonus>rules.damageReductionCap||rules.guardReduction>=1||rules.guardHealing>1||rules.pillDuration>120||rules.judgmentDamage!==9999)fail(`${path}.rules`);
     validateStoryPursuit(entry.pursuit,steps,sections,rules);
     if(!entry.dialogue||typeof entry.dialogue!=='object')fail(`${path}.dialogue`);

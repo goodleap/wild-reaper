@@ -80,6 +80,30 @@ for(const step of ['sanctuary','judgment','conversation']){
 const talking=fixture({step:'conversation',actor:{x:-75,y:0},player:{x:75,y:0},target:{x:0,y:0}});talking.story.angel={x:0,y:0};
 advance(talking,3,60);assert(distance(foot(talking.princess),foot(talking.g.player))<145,'refuge waiting cannot strand the final conversation outside its unchanged action radius');
 
+// After taking the medicine the full route remains active. The princess leads
+// on exactly that curve, then stays at the summoning location while the hero
+// moves away to fight; no separate guessed destination direction is involved.
+const summonWorld=new Game({mode:'world',debug:true,debugWorld:'forest'}),summonLayout=summonWorld.terrain.island.layout;
+const summonStart=summonLayout.areas.find(area=>area.id==='02').center,summonEnd=summonLayout.areas.find(area=>area.id==='03').center;
+const summoning=fixture({terrain:summonWorld.terrain,player:summonStart,actor:summonStart,target:summonEnd,step:'burst'});
+summoning.story._helpReady=false;summoning.story.anchors={refuge:summonEnd};let summonFrames=0;
+for(;summonFrames<60*15;summonFrames++){
+  const guide=summoning.navigation.getGuide(),p=foot(summoning.g.player),remaining=distance(p,summonEnd);
+  assert.equal(guide.kind,'travel','medicine does not remove the route or switch to an in-place prayer');
+  assert(guide.complete,'the entire escape path is verified before guiding the player');
+  if(remaining<14)break;
+  assert(guide.waypoint,'guidance provides a physically usable next point');
+  const next=guide.waypoint,d=distance(p,next),fraction=Math.min(1,d/(320/60));
+  tick(summoning,1/60,{x:(next.x-p.x)/d*fraction,y:(next.y-p.y)/d*fraction});
+}
+assert(summonFrames<60*15);advance(summoning,1,60);
+assert(distance(foot(summoning.princess),summonEnd)<100,'both actors actually arrive close enough to start summoning');
+assert.equal(summoning.navigation.route.plans,1,'the guide shares the stable full player route through the actual map turns');
+summoning.story._summoning=true;const summonHeld=foot(summoning.princess);
+advance(summoning,1,60,{x:-1});assert(distance(summonHeld,foot(summoning.princess))<.001,'summoning stays anchored while the hero fights outside the immediate spot');
+summoning.story._helpReady=true;advance(summoning,1,60,{x:-1});assert(distance(summonHeld,foot(summoning.princess))<.001,'the arriving guardian does not pull the princess back into follow mode');
+summonWorld.dispose();
+
 // Replay the real first world's 13-point passage with collision, fixed stage
 // semantics and the shared local route. Combat is exercised by story-run QA.
 const routeResults=[];

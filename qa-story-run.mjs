@@ -22,23 +22,25 @@ function tick(game,input={},read=true) {
   game.update(.05,input);observedEvents.push(...game.events);game.events=[];
   assert(['playing','victory'].includes(game.status),`the actual-input route remains alive in ${game.story.step} at ${game.runTime.toFixed(2)}s`);
 }
-function walk(game,target) {
-  // This is an integration fixture with known map paths, not first-time
-  // player-experience evidence. It uses normal input, collision and damage.
-  for(let i=0;i<500;i++) {
-    readBlock(game.story);
-    const p=foot(game.player),dx=target.x-p.x,dy=target.y-p.y,d=Math.hypot(dx,dy);
-    if(d<28)return;
-    tick(game,{x:dx/d,y:dy/d});
-    if(game.story.getAction()?.id==='story:take-pill')return;
+function followGuideUntil(game,done,{seconds=60}={}) {
+  // Integration fixture: route data drives ordinary input, collision and
+  // damage. This is not evidence of first-time human navigation usability.
+  for(let i=0;i<seconds/.05;i++) {
+    readBlock(game.story);if(done())return;
+    const guide=game.story.getGuide();assert(guide?.complete,'The displayed navigation has a complete route to its destination.');
+    const p=foot(game.player),target=guide.waypoint;
+    if(!target){tick(game);continue;}
+    const dx=target.x-p.x,dy=target.y-p.y,d=Math.hypot(dx,dy);
+    const amount=Math.min(1,d/(game.player.speed*.05));
+    tick(game,d>1?{x:dx/d*amount,y:dy/d*amount}:{});
   }
-  assert.fail(`unreachable route point in ${game.story.step}`);
+  assert.fail(`navigation did not complete its objective in ${game.story.step}`);
 }
 
 const flow=new StoryFlow(['a','b','c']);assert(flow.start());assert(!flow.go('a'));assert(!flow.go('missing'));
 flow.update(.5);assert.equal(flow.elapsed,.5);assert(flow.next());assert.equal(flow.elapsed,0);assert(!flow.go('a'));
 validateStory(getConfigSnapshot().sections);
-for(const mutation of [s=>s.definitions[0].anchors.meetingArea='missing',s=>s.definitions[0].rules.damageReductionCap=1,s=>s.definitions[0].steps.push('search'),s=>s.definitions[0].dialogue.awakening[0].speaker='unknown']) {
+for(const mutation of [s=>s.definitions[0].anchors.meetingArea='missing',s=>s.definitions[0].rules.damageReductionCap=1,s=>s.definitions[0].steps.push('search'),s=>s.definitions[0].dialogue.awakening[0].speaker='unknown',s=>s.definitions[0].rules.arrivalDuration=0,s=>s.definitions[0].rules.prayerDuration=0,s=>s.definitions[0].rules.judgmentWindup=s.definitions[0].rules.judgmentDuration,s=>s.definitions[0].summonLine='']) {
   const sections=structuredClone(getConfigSnapshot().sections);mutation(sections.story);assert.throws(()=>validateStory(sections));
 }
 
@@ -49,13 +51,10 @@ assert.equal(story.getAction(),null);assert.equal(story.getBuff(),null);assert(!
 assert.equal(game.getInteraction(),null,'ordinary world interiors cannot interrupt the prologue');
 const canonical=game.build,buildBefore=canonical.serialize();
 readBlock(story);assert.equal(story.step,'search');assert(story.getGuide(),'The first controllable phase supplies an immediate destination.');
-for(const point of story.paths.search)walk(game,point);
-assert.equal(story.step,'escort');assert.equal(story.princess.heroId,'princess');assert.equal(story.princess.appearanceId,'princess-v2');
+followGuideUntil(game,()=>!!story.getAction());
+assert.equal(story.princess.heroId,'princess');assert.equal(story.princess.appearanceId,'princess-v2');
 assert(readStages.has('escort'),'The meeting explanation is confirmed before the escort action.');
 assert(!game.companions.members.includes(story.princess),'story companion has no army payroll');
-const pillIndex=Math.floor(story.paths.escape.length*.42);
-for(const point of story.paths.escape.slice(0,pillIndex+1)){walk(game,point);if(story.getAction())break;}
-for(let i=0;i<100&&!story.getAction();i++)tick(game);
 assert.equal(story.getAction()?.id,'story:take-pill');assert(readStages.has('pill'));
 assert(Number.isFinite(story._medicineReceivedAt),'The horde begins to grow when medicine is received.');
 assert.match(story.getAction().detail,new RegExp(`${story.rules.pillDuration} 秒`));
@@ -66,14 +65,15 @@ assert.equal(game.player.speed,640);assert.equal(game.build.getRank('sword'),5);
 assert.equal(game.build.getRank('barrier'),3);assert.equal(game.superSkills.owned.swords,3);
 assert.equal(game.build.getSkill('fireball').baseRank,0);assert.equal(game.canonicalBuild,canonical);assert.deepEqual(canonical.serialize(),buildBefore);
 const levelBefore=game.player.level;
-assert.equal(story.getProgress().label,'公主求援');
-for(let i=0;i<Math.ceil(story.rules.prayerDuration/.05)+40&&!story._helpReady;i++)tick(game);
-assert(story._helpReady,'Staying near the princess visibly completes the prayer.');
-assert(story.angel);assert.equal(story.getProgress().label,'燃脉药效');
-assert(story.temporary.remaining>0,'The retreat opens while the temporary power still protects the hero.');
-assert.match(story.objective,/撤/);
-for(const point of story.paths.escape.slice(pillIndex))walk(game,point);
-assert(story.temporary.active,'The announced retreat can be completed before medicine expires.');
+assert.deepEqual(story.objectivePoint,story.anchors.refuge,'Taking the medicine immediately provides the onward destination.');
+assert.equal(story._prayerProgress,0,'Summoning cannot finish while the player remains at the medicine handover.');
+followGuideUntil(game,()=>story._helpReady);
+assert(story.angel,'Following the complete route reaches the princess’s summoning and the angel’s arrival.');
+assert.equal(story.princess.castFace,0,'The completed summoning does not leave the princess permanently casting.');
+assert.equal(story._prayerProgress,story.rules.prayerDuration);
+assert.equal(story.getProgress().label,'燃脉药效');
+assert(story.temporary.remaining>0,'The journey and summoning complete while temporary power still protects the hero.');
+assert(story.guardReduction>0,'The newly visible angel protects the hero before the final sanctuary stage.');
 let warned=false;
 for(let i=0;i<500&&story.step==='burst';i++){
   tick(game);if(story.temporary.active&&story.temporary.remaining<=6){warned=true;assert.match(story.objective,/即将消退/);}
@@ -86,23 +86,25 @@ assert.equal(game.crystals,0);assert.equal(game.progressionTier,1);assert.deepEq
 readBlock(story);assert.equal(story.getProgress().label,'天使引雷');assert(story.guardReduction>0);
 for(let i=0;i<500&&story.step!=='judgment';i++)tick(game);
 assert.equal(story.step,'judgment');assert.equal(story.dialogueBlocking,false,'The thunder sequence does not wait on a combat bubble.');
-const castKillsBefore=game.kills,castDefeated=new Set();
+const castKillsBefore=game.kills,castDefeated=new Set(),judgmentStarted=story._judgmentStartedAt;
+assert(Number.isFinite(judgmentStarted));assert.equal(story.rules.judgmentDuration,3);
 game.onArchiveDefeat=enemy=>{assert(!castDefeated.has(enemy.id),'An enemy cannot receive duplicate defeat credit across thunder pulses');castDefeated.add(enemy.id);};
-for(let i=0;i<200&&!story._judgmentStartedAt;i++)tick(game);
-assert(story._judgmentStartedAt);assert.equal(story.step,'judgment');
-const judgmentEvent=observedEvents.find(event=>event.type==='storyJudgment');
-assert(judgmentEvent?.count>0);assert.equal(judgmentEvent.damage,9999);
-let boltFrames=0;
-for(let i=0;i<60;i++) {
-  tick(game);assert.equal(story.step,'judgment');
+let boltFrames=0,maxBolts=0;
+for(let i=0;i<100&&story.step==='judgment';i++) {
+  tick(game,{},false);
   const bolts=game.effects.filter(effect=>effect.storyJudgment);if(bolts.length)boltFrames++;
+  maxBolts=Math.max(maxBolts,bolts.length);
   assert(bolts.every(effect=>effect.type==='angelStrike'&&effect.maxLife===.18));
   assert.equal(game.kills,castKillsBefore+castDefeated.size,'Later arrivals receive damage without duplicate kill credit.');
 }
-assert(boltFrames>20);
-for(let i=0;i<100&&story.step!=='conversation';i++)tick(game,{},false);
+const judgmentEvent=observedEvents.find(event=>event.type==='storyJudgment');
+assert(judgmentEvent?.count>0);assert.equal(judgmentEvent.damage,9999);
+assert(boltFrames>10,'The three-second ultimate is animated across multiple real simulation frames.');
+assert(maxBolts<=4,'The visual burst stays sparse even against a large pursuing army.');
 assert.equal(story.step,'conversation');
-assert(!game.effects.some(effect=>effect.storyJudgment),'Finished rescue lightning cannot freeze behind the concluding dialogue.');assert.equal(story._living().length,0);assert(game._clock-story._judgmentStartedAt>=4);
+assert(!game.effects.some(effect=>effect.storyJudgment),'Finished rescue lightning cannot freeze behind the concluding dialogue.');
+assert.equal(story._living().length,0);
+assert(story._clock-judgmentStarted>=3-1e-8&&story._clock-judgmentStarted<=3.1,'The final cast takes three seconds including its initial windup.');
 assert(story.dialogueBlocking);assert.equal(story.getAction(),null,'The conclusion directly opens its dialogue instead of asking the player to find a moving NPC.');
 readBlock(story);assert(game.sceneTransition.active);
 for(let i=0;i<32&&game.sceneTransition.active;i++)tick(game,{},false);
@@ -115,4 +117,4 @@ assert(!game.regions.rewardPortal);assert.equal(game.bossKills,0);
 assert.deepEqual([...readStages],['awakening','escort','pill','sanctuary','conversation'],'Every necessary conversation is reached and deliberately confirmed in order.');
 const replay=new Game({mode:'story'});assert.equal(replay.story.step,'awakening');assert.equal(replay.player.level,1);assert(!replay.story.pillUsed);assert(replay.story.dialogueBlocking);
 game.dispose();replay.dispose();
-console.log('Story route: normal input/collision/combat, confirmed conversations, medicine handover, nearby prayer progress, powered retreat with expiry warning, guarded rescue, one-time thunder damage, victory transition and clean replay passed.');
+console.log('Story route: normal input/collision/combat, confirmed conversations, medicine handover, complete guided journey, destination summoning with arrival protection, expiry warning, guarded rescue, one-time thunder damage, victory transition and clean replay passed.');
