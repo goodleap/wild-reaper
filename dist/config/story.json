@@ -8,7 +8,7 @@
       "weaponIds": ["sword"],
       "anchors": {"wakeArea": "01", "meetingArea": "02", "refugeArea": "03", "searchPassage": "01-02", "escapePassage": "02-03"},
       "steps": ["awakening", "search", "escape", "escort", "pill", "burst", "fading", "sanctuary", "judgment", "conversation", "complete"],
-      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 20, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 3, "judgmentWindup": 0.3, "prayerDuration": 3, "prayerRadius": 260, "arrivalDuration": 1.1},
+      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 20, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 330, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 3, "judgmentWindup": 0.3, "prayerDuration": 3, "prayerRadius": 260, "arrivalDuration": 1.1},
       "summonLine": "守望者，请回应古老的誓约，护住此地！",
       "pursuit": {
         "totalLimit": 80,

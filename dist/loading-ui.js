@@ -11,8 +11,10 @@ export function createLoadingView(document,{debug=false,setTimer=setTimeout,clea
     if(!mode)return;
     const ratio=Math.max(0,Math.min(1,Number.isFinite(completed)&&Number.isFinite(total)&&total>0?completed/total:0));
     const label=debug===true&&typeof detail==='string'&&detail?`${stage}（${detail}）`:stage;
+    const percent=ratio<1?Math.min(99,Math.round(ratio*100)):100;
     element('-label').textContent=label;element('-fill').style.transform=`scaleX(${ratio})`;
-    element('-track').setAttribute('aria-valuenow',Math.round(ratio*100));
+    if(mode==='boot'){const number=element('-percent');if(number)number.textContent=`${percent}%`;}
+    element('-track').setAttribute('aria-valuenow',percent);
     element('-track').setAttribute('aria-valuetext',label);
   }
   function start(nextMode='boot',{delay=nextMode==='boot'?250:0,stage='正在准备',detail=''}={}){
@@ -28,9 +30,10 @@ export function createLoadingView(document,{debug=false,setTimer=setTimeout,clea
     nodes[mode].classList.add('is-complete');
     const token=revision;hideTimer=setTimer(()=>{if(token===revision)hide();},180);
   }
-  function fail(message,{onRetry,onBack}={}){
+  function fail(message,{onRetry,onBack,detail=''}={}){
     if(!mode)start('boot',{delay:0});cancelTimers();reveal();nodes[mode].classList.add('has-error');nodes[mode].setAttribute('aria-busy','false');
-    element('-label').textContent=message;element('-track').setAttribute('aria-valuetext',message);element('-actions').classList.remove('hidden');
+    const label=debug===true&&typeof detail==='string'&&detail?`${message}（${detail}）`:message;
+    element('-label').textContent=label;element('-track').setAttribute('aria-valuetext',label);element('-actions').classList.remove('hidden');
     const retry=element('-retry'),back=element('-back');retry.onclick=onRetry||null;retry.classList.toggle('hidden',!onRetry);back.onclick=onBack||null;back.classList.toggle('hidden',!onBack);
     (onRetry?retry:back).focus({preventScroll:true});
   }

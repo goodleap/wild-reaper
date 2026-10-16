@@ -14,18 +14,23 @@ const canvases=[],art=new AngelArt(()=>{const {ctx,calls}=recordingContext(),can
 const site={type:'angel',x:40,y:70,healing:false,_attack:0};
 function aura(options){const recording=recordingContext();assert(art.drawAura(recording.ctx,site,options));assert.equal(recording.ctx.globalAlpha,.7);assert.equal(recording.ctx.stack.length,0);return recording.calls;}
 const standard=aura({pixelRatio:1,time:10});assert.equal(canvases.length,1);
-assert.equal(canvases[0].width,316);assert.equal(canvases[0].height,316);
-assert(canvases[0].calls.some(c=>c[0]==='arc'&&c[3]===150),'cached boundary follows the actual guard radius');
+assert.equal(canvases[0].width,516);assert.equal(canvases[0].height,516);
+assert(canvases[0].calls.some(c=>c[0]==='arc'&&c[3]===250),'cached boundary follows the actual guard radius');
 assert.deepEqual(aura({pixelRatio:1,time:10}),standard,'same simulation time draws a stationary aura');
 assert.notDeepEqual(aura({pixelRatio:1,time:11}),standard,'only a few motes animate');assert.equal(canvases.length,1,'steady frames reuse static artwork');
-const retina=aura({pixelRatio:2,time:10});assert.equal(canvases.length,2);assert.equal(canvases[1].width,632);assert.equal(art.cacheStats.pixelRatio,2);
-const image=retina.find(c=>c[0]==='drawImage');assert.deepEqual(image.slice(2),[-158,-158,316,316],'hiDPI artwork keeps the same world footprint');
+const retina=aura({pixelRatio:2,time:10});assert.equal(canvases.length,2);assert.equal(canvases[1].width,1032);assert.equal(art.cacheStats.pixelRatio,2);
+const image=retina.find(c=>c[0]==='drawImage');assert.deepEqual(image.slice(2),[-258,-258,516,516],'hiDPI artwork keeps the same world footprint');
 const foot=retina.find(c=>c[0]==='ellipse');assert.deepEqual(foot.slice(1,5),[0,0,ANGEL_FOOT_RING.rx,ANGEL_FOOT_RING.ry]);
 assert(!retina.some(c=>c[0]==='scale'),'the foot ring is never scaled up with the aura bitmap');
 assert(ANGEL_FOOT_RING.rx<25&&ANGEL_FOOT_RING.ry<12,'the small ring fits a normal humanoid footprint');
 for(let i=0;i<20;i++)aura({pixelRatio:3,time:i});
-assert.equal(canvases.length,2,'DPR is capped at the game display density');assert.equal(art.cacheStats.entries,1);assert(art.cacheStats.bytes<1_700_000,'all guardians share a small bounded cache');
+assert.equal(canvases.length,2,'DPR is capped at the game display density');assert.equal(art.cacheStats.entries,1);assert(art.cacheStats.bytes<4_300_000,'all guardians share a small bounded cache');
 assert.deepEqual(aura({pixelRatio:2,time:5,reduced:true}),aura({pixelRatio:2,time:50,reduced:true}));
+const scripted=recordingContext();art.drawAura(scripted.ctx,{...site,guardRadius:330},{pixelRatio:2});
+const scriptedImage=scripted.calls.find(c=>c[0]==='drawImage');
+assert.equal(scriptedImage[4]/516*250,330,'a scripted aura draws its actual radius without a fixed 150-unit assumption');
+assert.deepEqual(scripted.calls.find(c=>c[0]==='ellipse').slice(1,5),[0,0,ANGEL_FOOT_RING.rx,ANGEL_FOOT_RING.ry],'the scripted aura preserves the actor-sized foot ring');
+assert.equal(canvases.length,2,'different guardian ranges reuse the same bounded bitmap');
 const wrong=recordingContext();assert.equal(art.drawAura(wrong.ctx,{type:'merchant'}),false);assert.equal(wrong.calls.length,0);
 
 const effect={type:'angelStrike',x:100,y:200,r:60,seed:913,life:.18,maxLife:.18};

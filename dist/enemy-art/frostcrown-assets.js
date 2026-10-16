@@ -1,4 +1,4 @@
-import { readResponseBytes } from '../loading-resource.js';
+import { fetchResourceBytes, LoadingResourceError } from '../loading-resource.js';
 
 export const FROSTCROWN_ASSET=Object.freeze({
   path:'../assets/units/frostcrown-0d4e3d938dc5e6e0.png',
@@ -21,6 +21,18 @@ function loadImage(url,signal){
   });
 }
 
+async function timedImagePhase(operation,{timeoutMs,code,detail}){
+  const controller=new AbortController();let timer;
+  try{
+    const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{
+      const error=new LoadingResourceError(code,'Frostcrown artwork phase timed out.',{detail});
+      controller.abort(error);reject(error);
+    },Math.max(1,timeoutMs));});
+    return await Promise.race([operation(controller.signal),timeout]);
+  }catch(error){controller.abort(error);throw error;}
+  finally{clearTimeout(timer);}
+}
+
 // One decoded source shared by the archive and the bounded MonsterArt cache.
 // Boot waits for this promise before either surface can cache a first frame.
 export class FrostcrownAssets{
@@ -30,46 +42,48 @@ export class FrostcrownAssets{
   get image(){return this.#image;}
   get ready(){return this.image!==null;}
   get diagnostics(){return {ready:this.ready,decodes:this.decodes,bytes:this.ready?FROSTCROWN_ASSET.width*FROSTCROWN_ASSET.height*4:0};}
-  preload({load,fetchImpl=globalThis.fetch,onProgress=()=>{},expectedBytes,timeoutMs=12000}={}){
+  preload({load,fetchImpl=globalThis.fetch,onProgress=()=>{},expectedBytes,timeoutMs,
+    idleTimeoutMs=timeoutMs??20000,downloadTimeoutMs=timeoutMs??120000,decodeTimeoutMs=timeoutMs??20000}={}){
     if(this.ready){onProgress({phase:'ready',...this.#download,done:true});return Promise.resolve(this);}
     if(this.pending)return this.pending;
-    const controller=new AbortController();let finished=false,timer,objectURL;
+    let finished=false,objectURL;
     let download={loaded:0,total:null};
-    const progress=(phase,done)=>{if(!finished&&!controller.signal.aborted)onProgress({phase,...download,done});};
+    const progress=(phase,done)=>{if(!finished)onProgress({phase,...download,done});};
     const attempt=(async()=>{
       try{
-        const request=(async()=>{
-          const url=new URL(FROSTCROWN_ASSET.path,import.meta.url).href;
-          let image;
-          if(load){
-            progress('download',false);image=await load(url);
-          }else{
-            if(typeof fetchImpl!=='function')throw new Error('Frostcrown artwork transport unavailable.');
-            const response=await fetchImpl(url,{signal:controller.signal,credentials:'same-origin',cache:'default'});
-            if(!response.ok)throw new Error(`Frostcrown artwork response ${response.status}.`);
-            const bytes=await readResponseBytes(response,{expectedBytes,signal:controller.signal,maxBytes:8*1024*1024,
-              onProgress:({loaded,total,done})=>{download={loaded,total};progress('download',done);}});
-            if(controller.signal.aborted)throw controller.signal.reason;
-            progress('decode',false);
-            objectURL=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
-            image=await loadImage(objectURL,controller.signal);
-          }
-          if(controller.signal.aborted)throw controller.signal.reason;
-          if(load)progress('decode',false);
-          if(typeof image.decode==='function')await image.decode();
-          if(controller.signal.aborted)throw controller.signal.reason;
-          if((image.naturalWidth??image.width)!==FROSTCROWN_ASSET.width||(image.naturalHeight??image.height)!==FROSTCROWN_ASSET.height)
-            throw new Error('Frostcrown artwork dimensions do not match.');
-          return image;
-        })();
-        const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{
-          const error=new Error('Frostcrown artwork load timed out.');controller.abort(error);reject(error);
-        },Math.max(1,timeoutMs));});
-        const image=await Promise.race([request,timeout]);
+        const url=new URL(FROSTCROWN_ASSET.path,import.meta.url).href;
+        let loaded;
+        progress('download',false);
+        if(load){
+          // Preserve injected loaders for consumers/tests without letting a late
+          // completion from a failed attempt replace the current decoded image.
+          loaded=await timedImagePhase(()=>load(url),{timeoutMs:Math.min(idleTimeoutMs,downloadTimeoutMs),
+            code:'download-stalled',detail:'图片加载长时间未完成'});
+        }else{
+          const bytes=await fetchResourceBytes(url,{fetchImpl,expectedBytes,maxBytes:8*1024*1024,
+            idleTimeoutMs,totalTimeoutMs:downloadTimeoutMs,onRetry:()=>progress('retry',false),
+            onProgress:({loaded,total,done})=>{download={loaded,total};progress('download',done);}});
+          objectURL=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
+        }
+        progress('decode',false);
+        let image;
+        try{
+          image=await timedImagePhase(async signal=>{
+            const image=loaded??await loadImage(objectURL,signal);
+            if(signal.aborted)throw signal.reason;
+            if(typeof image.decode==='function')await image.decode();
+            if(signal.aborted)throw signal.reason;
+            if((image.naturalWidth??image.width)!==FROSTCROWN_ASSET.width||(image.naturalHeight??image.height)!==FROSTCROWN_ASSET.height)
+              throw new LoadingResourceError('image-dimensions','Frostcrown artwork dimensions do not match.',{detail:'角色图片尺寸不符合版本要求'});
+            return image;
+          },{timeoutMs:decodeTimeoutMs,code:'decode-timeout',detail:'角色图片解码超时'});
+        }catch(error){
+          if(error instanceof LoadingResourceError)throw error;
+          throw new LoadingResourceError('decode',error.message||'Frostcrown artwork decode failed.',{detail:'角色图片解码失败',cause:error});
+        }
         this.#image=image;this.#download=download;this.decodes++;progress('ready',true);return this;
-      }catch(error){controller.abort(error);throw error;}
-      finally{
-        finished=true;clearTimeout(timer);
+      }finally{
+        finished=true;
         if(objectURL)URL.revokeObjectURL(objectURL);
       }
     })();

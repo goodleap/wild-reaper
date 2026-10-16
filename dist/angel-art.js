@@ -40,8 +40,8 @@ export class AngelArt {
   }
   drawAura(ctx,site,{time=0,reduced=false,pixelRatio=1}={}){
     if(site.type!=='angel')return false;
-    const radius=ANGEL_RULES.guardRadius,t=reduced?0:time,art=this._aura(pixelRatio);
-    ctx.save();ctx.translate(site.x,site.y);ctx.globalAlpha=site.healing?1:.86;ctx.drawImage(art.canvas,-art.size/2,-art.size/2,art.size,art.size);
+    const radius=Number.isFinite(site.guardRadius)&&site.guardRadius>0?site.guardRadius:ANGEL_RULES.guardRadius,t=reduced?0:time,art=this._aura(pixelRatio),size=art.size*radius/ANGEL_RULES.guardRadius;
+    ctx.save();ctx.translate(site.x,site.y);ctx.globalAlpha=site.healing?1:.86;ctx.drawImage(art.canvas,-size/2,-size/2,size,size);
     // Foot-sized ellipse, independent of the guard radius and cache resolution.
     ctx.globalAlpha=site.healing?.92:.72;ctx.strokeStyle='#f3e7b9';ctx.lineWidth=1.25;ctx.beginPath();ctx.ellipse(0,0,ANGEL_FOOT_RING.rx,ANGEL_FOOT_RING.ry,0,0,TAU);ctx.stroke();
     ctx.globalAlpha=.4;ctx.strokeStyle='#cbd9bc';ctx.lineWidth=.8;ctx.beginPath();ctx.ellipse(0,0,18,6.5,0,0,TAU);ctx.stroke();

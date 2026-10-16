@@ -6,9 +6,9 @@
     "guards": 4
   },
   "angelRules": {
-    "guardRadius": 150,
-    "auraRadius": 150,
-    "attackRange": 150,
+    "guardRadius": 250,
+    "auraRadius": 250,
+    "attackRange": 250,
     "healingPerSecond": 0.03,
     "strikeRadius": 60,
     "attackInterval": 0.1,

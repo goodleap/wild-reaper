@@ -11,11 +11,15 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export function provokeEnemyGroup(game,enemy){
   const field=['rescueId','settlementId','eventId','dungeonId'].find(key=>enemy[key]);
   if(!field)return false;
-  const same=other=>other[field]===enemy[field]&&(field!=='dungeonId'||other.dungeonRoom===enemy.dungeonRoom);
-  activateCombatGroup(game.enemies.filter(same),member=>{
-    if(member.rescueSpawnGrace>0)return;
-    member._groupProvokedUntil=(game._clock||0)+3;member.guardActive=true;member.guardReturnTarget=null;
-  });
+  const until=(game._clock||0)+3;
+  // Keep the live roster check: reinforcements or a replaced scene can arrive
+  // within this same tick. Avoid allocating a filtered group for every hit.
+  for(const member of game.enemies){
+    if(member[field]!==enemy[field]||(field==='dungeonId'&&member.dungeonRoom!==enemy.dungeonRoom)||
+      !(member.hp>0)||member.state==='recovering'||member.state==='left'||member.rescueSpawnGrace>0)continue;
+    if(member._groupProvokedUntil===until&&member.guardActive===true&&member.guardReturnTarget==null)continue;
+    member._groupProvokedUntil=until;member.guardActive=true;member.guardReturnTarget=null;
+  }
   return true;
 }
 export function enemyGroupProvoked(game,enemy,center,leash){

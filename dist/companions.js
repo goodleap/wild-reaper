@@ -24,7 +24,7 @@ function bindCombatTarget(game,member){
   if(Object.getOwnPropertyDescriptor(member,'_combatTarget')?.get)return;
   member._combatTargetId=member._combatTarget?.id??null;
   Object.defineProperty(member,'_combatTarget',{configurable:true,enumerable:false,
-    get(){return game.enemies.find(enemy=>enemy.id===this._combatTargetId)||null;},
+    get(){return this._combatTargetId==null?null:game.enemies.find(enemy=>enemy.id===this._combatTargetId)||null;},
     set(enemy){this._combatTargetId=enemy?.id??null;}});
 }
 
@@ -167,12 +167,21 @@ export class Companions {
     return this.members.some(member=>member.kind==='warden'&&member.state==='active'&&member.hp>0&&distance(this._foot(member),this._foot(target))<=COMPANION_RULES.guardRadius&&this.game.combat.clearPath(member,target,{profile:'sight'}))?COMPANION_RULES.guardMultiplier:1;
   }
   alert(threat=null){
-    const g=this.game;if(g.status!=='playing')return;
-    const enemy=g.enemies.includes(threat)?threat:g.enemies.find(e=>e.id===threat?.ownerId);
+    const g=this.game;if(g.status!=='playing'||!this.members.length)return;
+    const now=g._clock||0,enemy=threat&&(g.enemies.includes(threat)?threat:threat.ownerId!=null?g.enemies.find(e=>e.id===threat.ownerId):null);
     if(enemy&&distance(this._foot(enemy),this._foot())>PARTY_COMBAT_RULES.leash)return;
-    if(enemy)this._combatThreats.set(enemy.id,g._clock+PARTY_COMBAT_RULES.alertDuration);
-    for(const [id,until]of this._combatThreats)if(until<=g._clock||!g.enemies.some(e=>e.id===id&&e.hp>0))this._combatThreats.delete(id);
-    activateCombatGroup(this.members,member=>{member._combatAlertUntil=g._clock+PARTY_COMBAT_RULES.alertDuration;member._combatRetargetAt=0;});
+    const newThreat=enemy&&(this._combatThreats.get(enemy.id)||0)<=now;
+    if(enemy)this._combatThreats.set(enemy.id,now+PARTY_COMBAT_RULES.alertDuration);
+    // Threats hold only IDs and expire shortly. Removed/dead actors cannot pass
+    // live target selection, so each hit need not search the roster for each ID.
+    if(now>=(this._nextThreatPrune||0)){
+      for(const [id,until]of this._combatThreats)if(until<=now)this._combatThreats.delete(id);
+      this._nextThreatPrune=now+PARTY_COMBAT_RULES.retarget;
+    }
+    activateCombatGroup(this.members,member=>{
+      if(newThreat||(member._combatAlertUntil||0)<=now)member._combatRetargetAt=0;
+      member._combatAlertUntil=now+PARTY_COMBAT_RULES.alertDuration;
+    });
   }
   _combatRule(member){
     const rule=skills[member.kind];
@@ -187,17 +196,20 @@ export class Companions {
     const ready=enemy=>member.kind==='stormcaller'?g.combat.canTarget(enemy,member,{range:rule.range,requireView:true,checkPath:true,source:rule.source}):distance(this._foot(enemy),from)<=rule.range&&g.combat.clearPath(member,enemy,{source:rule.source});
     const eligible=enemy=>enemy&&distance(this._foot(enemy),leader)<=PARTY_COMBAT_RULES.leash&&g.combat.canTarget(enemy,member,{requireView:true,source:rule.source,canHitFlying:rule.air})&&
       (enemy.guardActive!==false||now<(member._combatAlertUntil||0)&&now<(this._combatThreats.get(enemy.id)||0)||ready(enemy));
-    if(!eligible(member._combatTarget)||now>=(member._combatRetargetAt||0)){
-      const previous=member._combatTarget;let best=null,score=Infinity;
-      for(const enemy of g.enemies){
-        if(!eligible(enemy))continue;
-        const d=distance(from,this._foot(enemy));
-        const value=d*(enemy===previous?.85:1)*(ready(enemy)?.75:1);
-        if(value<score){score=value;best=enemy;}
+    let enemy=member._combatTarget;
+    // A missing previous target needs immediate replacement; a completed scan
+    // with no target waits for the normal retry interval instead of every frame.
+    if((member._combatTargetId!=null&&!eligible(enemy))||now>=(member._combatRetargetAt||0)){
+      const previous=enemy;let best=null,score=Infinity;
+      for(const candidate of g.enemies){
+        if(!eligible(candidate))continue;
+        const d=distance(from,this._foot(candidate));
+        const value=d*(candidate===previous?.85:1)*(ready(candidate)?.75:1);
+        if(value<score){score=value;best=candidate;}
       }
-      member._combatTarget=best;member._combatRetargetAt=now+PARTY_COMBAT_RULES.retarget+(member.id%4)*.017;
+      member._combatTarget=enemy=best;member._combatRetargetAt=now+PARTY_COMBAT_RULES.retarget+(member.id%4)*.017;
     }
-    const enemy=member._combatTarget;if(!enemy)return null;
+    if(!enemy)return null;
     if(g.abilities?.isFrozen(member))return {hold:true};
     const target=this._foot(enemy);
     if(member.kind==='stormcaller'&&member._attack>0){
@@ -427,22 +439,22 @@ export class Companions {
   _quake(x,y,r,damage,echo,seed) {
     const g=this.game,source=echo?'companionEcho':'companionPulse',origin={x,y:y-groundOffset(g.player,true),groundY:y};
     g._effect(x,y,'ring',echo?.6:.48,r,echo?'#c6ead5':'#9de0b3',undefined,{quake:true,groundY:y,evolved:true,echo,branch:'echoes',ally:true,seed});
-    for(const enemy of g._nearby(x,y,r+50))if(g.combat.canTarget(enemy,origin,{requireView:true,checkPath:true,source,canHitFlying:false})&&(isFrostcrownBody(enemy)?!!frostcrownGroundContact(enemy,x,y,r):Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r))
+    for(const enemy of g._nearby(x,y,r+50))if((isFrostcrownBody(enemy)?!!frostcrownGroundContact(enemy,x,y,r):Math.hypot(enemy.x-x,enemy.y+groundOffset(enemy)-y)<r+enemy.r)&&g.combat.canTarget(enemy,origin,{requireView:true,checkPath:true,source,canHitFlying:false}))
       g._hitEnemy(enemy,damage,echo?skills.warden.echoKnockback:skills.warden.knockback,origin,source);
   }
   _castQuake(active) {
-    const g=this.game,foot=this._foot(active),rule=skills.warden,enemies=g._nearby(foot.x,foot.y,rule.radius).filter(e=>g.combat.canTarget(e,active,{requireView:true,checkPath:true,source:'companionPulse',canHitFlying:false})&&(isFrostcrownBody(e)?!!frostcrownGroundContact(e,foot.x,foot.y,rule.radius):distance(this._foot(e),foot)<rule.radius+e.r));
-    if(!enemies.length)return false;
+    const g=this.game,foot=this._foot(active),rule=skills.warden;
+    if(!g._nearby(foot.x,foot.y,rule.radius).some(e=>(isFrostcrownBody(e)?!!frostcrownGroundContact(e,foot.x,foot.y,rule.radius):distance(this._foot(e),foot)<rule.radius+e.r)&&g.combat.canTarget(e,active,{requireView:true,checkPath:true,source:'companionPulse',canHitFlying:false})))return false;
     const damage=rule.damage*(1+Math.floor(g.time/rule.growthPeriod)*rule.growth);
     this._quake(foot.x,foot.y,rule.radius,damage,false,active.id);
     active._attack=rule.cooldown;active.castFace=.3;return true;
   }
   _castGolem(active) {
     const g=this.game,foot=this._foot(active),rule=skills.golem;
-    const targets=g._nearby(foot.x,foot.y,rule.queryRange).filter(e=>g.combat.canTarget(e,active,{checkPath:true,source:'companionGolem',canHitFlying:false})&&(isFrostcrownBody(e)?!!frostcrownGroundContact(e,foot.x,foot.y,rule.radius):distance(this._foot(e),foot)<rule.radius+e.r));
+    const targets=g._nearby(foot.x,foot.y,rule.queryRange).filter(e=>(isFrostcrownBody(e)?!!frostcrownGroundContact(e,foot.x,foot.y,rule.radius):distance(this._foot(e),foot)<rule.radius+e.r)&&g.combat.canTarget(e,active,{checkPath:true,source:'companionGolem',canHitFlying:false}));
     if(!targets.length)return false;
     targets.sort((a,b)=>(b.type==='boss')-(a.type==='boss')||distance(a,active)-distance(b,active));
-    const target=targets.includes(active._combatTarget)?active._combatTarget:targets[0],angle=Math.atan2(target.y-active.y,target.x-active.x);active.castFacing=angle;active.facing=angle;active.castFace=.48;
+    const preferred=active._combatTarget,target=targets.includes(preferred)?preferred:targets[0],angle=Math.atan2(target.y-active.y,target.x-active.x);active.castFacing=angle;active.facing=angle;active.castFace=.48;
     g._effect(foot.x+Math.cos(angle)*44,foot.y+Math.sin(angle)*44,'ring',.42,85,'#d6c9a7',undefined,{quake:true,groundY:foot.y,evolved:false,ally:true,seed:active.id});
     for(const enemy of targets){
       const delta=Math.atan2(Math.sin(Math.atan2(enemy.y-active.y,enemy.x-active.x)-angle),Math.cos(Math.atan2(enemy.y-active.y,enemy.x-active.x)-angle));
@@ -468,7 +480,7 @@ export class Companions {
     }
   }
   onSceneChange(arrival=null) {
-    this.game._friendlySnapshot=null;this._combatThreats.clear();const p=this._foot();
+    this.game._friendlySnapshot=null;this._combatThreats.clear();this._nextThreatPrune=0;const p=this._foot();
     for(const active of this.members){active._echoes=[];active.workTarget=null;active._meleeTarget=null;active._combatTarget=null;active._combatAlertUntil=0;active._combatRetargetAt=0;active.scoutTarget=null;active.treasureTarget=null;active.scoutCount=0;active.cue='';active._scan=0;active.x=p.x;active.y=p.y-active.groundOffset;this._resetFollowing(active);}
     const placed=[],members=arrival?[...this.members].sort((a,b)=>b.r-a.r):this.members;
     for(const active of members){if(!arrival||!this._placeAtDoor(active,arrival,placed))this._safeReturn(active);placed.push(active);}

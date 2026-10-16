@@ -76,11 +76,11 @@ click(h,'pause-character-button');key(h,'Escape');assert(h.run('paused'));assert
 click(h,'pause-archive-button',{keyboard:true});key(h,'Escape');assert.equal(h.document.activeElement,node(h,'pause-archive-button'));
 click(h,'resume-button');assert.equal(h.document.activeElement,canvas);assert(!h.run('paused'));
 
-// The new realm trigger obeys the same policy and its radio group participates
+// Realm material preferences keep the same character-panel focus policy and participate
 // in the keyboard order once, with disabled materials excluded.
 h.run('game.player.level=game.realms.cap;game.player.xp=game.player.xpNext=100;game.realms.talismans=2;updateHUD();');
-assert(!node(h,'realm-ready').classList.contains('hidden'));
-click(h,'realm-ready');assert.equal(h.document.activeElement,panel(h,'character-overlay'));
+assert(!node(h,'context-action').classList.contains('hidden'));
+click(h,'character-button');assert.equal(h.document.activeElement,panel(h,'character-overlay'));
 const realmControls=h.run('focusNavigation.focusable($("character-overlay")).map(element=>element.id)');
 assert(realmControls.includes('realm-material-2'));assert(!realmControls.includes('realm-material-0'));assert(!realmControls.includes('realm-material-1'));assert(!realmControls.includes('realm-material-3'));
 node(h,'realm-material-1').checked=true;node(h,'realm-material-2').checked=false;
@@ -91,7 +91,7 @@ key(h,'Escape');assert.equal(h.document.activeElement,canvas);
 // Tab includes input/textarea/tabindex surfaces and skips hidden, disabled,
 // roving-tabindex and collapsed-details controls. Input editing never casts.
 click(h,'pause-button');const input=node(h,'debug-viewport-width');input.focus();input.value='600';
-for(const code of ['Space','KeyM','KeyC','KeyP','Enter']){
+for(const code of ['Space','KeyM','KeyC','KeyP','KeyF','Enter']){
   h.run('skillRequested=false;');assert(!key(h,code).defaultPrevented);assert(h.run('paused&&!mapOpen&&!characterOpen&&!skillRequested'));
 }
 const ids=Array.from(h.run('focusNavigation.focusable($("pause-overlay")).map(element=>element.id)'));

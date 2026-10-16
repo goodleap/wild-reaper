@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readResponseBytes } from './dist/loading-resource.js';
+import { readResponseBytes, fetchResourceBytes } from './dist/loading-resource.js';
 import { FrostcrownAssets } from './dist/enemy-art/frostcrown-assets.js';
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
@@ -55,6 +55,85 @@ for(const mode of ['stream','arrayBuffer','text']){
   if(mode==='stream')assert(cancelled,'abort does not wait for an uncooperative cancel promise');
 }
 
+const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
+function clock(){
+  let time=0,id=0;const timers=new Map();
+  return {
+    now:()=>time,setTimer:(run,delay)=>{timers.set(++id,{run,at:time+delay});return id;},clearTimer:timer=>timers.delete(timer),
+    get pending(){return timers.size;},
+    async advance(ms){
+      const end=time+ms;
+      while(true){
+        const next=[...timers].filter(([,task])=>task.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];
+        if(!next)break;
+        time=next[1].at;timers.delete(next[0]);next[1].run();await flush();
+      }
+      time=end;await flush();
+    }
+  };
+}
+{
+  const time=clock();let stream,requests=0;
+  const download=fetchResourceBytes('fixture',{...time,fetchImpl:async()=>{
+    requests++;return new Response(new ReadableStream({start(controller){stream=controller;}}));
+  }});
+  await flush();
+  // Defaults allow a 40-second download: each real chunk renews the 20-second
+  // stall allowance, including beyond the old 12-second absolute deadline.
+  for(let i=0;i<4;i++){await time.advance(10000);stream.enqueue(new Uint8Array([i]));await flush();}
+  stream.close();assert.deepEqual(await download,new Uint8Array([0,1,2,3]));
+  assert.equal(requests,1);assert.equal(time.pending,0);
+}
+{
+  const time=clock();let requests=0,retries=0,cancels=0;const streams=[],signals=[];
+  const download=fetchResourceBytes('fixture',{...time,onRetry:()=>retries++,fetchImpl:async(_url,{signal})=>{
+    requests++;signals.push(signal);return new Response(new ReadableStream({start(controller){streams.push(controller);},cancel(){cancels++;}}));
+  }});
+  const rejected=assert.rejects(download,error=>error.code==='download-stalled');
+  await flush();await time.advance(19000);streams[0].enqueue(new Uint8Array());await flush();
+  await time.advance(1000);assert.equal(retries,1,'zero-byte chunks do not reset the stall clock');
+  await time.advance(20000);await rejected;
+  assert.equal(requests,2);assert.equal(cancels,2);assert(signals.every(signal=>signal.aborted));assert.equal(time.pending,0);
+}
+{
+  const time=clock();let stream,requests=0,cancels=0;
+  const download=fetchResourceBytes('fixture',{...time,fetchImpl:async()=>{
+    requests++;return new Response(new ReadableStream({start(controller){stream=controller;},cancel(){cancels++;}}));
+  }});
+  const rejected=assert.rejects(download,error=>error.code==='download-timeout');
+  await flush();
+  for(let i=0;i<11;i++){await time.advance(10000);stream.enqueue(new Uint8Array([i]));await flush();}
+  await time.advance(10000);await rejected;
+  assert.equal(requests,1,'the total budget does not restart after each chunk or on retry');
+  assert.equal(cancels,1);assert.equal(time.pending,0);
+}
+for(const status of [503,404]){
+  const time=clock();let requests=0,retries=0;
+  const download=fetchResourceBytes('fixture',{...time,onRetry:()=>retries++,fetchImpl:async()=>{
+    requests++;return requests===1?new Response('',{status}):streamed([bytes]);
+  }});
+  if(status===503){assert.deepEqual(await download,bytes);assert.equal(requests,2);assert.equal(retries,1);}
+  else{await assert.rejects(download,error=>error.code==='http');assert.equal(requests,1);assert.equal(retries,0);}
+  assert.equal(time.pending,0);
+}
+{
+  const time=clock();let requests=0;
+  const download=fetchResourceBytes('fixture',{...time,fetchImpl:async()=>{
+    if(++requests===1)throw new TypeError('connection interrupted');return streamed([bytes]);
+  }});
+  assert.deepEqual(await download,bytes);assert.equal(requests,2);assert.equal(time.pending,0);
+}
+{
+  const time=clock();let requests=0,stream;
+  const download=fetchResourceBytes('fixture',{...time,idleTimeoutMs:30000,totalTimeoutMs:40000,fetchImpl:async()=>{
+    requests++;return new Response(new ReadableStream({start(controller){stream=controller;}}));
+  }});
+  const rejected=assert.rejects(download,error=>error.code==='download-timeout');
+  await flush();await time.advance(30000);assert.equal(requests,2);
+  stream.enqueue(bytes);await flush();await time.advance(10000);await rejected;
+  assert.equal(time.pending,0,'one retry shares the original total download deadline');
+}
+
 // Exercise the production PNG fetch -> Blob -> Image path with a controlled
 // browser image decoder, including disposal and timeout retry ownership.
 const previousImage=globalThis.Image,previousCreate=URL.createObjectURL,previousRevoke=URL.revokeObjectURL;
@@ -91,7 +170,9 @@ try{
     decode=()=>{started.resolve();return late.promise;};
     const loading=assets.preload({timeoutMs:10,fetchImpl:async(_url,options)=>{signal=options.signal;return streamed([bytes]);},onProgress:event=>events.push(event)});
     await started.promise;const old=images.at(-1);
-    await assert.rejects(loading,/timed out/);assert(signal.aborted);assert.equal(assets.ready,false);assert(revoked.includes(old.url));
+    await assert.rejects(loading,error=>error.code==='decode-timeout');
+    assert.equal(signal.aborted,false,'a separate decode deadline does not cancel an already completed download');
+    assert.equal(assets.ready,false);assert(revoked.includes(old.url));
     const count=events.length;decode=()=>Promise.resolve();
     await assets.preload({fetchImpl:async()=>streamed([bytes])});const current=assets.image;
     late.resolve();await Promise.resolve();await Promise.resolve();
@@ -123,4 +204,4 @@ try{
 }finally{
   globalThis.Image=previousImage;URL.createObjectURL=previousCreate;URL.revokeObjectURL=previousRevoke;
 }
-console.log('Loading bytes: streamed UTF-8 counts, trustworthy gzip/CORS totals, EOF completion, bounded reads, abort/late suppression; PNG single fetch/decode, Blob disposal, timeout retry and legacy loader compatibility passed.');
+console.log('Loading bytes: exact counts, bounded reads, abort/late suppression; 40-second active download, 20-second stall, 120-second total, one transient retry, separate decode deadline, Blob/timer cleanup and legacy loader compatibility passed.');

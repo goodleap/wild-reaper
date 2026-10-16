@@ -112,6 +112,11 @@
 .playing .hud{margin:var(--safe-top) var(--safe-right) 0 var(--safe-left)}
 .game-bottom{margin:0 var(--safe-right) var(--safe-bottom) var(--safe-left)}
 .touch-skill{margin-right:var(--safe-right);margin-bottom:var(--safe-bottom)}
+.game-bottom{gap:12px}
+.touch-context-action{left:27px;right:auto;margin-left:var(--safe-left);margin-right:0}
+.touch-context-action>span{font-size:23px}
+.touch-context-action:disabled{opacity:.65}
+@media(max-width:950px) and (max-height:500px){.touch-context-action{left:22px;right:auto}}
 .portal-action,.intro-bottom,.hero-caption{margin-bottom:var(--safe-bottom)}
 .buff-status,.companion-status,.encounter-status,.boss-bar{margin-top:var(--safe-top);margin-bottom:var(--safe-bottom)}
 .buff-status,.companion-status{margin-left:var(--safe-left)}

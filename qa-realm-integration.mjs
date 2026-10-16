@@ -17,10 +17,32 @@ click('pause-character-button');assert.equal(h.run('characterOpen'),true);assert
 node('realm-material-2').checked=true;h.fire(node('realm-material-2'),'change');click('start-tribulation');
 assert.equal(h.run('characterOpen'),false);assert.equal(h.run('paused'),false);assert.equal(h.run('game.realms.active.materials'),2);assert.equal(h.run('game.realms.talismans'),1);
 assert.equal(node('tribulation-progress').classList.contains('hidden'),false);
-assert.equal(node('realm-ready').classList.contains('hidden'),true);
+assert.equal(node('touch-context-action').classList.contains('hidden'),true);
 const elapsed=h.run('game.realms.active.elapsed');click('pause-button');for(let i=0;i<10;i++)h.tick();assert.equal(h.run('game.realms.active.elapsed'),elapsed,'pause suspends trial warnings and damage');click('resume-button');
 for(let i=0;i<600&&!h.run('!game.realms.active');i++)h.tick();
 assert.equal(h.run('game.player.level'),6);assert.equal(h.run('game.realms.label'),'筑基');assert.equal(h.run('game.realms.active'),null);assert.equal(h.run('game.realms.talismans'),1);
+
+// Context shortcut starts directly, obeys current availability, and cannot retrigger.
+const direct=harness('?debug');
+const directNode=id=>direct.document.getElementById(id);
+const directClick=id=>direct.fire(directNode(id),'click');
+const pressF=(extra={})=>{const event={code:'KeyF',key:'f',target:direct.document.activeElement,repeat:false,preventDefault(){this.defaultPrevented=true;},...extra};direct.listeners['window:keydown'](event);return event;};
+directClick('start-button');directClick('prepare-start-button');await direct.flush();
+direct.run('game.enemies=[];game.addExperience(1000000);game.regionGrace=2;updateHUD();');
+assert.equal(directNode('context-action').disabled,true,'scene stabilization still blocks direct starts');
+pressF();assert.equal(direct.run('game.realms.active'),null);
+direct.run('game.regionGrace=0;updateHUD();');
+assert.equal(directNode('context-action').disabled,false);
+directClick('pause-button');pressF();assert.equal(direct.run('game.realms.active'),null,'pause blocks the shortcut');
+const editor=directNode('debug-viewport-width');editor.focus();assert.equal(pressF().defaultPrevented,undefined,'text inputs retain F');
+directClick('resume-button');
+pressF({repeat:true});assert.equal(direct.run('game.realms.active'),null,'held key cannot start a trial');
+assert.equal(pressF().defaultPrevented,true);
+assert.equal(direct.run('game.realms.active.materials'),3,'direct start uses the recommended available material count');
+assert.equal(direct.run('characterOpen'),false);assert.equal(direct.document.activeElement,directNode('game-canvas'));
+const directTrial=direct.run('game.realms.active.id');pressF();directClick('context-action');
+assert.equal(direct.run('game.realms.active.id'),directTrial);assert.equal(direct.run('game.realms.talismans'),0);
+assert.equal(directNode('context-action').classList.contains('hidden'),true);
 
 // A real world transition retains the service and the unlocked cap. Region
 // cancellation must never dispose the whole growth service.

@@ -10,7 +10,7 @@ function angel(g,x=0,y=0,id='angel:fixture'){const site={id,type:'angel',name:'å
 function feet(g,x,y){g.player.x=x;g.player.y=y-groundOffset(g.player,true);}
 function enemy(g,x,y,hp=300){const e=g._spawnEnemy('slime',1);e.x=x;e.y=y-groundOffset(e);e.hp=e.maxHp=hp;e.speed=0;return e;}
 
-assert.equal(ANGEL_RULES.guardRadius,150);assert.equal(ANGEL_RULES.auraRadius,ANGEL_RULES.guardRadius);assert.equal(ANGEL_RULES.attackRange,ANGEL_RULES.guardRadius);assert.equal(ANGEL_RULES.attackInterval,.1);
+assert.equal(ANGEL_RULES.guardRadius,250);assert.equal(ANGEL_RULES.auraRadius,ANGEL_RULES.guardRadius);assert.equal(ANGEL_RULES.attackRange,ANGEL_RULES.guardRadius);assert.equal(ANGEL_RULES.attackInterval,.1);
 const disabled=arena();disabled.settlements.update(.1);assert.equal(disabled.settlements.sites.length,0,'disabled generation fixtures never silently acquire an angel');
 const healing=arena(),haven=angel(healing);feet(healing,0,0);healing.player.hp=40;
 assert.equal(healing.settlements.getInteraction(),null,'the aura needs no one-shot blessing button');assert.equal(healing.settlements.interact(haven.id),false);
@@ -29,7 +29,7 @@ const strike=combat.effects.find(e=>e.type==='angelStrike');assert(strike);asser
 combat.settlements.update(.099);assert.equal(splash.hp,185,'rapid guardian strikes still respect their full cooldown');combat.settlements.update(.00101);assert.equal(splash.hp,70);assert.equal(outside.hp,300);
 combat.status='paused';combat.settlements.update(.1);assert.equal(guardian.castFace,.25,'pausing freezes the cast expression');combat.status='playing';
 const fixed={x:guardian.x,y:guardian.y};feet(combat,1500,1500);combat.settlements.update(5);assert.equal(splash.hp,70,'offscreen angels do not farm distant monsters');assert.deepEqual({x:guardian.x,y:guardian.y},fixed,'the guardian never follows the player or a target');assert.equal(guardian.castFace,0,'the focused face fades when no target remains');
-// The same 150-unit boundary is inclusive for both healing and offensive reach.
+// The same 250-unit boundary is inclusive for both healing and offensive reach.
 const boundary=arena();angel(boundary);feet(boundary,ANGEL_RULES.guardRadius,0);boundary.player.hp=40;
 const edgeEnemy=enemy(boundary,ANGEL_RULES.guardRadius,0);boundary.settlements.update(1);
 assert.equal(boundary.player.hp,43);assert.equal(edgeEnemy.hp,300-ANGEL_RULES.damage);
@@ -86,8 +86,8 @@ const pursuit=enemy(scripted,180,25,1000);
 updateAngelGuardian(scripted,arrived,1,{rules:{guardRadius:220,healingPerSecond:.08}});
 assert.equal(scripted.player.hp,48);assert.equal(pursuit.hp,1000-ANGEL_RULES.damage);assert.equal(arrived.castFace,.25);
 assert.equal(scripted.settlements.sites.length,0,'scripted guarding does not restore ordinary sites');
-assert.equal(ANGEL_RULES.guardRadius,150);assert.equal(ANGEL_RULES.healingPerSecond,.03,'encounter overrides do not mutate ordinary settings');
+assert.equal(ANGEL_RULES.guardRadius,250);assert.equal(ANGEL_RULES.healingPerSecond,.03,'encounter overrides do not mutate ordinary settings');
 scripted.player.hp=40;updateAngelGuardian(scripted,arrived,1,{heal:false,attack:false,rules:{guardRadius:220}});assert.equal(scripted.player.hp,40);assert.equal(pursuit.hp,1000-ANGEL_RULES.damage,'visual climax can independently silence ordinary extra strikes');
 scripted.status='paused';updateAngelGuardian(scripted,arrived,1,{rules:{guardRadius:220}});assert.equal(scripted.player.hp,40,'scripted guarding respects pause');
 
-console.log('Angels: persistent spawn guardian, no portal guardians or gate aura, restored-world cleanup, deduplication, flying state, continuous capped nonstacking aura, pause/castle/wall isolation, shared 150-unit guard boundary, offscreen-guardian phone protection, local splash lightning, 0.1-second cooldowns and ordinary kill rewards passed.');
+console.log('Angels: persistent spawn guardian, no portal guardians or gate aura, restored-world cleanup, deduplication, flying state, continuous capped nonstacking aura, pause/castle/wall isolation, shared 250-unit guard boundary, offscreen-guardian phone protection, local splash lightning, 0.1-second cooldowns and ordinary kill rewards passed.');

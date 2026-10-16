@@ -24,14 +24,15 @@ assert.equal(png[25],6,'the approved PNG retains its RGBA alpha channel');
 // Concurrent consumers must wait through decoding, and failure must not poison
 // the next attempt or publish a half-loaded texture to the sprite cache.
 {
-  const assets=new FrostcrownAssets();let loadCalls=0,decodeCalls=0,resolveLoad,resolveDecode;
+  const assets=new FrostcrownAssets();let loadCalls=0,decodeCalls=0,resolveLoad,resolveDecode,resolveDecodeStarted;
   const loaded=new Promise(resolve=>{resolveLoad=resolve;});
   const decoded=new Promise(resolve=>{resolveDecode=resolve;});
-  const image={naturalWidth:1254,naturalHeight:1254,decode(){decodeCalls++;return decoded;}};
+  const decodeStarted=new Promise(resolve=>{resolveDecodeStarted=resolve;});
+  const image={naturalWidth:1254,naturalHeight:1254,decode(){decodeCalls++;resolveDecodeStarted();return decoded;}};
   const first=assets.preload({load:async url=>{loadCalls++;assert.equal(url,assetURL.href);return loaded;}});
   const second=assets.preload({load:async()=>{assert.fail('concurrent consumer started a duplicate request');}});
   assert.equal(first,second);assert.equal(loadCalls,1);assert.equal(assets.ready,false);assert.equal(assets.image,null);
-  resolveLoad(image);await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  resolveLoad(image);await decodeStarted;
   assert.equal(decodeCalls,1);assert.equal(assets.ready,false,'load event alone cannot publish an undecoded image');
   resolveDecode();assert.equal(await first,assets);assert.equal(assets.image,image);
   await assets.preload({load:async()=>assert.fail('ready texture was loaded twice')});

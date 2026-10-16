@@ -317,25 +317,30 @@ export class Game {
       this._grid.get(key).push(e);
     }
   }
-  _nearby(x,y,r=70) {
-    const found=[];let frostSeen;
+  _nearby(x,y,r=70,options) {
+    const found=options?.result??[],limit=options?.limit??Infinity,afterId=options?.afterId??-Infinity;found.length=0;let frostSeen;
+    if(limit<=0)return found;
     for(let i=Math.floor((x-r)/this._cell);i<=Math.floor((x+r)/this._cell);i++)
       for(let j=Math.floor((y-r)/this._cell);j<=Math.floor((y+r)/this._cell);j++) {
         const cell=this._grid.get(`${i},${j}`);if(cell)for(const e of cell){
+          if(e.id<=afterId)continue;
           if(isFrostcrownBody(e)){frostSeen??=new Set();if(frostSeen.has(e))continue;frostSeen.add(e);}
           found.push(e);
+          if(found.length>=limit)return found;
         }
       }
     return found;
   }
-  _moveEntity(entity,dx,dy,isPlayer=false) {
+  _moveEntity(entity,dx,dy,isPlayer=false,movementQueries=null) {
     if(isFrostcrownBody(entity)){
       const moved=moveFrostcrownGround(this.terrain,entity,dx,dy,movementProfile(entity));
       if(Number.isFinite(entity._walkStartX))entity._walkStartX+=moved.correctionX||0;
       if(Number.isFinite(entity._walkStartY))entity._walkStartY+=moved.correctionY||0;
       entity.x=moved.x;entity.y=moved.y;return {...moved,y:moved.y+groundOffset(entity)};
     }
-    const offset=groundOffset(entity,isPlayer||entity.isCompanion),moved=this.terrain.moveCircle(entity.x,entity.y+offset,dx,dy,entity.r,movementProfile(entity));
+    let queryCache;
+    if(movementQueries){queryCache=movementQueries.get(entity);if(!queryCache){queryCache={};movementQueries.set(entity,queryCache);}}
+    const offset=groundOffset(entity,isPlayer||entity.isCompanion),moved=this.terrain.moveCircle(entity.x,entity.y+offset,dx,dy,entity.r,movementProfile(entity),queryCache);
     entity.x=moved.x;entity.y=moved.y-offset;return moved;
   }
   _moveEnemy(e,dt,target=null) {
@@ -639,23 +644,25 @@ export class Game {
     }
     this._rebuildGrid();
     // Soft separation keeps the horde readable while preserving dense swarms.
+    // Reuse only this pass's candidates and local terrain queries. Every push
+    // still resolves separately; a cache never outlives movement or a scene.
+    const separationQuery={result:[],limit:9,afterId:0},movementQueries=new Map();
     for(const e of this.enemies) {
       if(e.hp<=0) continue;
-      let count=0;
-      for(const n of this._nearby(e.x,e.y,48)) {
-        if(n.id<=e.id || count++>8) continue;
+      separationQuery.afterId=e.id;
+      for(const n of this._nearby(e.x,e.y,48,separationQuery)) {
         if(isFrostcrownBody(e)||isFrostcrownBody(n)){
           const deer=isFrostcrownBody(e)?e:n,other=deer===e?n:e;
           if(other.type==='boss'||other.trainingDummy||other.charge||other.guardActive===false||this.abilities.isFrozen(other))continue;
           const otherFoot=friendlyFoot(other),contact=frostcrownGroundContact(deer,otherFoot.x,otherFoot.y,other.r*.76,.76);
-          if(contact){const force=Math.min(contact.overlap,30*dt)*.5;this._moveEntity(other,contact.nx*force,contact.ny*force);}
+          if(contact){const force=Math.min(contact.overlap,30*dt)*.5;this._moveEntity(other,contact.nx*force,contact.ny*force,false,movementQueries);}
           continue;
         }
         const dx=e.x-n.x,dy=e.y-n.y,d=Math.hypot(dx,dy),overlap=(e.r+n.r)*.76-d;
         if(overlap>0 && d>.1) {
           const force=Math.min(overlap,30*dt)*.5;
-          if(e.type!=='boss'&&!e.trainingDummy&&!e.charge&&e.guardActive!==false&&!this.abilities.isFrozen(e))this._moveEntity(e,dx/d*force,dy/d*force);
-          if(n.type!=='boss'&&!n.trainingDummy&&!n.charge&&n.guardActive!==false&&!this.abilities.isFrozen(n))this._moveEntity(n,-dx/d*force,-dy/d*force);
+          if(e.type!=='boss'&&!e.trainingDummy&&!e.charge&&e.guardActive!==false&&!this.abilities.isFrozen(e))this._moveEntity(e,dx/d*force,dy/d*force,false,movementQueries);
+          if(n.type!=='boss'&&!n.trainingDummy&&!n.charge&&n.guardActive!==false&&!this.abilities.isFrozen(n))this._moveEntity(n,-dx/d*force,-dy/d*force,false,movementQueries);
         }
       }
     }

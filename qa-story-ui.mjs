@@ -97,6 +97,8 @@ node(h,'story-dialogue-panel').focus();
 assert(storyKey('Space').defaultPrevented);assert.equal(h.run('advances'),0,'Space combat muscle memory cannot skip a neutral conversation');
 h.listeners['window:keyup']({code:'Space'});
 assert(storyKey('KeyM').defaultPrevented);assert.equal(h.run('mapOpen'),false);
+assert(storyKey('KeyF').defaultPrevented,'context actions cannot bypass blocking dialogue');
+h.listeners['window:keyup']({code:'KeyF'});
 assert(storyKey('Enter').defaultPrevented);assert.equal(node(h,'story-dialogue-name').textContent,'公主');
 assert.equal(node(h,'story-dialogue-next').textContent,'一起突围');
 h.fire(node(h,'story-dialogue-panel'),'click',{target:node(h,'story-dialogue-text')});
@@ -172,23 +174,28 @@ h.run(`const realStory=game.story;let actionUses=0;
     getBuff:()=>actionUses?{label:'燃脉激发',remaining:29.1,speedPercent:100,damageReduction:.98}:null};updateHUD();`);
 assert.equal(hidden(h,'context-action'),false);
 assert.equal(node(h,'context-action-label').textContent,'服用燃脉丸');
-click(h,'context-action');
+assert.equal(hidden(h,'touch-context-action'),false);
+click(h,'touch-context-action');
 assert.equal(h.run('actionUses'),1);
 assert.equal(hidden(h,'context-action'),true,'successful use immediately removes the action');
 assert.equal(hidden(h,'story-buff'),false);
 assert.equal(node(h,'story-buff-time').textContent,'30');
 assert.match(node(h,'story-buff').title,/移速 \+100%.*当前减伤 98%/,'buff uses the accumulated mitigation value');
 click(h,'context-action');assert.equal(h.run('actionUses'),1,'stale repeated clicks cannot use a consumed action');
+h.run('actionUses=0;updateHUD();');
+assert(storyKey('KeyF').defaultPrevented);
+assert.equal(h.run('actionUses'),1,'F uses the same story action as the touch control');
+assert.equal(h.document.activeElement,node(h,'game-canvas'));
 h.run('game.story=realStory;home();');
 assert.equal(hidden(h,'context-action'),true);
 assert.equal(h.run('game'),null);
-assert.equal(hidden(h,'realm-ready'),true);
+assert.equal(hidden(h,'touch-context-action'),true);
 click(h,'start-button');choose(h,'mode-world');
 assert.equal(node(h,'world-verdant-rift').checked,true,'returning from a story run restores exploration world');
 assert.equal(node(h,'hero-princess-v2').checked,true);
 assert.equal(node(h,'weapon-arrow').checked,true);
 
-// Realm controls are a paused character panel; the material count is explicit.
+// Material preferences remain in the character panel, while the HUD action starts directly.
 click(h,'prepare-start-button');await h.flush();
 assert.equal(h.run('game.startWorldId'),'verdant-rift');
 assert.equal(hidden(h,'story-objective'),true);assert.equal(node(h,'story-objective-text').textContent,'');
@@ -199,8 +206,10 @@ assert.match(node(h,'character-content').textContent,/距 Lv\.5 瓶颈还需 \d+
 assert.match(node(h,'character-content').textContent,/护劫符 0 张/);
 click(h,'character-done');
 h.run(`game.player.level=5;game.player.xp=game.player.xpNext;game.realms.capExperience();updateHUD();`);
-assert.equal(hidden(h,'realm-ready'),false);
-click(h,'realm-ready');
+assert.equal(hidden(h,'touch-context-action'),false);
+assert.equal(node(h,'context-action-label').textContent,'开始渡劫');
+assert.match(node(h,'context-action-detail').textContent,/投入护劫符 3 张/);
+click(h,'character-button');
 assert.equal(h.run('characterOpen'),true);
 assert(node(h,'realm-material-3').checked,'the first preparation recommends the three granted talismans');
 assert.match(node(h,'character-content').textContent,/附近随机落下/);assert.doesNotMatch(node(h,'character-content').textContent,/开阔|留在劫域|离场/);
@@ -209,6 +218,12 @@ assert.equal(node(h,'realm-material-3').disabled,false);
 choose(h,'realm-material-2');
 assert.equal(h.run('realmMaterials'),2);
 assert.match(node(h,'start-tribulation').textContent,/投入 2 张/);
+click(h,'character-done');h.run('game.regionGrace=0;updateHUD();');
+click(h,'touch-context-action');
+assert.equal(h.run('characterOpen'),false,'HUD action never opens the character panel');
+assert.equal(h.run('game.realms.active.materials'),2,'direct action honors the selected material count');
+assert.equal(h.document.activeElement,node(h,'game-canvas'));
+assert.equal(hidden(h,'touch-context-action'),true,'an active trial consumes its action');
 // A chapter's unread angel line directs the player back to the angel, rather
 // than mislabelling the destination as the following princess.
 h.run(`const pointerLabels=[],savedSceneLabel=ctx.fillText,savedStory=game.story;
@@ -218,7 +233,8 @@ assert.equal(h.run('pointerLabels.length'),0,'story does not draw duplicate loca
 assert.equal(h.run('pointerLabels.some(text=>text.startsWith("公主"))'),false);
 const css=fs.readFileSync(new URL('./dist/story-ui.css',import.meta.url),'utf8');
 assert.match(css,/\.story-preparation \.hero-option,\.story-preparation \.weapon-option\{flex-grow:0;flex-basis:max/,'single story selections preserve standard card sizes');
-assert.match(css,/@media\(pointer:coarse\).*?bottom:calc\(176px/s,'mobile action sits above the joystick');
+const mainCss=fs.readFileSync(new URL('./dist/style.css',import.meta.url),'utf8');
+assert.match(mainCss,/\.touch-context-action\{left:27px;right:auto;margin-left:var\(--safe-left\)/,'mobile context shares the lightning geometry and mirrors its side');
 assert.match(css,/\.story-victory \.end-actions\{grid-template-columns:minmax\(180px,240px\);justify-content:center/,'the single ending action replaces the two-column grid');
 // Completing the final conversation fades into a chapter victory screen.
 // The frame scheduler must keep advancing the fade after its commit changes

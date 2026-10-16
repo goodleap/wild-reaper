@@ -20,7 +20,12 @@ function fixture(options={}){
   assert(!element('boot-loading').classList.contains('hidden'));
   view.update({completed:2,total:5,stage:'读取配置'});
   assert.equal(element('boot-loading-fill').style.transform,'scaleX(0.4)');assert.equal(element('boot-loading-track').attributes['aria-valuenow'],'40');assert.equal(element('boot-loading-label').textContent,'读取配置');
+  assert.equal(element('boot-loading-percent').textContent,'40%');
+  view.update({completed:.999,total:1,stage:'正在准备'});
+  assert.equal(element('boot-loading-percent').textContent,'99%','rounding must not announce completion before readiness');
+  assert.equal(element('boot-loading-track').attributes['aria-valuenow'],'99');
   view.finish();assert(element('boot-loading').classList.contains('is-complete'));advance(179);assert(!element('boot-loading').classList.contains('hidden'));advance(1);assert(element('boot-loading').classList.contains('hidden'));
+  assert.equal(element('boot-loading-percent').textContent,'100%');
 }
 {
   const {view,element}=fixture();
@@ -30,6 +35,8 @@ function fixture(options={}){
   view.update({completed:1,total:2,stage:'准备界面',detail:'导入应用模块'});
   assert.equal(element('boot-loading-label').textContent,'准备界面','ordinary loading hides diagnostic detail');
   assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'准备界面');
+  view.fail('暂时无法完成加载，请重试。',{detail:'下载图片：等待数据超时',onRetry:()=>{}});
+  assert.equal(element('boot-loading-label').textContent,'暂时无法完成加载，请重试。');
 }
 {
   const {view,element,advance}=fixture({debug:true});
@@ -50,6 +57,9 @@ function fixture(options={}){
   view.update({stage:'读取配置',detail:'读取清单'});view.fail('配置读取失败',{onRetry:()=>{}});
   assert.equal(element('boot-loading-label').textContent,'配置读取失败','failure text replaces diagnostic detail');
   assert.equal(element('boot-loading-track').attributes['aria-valuetext'],'配置读取失败');
+  view.fail('暂时无法完成加载，请重试。',{detail:'解码图片：解码超时',onRetry:()=>{}});
+  assert.equal(element('boot-loading-label').textContent,'暂时无法完成加载，请重试。（解码图片：解码超时）');
+  assert.equal(element('boot-loading-track').attributes['aria-valuetext'],element('boot-loading-label').textContent);
 }
 {
   const {view,element,advance}=fixture({debug:true});

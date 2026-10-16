@@ -250,9 +250,9 @@ export class Terrain {
   }
   isDry(x,y,r=0) {return !this.island||this.island.isDry(x,y,r);}
   isNaturalFree(x,y,r=0) {return (!this.island||this.island.naturalCircleFree(x,y,r))&&this.isFree(x,y,r);}
-  isFree(x,y,r=0,profile='ground') {
+  isFree(x,y,r=0,profile='ground',items=null) {
     if(this.island&&!this.island.contains(x,y,r)||this.rift&&!this.rift.circleFree(x,y,r,profile))return false;
-    return !this.query(x-r,y-r,x+r,y+r).some(o=>{if(!blocksObstacle(o,profile))return false;if(o.water)return waterIntersectsCircle(o.water,x,y,Math.max(0,r-.001));const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
+    return !(items??this.query(x-r,y-r,x+r,y+r)).some(o=>{if(!blocksObstacle(o,profile))return false;if(o.water)return waterIntersectsCircle(o.water,x,y,Math.max(0,r-.001));const q=this.closestPoint(o,x,y);return (x-q.x)**2+(y-q.y)**2<(r+o.r-.001)**2;});
   }
   _resolve(x,y,r,items,fromX=x,fromY=y) {
     let blocked=false;
@@ -294,14 +294,26 @@ export class Terrain {
     }
     return {x,y,blocked};
   }
-  moveCircle(x,y,dx,dy,r,profile='ground') {
-    const start=this.resolveCircle(x,y,r,profile);x=start.x;y=start.y;
+  _movementQuery(x,y,dx,dy,r,profile,cache) {
+    const minX=Math.min(x,x+dx)-r-110,minY=Math.min(y,y+dy)-r-110,maxX=Math.max(x,x+dx)+r+110,maxY=Math.max(y,y+dy)+r+110;
+    const prior=cache.coverage;
+    if(cache.terrain===this&&cache.revision===this.structureRevision&&cache.profile===profile&&prior&&minX>=prior.minX&&minY>=prior.minY&&maxX<=prior.maxX&&maxY<=prior.maxY)return cache;
+    // Small sequential crowd pushes share one broad query, while each exact
+    // circle/sweep and the live coastline/outline still run on every move.
+    const coverage={minX:minX-32,minY:minY-32,maxX:maxX+32,maxY:maxY+32};
+    const items=this.query(coverage.minX,coverage.minY,coverage.maxX,coverage.maxY).filter(o=>blocksObstacle(o,profile));
+    Object.assign(cache,{terrain:this,revision:this.structureRevision,profile,coverage,items,hooks:undefined});return cache;
+  }
+  moveCircle(x,y,dx,dy,r,profile='ground',queryCache=null) {
+    let nearby=queryCache?this._movementQuery(x,y,dx,dy,r,profile,queryCache):null;
+    const start=nearby&&this.isFree(x,y,r,profile,nearby.items)?{x,y,blocked:false}:this.resolveCircle(x,y,r,profile);x=start.x;y=start.y;
     const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(3,Math.min(6,r*.45))));
     const sx=dx/steps,sy=dy/steps;let blocked=start.blocked;
     let coverage={minX:Math.min(x,x+dx)-r-110,minY:Math.min(y,y+dy)-r-110,maxX:Math.max(x,x+dx)+r+110,maxY:Math.max(y,y+dy)+r+110};
-    let items=this.query(coverage.minX,coverage.minY,coverage.maxX,coverage.maxY).filter(o=>blocksObstacle(o,profile));
+    if(queryCache){nearby=this._movementQuery(x,y,dx,dy,r,profile,queryCache);coverage=nearby.coverage;}
+    let items=nearby?.items??this.query(coverage.minX,coverage.minY,coverage.maxX,coverage.maxY).filter(o=>blocksObstacle(o,profile));
     if(!items.length&&(!this.rift||!this.rift.firstBlocker(x,y,x+dx,y+dy,r,profile))&&(!this.island||this.island.containsCapsule(x,y,x+dx,y+dy,r)))return {x:x+dx,y:y+dy,blocked};
-    let hooks=this.rift&&items.length?movementHooks(this,items):undefined;
+    let hooks=this.rift&&items.length?(nearby?(nearby.hooks??=movementHooks(this,items)):movementHooks(this,items)):undefined;
     for(let i=0;i<steps;i++) {
       if(this.rift){
         const margin=r+Math.hypot(sx,sy)+1;
