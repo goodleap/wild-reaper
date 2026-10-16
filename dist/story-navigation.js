@@ -6,8 +6,8 @@ import { getHero } from './heroes.js';
 
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const foot=actor=>({x:actor.x,y:actor.y+groundOffset(actor,!!actor.heroId)});
-const TRAVEL=new Set(['escape','escort','fading']);
-const LABELS={escape:'会合处',escort:'突围路口',fading:'救援点',sanctuary:'守护光环',judgment:'守护光环',pill:'公主',conversation:'公主'};
+const TRAVEL=new Set(['search','escape','escort','burst','fading']);
+const LABELS={search:'林间谷地',burst:'救援点',escape:'会合处',escort:'突围路口',fading:'救援点',sanctuary:'守护光环',judgment:'守护光环',pill:'公主',conversation:'公主'};
 
 // One terrain-validated local route drives both the chapter's guide and its
 // presentation. A distant destination may need several of these ordinary
@@ -34,7 +34,7 @@ export class StoryNavigation {
     }
     const waitingForAngel=s.step==='conversation'&&s._awaitingAngel();
     return {target,waypoint:path[1]||null,path,label:s.objective,shortLabel:waitingForAngel?'天使':LABELS[s.step]||'',
-      kind:TRAVEL.has(s.step)?'travel':'hold',phase:s.step,areaRadius:['sanctuary','judgment'].includes(s.step)?s.rules.guardRadius:null,
+      kind:TRAVEL.has(s.step)&&(!['burst','fading'].includes(s.step)||s._helpReady!==false)?'travel':'hold',phase:s.step,areaRadius:['sanctuary','judgment'].includes(s.step)?s.rules.guardRadius:null,
       arrivalRadius:['sanctuary','judgment'].includes(s.step)?s.rules.guardRadius:s.rules.arrivalRadius};
   }
   _ahead(guide,actor){
@@ -67,12 +67,14 @@ export class StoryNavigation {
     return null;
   }
   updatePrincess(dt){
-    const g=this.game,s=this.story,actor=s.princess;if(!actor||!Number.isFinite(dt)||dt<=0)return;
+    const g=this.game,s=this.story,actor=s.princess;if(!actor||!Number.isFinite(dt)||dt<=0||s.dialogueBlocking)return;
+    if(['awakening','search','escape'].includes(s.step)){actor.moving=false;return;}
     if(this._step!==s.step){this._step=s.step;this._waiting=null;}
     const leader=foot(g.player),from=foot(actor),navigation=terrainNavigation(g.terrain),gap=distance(from,leader);
     if(gap>220)this._rejoining=true;
     else if(gap<150&&navigation.clearSegment(from,leader,actor.r,'ground'))this._rejoining=false;
-    const wait=this._rejoining?null:this._waitPoint(actor,leader);
+    const praying=['burst','fading'].includes(s.step)&&s._helpReady===false&&gap<=(s.rules.prayerRadius||260)-20;
+    const wait=praying?from:this._rejoining?null:this._waitPoint(actor,leader);
     const ahead=wait||this._rejoining?null:this._ahead(this.getGuide(),actor);
     // Conversation must settle inside its existing 145-unit interaction
     // reach, even if both actors stood on opposite sides of the refuge.

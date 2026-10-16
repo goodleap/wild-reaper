@@ -361,7 +361,7 @@ export class Game {
     }
     const definition=e.isCompanion?null:enemyDefinition(e.type);
     const wobble=!detouring&&definition?.wobble?Math.sin(this._clock*definition.wobble.frequency+e.phase)*definition.wobble.amplitude:0;
-    const speed=e.speed*(definition?.surge?1+Math.max(0,Math.sin(this._clock*definition.surge.frequency))*definition.surge.amplitude:1)*(this.environment?.movementMultiplier(e,!!e.isCompanion)||1)*(this.elites?.movementMultiplier(e)||1)*this._branchMovementMultiplier(e);
+    const speed=e.speed*(definition?.surge&&e.movementSurge!==false?1+Math.max(0,Math.sin(this._clock*definition.surge.frequency))*definition.surge.amplitude:1)*(this.environment?.movementMultiplier(e,!!e.isCompanion)||1)*(this.elites?.movementMultiplier(e)||1)*this._branchMovementMultiplier(e);
     const travel=e._routePoint?Math.min(speed*dt,d):speed*dt;
     this._moveEntity(e,(nx-ny*wobble)*travel,(ny+nx*wobble)*travel);
     if(e._routePoint&&d<=speed*dt+6)e._navTimer=0;
@@ -533,6 +533,7 @@ export class Game {
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
     if(this.status==='dead'){this.story?.cleanup('death');this.realms?.cancel('death');return;}
     if(this.sceneTransition.active){this.sceneTransition.update(dt);return;}
+    if(this.story?.dialogueBlocking){this.story.update(dt);return;}
     this.regions.flushReward();
     if(this.status!=='playing') return;
     const interact=!!input.interact,pressed=interact&&!this._interactHeld;this._interactHeld=interact;
@@ -541,7 +542,8 @@ export class Game {
     const inDungeon=!!this.dungeon.active;
     if(!inDungeon)this.time+=dt;this.runTime+=dt;this._clock+=dt;
     this.story?.update(dt);
-    this.realms?.update(dt);
+    if(this.story?.dialogueBlocking)return;
+    if(!this.story?.active)this.realms?.update(dt);
     if(this.status!=='playing')return;
     this.regionGrace=Math.max(0,this.regionGrace-dt);
     if(this.regionTransition){this.regionTransition.life-=dt;if(this.regionTransition.life<=0)this.regionTransition=null;}

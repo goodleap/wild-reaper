@@ -12,7 +12,11 @@ import { StoryPursuit } from './story-pursuit.js';
 export const STORY_DEFINITIONS=getConfigSection('story').definitions;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const foot=entity=>({x:entity.x,y:Number.isFinite(entity.groundY)?entity.groundY:entity.y+groundOffset(entity,!!entity.heroId)});
-const objectives={awakening:'看清四周，寻找离开营地的路',search:'搜寻队正在接近 · 留意脚步与退路',escape:'追兵不断赶来 · 沿路逃往林间谷地',escort:'跟随公主突围 · 不要与追兵纠缠',pill:'靠近公主，点击左下「服药」突破包围',burst:'燃脉激发 · 拦住追兵，为求援争取时间',fading:'药力消退！前往采石盆地求援',sanctuary:'守住天使光环 · 等待守望者完成引雷',judgment:'天使正在引雷 · 退回守护之内',conversation:'危机已解 · 靠近公主交谈，正式启航',complete:'沿林海追查押运队，寻找祭场线索'};
+const objectives={awakening:'林海余烬',search:'离开营地 · 沿路前往林间谷地',escape:'追兵发现了你 · 沿路逃往公主所在的谷地',escort:'跟随公主 · 前往前方突围路口',pill:'燃脉丸已拿到 · 点击「服药」击退追兵',burst:'掩护公主求援 · 留在她附近迎击追兵',fading:'药力消退 · 沿路撤入守望光环',sanctuary:'守住光环 · 为天使引雷争取时间',judgment:'天雷降临 · 留在守护之内',conversation:'危机解除',complete:'沿林海追查押运队，寻找祭场线索'};
+const conversations=new Set(['awakening','escort','pill','sanctuary','conversation']);
+const titles={awakening:'序章 · 林海余烬',escort:'林间相逢',pill:'燃脉丸',sanctuary:'守望者降临',conversation:'余烬未熄'};
+const continueLabels={awakening:'开始行动',escort:'一起突围',pill:'接过燃脉丸',sanctuary:'守住光环',conversation:'正式启航'};
+const speakerNames={player:'王子',princess:'公主',angel:'守望天使'};
 
 // This chapter owns its temporary cast and pursuers, not world geometry or the
 // ordinary combat loop. No internal step is persisted: a new run starts clean.
@@ -24,22 +28,55 @@ export class StoryRun {
     this.actors=[];this.dialogue=[];this.completed=false;this.disposed=false;this.initialized=false;this.pillUsed=false;
     this.temporary=new TemporaryBuild(game);this.flow=new StoryFlow(this.definition.steps,step=>this._enter(step));
     this._lineId=0;this._lineState=new Map();
-    this._clock=0;this._dialogueWait=0;
+    this._clock=0;this._prayerProgress=0;this._sanctuaryProgress=0;this._helpReady=false;this._dialogueTotal=0;
     this.navigation=new StoryNavigation(game,this);
     this.pursuit=new StoryPursuit(game,this,this.definition.pursuit);
   }
   get step(){return this.flow.step;}
   get active(){return this.initialized&&!this.completed&&!this.disposed;}
   get suppressChoices(){return this.active;}
-  get dialogueExclusive(){return this.active&&this.dialogue.length>0;}
-  get objective(){return this.step==='conversation'&&this._awaitingAngel()?'返回守望天使身边继续交谈':objectives[this.step]||'';}
-  _awaitingAngel(){return this.dialogue.some(line=>line.speaker==='angel');}
+  get dialogueBlocking(){return this.active&&this.dialogue.length>0;}
+  get dialogueExclusive(){return false;}
+  get objective(){
+    if(this.step==='burst'&&this._helpReady)return this.temporary.remaining<=6?'药力即将消退 · 立即撤向守望光环':'求援已有回应 · 趁药力仍在，跟公主撤向光环';
+    if(this.step==='fading'&&!this._helpReady)return '靠近公主 · 掩护她完成求援';
+    if(this.step==='sanctuary'&&!this._inAura())return '返回光环 · 离开守护范围会中断引雷';
+    return objectives[this.step]||'';
+  }
+  _awaitingAngel(){return false;}
   get objectivePoint() {
-    if(['escape'].includes(this.step))return this.anchors?.meeting;
+    if(['search','escape'].includes(this.step))return this.anchors?.meeting;
     if(this.step==='escort')return this.anchors?.pill;
-    if(['fading','sanctuary','judgment'].includes(this.step))return this.anchors?.refuge;
-    if(this.step==='conversation'&&this._awaitingAngel())return this.angel;
-    if(['pill','conversation'].includes(this.step))return this.princess?foot(this.princess):null;
+    if(['burst','fading'].includes(this.step))return this._helpReady?this.angel||this.anchors?.refuge:this.princess?foot(this.princess):null;
+    if(['sanctuary','judgment'].includes(this.step))return this.angel||this.anchors?.refuge;
+    return null;
+  }
+  getDialogue(){
+    const line=this.dialogue[0];if(!this.active||!line)return null;
+    return {...line,name:speakerNames[line.speaker],index:this._dialogueTotal-this.dialogue.length+1,total:this._dialogueTotal,
+      title:titles[this.step]||this.name,nextLabel:this.dialogue.length===1?continueLabels[this.step]||'继续':'继续'};
+  }
+  advanceDialogue(skip=false){
+    if(!this.dialogueBlocking)return false;
+    const lines=skip?this.dialogue.splice(0):[this.dialogue.shift()];
+    for(const line of lines){const state=this._lineState.get(line.id);state.presented=!skip;state.finished=true;state.skipped=skip;}
+    if(!this.dialogue.length){
+      const g=this.game;g.player.invuln=Math.max(g.player.invuln||0,1.5);
+      if(this.step==='awakening')this.flow.go('search');
+      else if(this.step==='pill')this._medicineReceivedAt=this._clock;
+      else if(this.step==='conversation')this._beginDeparture();
+    }
+    return true;
+  }
+  getProgress(){
+    if(!this.active||this.dialogueBlocking)return null;
+    if(['burst','fading'].includes(this.step)&&!this._helpReady){
+      const nearby=this.princess&&distance(foot(this.game.player),foot(this.princess))<=this.rules.prayerRadius;
+      return {label:'公主求援',value:this._prayerProgress,max:this.rules.prayerDuration,detail:nearby?'守在公主附近，为她完成祈愿争取时间':'靠近公主，继续掩护求援'};
+    }
+    if(this.step==='burst')return {label:'燃脉药效',value:this.temporary.remaining,max:this.rules.pillDuration,detail:`还剩 ${Math.ceil(this.temporary.remaining)} 秒 · 前往光环，准备撤退`};
+    if(this.step==='sanctuary')return {label:'天使引雷',value:this._sanctuaryProgress,max:this.rules.sanctuaryWaveSeconds*2,detail:this._inAura()?`守住光环 · 还需 ${Math.ceil(this.rules.sanctuaryWaveSeconds*2-this._sanctuaryProgress)} 秒`:'引雷暂停 · 回到光环内'};
+    if(this.step==='judgment')return {label:'天雷降临',value:Math.max(0,this._clock-(this._judgmentStartedAt??this._clock)),max:this.rules.judgmentDuration,detail:'守护仍在 · 追兵即将溃散'};
     return null;
   }
   getObjectiveTarget(){const target=this.objectivePoint;return target?{...target,label:this.objective,color:'#eed898'}:null;}
@@ -56,58 +93,46 @@ export class StoryRun {
     this.anchors={wake:{...origin},meeting:{...meeting},refuge:{...refuge},pill:{...escapePath[Math.floor(escapePath.length*.42)]}};
     this.paths={search:searchPath,escape:escapePath};
     this._sceneTerrain=g.terrain;this._sceneMapId=g.mapId;
-    g.canonicalBuild??=g.build;this.initialized=true;this.flow.start();
+    g.canonicalBuild??=g.build;this.initialized=true;this._createPrincess();this.flow.start();
     g._emit?.('storyStarted',{storyId:this.id,name:this.name});return true;
   }
   _queue(step) {
-    this._recap??=new Map();
-    for(const line of this.definition.dialogue[step]||[]) {
+    this.dialogue=[];this._recap??=new Map();
+    for(const line of conversations.has(step)?this.definition.dialogue[step]||[]:[]) {
       const id=`${this.id}:${++this._lineId}`;
-      const scope=this.definition.dialogueScopes?.[step]||'stage';
-      this.dialogue.push({...line,id,duration:3.6});this._lineState.set(id,{step,scope,presented:false,finished:false});
-      this._recap.set(id,`${line.speaker==='player'?'王子':line.speaker==='princess'?'公主':'天使'}：${line.text}`);
+      this.dialogue.push({...line,id});this._lineState.set(id,{step,presented:false,finished:false});
+      this._recap.set(id,`${speakerNames[line.speaker]}：${line.text}`);
     }
+    this._dialogueTotal=this.dialogue.length;
   }
-  onDialoguePresented(id) {const line=this._lineState.get(id);if(line)line.presented=true;}
-  onDialogueFinished(id) {
-    const line=this._lineState.get(id);if(!line)return false;
-    line.finished=true;this.dialogue=this.dialogue.filter(item=>item.id!==id);return true;
-  }
-  _linesFinished(step) {return [...this._lineState.values()].filter(line=>line.step===step).every(line=>line.finished);}
+  _linesFinished(step){return [...this._lineState.values()].filter(line=>line.step===step).every(line=>line.finished);}
   _enter(step) {
-    const g=this.game;
-    // Reactions to a passed situation must not hold up the next instruction.
-    // SceneDialogue preserves the minimum for a line still being read, then
-    // cancels this removed ID without pretending it was fully presented.
-    this.dialogue=this.dialogue.filter(line=>{const state=this._lineState.get(line.id);return state?.scope==='chapter'||state?.step===step;});
-    this._queue(step);this._dialogueWait=0;
-    if(step==='pill') {
-      // Deliver the actionable explanation as soon as the current protected
-      // line and opening memory finish; optional introductions may follow.
-      const order=line=>{const state=this._lineState.get(line.id);return state?.presented?0:state?.step==='awakening'?1:state?.step==='pill'?2:3;};
-      this.dialogue.sort((a,b)=>order(a)-order(b));
-    }
+    const g=this.game;this._queue(step);
     g._emit?.('storyStep',{storyId:this.id,step});
-    if(step==='escort')this._createPrincess();
-    if(step==='pill')this._medicineReceivedAt??=this._clock;
-    if(step==='fading') {
-      // Restoration always precedes the next encounter. No delayed boosted
-      // sword, bleed, shock, shield or owned super-skill survives this edge.
+    if(step==='fading'){
       this.temporary.stop('expired');
+      // A warning precedes this change; a short grace covers the exact loss of
+      // the shield so the player can continue the indicated escape route.
+      g.player.invuln=Math.max(g.player.invuln||0,1.2);
     }
-    if(step==='sanctuary') {
-      this._createAngel();
-    }
-    if(step==='judgment') {
+    if(step==='sanctuary'){this._createAngel();this._sanctuaryProgress=0;}
+    if(step==='judgment'){
       this._judgmentAt=this._clock+this.rules.judgmentWindup;
-      if(this.angel)this.angel.castFace=this.rules.judgmentWindup+.4;
-      if(this.angel)g._effect?.(this.angel.x,this.angel.y,'ring',this.rules.judgmentWindup,this.rules.guardRadius,'#f4edc0');
+      if(this.angel){this.angel.castFace=this.rules.judgmentWindup+.4;g._effect?.(this.angel.x,this.angel.y,'ring',this.rules.judgmentWindup,this.rules.guardRadius,'#f4edc0');}
     }
-    if(step==='conversation') {
-      this._clearHostileAttacks();this._conversationReady=false;
+    if(step==='conversation'){
+      this._clearHostileAttacks();
+      // The rescue has ended. Its last lightning frame and floating damage
+      // must not remain frozen over the entire concluding conversation.
+      g.effects=[];g.bullets=[];g.attacks?.clearScene?.();
     }
     this.pursuit?.enter(step);
     if(step==='complete')this._complete();
+  }
+  _beginDeparture(){
+    if(this.departing||this.completed)return false;
+    this.departing=true;
+    return this.game.sceneTransition.run('序章完成 · 正式启航',()=>this.flow.go('complete'));
   }
   _living(){return this.game.enemies.filter(enemy=>enemy.hp>0&&enemy.storyId===this.id);}
   _safePoint(around,{radius=18,min=0,max=260,ordinal=0,avoidPlayer=false}={}) {
@@ -139,7 +164,7 @@ export class StoryRun {
     this.angel={id:'story:angel',storyActor:true,type:'angel',kind:'angel',name:'守望天使',x:point.x,y:point.y,r:15,hp:1,maxHp:1,flying:true,guardRadius:this.rules.guardRadius,auraRadius:this.rules.guardRadius,healing:true,castFace:1,seed:916};
     this.actors.push(this.angel);this.game._effect?.(point.x,point.y,'ring',1.4,this.rules.guardRadius,'#f4edc0');return this.angel;
   }
-  updateActors(dt){if(this.active)this.navigation.updatePrincess(dt);}
+  updateActors(dt){if(this.active&&!this.dialogueBlocking)this.navigation.updatePrincess(dt);}
   beforeEnemy(enemy,dt) {
     return this.active&&this.pursuit.beforeEnemy(enemy,dt);
   }
@@ -157,34 +182,40 @@ export class StoryRun {
   update(dt) {
     if(!this.active||this.game.status!=='playing'||!Number.isFinite(dt)||dt<=0)return;
     if(this.game.terrain!==this._sceneTerrain||this.game.mapId!==this._sceneMapId){this.cleanup('sceneChange');return;}
+    if(this.dialogueBlocking)return;
     const g=this.game;this._clock+=dt;this.flow.update(dt);
     const wasBoosted=this.temporary.active;this.temporary.update(dt);
     if(wasBoosted&&!this.temporary.active&&this.step==='burst')this.flow.go('fading');
     this.pursuit.update(dt);
+    if(['burst','fading'].includes(this.step)&&!this._helpReady&&this.princess){
+      const nearby=distance(foot(g.player),foot(this.princess))<=this.rules.prayerRadius;
+      if(nearby){
+        this._prayerProgress=Math.min(this.rules.prayerDuration,this._prayerProgress+dt);this.princess.castFace=.25;
+        if(this._clock>=(this._nextPrayerPulse||0)){g._effect?.(this.princess.x,foot(this.princess).y,'ring',.9,38,'#d4e9c5');this._nextPrayerPulse=this._clock+1.2;}
+      }
+      if(this._prayerProgress>=this.rules.prayerDuration){this._helpReady=true;this._createAngel();g._emit?.('storyAidReady',{storyId:this.id});}
+    }
     if(this.angel) {this.angel.castFace=Math.max(0,this.angel.castFace-dt);this.angel.healing=this._inAura();}
     if(this.guardReduction>0)g.player.hp=Math.min(g.player.maxHp,g.player.hp+g.player.maxHp*this.rules.guardHealing*dt);
     switch(this.step) {
       case 'awakening':
-        if(distance(foot(g.player),this.anchors.wake)>45||this._linesFinished('awakening'))this.flow.next();
+        if(this._linesFinished('awakening'))this.flow.next();
         break;
       case 'search':
-        if(this._found())this.flow.next();
-        else if(this._near(this.anchors.meeting,230)&&!this._interceptionSpawned) {
-          // Reaching the far end unseen creates an actual visible patrol, not
-          // a countdown that declares the player discovered through a wall.
-          this._interceptionSpawned=true;
-          this.pursuit.spawnSearch(this.anchors.meeting);
-        }
+        // Seeing the rear patrol or leaving camp starts the chase. Slower
+        // pursuers must never force a correctly fleeing player to walk back.
+        if(this._found()||this._living().some(enemy=>g._inView(enemy)&&!g.terrain.firstBlocker(enemy.x,foot(enemy).y,g.player.x,foot(g.player).y,0,'sight'))||this._near(this.anchors.meeting,350))this.flow.next();
         break;
       case 'escape':if(this._near(this.anchors.meeting))this.flow.next();break;
       case 'escort':
         if(this._near(this.anchors.pill)&&distance(foot(this.princess),foot(g.player))<240)this.flow.next();
         break;
       case 'fading':
-        if(this._near(this.anchors.refuge,200)&&distance(foot(this.princess),foot(g.player))<350)this.flow.next();
+        if(this._helpReady&&this._near(this.angel||this.anchors.refuge,200)&&distance(foot(this.princess),foot(g.player))<350)this.flow.next();
         break;
       case 'sanctuary':
-        if(this.flow.elapsed>=this.rules.sanctuaryWaveSeconds*2)this.flow.next();
+        if(this._inAura())this._sanctuaryProgress=Math.min(this.rules.sanctuaryWaveSeconds*2,this._sanctuaryProgress+dt);
+        if(this._sanctuaryProgress>=this.rules.sanctuaryWaveSeconds*2)this.flow.next();
         break;
       case 'judgment':
         if(this._clock>=this._judgmentAt) {
@@ -200,15 +231,14 @@ export class StoryRun {
           }
         }
         break;
-      case 'conversation':this._conversationReady=this._linesFinished('conversation');break;
+
     }
   }
   getAction() {
-    if(!this.active||this.game.status!=='playing')return null;
-    // Combat actions carry their explanation in the persistent action control.
-    // A crowded or occluded speech bubble must never lock a time-critical aid.
-    if(this.step==='pill'&&!this.pillUsed&&distance(foot(this.princess),foot(this.game.player))<145)return {id:'story:take-pill',label:'服药',detail:'燃脉丸 · 临时激发潜力 30 秒',enabled:true};
-    if(this.step==='conversation'&&this._conversationReady&&distance(foot(this.princess),foot(this.game.player))<145)return {id:'story:finish',label:'正式启航',detail:'序章完成 · 沿路追查押运队',enabled:true};
+    if(!this.active||this.dialogueBlocking||this.game.status!=='playing')return null;
+    // The medicine is carried after the handover; the princess's moving
+    // interaction radius can no longer make this vital control disappear.
+    if(this.step==='pill'&&Number.isFinite(this._medicineReceivedAt)&&!this.pillUsed)return {id:'story:take-pill',label:'服药',detail:`燃脉丸 · 激发潜力 ${this.rules.pillDuration} 秒`,enabled:true};
     return null;
   }
   useAction(id) {
@@ -217,7 +247,6 @@ export class StoryRun {
       if(!this.temporary.start({duration:this.rules.pillDuration,moveSpeedBonus:this.rules.moveSpeedBonus,damageReductionBonus:this.rules.damageReductionBonus,damageReductionCap:this.rules.damageReductionCap}))return false;
       this.pillUsed=true;this.flow.go('burst');return true;
     }
-    if(id==='story:finish')return this.flow.go('complete');
     return false;
   }
   getBuff() {
@@ -256,19 +285,17 @@ export class StoryRun {
     // bolt retains the ordinary angel's original .18-second animation.
     for(const point of this._judgmentPoints)g._effect?.(point.x,point.y,'angelStrike',.18,ANGEL_RULES.strikeRadius,'#f4edc0',undefined,{sourceX:this.angel.x,sourceY:this.angel.y,angelId:this.angel.id,storyJudgment:true});
   }
-  _restoreWorld() {
-    this.pursuit.clear('complete');
-    this.game.sceneContent.restoreWorld();
-  }
   _complete() {
     if(this.completed)return;
     const g=this.game;this.temporary.stop('complete');this.completed=true;this.completionTime=g.runTime??this._clock;
-    this.dialogue=[];this._clearHostileAttacks();this._restoreWorld();
-    // Script kills grant real XP, but no crystal choices. Existing unrelated
-    // resources remain intact when the chapter returns control to exploration.
+    this.dialogue=[];this._clearHostileAttacks();this.pursuit.clear();
+    // Keep the canonical build and earned results for the victory archive;
+    // this chapter ends without instantiating an exploration population.
     g._choices=null;
     this.actors=[];g._refreshStats?.();g._refreshWeapons?.();
+    g.status='victory';
     g._emit?.('storyCompleted',{storyId:this.id,name:this.name,time:this.completionTime});
+    g._emit?.('victory',{storyId:this.id,storyName:this.name});
   }
   cleanup(reason='exit') {
     if(this.disposed)return false;

@@ -62,6 +62,7 @@ export class PlayerDialogue {
   constructor(){this.reset();}
   reset(){this.clock=0;this.nextGlobal=0;this.nextClass=new Map();this.recent=[];this.lastLine=new Map();this.rotations=new Map();this.entered=new Set();this.previousHp=null;this.previousEnemies=new Set();this.previousElites=new Set();this.samples=[];this.wasThreatened=false;this.retreatArmed=true;this.combatSince=null;this.lastCombatAt=0;this.nextIdle=rules.idleMin;this.idleTurn=0;this.seenEvents=new WeakSet();this.context=null;this.nextContextAt=0;}
   observe(game,dt,{say,exclusive=false}={}){
+    if(game.mode==='story')return;
     this.clock+=Math.max(0,dt||0);
     const now=this.clock;
     if(!this.context||now>=this.nextContextAt){this.context=playerCombatContext(game);this.nextContextAt=now+.25;}

@@ -131,6 +131,12 @@ export class SceneDialogue {
     if(d<=inner&&state.armed&&this._clock>=state.nextAt)this._say(s,key,priority,record,()=>{state.armed=false;state.nextAt=this._clock+DIALOGUE_RULES.greetingCooldown;});
   }
   observe(game,dt,{isVisible=()=>false}={}){
+    // The whole story mode uses its fixed dialogue panel. Keep this boundary
+    // here as well as in the app so direct observers cannot revive old bubbles.
+    if(game.mode==='story'){
+      if(this._game!==game||this._active.length||this._queue.length||this._external.length)this.reset();
+      this._game=game;this._playing=false;return;
+    }
     const scene=sceneIdentity(game);
     if(this._game!==game||this._scene!==scene||this._terrain!==game.terrain){const initial=this._game==null?this._external:[];this.reset();for(const entry of initial)this.enqueue(entry);this._game=game;this._scene=scene;this._terrain=game.terrain;}
     this._playing=game.status==='playing';if(!this._playing){this._presented.clear();return;}

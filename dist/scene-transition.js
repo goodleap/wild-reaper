@@ -11,7 +11,7 @@ export class SceneTransition {
   request(interaction){
     if(this.active||this.game.status!=='playing'||!interaction||interaction.enabled===false)return false;
     if(!SCENE_INTERACTIONS.has(interaction.type))return this.game.interact(interaction.id);
-    this.active=true;this.phase='out';this.elapsed=0;this.opacity=0;this.name=interaction.label;this._id=interaction.id;
+    this.active=true;this.phase='out';this.elapsed=0;this.opacity=0;this.name=interaction.label;this._scripted=false;this._id=interaction.id;
     this._activationSite=interaction.type==='castle'?this.game.settlements?.sites.find(site=>site.id===interaction.id&&site.type==='castle'):null;
     if(this._activationSite){
       const first=!this.game.dungeon?.states?.has(this._activationSite.id);
@@ -21,8 +21,15 @@ export class SceneTransition {
     }
     this.commitSucceeded=false;this.inputRevision++;return true;
   }
+  // Scripted scene handoffs use the same opaque commit and input boundary
+  // as doors and portals, without inventing a fake map interaction.
+  run(label,commit){
+    if(this.active||this.game.status!=='playing'||typeof commit!=='function')return false;
+    this.active=true;this.phase='out';this.elapsed=0;this.opacity=0;this.name=label;this._scripted=true;
+    this._commit=commit;this._activationSite=null;this.commitSucceeded=false;this.inputRevision++;return true;
+  }
   update(dt){
-    if(!this.active||this.game.status!=='playing'||!Number.isFinite(dt)||!(dt>0))return;
+    if(!this.active||!['playing','victory'].includes(this.game.status)||!Number.isFinite(dt)||!(dt>0))return;
     this.elapsed+=Math.min(.05,dt);
     advanceRelicActivation(this._activationSite,dt);
     if(this.phase==='ritual'){
@@ -34,9 +41,9 @@ export class SceneTransition {
       if(this.elapsed+1e-9<SCENE_TRANSITION_RULES.outDuration)return;
       // Discard the remainder so at least one rendered frame is fully dark.
       this.opacity=1;this.committing=true;
-      try{this.commitSucceeded=!!this.game.interact(this._id);}
-      finally{this.committing=false;}
-      this.name=this.game.dungeon.active?.name||this.game.stage?.currentIsland?.name||this.game.region.name;
+      try{this.commitSucceeded=!!(this._commit?this._commit():this.game.interact(this._id));}
+      finally{this.committing=false;this._commit=null;}
+      if(!this._scripted)this.name=this.game.dungeon.active?.name||this.game.stage?.currentIsland?.name||this.game.region.name;
       this.game.regionTransition=null;this.phase='in';this.elapsed=0;return;
     }
     this.opacity=1-smooth(this.elapsed/SCENE_TRANSITION_RULES.inDuration);

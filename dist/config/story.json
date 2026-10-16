@@ -8,7 +8,7 @@
       "weaponIds": ["sword"],
       "anchors": {"wakeArea": "01", "meetingArea": "02", "refugeArea": "03", "searchPassage": "01-02", "escapePassage": "02-03"},
       "steps": ["awakening", "search", "escape", "escort", "pill", "burst", "fading", "sanctuary", "judgment", "conversation", "complete"],
-      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 30, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 4, "judgmentWindup": 1},
+      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 20, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 230, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 4, "judgmentWindup": 1, "prayerDuration": 12, "prayerRadius": 260},
       "pursuit": {
         "totalLimit": 80,
         "leaderLimit": 2,
@@ -21,7 +21,7 @@
           "soldier": {
             "type": "shieldguard",
             "behavior": "chase",
-            "speed": 344,
+            "speed": 288,
             "hp": 62,
             "damage": 9,
             "xp": 4
@@ -29,7 +29,7 @@
           "guard": {
             "type": "shieldguard",
             "behavior": "native",
-            "speed": 304,
+            "speed": 260,
             "hp": 145,
             "damage": 12,
             "xp": 8
@@ -37,7 +37,7 @@
           "mage": {
             "type": "frostmage",
             "behavior": "native",
-            "speed": 300,
+            "speed": 260,
             "hp": 75,
             "damage": 7,
             "xp": 8
@@ -47,7 +47,7 @@
             "bossKind": "ancient",
             "behavior": "native",
             "leader": true,
-            "speed": 332,
+            "speed": 280,
             "hp": 1450,
             "damage": 20,
             "xp": 30
@@ -114,7 +114,7 @@
             "ramp": {
               "from": 24,
               "to": 64,
-              "duration": 30,
+              "duration": 20,
               "startedAt": "_medicineReceivedAt"
             }
           },
@@ -135,7 +135,7 @@
             "ramp": {
               "from": 24,
               "to": 64,
-              "duration": 30,
+              "duration": 20,
               "startedAt": "_medicineReceivedAt"
             }
           },
@@ -156,7 +156,7 @@
             "ramp": {
               "from": 24,
               "to": 64,
-              "duration": 30,
+              "duration": 20,
               "startedAt": "_medicineReceivedAt"
             }
           },
@@ -177,7 +177,7 @@
             "ramp": {
               "from": 24,
               "to": 64,
-              "duration": 30,
+              "duration": 20,
               "startedAt": "_medicineReceivedAt"
             }
           },
@@ -198,7 +198,7 @@
             "ramp": {
               "from": 24,
               "to": 64,
-              "duration": 30,
+              "duration": 20,
               "startedAt": "_medicineReceivedAt"
             },
             "endWindow": {
@@ -220,19 +220,19 @@
         "awakening": [
           {"speaker": "player", "text": "我本是昭衡国王子。论剑术、论风度，谁敢与我争锋？"},
           {"speaker": "player", "text": "可沈玄策借镇界仪式夺权，把我推下祭井，还诬我引来灾变。"},
-          {"speaker": "player", "text": "我重生了？这一次，我不会再重蹈覆辙……"}
+          {"speaker": "player", "text": "我重生了……这一次，绝不重蹈覆辙。先循着林间道路离开营地。"}
         ],
         "search": [{"speaker": "player", "text": "脚步声……有人在搜林。先看清退路。"}],
         "escape": [{"speaker": "player", "text": "被发现了！东边谷地有路，不能在这里被围住。"}],
         "escort": [
           {"speaker": "princess", "text": "那枚佩饰……你是昭衡的王子？"},
           {"speaker": "player", "text": "若你是来领赏的，能否晚些再谈？"},
-          {"speaker": "princess", "text": "我是霁川公主，正护送难民。先跟我冲出谷地！"}
+          {"speaker": "princess", "text": "我是霁川公主。先跟我走，路口还能争取一点时间！"}
         ],
         "pill": [
-          {"speaker": "princess", "text": "追兵封住了东侧。这颗燃脉丸，能暂时借出你的潜力。"},
-          {"speaker": "princess", "text": "服药后只有片刻。你挡住他们，我向守望者求援。"},
-          {"speaker": "player", "text": "片刻够了。你带难民退后，我来开路。"}
+          {"speaker": "princess", "text": "拿着这颗燃脉丸。服下后能激发潜力，但药力只有二十秒。"},
+          {"speaker": "princess", "text": "我需要你在附近掩护，才能完成求援。收到回应，我们立刻撤往光环。"},
+          {"speaker": "player", "text": "我来挡住追兵。药力消退之前，一起撤！"}
         ],
         "burst": [{"speaker": "player", "text": "这股力量……王庭剑阵，随我破敌！"}],
         "fading": [
@@ -240,8 +240,8 @@
           {"speaker": "princess", "text": "别逞强！往采石盆地走，守望者已回应祈愿！"}
         ],
         "sanctuary": [
-          {"speaker": "angel", "text": "求援我已听见。守护之内，尚有生路。"},
-          {"speaker": "princess", "text": "古老誓约仍在……守住光环，别让他们逼近难民！"}
+          {"speaker": "angel", "text": "求援我已听见。到光环里来，我会护住你们。"},
+          {"speaker": "angel", "text": "留在守护之内，坚持到引雷完成。离开光环，誓约便会中断。"}
         ],
         "judgment": [{"speaker": "angel", "text": "此雷为护生而降——退开！"}],
         "conversation": [
@@ -249,7 +249,7 @@
           {"speaker": "princess", "text": "我追查押运队才来到林海。失踪的难民，都被送往祭场。"},
           {"speaker": "angel", "text": "林海北方留有押运痕迹。真相，需要你们自己去找。"},
           {"speaker": "player", "text": "我曾只想着夺回王位。这一次，先救人，再讨旧账。"},
-          {"speaker": "princess", "text": "那就沿路追查。王子，这回可别一个人逞强。"}
+          {"speaker": "princess", "text": "等安顿好获救的人，我们一同启航。王子，这一次，别再独自迎战。"}
         ]
       }
     }
