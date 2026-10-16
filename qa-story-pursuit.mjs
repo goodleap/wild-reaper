@@ -184,7 +184,7 @@ for(const [width,height] of [[1440,900],[540,985]]){
         seen.add(enemy.id);const state=director._entryState(director.config.profiles[enemy.storyProfile],p,enemy.r),target=state.target,nav=terrainNavigation(game.terrain);
         assert(target&&distance(target,p)<=160&&game.terrain.isFree(target.x,target.y,enemy.r+3,'ground'));
         assert(nav.clearSegment(target,p,0,'ground'),'The legal approach remains on the player side of the wall.');
-        assert(!game._inView(enemy,64)&&enemy._storyEntryProgress<director.routeProgress-120,'Cached entries remain offscreen and on the traversed rear road.');
+        assert(!game._inView(enemy,64)&&director._outsideForward(foot(enemy),p,enemy.r+5),'Cached medicine-phase entries remain offscreen and outside the whole forward guide sector.');
         assert(reachable(foot(enemy),target,enemy.r),'Each admitted troop still has a fully collision-checked route; the budget is never permission to skip reachability.');
       }
       if(!director.beforeEnemy(enemy,.1)&&!updateEnemyBehavior(game,enemy,.1))game._moveEnemy(enemy,.1);
@@ -196,6 +196,56 @@ for(const [width,height] of [[1440,900],[540,985]]){
   game.viewWidth+=200;assert.notEqual(director._entryState(profile,p,r),old,'A viewport change discards stale admission geometry.');
   const resized=director._entryState(profile,p,r);assert.notEqual(director._entryState(profile,{x:p.x+64,y:p.y},r),resized,'Actual movement reopens the scan instead of preserving a failed corner forever.');
   console.log(`Story corner admission ${width}x${height}: ${director.living().length} troops, ${totalPaths} path searches over 150 updates, slowest update ${maxUpdateMs.toFixed(1)} ms.`);
+}
+
+// Rotate the actual route through world directions. Admission must populate
+// both flanks and the rear while preserving the full front quadrant, even
+// when facing/input points backward. The angel then opens the fourth side.
+for(const angle of [0,Math.PI/2,Math.PI,-Math.PI/2,Math.PI/4]){
+  const {game,story,director}=chapter(540,900),p={x:0,y:0},end={x:Math.cos(angle)*1800,y:Math.sin(angle)*1800};
+  game.enemies=[];game.terrain=new Terrain({obstacles:[]});game.environment=null;
+  game.player.x=0;game.player.y=-groundOffset(game.player,true);game.player.facing=angle+Math.PI;
+  story.anchors.wake=p;story.paths={search:[p,end],escape:[end]};
+  story.getGuide=()=>({complete:true,routePath:[p,end],lengths:[0,1800],progress:0});
+  director.route=null;director.routeProgress=0;director.lastPlayer=p;story.flow.go('burst');
+  const admitted=[];
+  for(let i=0;i<24;i++){director.clock+=.1;const enemy=director._spawn('soldier');assert(enemy,'Open terrain supplies every requested rear/flank slot.');admitted.push(enemy);}
+  assert.deepEqual([...new Set(admitted.map(enemy=>enemy._storyEntrySector))].sort(),[0,1,2],'All three permitted directions receive real troops.');
+  for(const enemy of admitted){
+    const point=foot(enemy),length=distance(point,p),dot=point.x*Math.cos(angle)+point.y*Math.sin(angle);
+    assert(dot+enemy.r+5<length*Math.SQRT1_2,'The complete forward 90-degree sector, including the enemy body, stays clear.');
+    assert(!game._inView(enemy,64));assert(director._reachable(point,p,enemy.r));
+  }
+  for(const side of [-1,1]){
+    const toward=angle+side*(Math.PI/4-.001),clear=angle+side*(Math.PI/4+.001);
+    assert(!director._outsideForward({x:Math.cos(toward)*700,y:Math.sin(toward)*700},p));
+    assert(director._outsideForward({x:Math.cos(clear)*700,y:Math.sin(clear)*700},p),'Both exact angular boundaries separate the whole forward sector from the flanks.');
+  }
+  if(angle===0){
+    const free=game.terrain.isFree;
+    game.terrain.isFree=(x,y)=>Math.hypot(x,y)<160||x>Math.hypot(x,y)*Math.SQRT1_2;
+    game.terrain.structureRevision++;
+    for(let attempt=0;attempt<8;attempt++){director.clock+=.1;assert.equal(director._point(director.config.profiles.soldier),null,'Sealing every allowed side defers admission instead of falling back to the open forward guide sector.');}
+    game.terrain.isFree=free;game.terrain.structureRevision++;
+  }
+  const previous=director._entryState(director.config.profiles.soldier,p,admitted[0].r);
+  story.angel={x:0,y:0,arrival:{startedAt:0,duration:1.1}};
+  assert.equal(director.admissionMode,'surround','Visible arrival, not the end of its animation, opens all sides.');
+  assert.notEqual(director._entryState(director.config.profiles.soldier,p,admitted[0].r),previous,'The formation change invalidates cached entrance geometry.');
+  game.enemies=[];const surrounding=[];
+  for(let i=0;i<16;i++){director.clock+=.1;const enemy=director._spawn('soldier');assert(enemy);surrounding.push(enemy);}
+  assert.deepEqual([...new Set(surrounding.map(enemy=>enemy._storyEntrySector))].sort(),[0,1,2,3]);
+  assert(surrounding.some(enemy=>{const point=foot(enemy);return point.x*Math.cos(angle)+point.y*Math.sin(angle)>distance(point,p)*.9;}),'After angel arrival, real troops also enter from the formerly protected front.');
+}
+
+{
+  const {game,story,director}=chapter(),p={x:0,y:0};
+  story.getGuide=()=>({complete:true,routePath:[p,{x:300,y:0},{x:300,y:1000}],lengths:[0,300,1300],progress:0});
+  director._forwardState=null;
+  assert(!director._outsideForward({x:700,y:0},p),'The initial guide direction remains protected.');
+  assert(!director._outsideForward({x:300,y:700},p),'The broad direction through the upcoming bend is protected too.');
+  assert(director._outsideForward({x:-700,y:0},p),'The rear remains available through a turn.');
+  game.dispose();
 }
 
 for(const mutate of [
@@ -216,4 +266,4 @@ for(const mutate of [
 for(const mutate of [chapter=>chapter.rules.judgmentWindup=0,chapter=>chapter.dialogueScopes.pill='forever',chapter=>delete chapter.dialogueScopes.escape]){
   const sections=structuredClone(getConfigSnapshot().sections);mutate(sections.story.definitions[0]);assert.throws(()=>validateStory(sections));
 }
-console.log('Story pursuit QA passed: reachable offscreen patrols, medicine-triggered army growth, sustained Boss pursuit, bounded retirement and the final-half-second cutoff.');
+console.log('Story pursuit QA passed: reachable offscreen patrols, medicine-triggered army growth, rotated three-side admission with broad forward/bend protection, four sides on angel arrival, sustained Boss pursuit, bounded retirement and the final-half-second cutoff.');

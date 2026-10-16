@@ -99,14 +99,16 @@ for(const initialWeaponId of INITIAL_WEAPON_IDS) {
   assert.equal(weaponStats(full,initialWeaponId).equipped,true);
 }
 
-// Old snapshots still receive their former defaults; only weapons now permit
-// zero. The innate manual super keeps its validation and cannot disappear.
+// Old snapshots keep their former defaults. Explicitly unowned skills also
+// round-trip, as required by chapters without the ordinary manual super.
 for(const version of [1,2]) {
   const old=structuredClone(baseline);old.version=version;
   assert.deepEqual(CombatBuild.fromSnapshot(old).serialize(),baseline);
   delete old.weapons.sword;assert.equal(CombatBuild.fromSnapshot(old).getWeapon('sword').baseRank,1);
 }
 const noStorm=structuredClone(baseline);noStorm.skills.storm.baseRank=0;
+assert.equal(CombatBuild.fromSnapshot(noStorm).getSkill('storm').acquired,false);
+noStorm.skills.storm.baseRank=-1;
 assert.throws(()=>CombatBuild.fromSnapshot(noStorm),/storm.baseRank/);
 const negative=structuredClone(baseline);negative.weapons.sword.baseRank=-1;
 assert.throws(()=>CombatBuild.fromSnapshot(negative),/sword.baseRank/);

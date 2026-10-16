@@ -16,7 +16,7 @@ export const STORY_DEFINITIONS=getConfigSection('story').definitions;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const foot=entity=>({x:entity.x,y:Number.isFinite(entity.groundY)?entity.groundY:entity.y+groundOffset(entity,!!entity.heroId)});
 const objectives={awakening:'林海余烬',search:'离开营地',escape:'甩开追兵，与公主会合',escort:'跟随公主突围',pill:'燃脉丸已拿到 · 点击「服药」击退追兵',burst:'跟随公主 · 前往召唤地点',fading:'药力消退 · 跟紧公主',sanctuary:'守住光环 · 为天使引雷争取时间',judgment:'天雷降临 · 留在守护之内',conversation:'危机解除',complete:'序章完成'};
-const conversations=new Set(['awakening','escort','pill','sanctuary','conversation']);
+const conversations=new Set(['awakening','escort','pill','conversation']);
 const titles={awakening:'序章 · 林海余烬',escort:'林间相逢',pill:'燃脉丸',sanctuary:'守望者降临',conversation:'余烬未熄'};
 const continueLabels={awakening:'开始行动',escort:'一起突围',pill:'接过燃脉丸',sanctuary:'守住光环',conversation:'正式启航'};
 const speakerNames={player:'王子',princess:'公主',angel:'守望天使'};
@@ -38,6 +38,7 @@ export class StoryRun {
   get step(){return this.flow.step;}
   get active(){return this.initialized&&!this.completed&&!this.disposed;}
   get suppressChoices(){return this.active;}
+  allowsSkill(id){return id!=='storm';}
   get dialogueBlocking(){return this.active&&this.dialogue.length>0;}
   get dialogueExclusive(){return false;}
   get objective(){
@@ -65,6 +66,7 @@ export class StoryRun {
     if(!this.active)return [];
     const line=this.getDialogue();
     if(line){const actor=line.speaker==='player'?this.game.player:this[line.speaker];return actor?[{id:line.id,speaker:line.speaker,text:'…',actor}]:[];}
+    if(['fading','sanctuary'].includes(this.step)&&this.princess)return [{id:`${this.id}:medicine-ended`,speaker:'princess',text:this.definition.dialogue.sanctuary[0].text,actor:this.princess}];
     if(this._summoning&&!this._helpReady&&this.princess)return [{id:`${this.id}:summon`,speaker:'princess',text:this.definition.summonLine,actor:this.princess}];
     return [];
   }
@@ -110,7 +112,12 @@ export class StoryRun {
     this.paths={search:searchPath,escape:escapePath};
     this.anchors.refuge=this._safePoint(refuge,{radius:18,max:100})||refuge;
     this._sceneTerrain=g.terrain;this._sceneMapId=g.mapId;
-    g.canonicalBuild??=g.build;this.initialized=true;this._createPrincess();this.flow.start();
+    g.canonicalBuild??=g.build;
+    // A chapter's restricted skill is absent from the real build as well as
+    // its controls, so snapshots and archives cannot claim it was learned.
+    for(const skill of Object.values(g.canonicalBuild.skills))if(!this.allowsSkill(skill.id)){skill.baseRank=0;skill.equipped=false;}
+    g._refreshStats?.();g._refreshWeapons?.();
+    this.initialized=true;this._createPrincess();this.flow.start();
     g._emit?.('storyStarted',{storyId:this.id,name:this.name});return true;
   }
   _queue(step) {

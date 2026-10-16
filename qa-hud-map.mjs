@@ -11,7 +11,7 @@ assert(run('game.status')==='playing');
 run("keys.add('KeyW');skillRequested=true;touch={id:1,dx:1,dy:0};");
 nodes['map-button'].onclick();
 assert(run('mapOpen'));assert.equal(run('keys.size'),0);assert.equal(run('touch'),null);assert.equal(run('skillRequested'),false);
-assert.equal(nodes['map-button'].getAttribute('aria-expanded'),'true');assert.equal(document.activeElement.id,'close-map');
+assert.equal(nodes['map-button'].getAttribute('aria-expanded'),'true');assert.equal(document.activeElement,nodes['map-overlay'].querySelector('[role="dialog"]'),'opening without keyboard intent uses the map surface');
 const before=run('game.runTime??game.time');run('frame(1000);frame(1040);');assert.equal(run('game.runTime??game.time'),before,'opening map freezes simulation');
 key('KeyW');key('Space');key('KeyE');assert.equal(run('keys.size'),0);assert.equal(run('skillRequested'),false);assert.equal(run('portalRequested'),false);
 listeners['game-canvas:pointerdown']({pointerId:4,clientX:130,clientY:200,preventDefault(){}});assert.equal(run('touch'),null,'map does not leak pointer movement');
@@ -47,7 +47,7 @@ game.enemies=[{id:9009,type:'boss',x:fogPoint.x,y:fogPoint.y-groundOffset({type:
 assert(nodes['boss-bar'].classList.contains('hidden'));assert.equal(run('bossFeedbackVisible()'),false,'unseen Boss cannot emit positional cast feedback');
 assert.equal(nodes['phase-label'].textContent,'穿过门口 · 探索迷宫','hidden casts and boss presence do not override exploration HUD');
 assert.equal(run("worldMap.getMarkers(game).some(marker=>marker.type==='boss')"),false);
-run(`const capturedNotices=[];notify=(...args)=>capturedNotices.push(args);pendingEvolutions=[];announceCombatEvents([{type:'boss'},{type:'bloomWindup'}]);`);
+run(`const capturedNotices=[];notify=(...args)=>capturedNotices.push(args);notifications.clear();announceCombatEvents([{type:'boss'},{type:'bloomWindup'}]);`);
 assert.equal(run('capturedNotices.length'),0,'unseen Boss spawn/cast does not produce a toast');
 // A royal chest's raised open lid crosses the north wall's floor silhouette.
 // Its ground anchor still controls discovery, while world depth controls which

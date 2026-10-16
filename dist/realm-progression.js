@@ -1,17 +1,15 @@
 import { getConfigSection } from './content-config.js';
 import { groundOffset } from './terrain.js';
-import { majorFightActive, optionalFightNearby } from './event-scheduling.js';
 
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-const activeEnemy=e=>e?.hp>0&&!e.trainingDummy&&e.guardActive!==false&&e.territoryState!=='returning';
 
 // Session-only growth. Trial IDs and reward identities never survive a run;
 // quitting ends the run rather than attempting to restore part of a battle.
 export class RealmProgression {
-  constructor(game,{config=getConfigSection('realms')}={}) {
-    this.game=game;this.config=config;this.enabled=config.enabledModes.includes(game.mode)&&(game.mode==='story'||game._worldExploration!==false);
+  constructor(game,{config=getConfigSection('realms'),costForLevel=null,random=Math.random}={}) {
+    this.game=game;this.config=config;this.enabled=game.mode==='world'&&config.enabledModes.includes(game.mode)&&game._worldExploration!==false;
     this.index=0;this.talismans=0;this.active=null;this.cooldown=0;this.lastResult=null;
-    this._quiet=config.trial.quietSeconds;this._starterGranted=false;this._serial=0;this._disposed=false;
+    this._costForLevel=costForLevel;this._random=random;this._starterGranted=false;this._serial=0;this._disposed=false;
     this._rewarded=new WeakSet();this._rewardIds=new Set();this._settled=new Set();
   }
 
@@ -21,6 +19,14 @@ export class RealmProgression {
   get bottleneck(){return this.enabled&&this.cap!==null&&this.game.player.level>=this.cap;}
   get xpFull(){return this.bottleneck&&this.game.player.xp>=this.game.player.xpNext;}
   get label(){return this.enabled?this.definition.name:'';}
+  get recommendedMaterials(){return this.enabled?Math.min(this.config.materials.maxPerTrial,this.talismans):0;}
+  get xpRemaining(){
+    if(!this.enabled||this.cap===null)return null;
+    const p=this.game.player;let remaining=Math.max(0,p.xpNext-p.xp);
+    if(p.level<this.cap&&typeof this._costForLevel!=='function')return null;
+    for(let level=p.level+1;level<=this.cap;level++)remaining+=this._costForLevel(level);
+    return remaining;
+  }
 
   canLevelUp() {return !this.enabled||this.cap===null||this.game.player.level<this.cap;}
 
@@ -50,18 +56,9 @@ export class RealmProgression {
   }
 
   _foot(entity=this.game.player,player=true) {return {x:entity.x,y:entity.y+groundOffset(entity,player)};}
-  _combatNearby() {
-    const p=this._foot(),radius=this.config.trial.combatRadius;
-    return this.game.enemies?.some(e=>activeEnemy(e)&&distance(p,this._foot(e,false))<=radius)||false;
-  }
-  _angelNearby(point,radius=0) {
-    return this.game.settlements?.sites?.some(site=>site.type==='angel'&&site.storyHidden!==true&&site.state!=='disabled'&&distance(point,site)<=(site.guardRadius||site.auraRadius||300)+radius)||false;
-  }
-  _openGround(point) {
-    const g=this.game,t=this.config.trial,r=t.arenaRadius+t.clearancePadding;
-    if(g.terrain?.isFree?.(point.x,point.y,r,'ground')!==true||g.terrain?.isDry?.(point.x,point.y,r)===false||g.environment?.isHazardFree?.(point.x,point.y,r)===false)return false;
-    const waters=g.environment?.watersInBounds?.({minX:point.x-r,minY:point.y-r,maxX:point.x+r,maxY:point.y+r});
-    return !waters?.some(patch=>patch.kind==='water'||patch.kind==='lava');
+  _landingPoint() {
+    const point=this._foot(),angle=this._random()*Math.PI*2,radius=Math.sqrt(this._random())*this.config.trial.boltSpreadRadius;
+    return {x:point.x+Math.cos(angle)*radius,y:point.y+Math.sin(angle)*radius};
   }
 
   _blockedReason() {
@@ -72,18 +69,13 @@ export class RealmProgression {
     if(g.dungeon?.active||g.sceneKind==='dungeon'||g.sceneKind==='cave')return '请在室外渡劫';
     if(g.sceneTransition?.active||g.regionTransition||g.regionGrace>0)return '等待场景稳定';
     if(this.cooldown>0)return `调息中，${Math.ceil(this.cooldown)}秒后可重试`;
-    if(this._combatNearby()||this._quiet<this.config.trial.quietSeconds||g.player.hurtFlash>0)return '先脱离战斗并稍作调息';
-    if(majorFightActive(g)||optionalFightNearby(g))return '先结束附近的遭遇或首领战';
-    const point=this._foot();
-    if(this._angelNearby(point,this.config.trial.arenaRadius))return '请离开天使守护范围';
-    if(!this._openGround(point))return '请寻找足够开阔的安全地面';
     return '';
   }
 
   getAction() {
     if(!this.enabled||!this.xpFull||!this.nextDefinition||this.active)return null;
     const reason=this._blockedReason();
-    return {id:'tribulation',label:`渡劫·${this.nextDefinition.name}`,enabled:!reason,reason,materials:this.talismans,selectedMaterials:Math.min(this.config.materials.maxPerTrial,this.talismans),maxMaterials:this.config.materials.maxPerTrial};
+    return {id:'tribulation',label:`渡劫·${this.nextDefinition.name}`,enabled:!reason,reason,materials:this.talismans,selectedMaterials:this.recommendedMaterials,recommendedMaterials:this.recommendedMaterials,maxMaterials:this.config.materials.maxPerTrial};
   }
 
   start(count=Math.min(this.config.materials.maxPerTrial,this.talismans)) {
@@ -92,9 +84,9 @@ export class RealmProgression {
     // UI may inspect the action while the character panel pauses the world;
     // the transaction itself commits only once actual play resumes.
     if(this.game.status!=='playing')return false;
-    const d=this.definition,t=this.config.trial;
+    const d=this.definition;
     this.talismans-=count;
-    this.active={id:`tribulation:${++this._serial}`,realmIndex:this.index,elapsed:0,duration:d.duration,totalBolts:d.bolts,bolts:0,center:this._foot(),radius:t.arenaRadius,materials:count,pending:null,mapId:this.game.mapId,terrain:this.game.terrain};
+    this.active={id:`tribulation:${++this._serial}`,realmIndex:this.index,elapsed:0,duration:d.duration,totalBolts:d.bolts,bolts:0,materials:count,pending:null,mapId:this.game.mapId,terrain:this.game.terrain};
     this.lastResult=null;this.game._emit?.('tribulationStarted',{trialId:this.active.id,materials:count,realmId:d.id});return true;
   }
 
@@ -134,14 +126,13 @@ export class RealmProgression {
     if(g.status==='dead'){this.cancel('death');return;}
     if(g.status!=='playing'||!Number.isFinite(dt)||dt<=0)return;
     dt=Math.min(dt,.1);this.cooldown=Math.max(0,this.cooldown-dt);
-    this._quiet=this._combatNearby()||g.player.hurtFlash>0?0:this._quiet+dt;
     const trial=this.active;if(!trial)return;
     if(g.mapId!==trial.mapId||g.terrain!==trial.terrain||g.dungeon?.active||g.sceneTransition?.active){this.cancel('scene-change');return;}
-    if(distance(this._foot(),trial.center)>trial.radius){this.cancel('left-area');return;}
-    if(this._angelNearby(this._foot())){this.cancel('angel-aura');return;}
     trial.elapsed=Math.min(trial.duration,trial.elapsed+dt);
     const nextAt=(trial.bolts+1)*trial.duration/trial.totalBolts,t=this.config.trial;
-    if(!trial.pending&&trial.elapsed+1e-8>=nextAt-t.warning)trial.pending={...this._foot(),r:t.boltRadius,warning:t.warning,remaining:Math.max(0,nextAt-trial.elapsed)};
+    // Each warning samples the current position once. Its marked landing stays
+    // fixed so movement can avoid the strike while the trial follows the player.
+    if(!trial.pending&&trial.elapsed+1e-8>=nextAt-t.warning)trial.pending={...this._landingPoint(),r:t.boltRadius,warning:t.warning,remaining:Math.max(0,nextAt-trial.elapsed)};
     if(trial.pending)trial.pending.remaining=Math.max(0,nextAt-trial.elapsed);
     if(trial.elapsed+1e-8>=nextAt)this._strike(trial);
     if(this.active===trial&&trial.bolts===trial.totalBolts)this._settle(true,'completed',trial.id);
@@ -149,12 +140,12 @@ export class RealmProgression {
 
   getState() {
     const trial=this.active;
-    return {enabled:this.enabled,realmId:this.definition.id,realmName:this.label,nextRealmName:this.nextDefinition?.name||null,cap:this.cap,bottleneck:this.bottleneck,xpFull:this.xpFull,talismans:this.talismans,cooldown:this.cooldown,lastResult:this.lastResult&&{...this.lastResult},trial:trial?{id:trial.id,elapsed:trial.elapsed,duration:trial.duration,bolts:trial.bolts,totalBolts:trial.totalBolts,remaining:Math.max(0,trial.duration-trial.elapsed),center:{...trial.center},radius:trial.radius,pending:trial.pending&&{...trial.pending}}:null};
+    return {enabled:this.enabled,realmId:this.enabled?this.definition.id:null,realmName:this.label,nextRealmName:this.enabled?this.nextDefinition?.name||null:null,cap:this.cap,breakthroughLevel:this.enabled?this.nextDefinition?.minLevel??null:null,bottleneck:this.bottleneck,xpFull:this.xpFull,xpRemaining:this.xpRemaining,talismans:this.talismans,recommendedMaterials:this.recommendedMaterials,cooldown:this.cooldown,lastResult:this.lastResult&&{...this.lastResult},trial:trial?{id:trial.id,elapsed:trial.elapsed,duration:trial.duration,bolts:trial.bolts,totalBolts:trial.totalBolts,remaining:Math.max(0,trial.duration-trial.elapsed),pending:trial.pending&&{...trial.pending}}:null};
   }
 
   getMarkers() {
     const trial=this.active;if(!trial)return [];
-    const markers=[{kind:'tribulationBoundary',...trial.center,r:trial.radius,color:this.config.colors.boundary}];
+    const markers=[];
     if(trial.pending)markers.push({kind:'tribulationWarning',x:trial.pending.x,y:trial.pending.y,r:trial.pending.r,color:this.config.colors.warning,remaining:trial.pending.remaining,progress:1-trial.pending.remaining/trial.pending.warning});
     return markers;
   }

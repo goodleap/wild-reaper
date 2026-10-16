@@ -80,18 +80,15 @@
 #arena.narrow-hud #combat-notices .encounter-status strong{font-size:9px}
 #arena.narrow-hud #combat-notices #encounter-goal{font-size:9px}
 #arena.narrow-hud #combat-notices .encounter-icon{display:none}
-/* Entrance text shares the upper notice lane; priority messages take its place. */
-#arena{--notice-top:146px}
-#arena.narrow-hud{--notice-top:247px}
-#arena.short-hud:not(.narrow-hud){--notice-top:112px}
-#arena.narrow-hud.short-hud{--notice-top:158px}
-#arena.playing .toast,#arena.playing #portal-action{top:calc(var(--notice-top) + var(--safe-top));bottom:auto;left:50%;right:auto;transform:translateX(-50%);margin:0}
-#arena.playing.narrow-hud .toast{max-width:calc(100% - 28px);font-size:10px;line-height:1.5;padding:7px 11px;white-space:normal}
-#arena.playing.short-hud:not(.narrow-hud) .toast{max-width:calc(100% - 430px);line-height:1.45;white-space:normal}
-#arena.playing #portal-action{display:block;z-index:4;width:max-content;max-width:calc(100% - 28px - var(--safe-left) - var(--safe-right));padding:3px 0;border:0;border-radius:0;background:none;box-shadow:none;backdrop-filter:none;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font:500 12px/1.5 system-ui,sans-serif;letter-spacing:.5px;color:#e4edcf;text-shadow:0 1px 3px #071710,0 0 5px #071710;animation:entrance-hint-breathe 1.8s ease-in-out infinite}
-#arena.playing.entrance-hint-visible .toast{opacity:0;visibility:hidden}
-@keyframes entrance-hint-breathe{0%,100%{opacity:1}50%{opacity:.72}}
-@media(prefers-reduced-motion:reduce){#arena.playing #portal-action{animation:none}}
+/* Short notices stay below the character HUD, outside the central playfield. */
+#arena{--notice-top:calc(var(--hud-edge) + 116px);--notice-width:min(300px,calc(100% - var(--hud-actions-width) - var(--hud-edge) * 2 - var(--safe-left) - var(--safe-right) - 16px))}
+#arena.playing #toast,#arena.playing #portal-action{top:calc(var(--notice-top) + var(--safe-top));bottom:auto;left:calc(var(--hud-edge) + var(--safe-left));right:auto;transform:none;margin:0;max-width:var(--notice-width);text-align:left;white-space:normal;letter-spacing:0;pointer-events:none}
+#arena.playing #toast{display:flex;align-items:flex-start;gap:6px;width:max-content;padding:5px 8px;border:1px solid #c6dfcc28;border-radius:4px;background:#162b24a8;box-shadow:none;font:500 11px/1.5 system-ui,sans-serif;color:#e5efda;text-shadow:0 1px 2px #071710;visibility:hidden;transition:opacity .18s;box-sizing:border-box}
+#arena.playing #toast::before{content:attr(data-icon);flex:0 0 auto;color:#d3dfb3}
+#arena.playing #toast[data-priority="3"]{border-left:2px solid #e2c986}
+#arena.playing #toast.visible{visibility:visible;opacity:1}
+#arena #toast:empty,#arena:not(.playing) #toast{display:none}
+#arena.playing #portal-action{top:calc(var(--notice-top) + var(--safe-top) + 62px);display:block;z-index:4;width:max-content;padding:0;border:0;border-radius:0;background:none;box-shadow:none;backdrop-filter:none;font:500 11px/1.5 system-ui,sans-serif;color:#e4edcf;text-shadow:0 1px 3px #071710,0 0 5px #071710;animation:none}
 
 /* Expanded character details share the map's visual language and retain full reading size. */
 #character-overlay{overflow:hidden}

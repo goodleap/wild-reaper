@@ -1,8 +1,8 @@
 import { CombatBuild } from './combat-build.js';
-import { UPGRADE_DEFS, SUPER_SKILL_DEFS } from './combat-catalog.js';
-import { isBranchReady } from './weapon-branches.js';
+import { WEAPON_DEFS, SKILL_DEFS } from './combat-catalog.js';
+import { applyFullCombatBuild } from './full-combat-build.js';
 
-const PREVIEW_OWNERS=new Set(['sword','orbit','barrier','storm','swords']);
+const COMBAT_OWNERS=new Set([...Object.keys(WEAPON_DEFS),...Object.keys(SKILL_DEFS)]);
 
 function bindBuild(game,build) {
   game.build=build;game.levels=build.levels;game.branches=build.branches;game.evolutions=build.evolutions;
@@ -18,15 +18,7 @@ export class TemporaryBuild {
     if(this.active||this.game.status!=='playing')return false;
     const g=this.game,canonical=g.canonicalBuild||g.build;
     const preview=CombatBuild.fromSnapshot(canonical.serialize());
-    for(let pass=0;pass<UPGRADE_DEFS.length;pass++) {
-      let changed=false;
-      for(const def of UPGRADE_DEFS)if(PREVIEW_OWNERS.has(def.ownerId)&&def.category!=='attribute')while(preview.increment(def.id))changed=true;
-      if(isBranchReady(preview,'sword')&&!preview.getWeapon('sword').branch){preview.selectBranch('sword','sweep');changed=true;}
-      if(!changed)break;
-    }
-    const swords=SUPER_SKILL_DEFS.find(skill=>skill.id==='swords');
-    if(swords&&preview.getSkill('swords'))preview.superLevels.swords=swords.maxBaseRank;
-    for(const item of Object.values(preview.weapons))if(item.baseRank>0)item.equipped=true;
+    applyFullCombatBuild(preview,{excludedSkillIds:['storm']});
     this.canonical=canonical;g.canonicalBuild=canonical;
     this.previousCooldowns={storm:g.player.skillCooldown,super:{...g.superSkills?.cooldowns},ability:{...g._abilityCooldowns}};
     this.maxDuration=this.remaining=duration;this.elapsed=0;this.moveSpeedBonus=moveSpeedBonus;this.damageReductionBonus=damageReductionBonus;this.damageReductionCap=damageReductionCap;this.active=true;
@@ -56,8 +48,8 @@ export class TemporaryBuild {
       }
     }
     for(const enemy of g.enemies||[]) {enemy.bleed=null;enemy.shock=null;delete enemy.branchSlowUntil;}
-    const attackTypes=new Set(['swordSlash','swordEnergy','swordTrail','storm','pulse','lightning','orbit','superBurst','superSword','barrierTrigger','barrierBreak']);
-    g.effects=(g.effects||[]).filter(effect=>!attackTypes.has(effect.type)&&!PREVIEW_OWNERS.has(effect.skillId));
+    const attackTypes=new Set(['swordSlash','swordEnergy','swordTrail','arrowRicochet','storm','pulse','lightning','orbit','superBurst','superSword','barrierTrigger','barrierBreak']);
+    g.effects=(g.effects||[]).filter(effect=>!attackTypes.has(effect.type)&&!effect.quake&&!COMBAT_OWNERS.has(effect.skillId));
   }
   stop(reason='cleanup') {
     if(!this.active)return false;

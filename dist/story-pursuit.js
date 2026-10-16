@@ -2,6 +2,7 @@ import { enemyDefinition } from './enemy-definitions.js';
 import { initBoss, clearBossAttacks } from './bosses.js';
 import { groundOffset } from './terrain.js';
 import { terrainNavigation } from './terrain-navigation.js';
+import { pointOnRoute } from './navigation-route.js';
 
 const foot=e=>({x:e.x,y:e.y+groundOffset(e,!!e.heroId)});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -111,15 +112,46 @@ export class StoryPursuit {
     for(const point of candidates)if(distance(point,p)<=160&&g.terrain.isFree(point.x,point.y,clear,'ground')&&nav.clearSegment(point,p,0,'ground'))return {x:point.x,y:point.y};
     return null;
   }
-  _entryState(profile,p,r){
-    this._entries??=new Map();const g=this.game,key=`${profile.type}:${r}`,cached=this._entries.get(key);
-    if(cached&&cached.terrain===g.terrain&&cached.revision===(g.terrain.structureRevision||0)&&cached.blocker===g.terrain.firstBlocker&&cached.width===g.viewWidth&&cached.height===g.viewHeight&&distance(cached.player,p)<48&&Math.abs(cached.progress-this.routeProgress)<64)return cached;
-    const maximum=this.activeRadius()*1.8,points=[];
-    for(let along=this.routeProgress-160;along>=Math.max(-900,this.routeProgress-maximum);along-=48){
-      const center=this._routeAt(along);
-      for(const lateral of [0,32,-32,64,-64,96,-96])points.push({x:center.x-center.dy*lateral,y:center.y+center.dx*lateral,along,checked:false,reachable:false});
+  get admissionMode(){return this.story.angel?'surround':['burst','fading'].includes(this.stage)?'flanks':'rear';}
+  _forward(p){
+    if(this._forwardState?.clock===this.clock&&distance(this._forwardState.player,p)<1)return this._forwardState;
+    const guide=this.story.getGuide?.(),directions=[];
+    if(guide?.complete&&guide.routePath?.length>1){
+      // Several substantial lookaheads cover the guide's next bend as well
+      // as its current heading. Each protects a whole forward quadrant, not
+      // just the thin path or the top edge of the screen.
+      for(const ahead of [160,360,640]){
+        const point=pointOnRoute(guide.routePath,guide.lengths,guide.progress+ahead),length=point?distance(point,p):0;
+        if(length>60)directions.push({x:(point.x-p.x)/length,y:(point.y-p.y)/length});
+      }
     }
-    const state={terrain:g.terrain,revision:g.terrain.structureRevision||0,blocker:g.terrain.firstBlocker,width:g.viewWidth,height:g.viewHeight,player:{...p},progress:this.routeProgress,target:this._approachPoint(p,r),points,cursor:0};
+    if(!directions.length){const route=this._routeAt(this.routeProgress+160);directions.push({x:route.dx,y:route.dy});}
+    return this._forwardState={clock:this.clock,player:{...p},directions,angle:Math.atan2(directions[0].y,directions[0].x)};
+  }
+  _outsideForward(point,p,r=0){
+    const dx=point.x-p.x,dy=point.y-p.y,length=Math.hypot(dx,dy);
+    if(length<=r)return false;
+    // Reserve the complete 90-degree front sector, widened by body radius.
+    return this._forward(p).directions.every(direction=>dx*direction.x+dy*direction.y+r<length*Math.SQRT1_2);
+  }
+  _entryState(profile,p,r){
+    this._entries??=new Map();const g=this.game,mode=this.admissionMode,key=`${profile.type}:${r}:${mode}`,cached=this._entries.get(key),forward=mode==='rear'?null:this._forward(p);
+    if(cached&&cached.terrain===g.terrain&&cached.revision===(g.terrain.structureRevision||0)&&cached.blocker===g.terrain.firstBlocker&&cached.width===g.viewWidth&&cached.height===g.viewHeight&&distance(cached.player,p)<48&&Math.abs(cached.progress-this.routeProgress)<64&&(!forward||Math.cos(cached.angle-forward.angle)>.985))return cached;
+    const maximum=this.activeRadius()*1.8,points=[];
+    if(mode==='rear'){
+      for(let along=this.routeProgress-160;along>=Math.max(-900,this.routeProgress-maximum);along-=48){
+        const center=this._routeAt(along);
+        for(const lateral of [0,32,-32,64,-64,96,-96])points.push({x:center.x-center.dy*lateral,y:center.y+center.dx*lateral,along,checked:false,reachable:false});
+      }
+    }else{
+      const sectors=mode==='surround'?[Math.PI,Math.PI/2,-Math.PI/2,0]:[Math.PI,Math.PI/2,-Math.PI/2];
+      for(let radius=192;radius<=maximum;radius+=48)for(const spread of [0,-.18,.18,-.36,.36,-.54,.54])for(let sector=0;sector<sectors.length;sector++){
+        const angle=forward.angle+sectors[sector]+spread,point={x:p.x+Math.cos(angle)*radius,y:p.y+Math.sin(angle)*radius};
+        if(mode==='flanks'&&!this._outsideForward(point,p,r+5))continue;
+        points.push({...point,sector,checked:false,reachable:false});
+      }
+    }
+    const state={terrain:g.terrain,revision:g.terrain.structureRevision||0,blocker:g.terrain.firstBlocker,width:g.viewWidth,height:g.viewHeight,player:{...p},progress:this.routeProgress,mode,angle:forward?.angle,target:this._approachPoint(p,r),points,cursor:0};
     this._entries.set(key,state);return state;
   }
   _point(profile) {
@@ -128,34 +160,44 @@ export class StoryPursuit {
     if(this._admissionBudget?.clock!==this.clock)this._admissionBudget={clock:this.clock,paths:6,candidates:96};
     const budget=this._admissionBudget,state=this._entryState(profile,p,r),maximum=this.activeRadius()*1.8;
     if(!state.target)return null;
-    // Only the already-traversed road can admit reinforcements. Sampling a
-    // narrow strip lets a squad enter abreast without inventing a flank or a
-    // fallback at the road ahead. A fully visible rear shore defers arrivals.
+    // Early pursuit follows only the traversed road. Medicine opens the rear
+    // and two flanks; the visible angel opens all four sides. Every formation
+    // still shares the same offscreen, dry-ground and reachable admission.
     // Cache rejection as well as success, and continue the scan next admission
     // tick. A sealed approach never repeats thousands of full route searches
     // for every member of the same squad in a single frame.
     const living=this.living();
-    const available=point=>this._outside(point,r,profile.type)&&distance(point,p)<=maximum&&point.along<=this.routeProgress-120&&g.environment?.isHazardFree?.(point.x,point.y,r+5)!==false&&!living.some(e=>distance(foot(e),point)<e.r+r+12);
+    const available=point=>this._outside(point,r,profile.type)&&distance(point,p)<=maximum&&(state.mode!=='rear'||point.along<=this.routeProgress-120)&&(state.mode!=='flanks'||this._outsideForward(point,p,r+5))&&g.environment?.isHazardFree?.(point.x,point.y,r+5)!==false&&!living.some(e=>distance(foot(e),point)<e.r+r+12);
+    const admitted=point=>{this._nextSector=(point.sector??-1)+1;return {x:point.x,y:point.y,along:point.along??this._project(point)?.along,sector:point.sector,mode:state.mode};};
+    // Rotate successful arrivals among the available sides, including cached
+    // entrances, so one convenient rear entrance cannot starve both flanks.
+    const sectors=state.mode==='rear'?1:state.mode==='flanks'?3:4,preferred=(this._nextSector||0)%sectors;
     // Reuse the closest proven entrance as soon as its previous troop walks
     // clear. Continuing farther down the scan would strand later waves well
     // behind the scene even though the actual entrance is already available.
-    for(const point of state.points)if(point.reachable&&available(point))return {x:point.x,y:point.y,along:point.along};
-    for(let visited=0;visited<state.points.length;visited++){
-      const point=state.points[state.cursor];
-      if(!point.checked&&(!budget.paths||!budget.candidates))return null;
-      state.cursor=(state.cursor+1)%state.points.length;
-      if(point.checked&&!point.reachable)continue;
-      if(!available(point))continue;
-      if(!point.checked){
-        budget.candidates--;
-        if(!g.terrain.isFree(point.x,point.y,r+5,'ground')||g.terrain.island?.isDry(point.x,point.y,r+5)===false){point.checked=true;continue;}
-        const projected=this._project(point);
-        if(!projected||projected.along>this.routeProgress-120||Math.abs(projected.along-point.along)>120){point.checked=true;continue;}
-        budget.paths--;point.checked=true;point.reachable=this._reachable(point,state.target,r);
+    for(let sectorIndex=0;sectorIndex<sectors;sectorIndex++){
+      const sector=(preferred+sectorIndex)%sectors,points=state.mode==='rear'?state.points:state.points.filter(point=>point.sector===sector);
+      for(const point of points)if(point.reachable&&available(point))return admitted(point);
+      for(let visited=0;visited<points.length;visited++){
+        const point=points[state.mode==='rear'?state.cursor:visited];
+        if(state.mode==='rear')state.cursor=(state.cursor+1)%points.length;
+        if(point.checked&&!point.reachable)continue;
+        if(!available(point))continue;
+        if(!point.checked){
+          if(!budget.paths||!budget.candidates)break;
+          budget.candidates--;
+          if(!g.terrain.isFree(point.x,point.y,r+5,'ground')||g.terrain.island?.isDry(point.x,point.y,r+5)===false){point.checked=true;continue;}
+          if(state.mode==='rear'){
+            const projected=this._project(point);
+            if(!projected||projected.along>this.routeProgress-120||Math.abs(projected.along-point.along)>120){point.checked=true;continue;}
+          }
+          budget.paths--;point.checked=true;point.reachable=this._reachable(point,state.target,r);
+        }
+        if(!point.reachable)continue;
+        return admitted(point);
       }
-      if(!point.reachable)continue;
-      return {x:point.x,y:point.y,along:point.along};
     }
+    this._nextSector=preferred+1;
     return null;
   }
   _spawn(profileId,options={}) {
@@ -168,7 +210,7 @@ export class StoryPursuit {
       storySearching:!!options.search,guardActive:!options.search,speed:profile.speed,damage:profile.damage,
       movementSurge:false,
       hp:profile.hp,maxHp:profile.hp,xp:profile.xp,_storyInitialHp:profile.hp,_navTimer:0,
-      _storyAdmission:this.clock+this.config.admissionSeconds,_storyFarSince:null,_storyEntryProgress:point.along});
+      _storyAdmission:this.clock+this.config.admissionSeconds,_storyFarSince:null,_storyEntryProgress:point.along,_storyEntrySector:point.sector,_storyEntryMode:point.mode});
     if(profile.behavior==='chase')enemy.specialist=null;
     g._effect?.(enemy.x,point.y,'rescueWarning',this.config.admissionSeconds,enemy.r+8,'#c8a58b',undefined,{seed:enemy.id});
     return enemy;

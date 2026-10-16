@@ -48,6 +48,17 @@ assert.equal(h.run('game.story.id'),'prologue');
 assert.equal(h.run('game.story.active'),true);
 assert.match(node(h,'phase-label').textContent,/序章/);
 assert.equal(h.run('archive.data.totals.runs'),1);
+assert.equal(node(h,'level-label').textContent,'Lv.1','story shows character level without exploration realms');
+assert.equal(hidden(h,'game-bottom'),true);assert.equal(hidden(h,'skill-button'),true);assert.equal(hidden(h,'touch-skill'),true);
+h.run('requestSkill();');assert.equal(h.run('skillRequested'),false,'unavailable story skill has no input request or error toast');
+// The portrait redraws at the actual displayed size and follows DPR changes.
+node(h,'story-dialogue-portrait').getBoundingClientRect=()=>({width:144,height:156});
+h.run('drawStoryPortrait("princess");');
+assert.equal(node(h,'story-dialogue-portrait').width,288);assert.equal(node(h,'story-dialogue-portrait').height,312);
+h.window.devicePixelRatio=3;h.run('drawStoryPortrait("princess");');
+assert.equal(node(h,'story-dialogue-portrait').width,432);assert.equal(node(h,'story-dialogue-portrait').height,468);
+assert(h.run('[...storyPortraitArt.directional.cache.values()].some(sprite=>sprite.canvas.width/sprite.w>2)'),'portrait art is rasterized above the world sprite density');
+h.window.devicePixelRatio=2;
 
 // Fixed dialogue has no visibility/read-receipt dependency and owns input.
 // Use a chapter fixture to exercise actual shipped UI/focus handlers separately
@@ -104,6 +115,17 @@ assert(h.run('keys.has("KeyD")'),'A fresh movement press works after release and
 h.listeners['window:keyup']({code:'KeyD'});
 
 assert.equal(node(h,'story-progress-track').getAttribute('aria-valuenow'),'40');
+// Empty, inactive and non-story states fully clear the panel. In particular,
+// absent story data must never turn show(id, undefined) into its default true.
+h.run('const objectiveStory=game.story;');
+for(const state of ["game.mode='world';game.story=undefined", "game.mode='dungeon';game.story=objectiveStory", "game.mode='story';game.story={active:false,objective:'旧目标'}", "game.story={active:true,objective:'  ',getProgress:()=>({label:'旧进度',value:1,max:2})}"]){
+  h.run(`${state};updateStoryDialogueHUD(true);`);
+  assert.equal(hidden(h,'story-objective'),true);assert.equal(hidden(h,'story-progress'),true);
+  assert.equal(node(h,'story-objective-text').textContent,'');assert.equal(node(h,'story-progress-label').textContent,'');assert.equal(node(h,'story-progress-detail').textContent,'');
+  assert.equal(node(h,'story-progress-fill').style.width,'0%');
+}
+h.run("game.mode='story';game.story=objectiveStory;updateStoryDialogueHUD(true);");
+assert.equal(hidden(h,'story-objective'),false);assert.equal(node(h,'story-progress-track').getAttribute('aria-valuenow'),'40');
 assert.equal(h.document.querySelectorAll('#story-route-arrow').length,0,'ground ribbon is the only route direction display');
 h.run(`const originalObserve=sceneDialogue.observe;let ambientCalls=0;sceneDialogue.observe=()=>ambientCalls++;
   observeSceneDialogue(.1);game.story.active=false;observeSceneDialogue(.1);`);
@@ -135,11 +157,11 @@ assert(h.run('Math.abs(newSpeech[0].rect.x+newSpeech[0].rect.width/2-newSpeech[0
 
 // Generic progression announcements must not tell the chapter player to
 // leave the scripted objective for tribulation/rewards that are unavailable.
-h.run(`$('toast').textContent='剧情状态';pendingEvolutions=[{weaponId:'sword'}];
+h.run(`notifications.clear();$('toast').textContent='剧情状态';
   announceCombatEvents([{type:'realmBottleneck'},{type:'evolution',weaponId:'orbit'}]);`);
-assert.equal(node(h,'toast').textContent,'剧情状态');assert.equal(h.run('pendingEvolutions.length'),0);
-h.run(`game.mode='world';toastPriority=0;announceCombatEvents([{type:'realmBottleneck'}]);game.mode='story';`);
-assert.match(node(h,'toast').textContent,/主动渡劫突破/,'ordinary modes retain their progression announcements');
+assert.equal(node(h,'toast').textContent,'剧情状态');assert.equal(h.run('notifications.current'),null);
+h.run(`const realmWasEnabled=game.realms.enabled;game.mode='world';game.realms.enabled=true;announceCombatEvents([{type:'realmBottleneck'}]);game.mode='story';game.realms.enabled=realmWasEnabled;`);
+assert.match(node(h,'toast').textContent,/可准备渡劫/,'ordinary modes retain their progression announcements');
 
 // Trigger the actual shipped button handlers against a changing chapter action.
 // This avoids coupling UI tests to how far a player has walked through the map.
@@ -169,12 +191,20 @@ assert.equal(node(h,'weapon-arrow').checked,true);
 // Realm controls are a paused character panel; the material count is explicit.
 click(h,'prepare-start-button');await h.flush();
 assert.equal(h.run('game.startWorldId'),'verdant-rift');
-h.run(`game.enemies=[];game.realms.talismans=3;
-  game.player.level=10;game.player.xp=game.player.xpNext;updateHUD();`);
+assert.equal(hidden(h,'story-objective'),true);assert.equal(node(h,'story-objective-text').textContent,'');
+assert.equal(hidden(h,'skill-button'),false);assert.equal(hidden(h,'touch-skill'),false,'world restores the mobile skill entry');
+assert.match(node(h,'level-label').textContent,/^Lv\.1 · /);
+click(h,'character-button');
+assert.match(node(h,'character-content').textContent,/距 Lv\.5 瓶颈还需 \d+ 经验/);
+assert.match(node(h,'character-content').textContent,/护劫符 0 张/);
+click(h,'character-done');
+h.run(`game.player.level=5;game.player.xp=game.player.xpNext;game.realms.capExperience();updateHUD();`);
 assert.equal(hidden(h,'realm-ready'),false);
 click(h,'realm-ready');
 assert.equal(h.run('characterOpen'),true);
-assert(node(h,'realm-material-0').checked);
+assert(node(h,'realm-material-3').checked,'the first preparation recommends the three granted talismans');
+assert.match(node(h,'character-content').textContent,/附近随机落下/);assert.doesNotMatch(node(h,'character-content').textContent,/开阔|留在劫域|离场/);
+assert.equal(node(h,'start-tribulation').disabled,false,'combat does not disable an otherwise ready trial');
 assert.equal(node(h,'realm-material-3').disabled,false);
 choose(h,'realm-material-2');
 assert.equal(h.run('realmMaterials'),2);
@@ -189,6 +219,7 @@ assert.equal(h.run('pointerLabels.some(text=>text.startsWith("公主"))'),false)
 const css=fs.readFileSync(new URL('./dist/story-ui.css',import.meta.url),'utf8');
 assert.match(css,/\.story-preparation \.hero-option,\.story-preparation \.weapon-option\{flex-grow:0;flex-basis:max/,'single story selections preserve standard card sizes');
 assert.match(css,/@media\(pointer:coarse\).*?bottom:calc\(176px/s,'mobile action sits above the joystick');
+assert.match(css,/\.story-victory \.end-actions\{grid-template-columns:minmax\(180px,240px\);justify-content:center/,'the single ending action replaces the two-column grid');
 // Completing the final conversation fades into a chapter victory screen.
 // The frame scheduler must keep advancing the fade after its commit changes
 // status to victory, then record the clear exactly once before disposal.
@@ -200,11 +231,12 @@ click(ending,'story-dialogue-skip');
 assert.equal(ending.run('game.sceneTransition.active'),false,'skipping the conclusion still awaits deliberate departure');
 assert.equal(node(ending,'story-dialogue-next').textContent,'正式启航');
 assert.equal(hidden(ending,'story-dialogue-skip'),true);
-click(ending,'story-dialogue-panel');
 node(ending,'story-dialogue-panel').focus();
 ending.listeners['window:keydown']({code:'Enter',key:'Enter',target:node(ending,'story-dialogue-panel'),repeat:false,preventDefault(){this.defaultPrevented=true;}});
-assert.equal(ending.run('game.sceneTransition.active'),false,'clicking the general dialogue surface cannot depart');
-click(ending,'story-dialogue-next');
+assert.equal(ending.run('game.sceneTransition.active'),false,'neutral keyboard focus does not implicitly depart');
+for(let i=0;i<5;i++)ending.tick(20);
+assert.equal(ending.run('game.sceneTransition.active'),false,'the ending awaits a deliberate player action');
+click(ending,'story-dialogue-panel');
 assert.equal(ending.run('game.sceneTransition.active'),true);
 assert.equal(hidden(ending,'end-overlay'),true);
 for(let i=0;i<30;i++)ending.tick(20);
@@ -220,7 +252,7 @@ assert.equal(hidden(ending,'restart-button'),true);
 assert.equal(hidden(ending,'end-archive-button'),true);
 assert.equal(hidden(ending,'end-stats'),true);
 assert.equal(node(ending,'home-button').textContent,'返回主界面');
-assert.equal(ending.document.activeElement.id,'home-button');
+assert.equal(ending.document.activeElement,node(ending,'end-overlay').querySelector('[role="dialog"]'),'touch completion focuses the ending surface');
 assert.equal(ending.run('archive.data.stories.prologue.clears'),1);
 assert.equal(ending.run('game.sceneContent.allows("worldContent")'),false,'chapter never restores ordinary exploration behind its ending');
 assert.equal(ending.run('game.story.disposed'),true);

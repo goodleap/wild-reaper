@@ -49,7 +49,7 @@ const storage=new Map(),chosen={...disabled,fullLoadout:true,allBosses:true,allM
   assert.equal(restored.run('characterPanelHTML(game,"attributes").includes("天雷无冷却")'),false);
   change(restored,'fastMovement',true);
   assert.deepEqual(state(restored,'game.debugOptions'),chosen,'changing saved preparation choices cannot mutate a running game');
-  assert.match(node(restored,'toast').textContent,/准备页设置已生效/);
+  assert.match(node(restored,'toast').textContent,/调试设置已生效/);
 }
 
 // A normal entry cannot inherit any remembered boost or modify debug choices.

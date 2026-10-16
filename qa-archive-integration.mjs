@@ -6,7 +6,9 @@ import { ARCHIVE_ENTRIES, ARCHIVE_CATEGORIES, ARCHIVE_TABS } from './dist/archiv
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert.equal(new Set(ids).size,ids.length,'shipped modal and entry IDs remain unique');
 const key=(h,code)=>h.listeners['window:keydown']({code,key:code==='Escape'?'Escape':code,repeat:false,target:h.nodes['game-canvas'],preventDefault(){}});
-const click=(h,id)=>{h.nodes[id].focus();h.nodes[id].onclick();};
+// This lifecycle exercises explicit keyboard activation/return. Pointer
+// activation and neutral return surfaces are covered in qa-focus-navigation.
+const click=(h,id)=>{key(h,'Tab');h.nodes[id].focus();h.fire(h.nodes[id],'click',{detail:0});};
 const start=async h=>{
   click(h,'start-button');click(h,'prepare-start-button');await h.flush();
   h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');

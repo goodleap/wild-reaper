@@ -162,7 +162,7 @@ export class CombatBuild {
       if(!source||typeof source!=='object')throw new TypeError('Missing combat build records');
       for(const [id,item] of Object.entries(destination)) {
         const saved=source[id];if(!saved)continue;
-        item.baseRank=readNumber(saved.baseRank,`${id}.baseRank`,defs[id].category==='weapon'?0:defs[id].initialRank,defs[id].maxBaseRank);
+        item.baseRank=readNumber(saved.baseRank,`${id}.baseRank`,0,defs[id].maxBaseRank);
         if(typeof saved.equipped!=='boolean'||typeof saved.evolved!=='boolean')throw new TypeError(`Invalid combat build flags: ${id}`);
         if(saved.branch!==null&&!branchDefinition(id,saved.branch))throw new TypeError(`Invalid combat build branch: ${id}`);
         item.branch=saved.branch;item.equipped=item.baseRank>0&&saved.equipped;item.evolved=saved.evolved;

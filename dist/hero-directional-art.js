@@ -108,11 +108,11 @@ export class DirectionalHeroArt {
     if(typeof kind!=='string')return false;
     kind=kind.replace(/-v2$/,'');
     if(!HEROES.has(kind))return false;
-    const {entity={},time=0,reduced=false,pixelRatio=2}=options;
+    const {entity={},time=0,reduced=false,pixelRatio=2,maxPixelRatio=2}=options;
     // Legacy humanoidPose must never override the new distance-based pose.
     const sampled=options.pose?.view?options.pose:this.animator.sample(entity,{time,reduced,frozen:options.frozen??entity.visualFrozen??false});
     const pose={view:'front',flip:1,bodyY:0,lean:0,shoulder:0,cloth:0,hair:0,armSwing:0,...sampled};
-    const view=['front','back','side'].includes(pose.view)?pose.view:'front',flip=pose.flip===-1?-1:1,ratio=clamp(Math.ceil(value(pixelRatio,2)),1,2);
+    const view=['front','back','side'].includes(pose.view)?pose.view:'front',flip=pose.flip===-1?-1:1,ratio=clamp(Math.ceil(value(pixelRatio,2)),1,clamp(maxPixelRatio,2,8));
     const fall=pose.action==='fall'?clamp(value(pose.actionProgress),0,1):0;
     c.save();c.lineCap='round';c.lineJoin='round';c.scale(flip,1);
     if(fall){c.translate(0,17);c.rotate(fall*.98);c.scale(1,1-fall*.12);c.translate(0,-17);}

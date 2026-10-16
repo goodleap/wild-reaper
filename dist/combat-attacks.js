@@ -72,7 +72,7 @@ export class CombatAttacks {
 
   castStorm() {
     const g=this.game,p=g.player,stats=skillStats(g,'storm');
-    if(g.abilities?.isFrozen(p))return false;
+    if(g.canUseSkill?.('storm')===false||g.abilities?.isFrozen(p))return false;
     const targets=g.enemies.filter(e=>dist2(e,p)<=sq(stats.radius)&&canTarget(g,e,p,{requireView:true,source:'storm',checkPath:true}));
     p.skillCooldownMax=stats.cooldown;p.skillCooldown=stats.cooldown;p.castFace=.25;
     recordHeroAction(g,{kind:'cast',angle:p.facing,duration:.65,priority:4});
