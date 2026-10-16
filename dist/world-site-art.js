@@ -1,5 +1,6 @@
 import { featureForSite } from './world-sites.js';
 import { relicActivationStrength } from './relic-activation.js';
+import { CityStructureArt } from './city-structure-art.js';
 
 const TAU=Math.PI*2;
 const poly=(c,points,fill,stroke,width=1)=>{c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=width;c.stroke();}};
@@ -41,15 +42,11 @@ export class WorldSiteArt {
       for(const y of [7,15,22])line(c,-16,y,16,y,'#705841',2);
       for(const [x,y] of [[-33,-26],[30,-38]])poly(c,[[x-4,y],[x,y-10],[x+5,y-2],[x+1,y+4]],'#abd4c3','#d0ead6');
     }else if(feature.id==='belltower'){
-      poly(c,[[-68,0],[-68,-17],[68,-17],[68,0]],'#565752','#a8a493');
-      c.fillStyle='#686d66';c.fillRect(-52,-95,104,91);c.fillStyle='#9b9a84';c.fillRect(-45,-95,40,91);
-      for(let row=0;row<6;row++){const y=-91+row*14;line(c,-50,y,49,y,'#454d48',1);for(let col=0;col<4;col++){const x=-45+col*27+(row%2)*13;if(x<50)line(c,x,y,x,y+13,'#62695f',1);}}
-      c.fillStyle='#4c554f';c.fillRect(-31,-143,62,49);c.fillStyle='#a5a18a';c.fillRect(-28,-144,10,51);c.fillRect(19,-144,9,51);
-      arch(c,0,-104,28,33,'#303f3b');
-      poly(c,[[-11,-107],[-8,-127],[8,-127],[11,-107]],'#b39557','#e0c482');oval(c,0,-107,13,3,'#dfc278');line(c,0,-129,0,-134,'#9a8251',3);
-      poly(c,[[-41,-143],[0,-166],[41,-143]],'#a16752','#3e4843',2);line(c,-34,-142,34,-142,'#d29772',2);
-      arch(c,0,1,40,56,'#253631','#c4bca0');line(c,-28,6,28,6,'#a5a58d',5);
-      for(const x of [-48,48]){c.fillStyle='#9a5946';c.fillRect(x-4,-74,8,25);poly(c,[[x-4,-49],[x,-43],[x+4,-49]],'#9a5946');}
+      // Existing settlements reuse the same blue-slate tower as authored city
+      // districts. Only the stamp changes: its footprint, foot and interactions
+      // retain the original feature dimensions and the 300x230 outer cache.
+      this.cityStructures??=new CityStructureArt(this.makeCanvas);
+      this.cityStructures.drawProp(c,{variant:'city-structure',cityKind:'belltower',x:0,y:-d/2,width:w,depth:d,height:100,style:1});
     }else if(feature.id==='furnace'){
       poly(c,[[-w/2,0],[-w/2,-24],[-80,-43],[80,-43],[w/2,-24],[w/2,0]],'#373b3b','#82756b',2);
       poly(c,[[-78,-21],[-72,-117],[-40,-135],[40,-135],[72,-117],[78,-21]],'#565252','#272c30',2);

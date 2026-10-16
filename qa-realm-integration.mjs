@@ -9,14 +9,9 @@ import { defenseDamageMultiplier } from './dist/combat-stats.js';
 const h=harness('',{coarse:true});
 const node=id=>h.document.getElementById(id),click=id=>h.fire(node(id),'click');
 click('start-button');click('prepare-start-button');await h.flush();
-h.run(`game.enemies=[];game.regionGrace=0;game.regionTransition=null;game.addExperience(1000000);
-  let integrationTrialPoint=null;
-  trialSearch:for(const area of game.terrain.island.layout.areas)for(let dx=-180;dx<=180;dx+=60)for(let dy=-180;dy<=180;dy+=60){
-    game.player.x=area.center.x+dx;game.player.y=area.center.y+dy-groundOffset(game.player,true);
-    if(game.realms.getAction()?.enabled){integrationTrialPoint={x:game.player.x,y:game.player.y};break trialSearch;}
-  }
-  updateHUD();`);
-assert(h.run('!!integrationTrialPoint'),'real first-world geometry provides a playable trial');
+h.run(`game.enemies=[];game.regionGrace=0;game.regionTransition=null;game.addExperience(1000000);game.realms._random=()=>0;updateHUD();`);
+assert(h.run('game.realms.getAction()?.enabled'),'the actual starting position supports a trial without finding a special site');
+assert.equal(h.run('game.player.level'),5);assert.equal(h.run('game.realms.getState().xpRemaining'),0);
 click('pause-button');assert.equal(h.run('paused'),true);
 click('pause-character-button');assert.equal(h.run('characterOpen'),true);assert.equal(h.run('game.status'),'playing');
 node('realm-material-2').checked=true;h.fire(node('realm-material-2'),'change');click('start-tribulation');
@@ -25,7 +20,7 @@ assert.equal(node('tribulation-progress').classList.contains('hidden'),false);
 assert.equal(node('realm-ready').classList.contains('hidden'),true);
 const elapsed=h.run('game.realms.active.elapsed');click('pause-button');for(let i=0;i<10;i++)h.tick();assert.equal(h.run('game.realms.active.elapsed'),elapsed,'pause suspends trial warnings and damage');click('resume-button');
 for(let i=0;i<600&&!h.run('!game.realms.active');i++)h.tick();
-assert.equal(h.run('game.player.level'),11);assert.equal(h.run('game.realms.label'),'筑基');assert.equal(h.run('game.realms.active'),null);assert.equal(h.run('game.realms.talismans'),1);
+assert.equal(h.run('game.player.level'),6);assert.equal(h.run('game.realms.label'),'筑基');assert.equal(h.run('game.realms.active'),null);assert.equal(h.run('game.realms.talismans'),1);
 
 // A real world transition retains the service and the unlocked cap. Region
 // cancellation must never dispose the whole growth service.

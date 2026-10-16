@@ -1,20 +1,17 @@
 {
-  "enabledModes": ["world", "story"],
+  "enabledModes": ["world"],
   "definitions": [
-    {"id": "qi", "name": "练气", "minLevel": 1, "maxLevel": 10, "bolts": 3, "duration": 9},
-    {"id": "foundation", "name": "筑基", "minLevel": 11, "maxLevel": 20, "bolts": 4, "duration": 12},
+    {"id": "qi", "name": "练气", "minLevel": 1, "maxLevel": 5, "bolts": 3, "duration": 9},
+    {"id": "foundation", "name": "筑基", "minLevel": 6, "maxLevel": 20, "bolts": 4, "duration": 12},
     {"id": "core", "name": "金丹", "minLevel": 21, "maxLevel": 30, "bolts": 5, "duration": 15},
     {"id": "soul", "name": "元婴", "minLevel": 31, "maxLevel": null, "bolts": 0, "duration": 0}
   ],
   "trial": {
-    "arenaRadius": 150,
-    "clearancePadding": 16,
     "boltRadius": 42,
+    "boltSpreadRadius": 110,
     "warning": 1,
     "pressureRatio": 0.1,
     "directRatio": 0.35,
-    "combatRadius": 420,
-    "quietSeconds": 3,
     "retrySeconds": 30
   },
   "materials": {
@@ -27,5 +24,5 @@
     "bossDrop": 2,
     "inventoryCap": 99
   },
-  "colors": {"boundary": "#9487eb", "warning": "#a89aff", "strike": "#b3a2ff"}
+  "colors": {"warning": "#a89aff", "strike": "#b3a2ff"}
 }

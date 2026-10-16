@@ -1,10 +1,9 @@
-import { UPGRADE_DEFS, SUPER_SKILL_DEFS } from './combat-catalog.js';
-import { isBranchReady } from './weapon-branches.js';
+import { applyFullCombatBuild } from './full-combat-build.js';
 import { groundOffset } from './terrain.js';
 import { enemyDefinition } from './enemy-definitions.js';
 import { BOSS_DEFS, initBoss } from './bosses.js';
 
-export const DEBUG_FULL_BRANCHES=Object.freeze({sword:'sweep',arrow:'pierce',pulse:'echoes',lightning:'chain'});
+export { FULL_BUILD_BRANCHES as DEBUG_FULL_BRANCHES } from './full-combat-build.js';
 export const TRAINING_DUMMY_RULES=Object.freeze({radius:16,foot:18,defense:100,health:1e9,minDistance:110,maxDistance:230});
 export const DEBUG_BOSS_RULES=Object.freeze({health:100000,minDistance:260,maxDistance:650});
 // World and castle encounters share combat kinds. Location-specific names or
@@ -17,21 +16,7 @@ export const DEBUG_BOSS_ROSTER=Object.freeze(Object.values(BOSS_DEFS).map(boss=>
 // character XP and crystal progression are deliberately left untouched.
 export function applyFullDebugBuild(game) {
   if(game.debug!==true||game.debugOptions?.fullLoadout!==true||game._debugFullApplied)return false;
-  const build=game.build;
-  const upgrades=UPGRADE_DEFS.filter(def=>def.category!=='attribute');
-  // Normal acquisition/rank APIs enforce prerequisites and branch thresholds.
-  // A later pass can take modifiers unlocked by the preceding branch choice.
-  for(let pass=0;pass<UPGRADE_DEFS.length;pass++) {
-    let changed=false;
-    for(const def of upgrades)while(build.increment(def.id))changed=true;
-    for(const [id,branch] of Object.entries(DEBUG_FULL_BRANCHES)) {
-      if(isBranchReady(build,id)&&build.selectBranch(id,branch))changed=true;
-    }
-    if(!changed)break;
-  }
-  while(build.awardRuneArrow()){}
-  for(const def of SUPER_SKILL_DEFS)if(build.getSkill(def.id))build.superLevels[def.id]=def.maxBaseRank;
-  for(const weapon of Object.values(build.weapons))if(weapon.acquired)build.setEquipped(weapon.id,true);
+  applyFullCombatBuild(game.build);
   game._syncEvolutions(false);game._refreshStats();game._refreshWeapons();
   game._debugFullApplied=true;
   return true;

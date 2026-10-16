@@ -4,15 +4,21 @@ import { harness } from './qa-app-harness.mjs';
 // Exercise shipped UI handlers and state. Native browser Space-click behavior
 // is emulated only when the handler leaves a real focused control unconsumed.
 const node=(h,id)=>h.document.getElementById(id);
+const settleActions=()=>new Promise(resolve=>setTimeout(resolve,0));
 function key(h,code,extra={}){
   const event={code,key:code==='Space'?' ':code,repeat:false,target:h.document.activeElement||node(h,'game-canvas'),preventDefault(){this.defaultPrevented=true;},...extra};
   h.listeners['document:keydown']?.(event);h.listeners['window:keydown']?.(event);return event;
 }
-function click(h,id,{keyboard=false,touch=false}={}){
+function click(h,id,{keyboard=false,touch=false,settle=true}={}){
   const target=node(h,id),detail=keyboard?0:1;
   if(keyboard)key(h,'Tab');else h.listeners['document:pointerdown']?.({target,pointerType:touch?'touch':'mouse'});
   target.focus();h.listeners['document:click']?.({target,detail});
-  return h.fire(target,'click',{detail});
+  const event=h.fire(target,'click',{detail});
+  // The VM DOM has no browser event loop. Flush the same post-dispatch policy
+  // synchronously for existing assertions; separate cases below await the
+  // installed capture listener's next event task, including stopped events.
+  if(settle)h.run(`focusNavigation.settlePointerAction({target:$(${JSON.stringify(id)}),detail:${detail}});`);
+  return event;
 }
 function space(h){
   const target=h.document.activeElement,event=key(h,'Space');
@@ -26,6 +32,10 @@ const quiet=h=>h.run('game.enemies=[];game._spawn=game.nextBossAt=Infinity;game.
 // Pointer navigation does not decorate a destructive/back control as selected.
 // The opening source survives Escape, while a subsequent Tab remains usable.
 const h=harness('?debug'),canvas=node(h,'game-canvas');
+h.run('audio={state:"suspended",resume:()=>Promise.resolve()};');
+click(h,'sound-button');assert.equal(h.document.activeElement,node(h,'intro'));
+const soundSelected=node(h,'sound-button').getAttribute('aria-pressed');
+space(h);assert.equal(node(h,'sound-button').getAttribute('aria-pressed'),soundSelected,'pointer sound toggle cannot remain the Space target');
 click(h,'start-button',{touch:true});assert.equal(h.document.activeElement,node(h,'prepare-screen'));
 assert.equal(h.run('prepareOpen'),true);assert.equal(node(h,'mode-world').checked,true);
 click(h,'prepare-help-button',{touch:true});assert.equal(h.document.activeElement,panel(h,'help-overlay'));
@@ -60,6 +70,8 @@ h.fire(canvas,'pointerup',{pointerId:81});assert.equal(h.run('touch'),null);
 
 // Nested dialogs return to their actual parent surface, never the live game.
 click(h,'pause-button');assert(h.run('paused'));assert.equal(h.document.activeElement,panel(h,'pause-overlay'));
+click(h,'pause-sound-button');assert.equal(h.document.activeElement,panel(h,'pause-overlay'));
+assert.notEqual(node(h,'pause-sound-button').getAttribute('aria-pressed'),soundSelected,'clearing focus preserves the sound toggle state');
 click(h,'pause-character-button');key(h,'Escape');assert(h.run('paused'));assert.equal(h.document.activeElement,panel(h,'pause-overlay'));
 click(h,'pause-archive-button',{keyboard:true});key(h,'Escape');assert.equal(h.document.activeElement,node(h,'pause-archive-button'));
 click(h,'resume-button');assert.equal(h.document.activeElement,canvas);assert(!h.run('paused'));
@@ -70,8 +82,8 @@ h.run('game.player.level=game.realms.cap;game.player.xp=game.player.xpNext=100;g
 assert(!node(h,'realm-ready').classList.contains('hidden'));
 click(h,'realm-ready');assert.equal(h.document.activeElement,panel(h,'character-overlay'));
 const realmControls=h.run('focusNavigation.focusable($("character-overlay")).map(element=>element.id)');
-assert(realmControls.includes('realm-material-0'));assert(!realmControls.includes('realm-material-1'));assert(!realmControls.includes('realm-material-3'));
-node(h,'realm-material-1').checked=true;node(h,'realm-material-0').checked=false;
+assert(realmControls.includes('realm-material-2'));assert(!realmControls.includes('realm-material-0'));assert(!realmControls.includes('realm-material-1'));assert(!realmControls.includes('realm-material-3'));
+node(h,'realm-material-1').checked=true;node(h,'realm-material-2').checked=false;
 h.fire(node(h,'realm-material-1'),'change');assert.equal(h.run('realmMaterials'),1);
 assert(!key(h,'Space',{target:node(h,'realm-material-1')}).defaultPrevented,'native radio keys remain native');
 key(h,'Escape');assert.equal(h.document.activeElement,canvas);
@@ -109,4 +121,51 @@ const other=harness('',{coarse:true});click(other,'start-button',{touch:true});
 assert.equal(other.document.activeElement,node(other,'prepare-screen'));
 assert.equal(h.document.activeElement,second);
 assert(h.run('focusNavigation.visible($("upgrade-overlay"))'));
-console.log('Focus navigation: pointer/keyboard return origins, map/detail Space routing, touch preparation, canvas ownership, nested dialogs, realm radios, Tab boundaries, editable controls and delayed reward focus passed (shipped handlers / VM DOM).');
+
+// The reusable dialogue button survives each line. Native pointer focus must
+// be released after every click, including handlers that stop propagation.
+const story=harness('',{coarse:true});click(story,'start-button',{touch:true});
+node(story,'mode-story').checked=true;story.fire(node(story,'mode-story'),'change');
+click(story,'prepare-start-button',{touch:true});await story.flush();quiet(story);
+let lines=0;
+while(story.run('game.story.dialogueBlocking')){
+  const event=click(story,'story-dialogue-next',{touch:true,settle:false});
+  assert(event.stopped,'the shipped dialogue handler stops propagation');
+  await settleActions();
+  assert.notEqual(story.document.activeElement,node(story,'story-dialogue-next'));
+  if(story.run('game.story.dialogueBlocking'))assert.equal(story.document.activeElement,panel(story,'story-dialogue-overlay'));
+  assert(++lines<20,'opening dialogue should finish');
+}
+assert(lines>1,'test repeated pointer confirmation, not only the final close');
+assert.equal(story.document.activeElement,node(story,'game-canvas'));
+story.run('skillRequested=false;game.player.skillCooldown=0;');
+assert(key(story,'Space').defaultPrevented);assert(story.run('keys.has("Space")'),'Space returns to combat routing after the final line');
+story.listeners['window:keyup']({code:'Space'});
+assert(!story.run('game.story.dialogueBlocking'));
+
+// Chromium can checkpoint microtasks between capture and delegated listeners.
+// Reproduce that ordering with the actual archive re-render handler: its
+// replacement button must also release focus while keeping its selected tab.
+click(other,'prepare-archive-button',{touch:true});
+const archiveTab=node(other,'archive-content').querySelector('[data-archive-tab="world"]');
+other.listeners['document:pointerdown']({target:archiveTab,pointerType:'touch'});
+archiveTab.focus();other.listeners['document:click']({target:archiveTab,detail:1});
+await Promise.resolve();
+other.fire(node(other,'archive-content'),'click',{target:archiveTab,detail:1});
+await settleActions();
+assert.equal(other.document.activeElement,panel(other,'archive-overlay'));
+assert.equal(node(other,'archive-content').querySelector('[data-archive-tab="world"]').getAttribute('aria-pressed'),'true');
+click(other,'close-archive',{touch:true});
+
+// A captured pointer click must not clear a later explicit keyboard focus,
+// nor the input intentionally focused by a button's completion handler.
+click(other,'prepare-help-button',{touch:true});
+click(other,'sound-button',{touch:true,settle:false});
+key(other,'Tab');node(other,'close-help').focus();await settleActions();
+assert.equal(other.document.activeElement,node(other,'close-help'));
+click(other,'sound-button',{touch:true,settle:false});
+const editable=other.document.createElement('input');editable.setAttribute('type','text');panel(other,'help-overlay').append(editable);editable.focus();await settleActions();
+assert.equal(other.document.activeElement,editable);
+click(other,'sound-button',{keyboard:true,settle:false});await settleActions();
+assert.equal(other.document.activeElement,node(other,'sound-button'),'keyboard activation keeps the chosen button');
+console.log('Focus navigation: repeated story confirmation, stopped/bubbling pointer actions, toggle state, current modal ownership, pointer/keyboard return origins, combat Space routing, touch preparation, editable controls, Tab boundaries and delayed focus passed (shipped handlers / VM DOM).');

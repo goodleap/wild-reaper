@@ -54,7 +54,7 @@ const finishVictory=(archive,game,time)=>{archive.begin(game);game.runTime=time;
   assert.equal(archive.data.totals.runs,5,'failed or abandoned runs still contribute their normal statistics');
 }
 
-const click=(h,id)=>{h.nodes[id].focus();h.nodes[id].onclick();};
+const click=(h,id)=>{const target=h.nodes[id];h.listeners['document:pointerdown']?.({target,pointerType:'mouse'});target.focus();h.fire(target,'click',{detail:1});h.run(`focusNavigation.settlePointerAction({target:$(${JSON.stringify(id)}),detail:1});`);};
 const quiet=h=>h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
 const select=(h,mode)=>{h.nodes['mode-dungeon'].checked=mode==='dungeon';h.nodes['mode-world'].checked=mode==='world';h.listeners[`mode-${mode}:change`]();};
 const selectForest=h=>{select(h,'dungeon');const input=h.document.getElementById('stage-forest-trial');input.checked=true;h.fire(input,'change');};
@@ -74,7 +74,7 @@ const selectForest=h=>{select(h,'dungeon');const input=h.document.getElementById
   assert.equal(h.nodes['end-time-label'].textContent,'通关用时');assert.match(h.nodes['end-archive-summary'].textContent,/通关成绩已记录/);
   assert.equal(h.run("archive.data.stages['forest-trial'].normal.clears"),1);
   click(h,'end-archive-button');assert.equal(h.run('archiveOpen'),true);h.run('closeArchive();');
-  assert.equal(h.run('runEnded'),true);assert.equal(h.document.activeElement.id,'end-archive-button');
+  assert.equal(h.run('runEnded'),true);assert.equal(h.document.activeElement,h.nodes['end-overlay'].querySelector('[role="dialog"]'));
   click(h,'restart-button');await h.flush();quiet(h);assert.equal(h.run('game.stage.id'),'forest-trial');
   h.run("game.status='dead';");h.tick();
   assert.equal(h.nodes['end-time-label'].textContent,'存活时间');assert.doesNotMatch(h.nodes['end-title'].textContent,/通关/);

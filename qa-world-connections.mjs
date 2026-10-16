@@ -7,7 +7,7 @@ import { REGIONS, WORLD_IDS, WORLD_CONNECTIONS, worldNeighbors } from './dist/wo
 import { portalDoor } from './dist/portal-geometry.js';
 
 const legacyIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(WORLD_IDS,[...legacyIds,'verdant-rift']);
+assert.deepEqual(WORLD_IDS,[...legacyIds,'verdant-rift','clockshadow-city']);
 assert.deepEqual(WORLD_CONNECTIONS,[[0,1],[1,2],[0,2],[0,3],[3,4],[4,5],[5,6],[6,7],[7,2],[4,2]],'all ten legacy world connections retain their identities');
 assert.equal(new Set(WORLD_CONNECTIONS.map(([a,b])=>worldConnectionId(a,b))).size,WORLD_CONNECTIONS.length);
 const reachable=new Set([0]),queue=[0];
@@ -20,7 +20,7 @@ assert.deepEqual(worldNeighbors(8),[],'the independent new map is entered throug
 const outlines=new Set();
 for(const [index,region] of REGIONS.entries())for(const seed of [0,index,17,91]) {
   const island=new Island({region:region.id,seed}),portals=worldNeighbors(index).map(target=>island.plan[`portal:${target}`]);
-  if(seed===0)outlines.add(JSON.stringify(island.points));
+  if(seed===0)outlines.add(JSON.stringify(region.authored?region.authored.boundaries:island.points));
   assert.equal(island.points.length,region.authored?4:128,'authored maps retain rectangular bounds; procedural coasts retain their bounded geometry');
   assert.deepEqual(new Island({region:region.id,seed}).plan,island.plan,'generation is deterministic');
   assert.equal(Object.keys(island.plan).filter(key=>key.startsWith('portal:')).length,portals.length);
@@ -56,7 +56,7 @@ for(const [index,region] of REGIONS.entries())for(const seed of [0,index,17,91])
   for(const point of pending)for(const next of links.get(point)||[])if(!connected.has(next)){connected.add(next);pending.push(next);}
   for(const [name,point] of Object.entries(island.plan))assert(connected.has(key(point.x,point.y+96)),`${region.id}/${seed}: route network misses ${name}`);
 }
-assert.equal(outlines.size,REGIONS.length,'every world has its own outline');
+assert.equal(outlines.size,REGIONS.length,'every world has its own authored terrain or procedural outline');
 
 // Catalog position is identity, never an exponential difficulty multiplier.
 const guardianHp=[];

@@ -218,7 +218,8 @@ export class Game {
     const dy=Math.max(0,Math.abs(entity.y-this.player.y)-this.viewHeight*.5-margin);
     return dx*dx+dy*dy<=sq(entity.r||0);
   }
-  _castStorm() { return this.attacks.castStorm(); }
+  canUseSkill(id) {return !!this.build.getSkill(id)?.acquired&&this.story?.allowsSkill?.(id)!==false;}
+  _castStorm() { return this.canUseSkill('storm')?this.attacks.castStorm():false; }
   _nearest(x,y,range=BALANCE.arrowRange,exclude,originEntity=null,options={}) {
     const origin=originEntity||{x,y,groundY:y+groundOffset(this.player,true)};
     let best=null, d=range*range;
@@ -631,7 +632,7 @@ export class Game {
       const oldX=e._walkStartX??e.x,oldY=e._walkStartY??e.y;
       updateEnemyLocomotion(e,oldX,oldY,dt,this.abilities.isFrozen(e));
     }
-    if(input.skill && p.skillCooldown<=0&&!this.abilities.isFrozen(p)) this._castStorm();
+    if(input.skill && this.canUseSkill('storm')&&p.skillCooldown<=0&&!this.abilities.isFrozen(p)) this._castStorm();
     for(const target of friendlyTargets(this)){
       if(!isFriendlyActive(this,target)||target.invuln>0)continue;
       const foot=friendlyFoot(target);

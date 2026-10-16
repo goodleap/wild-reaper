@@ -241,8 +241,7 @@
           {"speaker": "princess", "text": "别逞强！往采石盆地走，守望者已回应祈愿！"}
         ],
         "sanctuary": [
-          {"speaker": "angel", "text": "药力已尽。留在光环里，我会护住你们。"},
-          {"speaker": "angel", "text": "留在守护之内，坚持到引雷完成。离开光环，誓约便会中断。"}
+          {"speaker": "princess", "text": "药效燃尽了！跟紧我，留在天使的守护光环里，撑到引雷完成！"}
         ],
         "judgment": [{"speaker": "angel", "text": "此雷为护生而降——退开！"}],
         "conversation": [

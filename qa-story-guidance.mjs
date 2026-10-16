@@ -34,6 +34,29 @@ assert.equal(arcs.at(-1)[2],27,'a conversation is a small destination marker, no
 assert.equal(balance,0,'ground drawing restores canvas state for later units');
 assert.deepEqual(labels,[],'the ground ribbon renders no location direction labels');
 
+// A translucent light fill alone disappears on bright terrain. Every chevron
+// needs a dark contour and a narrow light rim, using the same paint at any zoom.
+function ribbonPaint(zoom){
+  const paints=[],stack=[];let state={globalAlpha:.31,lineWidth:1,shadowBlur:0,globalCompositeOperation:'source-over'};
+  const canvas=new Proxy({}, {get:(_,key)=>key==='save'?()=>stack.push({...state}):key==='restore'?()=>{state=stack.pop();}:key==='fill'||key==='stroke'?()=>paints.push({kind:key,...state}):state[key]??(()=>{}),set:(_,key,value)=>(state[key]=value,true)});
+  drawStoryGuideGround(canvas,{...guide,target:null},{zoom});
+  assert.equal(stack.length,0);assert.equal(state.globalAlpha,.31);
+  return paints;
+}
+const paints=ribbonPaint(1),fills=paints.filter(p=>p.kind==='fill'),strokes=paints.filter(p=>p.kind==='stroke');
+const luminance=hex=>{const rgb=hex.match(/[a-f\d]{2}/gi).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
+assert.equal(fills.length,marks.length,'each verified route mark retains one translucent body');
+assert(fills.every(p=>p.globalAlpha>0&&p.globalAlpha<1&&luminance(p.fillStyle)>.8));
+assert.equal(strokes.length,fills.length*2);
+for(let i=0;i<strokes.length;i+=2){
+  const [rim,contour]=strokes.slice(i,i+2);
+  assert(luminance(rim.strokeStyle)>.9&&luminance(contour.strokeStyle)<.08,'light and dark edges cover opposite terrain brightness');
+  assert(rim.lineWidth>contour.lineWidth&&rim.lineWidth-contour.lineWidth<=2,'the bright rim stays narrow');
+  assert(contour.globalAlpha>fills[i/2].globalAlpha,'the outline stays clearer than the translucent fill');
+}
+assert(paints.every(p=>p.shadowBlur===0&&p.globalCompositeOperation==='source-over'),'the ground marks add no blur or luminous blending');
+assert.deepEqual(ribbonPaint(.5),paints);assert.deepEqual(ribbonPaint(1.8),paints);
+
 // Stale or debug-revealed world data must not leak into a chapter's rendering,
 // discovery, unit tally or ambient conversations, including targetless phases.
 const player={id:0,x:0,y:-19.8,hp:100,heroId:'traveler'},princess={id:'princess',x:20,y:-19.8,hp:1,storyActor:true,heroId:'princess'};

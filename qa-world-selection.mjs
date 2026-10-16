@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
-import { harness } from './qa-app-harness.mjs';
+import { harness as createHarness } from './qa-app-harness.mjs';
 import { WORLD_IDS } from './dist/world-definitions.js';
 import { createRiftLayout } from './dist/worlds/rift-layout.js';
 import { groundOffset } from './dist/terrain.js';
 
 // Exercise the normal preparation handlers and their real Game instances.
 // Canvas is mocked here; browser layout and performance need browser checks.
+// Image fetching is mocked with the other rendering dependencies; decode and
+// failure/retry behavior have their own asset QA and real Chromium capture.
+const harness=(search='',options={})=>createHarness(search,{...options,moduleOverrides:{cityDetailArt:{preload:async()=>{},drawProp:()=>false,ready:false},cityArtLibrary:{preload:async()=>{},draw:()=>true,coversPlayer:()=>true}}});
 const worlds=[
   {id:'forest',radio:'world-rift-forest',preview:'world-preview',name:'裂谷林海',width:7200,height:5400},
-  {id:'verdant-rift',radio:'world-verdant-rift',preview:'world-preview-verdant-rift',name:'苍翠断脊',width:14400,height:10800}
+  {id:'verdant-rift',radio:'world-verdant-rift',preview:'world-preview-verdant-rift',name:'苍翠断脊',width:14400,height:10800},
+  {id:'clockshadow-city',radio:'world-clockshadow-city',preview:'world-preview-clockshadow-city',name:'钟影旧都',width:14400,height:10800}
 ];
 const node=(h,id)=>h.document.getElementById(id);
 const click=(h,id)=>h.fire(node(h,id),'click');
@@ -29,17 +33,18 @@ const assertDestination=(h,world)=>{
   assert.equal(layout.bounds.maxX-layout.bounds.minX,world.width);assert.equal(layout.bounds.maxY-layout.bounds.minY,world.height);
   assert.equal(game.player.x,layout.spawn.x);assert.equal(game.player.y+groundOffset(game.player,true),layout.spawn.y);
   assert.equal(node(h,'terrain-name').textContent,world.name);
+  assert(node(h,'story-objective').classList.contains('hidden'),'ordinary exploration never displays an empty story objective');
   assert.equal(h.run('viewWidth'),540,'normal world selection retains standard camera width');
 };
 
 assert.deepEqual(WORLD_IDS.slice(0,8),['forest','marsh','ruins','beach','city','mountain','snow','volcano'],'existing world identities remain stable');
-assert.equal(WORLD_IDS[8],'verdant-rift');
+assert.equal(WORLD_IDS[8],'verdant-rift');assert.equal(WORLD_IDS[9],'clockshadow-city');
 assert.notEqual(createRiftLayout('forest'),createRiftLayout('verdant-rift'),'authored map caches do not alias');
 
 for(const world of worlds){
   const h=harness('',{coarse:true}),rail=node(h,'world-options');click(h,'start-button');
-  assert.equal(rail.children.length,2,'normal preparation exposes exactly the two authored worlds');
-  assert.equal(node(h,'world-count').textContent,'2 张地图');
+  assert.equal(rail.children.length,3,'normal preparation exposes exactly the three authored worlds');
+  assert.equal(node(h,'world-count').textContent,'3 张地图');
   for(const destination of worlds){
     const portrait=node(h,destination.preview);
     assert.equal(portrait.getAttribute('role'),'img');assert.match(portrait.getAttribute('aria-label'),new RegExp(destination.name));
@@ -50,15 +55,16 @@ for(const world of worlds){
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0,'previewing a destination never starts an adventure');
   assert.match(node(h,'prepare-summary').textContent,new RegExp(world.name));
   assert.equal(node(h,'world-mode-note').getAttribute('aria-describedby'),'world-description');
-  assert.match(node(h,'world-description').textContent,world.id==='forest'?/南岸营地/:/西南营地.*跨河桥/);
+  assert.match(node(h,'world-description').textContent,world.id==='forest'?/南岸营地/:world.id==='clockshadow-city'?/南郊驿站.*旧城堡庭院/:/西南营地.*跨河桥/);
   assert.equal(saved(h).worldId,world.id);
   selectMode(h,'dungeon');selectMode(h,'world');assert(node(h,world.radio).checked,'mode switching retains world choice');
   click(h,'prepare-back-button');click(h,'start-button');assert(node(h,world.radio).checked);
   click(h,'prepare-start-button');await h.flush();assertDestination(h,world);
+  click(h,'map-button');assert.match(node(h,'map-legend').textContent,world.id==='clockshadow-city'?/城墙、建筑与深水.*城门、街巷和石桥/:/深绿密林、山壁与深水/);click(h,'close-map');
   const previousGame=h.run('game');quiet(h);h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();
   assertDestination(h,world);assert.notEqual(h.run('game'),previousGame);assert.equal(saved(h).worldId,world.id);
   h.run('home();');click(h,'start-button');assert(node(h,world.radio).checked);
-  const images=h.drawImages();click(h,'prepare-back-button');click(h,'start-button');assert.equal(h.drawImages(),images,'reopening reuses both static world previews');
+  const images=h.drawImages();click(h,'prepare-back-button');click(h,'start-button');assert.equal(h.drawImages(),images,'reopening reuses all static world previews');
   const restored=harness('',{storage:h.storage,coarse:true});click(restored,'start-button');assert(node(restored,world.radio).checked);assert.match(node(restored,'prepare-summary').textContent,new RegExp(world.name));
 }
 
@@ -105,4 +111,4 @@ for(const worldId of [undefined,null,'rift-forest','snow','missing','__proto__',
   }
   assert(!h.fire(rail,'touchstart').defaultPrevented);assert(!h.fire(rail,'touchmove').defaultPrevented);
 }
-console.log('World selection: two normal authored destinations, full-map previews, launch/restart identity, distinct layouts and spawns, 540 camera, remembered independent preferences, legacy fallback, non-selecting focus and resize state passed (VM DOM / mocked Canvas).');
+console.log('World selection: three normal authored destinations, full-map previews, launch/restart identity, distinct layouts and spawns, 540 camera, remembered independent preferences, legacy fallback, non-selecting focus and resize state passed (VM DOM / mocked Canvas).');

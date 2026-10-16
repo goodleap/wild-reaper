@@ -3,7 +3,15 @@
 const TAU=Math.PI*2;
 const finite=point=>point&&Number.isFinite(point.x)&&Number.isFinite(point.y);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-export const ROUTE_RIBBON_RULES=Object.freeze({spacing:42,firstMark:28,opacity:.44,width:28,length:30});
+export const ROUTE_RIBBON_RULES=Object.freeze({spacing:42,firstMark:28,opacity:.56,width:28,length:30});
+const PALETTE=Object.freeze({fill:'#dcf5ff',outline:'#183743',edge:'#f5feff'});
+
+function strokeRibbon(ctx,opacity=1){
+  // The narrow light rim separates the dark contour from shaded ground;
+  // the contour remains readable on pale sand, snow and lunar terrain.
+  ctx.globalAlpha=.76*opacity;ctx.strokeStyle=PALETTE.edge;ctx.lineWidth=4;ctx.stroke();
+  ctx.globalAlpha=.88*opacity;ctx.strokeStyle=PALETTE.outline;ctx.lineWidth=2.2;ctx.stroke();
+}
 
 export function routeRibbonMarks(guide){
   const path=guide?.routePath||guide?.path;if(guide?.complete===false||!Array.isArray(path)||path.length<2)return [];
@@ -37,15 +45,15 @@ export function drawRouteRibbonGround(ctx,guide,{zoom=1,bounds=null}={}){
     ctx.save();ctx.translate(mark.x,mark.y);ctx.rotate(mark.angle);ctx.scale(scale,scale);
     ctx.globalAlpha=ROUTE_RIBBON_RULES.opacity*mark.opacity;
     ctx.beginPath();ctx.moveTo(-15,-14);ctx.lineTo(-2,-14);ctx.lineTo(13,0);ctx.lineTo(-2,14);ctx.lineTo(-15,14);ctx.lineTo(-1,0);ctx.closePath();
-    ctx.fillStyle='#d4f0c5';ctx.fill();ctx.strokeStyle='#f2f7d2';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+    ctx.fillStyle=PALETTE.fill;ctx.fill();strokeRibbon(ctx,mark.opacity);ctx.restore();
   }
   const target=guide.target;
   if(finite(target)&&visible(target,Math.max(80,guide.areaRadius||0))){
     const radius=guide.areaRadius>0?guide.areaRadius:27*scale;
-    ctx.save();ctx.translate(target.x,target.y);ctx.globalAlpha=.35;ctx.strokeStyle='#d4f0c5';ctx.lineWidth=2*scale;
+    ctx.save();ctx.translate(target.x,target.y);
     // An unfilled destination ring remains present after entering the screen.
-    ctx.beginPath();ctx.arc(0,0,radius,0,TAU);ctx.stroke();
-    for(let i=0;i<4;i++){const angle=i*Math.PI/2,x=Math.cos(angle),y=Math.sin(angle);ctx.beginPath();ctx.moveTo(x*(radius+5*scale),y*(radius+5*scale));ctx.lineTo(x*(radius+11*scale),y*(radius+11*scale));ctx.stroke();}
+    ctx.beginPath();ctx.arc(0,0,radius,0,TAU);strokeRibbon(ctx,.75);
+    for(let i=0;i<4;i++){const angle=i*Math.PI/2,x=Math.cos(angle),y=Math.sin(angle);ctx.beginPath();ctx.moveTo(x*(radius+5*scale),y*(radius+5*scale));ctx.lineTo(x*(radius+11*scale),y*(radius+11*scale));strokeRibbon(ctx,.75);}
     ctx.restore();
   }
   ctx.restore();

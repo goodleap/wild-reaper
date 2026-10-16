@@ -57,7 +57,7 @@ export class HumanoidArt {
   }
   _part(c,kind,part,flip,ratio,x=0,y=0){const s=this._sprite(kind,part,flip,ratio);c.drawImage(s.canvas,x-s.ox,y-s.oy,s.w,s.h);}
   draw(c,kind,options={}){
-    const {pose={},entity={},time=0,reduced=false,pixelRatio=2}=options;
+    const {pose={},entity={},time=0,reduced=false,pixelRatio=2,maxPixelRatio=2}=options;
     const appearanceId=options.appearanceId??entity.appearanceId??kind;
     if(DIRECTIONAL_HERO_IDS.has(appearanceId)){
       this.directional??=new DirectionalHeroArt(this.makeCanvas);
@@ -65,7 +65,7 @@ export class HumanoidArt {
     }
     if(!KINDS.has(kind))return false;
     const facing=entity.castFace>0&&Number.isFinite(entity.castFacing)?entity.castFacing:entity.facing||0;
-    const flip=Math.cos(facing)<-.1?-1:1,ratio=clamp(Math.ceil(Number.isFinite(pixelRatio)?pixelRatio:2),1,2);
+    const flip=Math.cos(facing)<-.1?-1:1,ratio=clamp(Math.ceil(Number.isFinite(pixelRatio)?pixelRatio:2),1,clamp(maxPixelRatio,2,8));
     const p={step:0,leftLift:0,rightLift:0,bodyY:0,arm:0,cloth:0,...pose},palette=PALETTES[kind];
     if(kind==='traveler'){this._drawTraveler(c,p,entity,time,reduced,flip,ratio);return true;}
     const cast=entity.castFace>0?Math.sin(Math.PI*clamp(entity.castFace/.25,0,1)):0;

@@ -5,15 +5,24 @@ export function isEditableTarget(target){
   return !!(target?.isContentEditable||target?.closest?.('input,select,textarea,[contenteditable="true"]'));
 }
 
-export function createFocusNavigation(document){
-  let keyboard=true;
-  const noteKeyboard=event=>{if(!['Shift','Control','Alt','Meta'].includes(event.key))keyboard=true;};
-  document.addEventListener('pointerdown',()=>{keyboard=false;},{capture:true});
+export function createFocusNavigation(document,{pointerSurface}={}){
+  let keyboard=false,inputRevision=0;
+  const noteKeyboard=event=>{if(!['Shift','Control','Alt','Meta'].includes(event.key)){keyboard=true;inputRevision++;}};
+  const fromKeyboard=event=>event?.pointerType||event?.detail>0?false:event?.detail===0?true:keyboard;
+  const action=element=>element?.closest?.('button,summary,[role="button"],input[type="button"],input[type="submit"],input[type="reset"]');
+  document.addEventListener('pointerdown',()=>{keyboard=false;inputRevision++;},{capture:true});
   document.addEventListener('keydown',noteKeyboard,{capture:true});
-  document.addEventListener('click',event=>{if(event.detail===0)keyboard=true;else if(event.detail>0)keyboard=false;},{capture:true});
+  document.addEventListener('click',event=>{
+    keyboard=fromKeyboard(event);const revision=++inputRevision;
+    if(keyboard||!action(event.target))return;
+    // A new task is required: browsers can run a capture listener's microtasks
+    // before later target/delegated listeners. Those may replace the control,
+    // focus another action, or open/close a nested dialog. A later pointer or
+    // keyboard action owns its focus and cancels this cleanup.
+    setTimeout(()=>{if(inputRevision===revision)settlePointerAction(event);},0);
+  },{capture:true});
   function capture(event){
-    const fromKeyboard=event?.detail===0?true:event?.detail>0||event?.pointerType?false:keyboard;
-    return {target:document.activeElement,keyboard:fromKeyboard};
+    return {target:document.activeElement,keyboard:fromKeyboard(event)};
   }
   function visible(element){
     if(!element||element.isConnected===false||element.closest?.('.hidden,[hidden],[inert],[aria-hidden="true"]'))return false;
@@ -28,6 +37,14 @@ export function createFocusNavigation(document){
   function surface(element){
     if(!visible(element))return false;
     element.tabIndex=-1;element.focus({preventScroll:true});return true;
+  }
+  function settlePointerAction(event){
+    if(fromKeyboard(event)||!action(event.target))return false;
+    const active=document.activeElement;
+    // Controls that receive text, native choices and intentional focus on
+    // readable content keep their behavior; only operation controls are freed.
+    if(active&&active!==document.body&&!action(active))return false;
+    return surface(pointerSurface?.(event)||active?.closest?.('[role="dialog"],[data-focus-surface]'));
   }
   function enter(scope,preferred,origin=capture()){
     if(origin.keyboard&&usable(preferred)){preferred.focus({preventScroll:true});return;}
@@ -58,5 +75,5 @@ export function createFocusNavigation(document){
       event.preventDefault();(event.shiftKey?last:first).focus({preventScroll:true});
     }
   }
-  return {capture,noteKeyboard,visible,surface,enter,restore,focusable,trap};
+  return {capture,noteKeyboard,visible,surface,enter,restore,focusable,trap,settlePointerAction};
 }

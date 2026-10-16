@@ -31,7 +31,7 @@ function portrait(item,world,large=false){
 }
 function detailHTML(item,world){
   const region=world&&REGIONS.find(region=>region.id===item.id);
-  const note=!world?'触碰入口可自动进入或激活；条件未满足时会先提示。遗迹建筑会保留，奖励不会因往返刷新。':region.authored?.kind==='rift-forest'?(worldNeighbors(REGIONS.indexOf(region)).length?'自由探索：沿自然山口和长桥前往相邻世界，无需击败驻门首领。往返保留本次探索的清理与宝藏进度。':'自由探索：从世界选择进入这张独立地图，沿桥梁、山口与地下通道探索；本图没有跨世界出口。重新出发时重置探索进度。'):'关卡模式：同主题岛屿之间可以往返，挑战核心首领后进入通关门。自由探索：击败驻门首领，获得超级技能并开启跨世界通道。';
+  const note=!world?'触碰入口可自动进入或激活；条件未满足时会先提示。遗迹建筑会保留，奖励不会因往返刷新。':region.authored?.kind==='rift-forest'?(worldNeighbors(REGIONS.indexOf(region)).length?'自由探索：沿自然山口和长桥前往相邻世界，无需击败驻门首领。往返保留本次探索的清理与宝藏进度。':region.authored.artTheme==='city'?'自由探索：从世界选择进入这张独立地图，沿街巷、城门、石桥与地下通道探索；本图没有跨世界出口。重新出发时重置探索进度。':'自由探索：从世界选择进入这张独立地图，沿桥梁、山口与地下通道探索；本图没有跨世界出口。重新出发时重置探索进度。'):'关卡模式：同主题岛屿之间可以往返，挑战核心首领后进入通关门。自由探索：击败驻门首领，获得超级技能并开启跨世界通道。';
   return `<section class="archive-detail world-archive-detail" data-world-archive-detail tabindex="-1">${portrait(item,world,true)}<span class="archive-kicker">${escape(world?'世界 · '+item.theme:item.tag)}</span><h3>${escape(item.name)}</h3>${world?`<div class="archive-detail-section"><h4>环境与挑战</h4><p>${escape(item.risk)}</p></div><div class="archive-detail-section"><h4>探索提示</h4><p>${escape(item.tip)}</p></div>`:`<p class="archive-description">${escape(item.summary)}</p><div class="archive-detail-section"><h4>如何进入</h4><p>${escape(item.trigger)}</p></div><div class="archive-detail-section"><h4>地点特色</h4><p>${escape(item.feature)}</p></div>`}<p class="archive-small-note">${note}</p></section>`;
 }
 export function worldArchiveHTML(options={}){

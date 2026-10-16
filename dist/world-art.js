@@ -1,5 +1,6 @@
-import { REGIONS } from './world-definitions.js';
+import { REGIONS, worldForId } from './world-definitions.js';
 import { biomeZone, CITY_BLOCK, CITY_STREET_HALF_WIDTH } from './biome-layout.js';
+import { paintCityGround, paintCityHouse, paintCityWall } from './city-scenery-art.js';
 
 // Theme artwork is generated once in bounded, world-independent sprite tiles.
 // Raised artwork uses the same foot anchors and silhouettes as Terrain.
@@ -20,16 +21,10 @@ export class WorldArt{
   get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
   _image(key,w,h,dpr,paint){let value=this.cache.get(key);if(value){this.cache.delete(key);this.cache.set(key,value);return value;}const canvas=this.makeCanvas();canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.lineCap='round';c.lineJoin='round';paint(c);value={canvas,w,h,pixels:canvas.width*canvas.height};while(this.pixels+value.pixels>PIXEL_LIMIT&&this.cache.size){const first=this.cache.keys().next().value;this.pixels-=this.cache.get(first).pixels;this.cache.delete(first);}this.cache.set(key,value);this.pixels+=value.pixels;this.builds++;return value;}
   _tile(region,v,zone=0,road=false){return this._image(`ground:${region}:${v}:${zone}:${road}`,TILE,TILE,1,c=>{
+    if(region==='city'){paintCityGround(c,{variant:v,zone,size:TILE,road});return;}
     const p=WORLD_ART_PALETTES[region],r=rng(801+v*71+zone*313+Object.keys(WORLD_ART_PALETTES).indexOf(region)*191);
     c.fillStyle=p.floor;c.fillRect(0,0,TILE,TILE);
-    if(region==='city'){
-      c.fillStyle=road?'#5a625e':zone===1?'#757467':'#79796c';c.fillRect(0,0,TILE,TILE);
-      const cell=road?32:64,rows=TILE/cell;for(let y=-1;y<=rows;y++)for(let x=-1;x<=rows;x++){const xx=x*cell+(y%2?cell*.5:0),yy=y*cell,skew=r()*2;
-        poly(c,[[xx+2,yy+1],[xx+cell-2,yy+1+skew],[xx+cell-1,yy+cell-3],[xx+2,yy+cell-2]],road?['#646c66','#686e66','#70746b','#5e6862'][(x+y+20+v)%4]:['#8b8b79','#94917d','#818576','#8f8d7a'][(x+y+20+v)%4]);
-        stroke(c,[[xx+3,yy+2],[xx+cell-3,yy+2]],road?'#a3b2a325':'#e0d3b544',.8);
-        if(r()>.6)stroke(c,[[xx+cell*.6,yy+2],[xx+cell*.53,yy+cell*.3],[xx+cell*.65,yy+cell*.48]],'#414c464d',.8);
-      }
-    }else if(region==='beach'){
+    if(region==='beach'){
       for(let i=0;i<11;i++){const x=r()*256,y=r()*256;c.beginPath();c.moveTo(x-40,y);c.bezierCurveTo(x-19,y-4,x+6,y+4,x+51,y-1);c.strokeStyle=i%2?'#e7d49e32':'#8c856620';c.lineWidth=.7+r()*1.6;c.stroke();}
       for(let i=0;i<7;i++){const x=9+r()*237,y=8+r()*240;if(i%3){oval(c,x,y,1.7+r()*2,.8+r(),i%2?'#ead9b3':'#948e70');}else{c.beginPath();c.moveTo(x-2,y);c.quadraticCurveTo(x-3,y-4,x,y-5);c.quadraticCurveTo(x+4,y-3,x+3,y);c.closePath();c.fillStyle='#ead9b8';c.fill();stroke(c,[[x,y-4],[x,y]],'#ae9a7780',.6);}}
     }else if(region==='snow'){
@@ -46,6 +41,7 @@ export class WorldArt{
     for(let i=0;i<630;i++){const x=r()*256,y=r()*256;c.fillStyle=i%3?p.light+'17':p.dark+'2c';c.fillRect(x,y,.5+r()*1.5,.4+r()*.7);}
   });}
   drawGround(c,region,camX,camY,w,h,{seed=0}={}){
+    if(worldForId(region).authored?.artTheme==='city')region='city';
     if(!WORLD_ART_PALETTES[region])return false;
     c.fillStyle=WORLD_ART_PALETTES[region].floor;c.fillRect(0,0,w,h);
     const ox=w*.5-camX,oy=h*.5-camY,minX=Math.floor(-ox/TILE),maxX=Math.ceil((w-ox)/TILE),minY=Math.floor(-oy/TILE),maxY=Math.ceil((h-oy)/TILE);
@@ -89,19 +85,7 @@ export class WorldArt{
     else if(reef&&!mountain){for(let i=0;i<12;i++){const x=-25+r()*46,y=-h*.4+r()*(h*.4+15);oval(c,x,y,1+r()*2,.7+r(),i%2?'#d5ceac75':'#5b70637c');}for(let i=0;i<5;i++){const x=-26+r()*49,y=18+r()*8;stroke(c,[[x,y],[x+2,y-4],[x+1,y-7]],'#526f5390',1.3);}}
     else{for(let i=0;i<3;i++){const x=-24+i*17;stroke(c,[[x,-h*.4],[x+3,-h*.25],[x+2,18]],'#272c31',1.4);stroke(c,[[x+1,-h*.4],[x+4,-h*.25]],'#b09d7650',.8);}if(v%2)stroke(c,[[-10,-8],[-3,-14],[3,-12]],'#9d674780',1);}
   });}
-  _building(v){return this._image(`building:${v}`,218,190,2,c=>{
-    c.translate(109,145);const r=rng(220+v*61),wall=['#a49d7f','#b0a184','#9ba18a'][v%3],roof=['#875949','#815144','#956451'][v%3];
-    poly(c,[[-88,-27],[74,-27],[88,-17],[88,22],[74,31],[-74,31],[-88,21]],'#5a6456','#3d4943',1.2);
-    poly(c,[[-78,-63],[70,-63],[76,24],[-75,24]],wall,'#4a5044',1.4);poly(c,[[70,-63],[87,-72],[88,17],[76,24]],'#827f69');
-    for(let y=-51;y<22;y+=15){stroke(c,[[-76,y],[75,y]],'#746f582d',.7);for(let x=-72+(y%2)*10;x<74;x+=29)stroke(c,[[x,y],[x,y+13]],'#5d634439',.6);}
-    for(const x of[-62,0,61]){poly(c,[[x-3,-66],[x+3,-66],[x+3,25],[x-3,25]],'#665b46');stroke(c,[[x-2,-62],[x-2,22]],'#d2bc833e',.8);}poly(c,[[-81,-6],[78,-6],[78,0],[-81,0]],'#6b604b');
-    poly(c,[[-92,-58],[-64,-107],[60,-115],[92,-70],[83,-61],[-72,-55]],roof,'#443e36',1.8);poly(c,[[-64,-107],[60,-115],[66,-107],[-60,-99]],'#c59970');poly(c,[[60,-115],[92,-70],[83,-61],[52,-103]],'#674337');
-    for(let row=0;row<4;row++){const y=-99+row*11,left=-64-row*6,right=60+row*6;stroke(c,[[left,y],[right,y-6]],'#dca87555',1.1);for(let x=left+7+(row%2)*6;x<right-4;x+=15)stroke(c,[[x,y-2],[x+4,y+7]],'#563c3470',.9);}stroke(c,[[-92,-58],[-72,-55],[83,-61]],'#392f2c',2.5);stroke(c,[[-89,-60],[-72,-57],[81,-63]],'#d3a079',1);
-    for(const x of[-43,41]){poly(c,[[x-10,-38],[x-10,-22],[x+10,-22],[x+10,-38]],'#33433b','#6c6249',2);poly(c,[[x-7,-35],[x-1,-35],[x-1,-25],[x-7,-25]],'#bfc39b');stroke(c,[[x,-35],[x,-23]],'#d7c69b',1.1);poly(c,[[x-14,-21],[x+14,-21],[x+14,-18],[x-14,-18]],'#777655');}
-    poly(c,[[-11,24],[-11,-22],[-6,-27],[7,-27],[12,-22],[12,24]],'#554d3b','#bdad87',1.6);for(const x of[-6,0,6])stroke(c,[[x,-20],[x,20]],'#a18b665c',.8);oval(c,7,1,1.5,1.5,'#c1ab71');poly(c,[[-16,23],[16,23],[20,30],[-19,30]],'#a5a58b');stroke(c,[[-16,24],[16,24]],'#e1d8b89a',1);
-    poly(c,[[37,-91],[37,-112],[51,-112],[51,-91]],'#8b8670','#4e5246',1);poly(c,[[35,-114],[53,-114],[53,-109],[35,-109]],'#b4ad8d');for(let y=-108;y<-91;y+=7)stroke(c,[[38,y],[50,y]],'#595f4b',.7);
-    texturedFace(c,[[-77,-51],[73,-51],[73,23],[-76,23]],r,130,'#e1d7b63b','#414b3430');
-  });}
+  _building(v){return this._image(`building:${v}`,218,190,2,c=>paintCityHouse(c,v));}
   _linear(kind,v,angle,halfLength,radius,region){
     const ridge=kind==='world-ridge',volcanic=region==='volcano',wall=kind==='world-city-wall',drift=kind==='world-driftwood',a=angle,l=halfLength,rr=radius;
     const dx=Math.cos(a)*l,dy=Math.sin(a)*l,height=drift?rr*.8:ridge?58:46,halfW=Math.abs(dx)+rr+8,above=Math.abs(dy)+rr+height+8,below=Math.abs(dy)+rr+8;
@@ -109,6 +93,7 @@ export class WorldArt{
       c.translate(halfW,above);const random=rng(681+v*73),nx=-Math.sin(a)*rr,ny=Math.cos(a)*rr;
       if(drift){c.save();c.rotate(a);wood(c,[[-l-rr*.8,-rr*.5],[-l+10,-rr],[l,-rr*.8],[l+rr*.5,0],[l,rr*.7],[-l,rr*.6]],'#b8a27a',random);for(let y=-rr*.65;y<rr*.5;y+=rr*.3)stroke(c,[[-l+5,y],[-l*.25,y+2],[l-7,y-1]],'#675f4780',1);oval(c,-l,0,rr*.45,rr*.8,'#d4c297');for(let i=1;i<3;i++){c.beginPath();c.ellipse(-l,0,rr*.11*i,rr*.22*i,0,0,TAU);c.strokeStyle='#96825c';c.lineWidth=.7;c.stroke();}c.restore();return;}
       const outline=ridge?Array.from({length:10},(_,i)=>{const t=i*TAU/10,side=Math.cos(t)<0?-1:1;const along=side*l+Math.cos(t)*rr,across=Math.sin(t)*rr;return[along*Math.cos(a)-across*Math.sin(a),along*Math.sin(a)+across*Math.cos(a)];}):[[-dx-nx,-dy-ny],[-dx+nx,-dy+ny],[dx+nx,dy+ny],[dx-nx,dy-ny]],upper=outline.map(([x,y],i)=>[x,y-height*(ridge?.81+hash(i+v,37)*.18:1)]);
+      if(wall&&(region==='city'||worldForId(region).authored?.artTheme==='city')){paintCityWall(c,{outline,upper,height,variant:v});return;}
       poly(c,outline,ridge?(volcanic?'#333337':'#47554f'):'#5e6758','#3f4b41',1.2);
       // Draw visible front faces in ground depth order; the height stays vertical.
       for(let i=0;i<outline.length;i++){const j=(i+1)%outline.length;if((outline[i][1]+outline[j][1])*.5<-.001)continue;const pts=[upper[i],upper[j],outline[j],outline[i]];poly(c,pts,ridge?(volcanic?['#51494a','#61544d','#474449'][i%3]:['#6b7971','#7d8d7f','#607367'][i%3]):'#94947c','#404e43',1);texturedFace(c,pts,random,180,'#c8cbb045','#2d3d3557');for(let y=12;y<height;y+=14)stroke(c,[[upper[i][0],upper[i][1]+y],[upper[j][0],upper[j][1]+y]],ridge?'#364a412b':'#4c5c4780',.85);}

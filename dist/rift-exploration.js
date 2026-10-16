@@ -22,14 +22,15 @@ export class RiftExploration {
     if(!generation||game.stage||game.expedition||layout?.kind!=='rift-forest')return;
     this.layout=layout;this.shortcutOpen=false;
     this.namespace=layout.worldId?`${layout.worldId}:`:'';
+    const theme=layout.artTheme?{artTheme:layout.artTheme}:{};
     const spec=layout.interactions??legacyInteractions(layout);
-    for(const cave of spec.caves)this.sites.push({...cave,id:`rift:${this.namespace}${cave.id}`,key:cave.id,kind:'cave',state:'ready',r:45});
+    for(const cave of spec.caves)this.sites.push({...cave,...theme,id:`rift:${this.namespace}${cave.id}`,key:cave.id,kind:'cave',state:'ready',r:45});
     for(const descriptor of spec.gates){
       const gate=layout.passages.find(passage=>passage.gateId===descriptor.id)?.gate;if(!gate)continue;
-      this.sites.push({...descriptor,...gate,id:`rift:${this.namespace}${descriptor.id}`,key:descriptor.key??descriptor.id,gateId:descriptor.id,kind:'shortcut',angle:Math.atan2(gate.by-gate.ay,gate.bx-gate.ax),halfLength:Math.hypot(gate.bx-gate.ax,gate.by-gate.ay)/2,state:'locked',open:false});
+      this.sites.push({...descriptor,...gate,...theme,id:`rift:${this.namespace}${descriptor.id}`,key:descriptor.key??descriptor.id,gateId:descriptor.id,kind:'shortcut',angle:Math.atan2(gate.by-gate.ay,gate.bx-gate.ax),halfLength:Math.hypot(gate.bx-gate.ax,gate.by-gate.ay)/2,state:'locked',open:false});
       game.terrain.setRiftGate?.(descriptor.id,false);
     }
-    for(const chest of spec.chests)this.sites.push({...chest,id:`rift:${this.namespace}${chest.id}`,key:chest.id,kind:'chest',state:'closed',r:22});
+    for(const chest of spec.chests)this.sites.push({...chest,...theme,id:`rift:${this.namespace}${chest.id}`,key:chest.id,kind:'chest',state:'closed',r:22});
   }
   _near(site,r=105){return distance(foot(this.game),site)<=r;}
   _clearApproach(site){const p=foot(this.game);return !this.game.terrain.firstBlocker(p.x,p.y,site.x,site.y,0,'sight');}
@@ -57,7 +58,7 @@ export class RiftExploration {
   interact(id){
     const choice=this.getInteraction();if(!choice||choice.id!==id||!choice.enabled)return false;
     const site=this.sites.find(s=>s.id===id),g=this.game;
-    if(site.kind==='cave')return g.dungeon.enter({id:`rift:${this.namespace}${site.caveId}`,type:'castle',riftCave:true,caveId:site.caveId,entryKey:site.key,name:site.caveName??site.name,x:site.x,y:site.y,door:{x:site.x,y:site.y},interactRadius:105,seed:site.seed});
+    if(site.kind==='cave')return g.dungeon.enter({id:`rift:${this.namespace}${site.caveId}`,type:'castle',riftCave:true,caveId:site.caveId,entryKey:site.key,name:site.caveName??site.name,x:site.x,y:site.y,door:{x:site.x,y:site.y},interactRadius:105,seed:site.seed,...(site.artTheme?{artTheme:site.artTheme}:{})});
     if(site.kind==='shortcut'){
       this.shortcutOpen=true;site.open=true;site.state='cleared';g.terrain.setRiftGate?.(site.gateId,true);
       g._emit('riftShortcutOpened',{name:site.name});return true;
@@ -70,7 +71,7 @@ export class RiftExploration {
   }
   createCaveState(dungeon,site){
     const state=dungeon._makeState(site),mouths=this.sites.filter(s=>s.kind==='cave'&&s.caveId===site.caveId);
-    state.kind='cave';state.name=site.name;state.treasureName=this.namespace?'洞穴遗藏':'暗河遗藏';
+    state.kind='cave';if(site.artTheme)state.artTheme=site.artTheme;state.name=site.name;state.treasureName=site.artTheme==='city'?'旧都遗藏':this.namespace?'洞穴遗藏':'暗河遗藏';
     // A paired mouth occupies a distant explored room of the existing seeded
     // maze. A challenge cave keeps only its original surface return opening.
     const occupied=new Set([state.entranceId,state.bossRoom.id,...state.chests.map(c=>c.cellId)]);

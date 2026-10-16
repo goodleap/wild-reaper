@@ -6,7 +6,7 @@ import { harness, html } from './qa-app-harness.mjs';
 // Real shipped event handlers and Game/build/archive state. Canvas is mocked;
 // scroll dimensions below are fixtures, not a browser/device layout assertion.
 const node=(h,id)=>h.document.getElementById(id);
-const click=(h,id)=>{node(h,id).focus();h.fire(node(h,id),'click');};
+const click=(h,id)=>{const target=node(h,id);h.listeners['document:pointerdown']?.({target,pointerType:'mouse'});target.focus();h.fire(target,'click',{detail:1});h.run(`focusNavigation.settlePointerAction({target:$(${JSON.stringify(id)}),detail:1});`);};
 const selected=(h,expression)=>JSON.parse(h.run(`JSON.stringify(${expression})`));
 const quiet=h=>h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
 const choose=(h,group,id)=>{
@@ -61,11 +61,11 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   assert.match(node(h,'prepare-summary').textContent,/雪原试炼.*帅气王子.*翠羽飞矢/);
   for(const id of ['prepare-archive-button','prepare-help-button']){
     click(h,id);assert.equal(h.run('prepareOpen'),true);key(h,'Escape');
-    assert.equal(h.document.activeElement.id,id);assert.equal(h.run('prepareOpen'),true);
+    assert.equal(h.document.activeElement,prepare);assert.equal(h.run('prepareOpen'),true);
     assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0);
   }
   const images=h.drawImages();click(h,'prepare-back-button');
-  assert.equal(h.run('prepareOpen'),false);assert.equal(h.document.activeElement.id,'start-button');
+  assert.equal(h.run('prepareOpen'),false);assert.equal(h.document.activeElement.id,'intro');
   click(h,'start-button');assert.equal(h.drawImages(),images,'reopening reuses the static preparation portraits');
   const radio=node(h,'weapon-arrow');radio.focus();assert(key(h,'Escape',radio).defaultPrevented);
   assert.equal(h.run('prepareOpen'),false,'Escape works with focus in a radio, before the normal input guard');

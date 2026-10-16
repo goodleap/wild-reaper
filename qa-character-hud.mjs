@@ -126,23 +126,23 @@ for(const eventOrder of [['pointerdown','touchstart'],['touchstart','pointerdown
 }
 run('clearInput();');
 // Entrance feedback is a non-interactive, single text node. It shares the
-// notice lane with routine messages and yields to significant combat notices.
+// notice lane stays separate from significant combat notices.
 assert.equal($('portal-action').querySelectorAll('button,small,kbd').length,0);
 assert.equal($('portal-action').getAttribute('role'),'status');
-run("const savedInteraction=game.getInteraction;game.getInteraction=()=>({id:'qa-hint',type:'supply',label:'走进林间小屋',enabled:true});toastUntil=0;toastPriority=0;updatePortalHUD();");
+run("const savedInteraction=game.getInteraction;game.getInteraction=()=>({id:'qa-hint',type:'supply',label:'走进林间小屋',enabled:true});notifications.clear();updatePortalHUD();");
 assert.equal($('portal-action').textContent,'走进林间小屋');
 assert(!$('portal-action').classList.contains('hidden'));
 assert($('arena').classList.contains('entrance-hint-visible'));
 run("notify('普通提醒',0);");assert(!$('portal-action').classList.contains('hidden'),'routine toast cannot obscure an entrance');
-run("notify('首领即将进攻',3);");assert($('portal-action').classList.contains('hidden'),'important notice takes the shared lane');
-assert(!$('arena').classList.contains('entrance-hint-visible'));
-run('toastUntil=0;toastPriority=0;updatePortalHUD();');assert(!$('portal-action').classList.contains('hidden'));
+run("notify('首领即将进攻',3);");assert(!$('portal-action').classList.contains('hidden'),'important notice cannot hide entrance feedback');
+assert($('arena').classList.contains('entrance-hint-visible'));
+run('notifications.clear();updatePortalHUD();');assert(!$('portal-action').classList.contains('hidden'));
 for(const flag of ['paused','helpOpen','mapOpen','characterOpen']){
   run(`${flag}=true;updatePortalHUD();`);assert($('portal-action').classList.contains('hidden'),`${flag} hides entrance feedback`);
   run(`${flag}=false;updatePortalHUD();`);assert(!$('portal-action').classList.contains('hidden'));
 }
 run("game.sceneTransition.active=true;updatePortalHUD();");assert($('portal-action').classList.contains('hidden'),'scene fade hides the entrance hint');
-run("game.sceneTransition.active=false;game.getInteraction=savedInteraction;toastUntil=0;toastPriority=0;$('toast').classList.remove('visible');updatePortalHUD();");
+run("game.sceneTransition.active=false;game.getInteraction=savedInteraction;notifications.clear();$('toast').classList.remove('visible');updatePortalHUD();");
 // Protection is separate from visible hit blinking; the shipped actor renderer
 // must pass the hurt timer, not the longer invulnerability timer.
 assert.deepEqual(JSON.parse(run(`JSON.stringify((()=>{
