@@ -72,10 +72,10 @@ function reachablePaths(game,goals,radius=22){
 
 const reports=[],networks=new Set();let lakeChecks=0;
 const completeWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'];
-assert.deepEqual(WORLD_IDS,[...completeWorldIds,'ember-realm-large'],'the partial sample appends without changing the complete-world fixtures');
-// These population/loop/objective requirements describe the ten complete
-// maps. The explicitly partial ember scene is checked against its real
-// targets below and by qa-ember-geometry.mjs, not invented full-map content.
+assert.deepEqual(WORLD_IDS,[...completeWorldIds,'ember-realm-large'],'the complete ember world appends without changing the ten existing fixtures');
+// Preserve every original population/loop/objective requirement on the ten
+// existing maps. The complete ember world below uses its authored targets
+// rather than assuming the old random vegetation and mission recipe.
 for(const region of completeWorldIds)for(const seed of [0,7,17]){
   const game=world(region,seed),terrain=game.terrain,island=terrain.island,layout=island.layout;
   game.viewWidth=540;game.viewHeight=540*717/393;
@@ -159,16 +159,28 @@ for(const region of completeWorldIds)for(const seed of [0,7,17]){
   reports.push({region,seed,goals:goals.length,territories:game.territories.groups.length,...reachability,mainSweeps});
 }
 assert.equal(networks.size,completeWorldIds.length,'the ten complete worlds have their own route geometry');
-const sample=new Game({mode:'world',worldId:'ember-realm-large'}),sampleLayout=sample.terrain.island.layout;
-assert.equal(sampleLayout.worldId,'ember-realm-large');assert.equal(sampleLayout.artTheme,'ember');assert.equal(sampleLayout.emberScene?.sample,true,'the reduced content scope must be explicitly declared as a sample');
-const sampleGoals=[
-  ...sampleLayout.areas.map(area=>({id:`area:${area.id}`,...area.center})),
-  ...sample.settlements.sites.map(site=>({id:site.id,...site.door})),
-  ...sample.relicSites.sites.map(site=>({id:site.id,...site.door})),
-  ...sample.riftExploration.sites.filter(site=>site.kind!=='shortcut').map(site=>({id:site.id,x:site.x,y:site.y}))
-];
-assert(sampleGoals.length>0,'the sample exposes real targets for the general body-sweep check');
-const sampleReachability=reachablePaths(sample,sampleGoals);
-for(const route of sampleLayout.routes)assert(!sample.terrain.rift.firstBlocker(route.ax,route.ay,route.bx,route.by,22),`${route.id}: the sample's actual route retains companion-body clearance`);
-reports.push({region:sample.worldId,partial:true,goals:sampleGoals.length,territories:sample.territories.groups.length,...sampleReachability});
-console.log(JSON.stringify({worldLayout:'passed',completeWorlds:completeWorldIds.length,partialWorlds:1,seeds:[0,7,17],bodyRadii:[15,22,49],lakeChecks,reports}));
+for(const seed of [0,7,17]){
+  const game=world('ember-realm-large',seed),layout=game.terrain.island.layout;
+  assert.equal(layout.worldId,'ember-realm-large');assert.equal(layout.artTheme,'ember');assert.equal(layout.emberScene.sample,false);assert.equal(layout.emberScene.revision,2);
+  assert.equal(layout.areas.length,17);assert.equal(layout.passages.length,23);assert.equal(layout.passages.filter(p=>p.kind==='bridge').length,3);
+  assert.equal(layout.encounters.filter(e=>e.kind==='boss').length,2);assert.equal(game.territories.groups.length,layout.encounters.length);
+  assert.equal(game.settlements.sites.filter(site=>site.type!=='angel').length,4);assert.equal(game.relicSites.sites.length,8,'all fixed recruitment and exploration slots become real sites');
+  assert.equal(game.regions.portals.length,0);assert.equal(game.regions.states.size,0);
+  const goals=[
+    ...layout.areas.map(area=>({id:`area:${area.id}`,...area.center})),
+    ...game.settlements.sites.map(site=>({id:site.id,...site.door})),
+    ...game.relicSites.sites.map(site=>({id:site.id,...site.door})),
+    ...game.riftExploration.sites.filter(site=>site.kind!=='shortcut').map(site=>({id:site.id,x:site.x,y:site.y})),
+    ...layout.clearings.map(clearing=>({id:clearing.id,x:clearing.x,y:clearing.y}))
+  ];
+  assert(goals.length>40,'complete-map reachability covers areas, all installed doors, fixed rewards, caves and encounters');
+  const reachability=reachablePaths(game,goals);
+  for(const route of layout.routes)for(const radius of [15,22,49])assert(!game.terrain.rift.firstBlocker(route.ax,route.ay,route.bx,route.by,radius),`${route.id}: actual route retains body clearance r=${radius}`);
+  for(const group of game.territories.groups)for(const enemy of group.members){
+    const point=feet(enemy);assert(game.terrain.isFree(point.x,point.y,enemy.r),`${group.id}: every finite enemy starts in free terrain`);
+    assert(distance(point,enemy.territoryHome)<.001);
+  }
+  assert.deepEqual(population(world(game.worldId,seed)),population(game),'the complete authored population is independent of camera and combat randomness');
+  reports.push({region:game.worldId,seed,goals:goals.length,uniqueGoalCoordinates:new Set(goals.map(point=>`${point.x},${point.y}`)).size,territories:game.territories.groups.length,...reachability});
+}
+console.log(JSON.stringify({worldLayout:'passed',completeWorlds:completeWorldIds.length+1,seeds:[0,7,17],bodyRadii:[15,22,49],lakeChecks,reports}));

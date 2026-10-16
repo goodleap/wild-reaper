@@ -91,9 +91,10 @@ export class Game {
     this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:this.stage?.currentIsland})});
     this.sceneContent=new SceneContent(this,{story:this.mode==='story'});
     const worldContent=this.sceneContent.allows('worldContent');
-    // A partial authored scene supplies its own objectives and encounters.
-    // Ordinary populations remain enabled on every existing complete world.
-    const ambientContent=worldContent&&!this.terrain.island?.layout?.emberScene?.sample;
+    // Fixed Ember locations own their population; existing worlds retain
+    // their original ambient generation and residents.
+    const emberScene=this.terrain.island?.layout?.emberScene;
+    const ambientContent=worldContent&&!emberScene,residentContent=worldContent&&!emberScene?.sample;
     this._islandWorlds=!!this.terrain.island;
     this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
@@ -150,11 +151,11 @@ export class Game {
     this.companions=new Companions(this,{generation:ambientContent&&companions});
     this.superSkills=new SuperSkills(this);this.progression=new CombatProgression(this,{costForTier:crystalCost});this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
     this.abilities=new AbilityRuntime(this);this._abilityCooldowns={fireball:.4,frostbolt:.7};
-    this.settlements??=new Settlements(this,{generation:ambientContent&&settlements});
+    this.settlements??=new Settlements(this,{generation:residentContent&&settlements});
     this.waveDirector=new WaveDirector(this);
     this.discoveredMap=new Set();if(worldContent)this.regions.initialize();
     this.riftExploration=new RiftExploration(this,{generation:worldContent});
-    this.relicSites=new RelicSites(this,{generation:!!(ambientContent&&adventure&&(encounters||companions))});
+    this.relicSites=new RelicSites(this,{generation:!!(residentContent&&adventure&&(encounters||companions))});
     if(this.mode!=='story')this.settlements.ensureAngels?.();
     this.territories=new MonsterTerritories(this,worldContent?{}:{generation:false});
     this.expedition?.initialize();
@@ -495,7 +496,7 @@ export class Game {
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;
     if(!this.regions.restoreWorld(this.mapId)) {
-      const seed=nextIsland?.seed??this.regionIndex,generate=!this.stage?.isBossIsland,ambient=generate&&!this.region.authored?.emberScene?.sample;
+      const seed=nextIsland?.seed??this.regionIndex,generate=!this.stage?.isBossIsland,emberScene=this.region.authored?.emberScene,ambient=generate&&!emberScene,residents=generate&&!emberScene?.sample;
       this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:nextIsland})});this.enemies=[];this.gems=[];this.coins=[];
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.riftExploration=null;this.discoveredMap=new Set();
       this.companions.camps=[];this.companions.generation=ambient&&this._features.companions;this.companions.nextAt=this.time+35;
@@ -506,10 +507,10 @@ export class Game {
       if(this._features.environment)this.environment=new Environment(this,{generation:ambient});
       if(this._features.adventure)this.adventure=new Adventure(this,{generation:ambient});
       if(generate&&this._features.encounters)this.encounters=new Encounters(this,{generation:ambient});
-      this.settlements=new Settlements(this,{generation:ambient&&this._features.settlements});
+      this.settlements=new Settlements(this,{generation:residents&&this._features.settlements});
       this.regions.initialize(portal,fromIndex);
       this.riftExploration=new RiftExploration(this);
-      this.relicSites=new RelicSites(this,{generation:!!(ambient&&this._features.adventure&&(this._features.encounters||this._features.companions))});
+      this.relicSites=new RelicSites(this,{generation:!!(residents&&this._features.adventure&&(this._features.encounters||this._features.companions))});
       this.territories=new MonsterTerritories(this);
     }
     if(this.adventure){this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;}

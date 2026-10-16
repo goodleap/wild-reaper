@@ -169,6 +169,13 @@
         "appearance": "icealtar",
         "name": "冰封祭坛"
       }
+    ],
+    "ember-realm-large": [
+      {
+        "key": "rune",
+        "type": "rune",
+        "name": "赤陶符印"
+      }
     ]
   },
   "relicSiteTypes": {

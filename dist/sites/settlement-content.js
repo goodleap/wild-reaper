@@ -9,9 +9,9 @@ export function settlementInteraction(site){
       if(site.type==='merchant'){label='与商人交易';description='购买一件补给或遗物后，游商将离开';}
       else if(site.type==='supply'||site.type==='occupied'||site.type==='castle') {
         const visited=site.explored||site.state==='spent';
-        if(site.type==='castle'){label=site.featureId?`${visited?'重返':'进入'}${site.name}`:visited?'重返已探索古堡':'进入古堡迷宫';description=visited?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';}
+        if(site.type==='castle'){label=site.featureId||site.region==='ember-realm-large'?`${visited?'重返':'进入'}${site.name}`:visited?'重返已探索古堡':'进入古堡迷宫';description=visited?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';}
         else if(site.type==='supply'){label=`${visited?'重返':'进入'}${site.name}`;description=visited?'补给已领取，可随时进出':'进入屋内搜寻补给箱';}
-        else {label=site.featureId?`${visited?'重返':'进入'}${site.name}`:visited?'重返清理过的小屋':'进入被占据的小屋';description=visited?'宝藏已领取，可随时进出':site.state==='cleared'?'守卫已清除，屋内宝箱等待领取':'清理屋内守卫，搜寻宝箱';}
+        else {label=site.featureId||site.region==='ember-realm-large'?`${visited?'重返':'进入'}${site.name}`:visited?'重返清理过的小屋':'进入被占据的小屋';description=visited?'宝藏已领取，可随时进出':site.state==='cleared'?'守卫已清除，屋内宝箱等待领取':'清理屋内守卫，搜寻宝箱';}
       }
   return {label,description,enabled};
 }

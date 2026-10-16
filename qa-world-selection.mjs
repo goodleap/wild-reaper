@@ -13,7 +13,7 @@ const worlds=[
   {id:'forest',radio:'world-rift-forest',preview:'world-preview',name:'裂谷林海',width:7200,height:5400},
   {id:'verdant-rift',radio:'world-verdant-rift',preview:'world-preview-verdant-rift',name:'苍翠断脊',width:14400,height:10800},
   {id:'clockshadow-city',radio:'world-clockshadow-city',preview:'world-preview-clockshadow-city',name:'钟影旧都',width:14400,height:10800},
-  {id:'ember-realm-large',radio:'world-ember-realm-large',preview:'world-preview-ember-realm-large',name:'熔火之境·区域样板',width:14400,height:10800}
+  {id:'ember-realm-large',radio:'world-ember-realm-large',preview:'world-preview-ember-realm-large',name:'熔火之境',width:14400,height:10800}
 ];
 const node=(h,id)=>h.document.getElementById(id);
 const click=(h,id)=>h.fire(node(h,id),'click');
@@ -34,14 +34,17 @@ const assertDestination=(h,world)=>{
   assert.equal(layout.bounds.maxX-layout.bounds.minX,world.width);assert.equal(layout.bounds.maxY-layout.bounds.minY,world.height);
   assert.equal(game.player.x,layout.spawn.x);assert.equal(game.player.y+groundOffset(game.player,true),layout.spawn.y);
   if(world.id==='ember-realm-large'){
-    assert.equal(game.mapId,10,'the sample appends after the ten existing world identities');
+    assert.equal(game.mapId,10,'the ember world appends after the ten existing world identities');
     assert.equal(layout.artTheme,'ember');
-    assert.equal(game.regions.portals.length,0,'the sample cannot invent travel into an existing world');
-    assert.equal(game.regions.states.size,0,'launching the sample cannot initialize a different world');
-    assert.equal(layout.encounters.filter(encounter=>encounter.kind==='boss').length,0,'the region sample does not add a full-map Boss encounter');
-    assert.equal(game.territories.groups.length,layout.encounters.length,'the sample creates its actual baked encounter reservations');
-    assert.equal(game.enemies.filter(enemy=>enemy.worldBoss).length,0,'the sample creates no undeclared open bosses');
-    assert(game.riftExploration.sites.every(site=>site.id.startsWith('rift:ember-realm-large:')),'sample objectives use their own saved identities');
+    assert.equal(game.regions.portals.length,0,'the ember world cannot invent travel into an existing world');
+    assert.equal(game.regions.states.size,0,'launching the ember world cannot initialize a different world');
+    assert.equal(layout.emberScene.sample,false);assert.equal(layout.areas.length,17);
+    assert.equal(layout.encounters.filter(encounter=>encounter.kind==='boss').length,2,'both authored open Boss encounters launch with the complete map');
+    assert.equal(game.territories.groups.length,layout.encounters.length,'the ember world creates its actual baked encounter reservations');
+    assert.equal(game.enemies.filter(enemy=>enemy.worldBoss).length,2,'the selected complete map creates both existing-system open bosses');
+    assert.equal(game.riftExploration.sites.filter(site=>site.kind==='chest').length,10);assert.equal(game.riftExploration.sites.filter(site=>site.kind==='cave').length,3);
+    assert.equal(game.settlements.sites.filter(site=>site.type!=='angel').length,4);assert.equal(game.relicSites.sites.length,8);
+    assert(game.riftExploration.sites.every(site=>site.id.startsWith('rift:ember-realm-large:')),'ember objectives use their own saved identities');
   }
   assert.equal(node(h,'terrain-name').textContent,world.name);
   assert(node(h,'story-objective').classList.contains('hidden'),'ordinary exploration never displays an empty story objective');
@@ -51,11 +54,11 @@ const assertDestination=(h,world)=>{
 assert.deepEqual(WORLD_IDS.slice(0,8),['forest','marsh','ruins','beach','city','mountain','snow','volcano'],'existing world identities remain stable');
 assert.equal(WORLD_IDS[8],'verdant-rift');assert.equal(WORLD_IDS[9],'clockshadow-city');assert.equal(WORLD_IDS[10],'ember-realm-large');assert.equal(WORLD_IDS.length,11);
 assert.notEqual(createRiftLayout('forest'),createRiftLayout('verdant-rift'),'authored map caches do not alias');
-assert.notEqual(createRiftLayout('ember-realm-large'),createRiftLayout('clockshadow-city'),'the region sample does not reuse a previous map cache');
+assert.notEqual(createRiftLayout('ember-realm-large'),createRiftLayout('clockshadow-city'),'the ember world does not reuse a previous map cache');
 
 for(const world of worlds){
   const h=harness('',{coarse:true}),rail=node(h,'world-options');click(h,'start-button');
-  assert.equal(rail.children.length,4,'normal preparation exposes the three existing authored worlds plus the region sample');
+  assert.equal(rail.children.length,4,'normal preparation exposes the three existing authored worlds plus the ember world');
   assert.equal(node(h,'world-count').textContent,'4 张地图');
   for(const destination of worlds){
     const portrait=node(h,destination.preview);
@@ -67,7 +70,7 @@ for(const world of worlds){
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0,'previewing a destination never starts an adventure');
   assert.match(node(h,'prepare-summary').textContent,new RegExp(world.name));
   assert.equal(node(h,'world-mode-note').getAttribute('aria-describedby'),'world-description');
-  assert.match(node(h,'world-description').textContent,world.id==='forest'?/南岸营地/:world.id==='clockshadow-city'?/南郊驿站.*旧城堡庭院/:world.id==='ember-realm-large'?/桥头.*矿营.*洞口/:/西南营地.*跨河桥/);
+  assert.match(node(h,'world-description').textContent,world.id==='forest'?/南岸营地/:world.id==='clockshadow-city'?/南郊驿站.*旧城堡庭院/:world.id==='ember-realm-large'?/17.*三.*桥.*矿洞/:/西南营地.*跨河桥/);
   assert.equal(saved(h).worldId,world.id);
   selectMode(h,'dungeon');selectMode(h,'world');assert(node(h,world.radio).checked,'mode switching retains world choice');
   click(h,'prepare-back-button');click(h,'start-button');assert(node(h,world.radio).checked);
@@ -123,4 +126,4 @@ for(const worldId of [undefined,null,'rift-forest','snow','missing','__proto__',
   }
   assert(!h.fire(rail,'touchstart').defaultPrevented);assert(!h.fire(rail,'touchmove').defaultPrevented);
 }
-console.log('World selection: three existing authored destinations plus the region sample, full-map previews, launch/restart identity, distinct layouts and spawns, sample encounter ownership, 540 camera, remembered independent preferences, legacy fallback, non-selecting focus and resize state passed (VM DOM / mocked Canvas).');
+console.log('World selection: three existing authored destinations plus the ember world, full-map previews, launch/restart identity, distinct layouts and spawns, complete ember encounter and fixed-site ownership, 540 camera, remembered independent preferences, legacy fallback, non-selecting focus and resize state passed (VM DOM / mocked Canvas).');

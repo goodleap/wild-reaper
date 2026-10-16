@@ -227,7 +227,8 @@ const ordinary=monster(hunt,'slime',100,5.8);hunt._hurtEnemy(ordinary,ordinary.h
 
 const populations=[];
 // This fixture retains the ten existing regional population recipes. The
-// region sample's authored encounters are checked by its launch coverage.
+// ember world's authored encounters and disabled ambient timers are checked
+// by its complete-map integration coverage.
 for(const region of REGIONS.slice(0,10)) {
   const g=arena();g.region=region;g.time=90;g._updatePressure=()=>{};const counts={};const savedRandom=Math.random;
   try {

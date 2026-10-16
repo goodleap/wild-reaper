@@ -29,6 +29,7 @@ import { cityDetailArt } from './city-detail-art.js';
 import { cityArtLibrary } from './city-art-library.js';
 import { CityNativeStructureArt } from './city-native-structure-art.js';
 import { drawEmberProp, drawEmberLandmark } from './ember-art.js';
+import { drawEmberSettlement, emberSettlementVisual } from './ember-site-art.js';
 import { drawNativeCityLandmark, drawNativeCitySettlement, nativeCitySettlementVisual } from './city-native-landmark-art.js';
 import { WorldLayoutArt } from './worlds/world-layout-art.js';
 import { createRiftLayout } from './worlds/rift-layout.js';
@@ -186,7 +187,7 @@ const explorableWorlds=Object.freeze([
   Object.freeze({id:'forest',name:'裂谷林海',radioId:'world-rift-forest',previewId:'world-preview',description:'从南岸营地出发，探索 18 片相连区域。沿桥梁和山口寻找通路，发现隐秘洞穴与荒野领主。'}),
   Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'}),
   Object.freeze({id:'clockshadow-city',name:'钟影旧都',radioId:'world-clockshadow-city',previewId:'world-preview-clockshadow-city',description:'从南郊驿站出发，沿双层城墙、石桥和运河探索古城。穿过市场、工坊与钟楼广场，进入可探索的旧城堡庭院，寻找地下通道、隐秘庭院与古城领主。'}),
-  Object.freeze({id:'ember-realm-large',name:'熔火之境·区域样板',radioId:'world-ember-realm-large',previewId:'world-preview-ember-realm-large',description:'先探索冷却岩桥两侧的桥头、矿营院落与北侧洞口。这里是大型世界的局部样板，其他区域尚未开放。'})
+  Object.freeze({id:'ember-realm-large',name:'熔火之境',radioId:'world-ember-realm-large',previewId:'world-preview-ember-realm-large',description:'探索 17 片相连区域，沿三座岩桥、山口与矿脊捷径穿越熔岩峡谷。从暖灰营地出发，寻找热泉绿洲、三处矿洞、旧铸聚落与熔晶秘谷，挑战火山口和熔炉遗台的领主。'})
 ]);
 const explorationWorld=id=>explorableWorlds.find(world=>world.id===id)||explorableWorlds[0];
 let selectedMode='world',selectedWorldId='forest',selectedDungeonId='survival',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
@@ -1188,7 +1189,7 @@ function drawActorShadows(actors,offsetX=0,offsetY=0,terrain=[],adventureProps=[
     // Query complete visible cache tiles plus caster reach. A fractional camera
     // shift inside this grid must not keep changing its collection of props.
     const minX=Math.floor(b.minX/tile)*tile,minY=Math.floor(b.minY/tile)*tile,maxX=Math.ceil(b.maxX/tile)*tile,maxY=Math.ceil(b.maxY/tile)*tile;
-    const reach=game.worldId==='clockshadow-city'?320:260;
+    const reach=game.worldId==='ember-realm-large'?600:game.worldId==='clockshadow-city'?320:260;
     terrain=game.terrain.query(minX-reach,minY-reach,maxX+reach,maxY+reach);
     adventureProps=adventureSceneProps((minX+maxX)/2,(minY+maxY)/2,maxX-minX,maxY-minY);
   }
@@ -1209,7 +1210,8 @@ function drawActors(actors){for(const actor of sortActors(actors))drawActor(acto
 // Solid terrain shares one world-space source with movement collision. The
 // old decorative trees are retained only on the title screen.
 function terrainInView(camX,camY){const {width,height}=sceneViewport();
-  const reach=game?.worldId==='clockshadow-city'?320:260;
+  // The longest native bridge rail extends 545 units from its anchor.
+  const reach=game?.worldId==='ember-realm-large'?600:game?.worldId==='clockshadow-city'?320:260;
   return game?.terrain?.query(camX-width/2-reach,camY-height/2-reach,camX+width/2+reach,camY+height/2+reach)||[];
 }
 function sceneVisible(entity){return sceneEntityVisible(entity,game?.dungeon?.active?game.dungeon.vision:null);}
@@ -1375,7 +1377,7 @@ function rubbleShadowPaths(prop){
 }
 function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
-    if(prop.visual===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.structureId)continue;
+    if(prop.visual===false||prop.castsShadow===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.structureId)continue;
     const {x,y,r,type,scale=1}=prop;
     if(prop.variant==='city-native'&&['oak','cypress','apple','shrub','ivy','rubble'].includes(prop.cityArt?.sprite)){
       const visual=prop.visual||{},offset=visual.shadowOffset??12,cx=x+SUN.x*offset,cy=y+SUN.y*offset;
@@ -1448,7 +1450,7 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   if(!game.dungeon?.active)for(const portal of game.regions?.portals||[])if(visible({...portal,y:portal.y-30}))props.push({...portal,type:'portal',...(portal.natural?{kind:'exit',angle:Math.atan2(-(portal.arrivalDirection?.y||0),-(portal.arrivalDirection?.x||0)),isRiftLandmark:true}:{}),sortY:portal.y});
   if(!game.dungeon?.active)for(const site of game.riftExploration?.sites||[])if(visible(site))props.push({...site,type:site.kind==='chest'?'treasure':site.kind,state:site.kind==='chest'?(site.state==='claimed'?'opened':'unlocked'):site.state,isRiftLandmark:site.kind!=='chest',sortY:site.y});
   if(!game.dungeon?.active)for(const site of game.settlements?.sites||[]){
-    const visual=game.worldId==='clockshadow-city'?nativeCitySettlementVisual(site):null;
+    const visual=game.worldId==='clockshadow-city'?nativeCitySettlementVisual(site):game.worldId==='ember-realm-large'?emberSettlementVisual(site):null;
     if(site.type!=='merchant'&&Math.abs(site.x-camX)<viewWidth/2+200&&Math.abs(site.y-camY)<viewHeight/2+(visual?350:230))props.push({...site,isSettlement:true,...(visual?{visual,sortY:visual.sortY}:{})});
   }
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest)&&sceneVisible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
@@ -1474,6 +1476,7 @@ function drawAdventureProp(prop){if(prop.isRiftLandmark&&(drawEmberLandmark(ctx,
 }
 function drawMudGround(){
   for(const mud of game.environment?.muds||[]){
+    if(mud.paintedByWorld)continue;
     waterArt.draw(ctx,mud,{...combatOptions,region:game.region.id});
   }
 }
@@ -1806,6 +1809,7 @@ function drawSmallHut(site){
 }
 function drawSettlement(site){
   if(site.type==='merchant')return;
+  if(drawEmberSettlement(ctx,site,{player:game.player,footY:game.player.y+groundOffset(game.player,true)}))return;
   if(game.worldId==='clockshadow-city'&&drawNativeCitySettlement(ctx,site,{library:cityArtLibrary,player:game.player,footY:game.player.y+groundOffset(game.player,true)}))return;
   if(worldSiteArt.drawSettlement(ctx,site,{...combatOptions,player:game.player}))return;
   if(site.type==='supply'||site.type==='occupied'){drawSmallHut(site);return;}
