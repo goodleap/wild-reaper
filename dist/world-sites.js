@@ -15,6 +15,10 @@ export function worldSettlementDefinition(world,definition){
   }
   const theme=worldForId(world).authored?.artTheme==='city'?'city':world;
   const match=Object.values(WORLD_SITE_FEATURES).find(item=>item.world===theme&&item.type===definition.type);
+  if(world==='clockshadow-city'&&['supply','occupied'].includes(definition.type)){
+    const occupied=definition.type==='occupied';
+    return {...definition,...(match?{name:match.name,featureId:match.id}:{}),width:occupied?104:96,depth:occupied?50:46};
+  }
   return match?{...definition,name:match.name,width:match.width,depth:match.depth,featureId:match.id}:definition;
 }
 export const WORLD_HUT_NAMES=config.hutNames;

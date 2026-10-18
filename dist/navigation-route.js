@@ -45,10 +45,11 @@ export function smoothNavigationRoute(path,navigation,radius,profile='ground'){
 // physical props on each leg. An unfinished/failed plan is never advertised as
 // a route to the destination. This is separate from cheap local combat pursuit.
 export class NavigationRoute {
-  constructor(terrain){this.terrain=terrain;this.navigation=terrainNavigation(terrain);this.path=[];this.lengths=[];this.progress=0;this.plans=0;this._revision=-1;this._retryAt=0;this._markOffset=0;}
+  constructor(terrain,{routeBackbone=null}={}){this.terrain=terrain;this.navigation=terrainNavigation(terrain);this.routeBackbone=routeBackbone;this.path=[];this.lengths=[];this.progress=0;this.plans=0;this._revision=-1;this._retryAt=0;this._markOffset=0;}
   _plan(from,target,radius,bodyRadius,profile){
     this.plans++;
-    const nav=this.navigation,backbone=nav.rift?.route(from,target,radius,profile)||[target],path=[copy(from)];
+    const nav=this.navigation,backbone=this.routeBackbone?this.routeBackbone(from,target,radius,profile):nav.rift?.route(from,target,radius,profile)||[target],path=[copy(from)];
+    if(!backbone?.length)return null;
     for(const endpoint of backbone){
       const start=path.at(-1);if(distance(start,endpoint)<.01)continue;
       const clearance=path.length===1?bodyRadius:radius;

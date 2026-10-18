@@ -15,7 +15,7 @@ assert.equal(environment.mechanisms.props.some(vine=>vine.id==='vine:-6,3'),fals
 assert.equal(safeWorld.adventure.spawnTreasure(camp.x,camp.y),null,'a guarded treasure cannot be generated in the reserved camp');
 const g=new Game({mode:'world',environment:false});
 const put=(point)=>{g.player.x=point.x;g.player.y=point.y-groundOffset(g.player,true);g.regionGrace=0;};
-const finish=()=>{for(let i=0;i<30&&g.sceneTransition.active;i++)g.sceneTransition.update(.05);assert.equal(g.sceneTransition.active,false);assert.equal(g.sceneTransition.commitSucceeded,true);};
+const finish=()=>{for(let i=0;i<30&&g.sceneTransition.active;i++)g.sceneTransition.update(.05);assert.equal(g.sceneTransition.active,false);assert.equal(g.sceneTransition.commitSucceeded,true);for(let i=0;i<8&&g.status==='upgrade';i++)assert(g.chooseUpgrade(g.getUpgradeChoices()[0].id),'finish a legitimate quest crystal reward before the next doorway');};
 const request=id=>{assert.equal(g.requestInteraction(id),true,`request ${id}`);finish();};
 assert.equal(g.terrain.island.layout.kind,'rift-forest');
 const exploration=g.riftExploration,layout=exploration.layout;

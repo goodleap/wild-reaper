@@ -25,6 +25,13 @@ assert(game.riftExploration.sites.length,'normal selection creates authored expl
 for(const site of game.riftExploration.sites)assert(site.id.startsWith(`rift:${ID}:`),'objectives carry a map-specific persistent identity');
 const forestIds=new Set(forest.riftExploration.sites.map(s=>s.id));assert(game.riftExploration.sites.every(s=>!forestIds.has(s.id)));
 
+// This suite walks every authored road after the bridge has been repaired.
+// Quest integration separately exercises the initial closure, southern detour,
+// real material collection and repair; keep the live barrier intact until here.
+assert(game.terrain.firstBlocker(1450,-150,1700,-150,game.player.r),'ordinary city entry starts with its quest bridge closed');
+game.quests._record('clock-bridge').objectives.bridge=true;game.quests._applyWorldEffects();
+assert(!game.terrain.firstBlocker(1450,-150,1700,-150,game.player.r),'the repaired bridge joins the authored full-route movement check');
+
 // Walking is isolated from combat outcomes, using the shipped physical movement
 // and navigation with every scenery, hazard, reservation, and body size intact.
 // The separate Chromium suite retains default enemies and exercises real input.

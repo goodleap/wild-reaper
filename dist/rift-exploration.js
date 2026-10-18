@@ -61,6 +61,7 @@ export class RiftExploration {
     if(site.kind==='cave')return g.dungeon.enter({id:`rift:${this.namespace}${site.caveId}`,type:'castle',riftCave:true,caveId:site.caveId,entryKey:site.key,name:site.caveName??site.name,x:site.x,y:site.y,door:{x:site.x,y:site.y},interactRadius:105,seed:site.seed,...(site.artTheme?{artTheme:site.artTheme}:{})});
     if(site.kind==='shortcut'){
       this.shortcutOpen=true;site.open=true;site.state='cleared';g.terrain.setRiftGate?.(site.gateId,true);
+      g.quests?.onShortcutOpened(site);
       g._emit('riftShortcutOpened',{name:site.name});return true;
     }
     if(site.kind==='chest'){

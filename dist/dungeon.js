@@ -75,6 +75,7 @@ export class Dungeon {
     else this._placePlayer(state.landing||state.entrance,{doorway:state.entrance,direction:{x:0,y:-1}});
     if(!state.populated){state.populated=true;interiorSceneFor(state).populate(this,state);if(state.kind==='cave'){const boss=g.enemies.find(e=>e.id===state.bossId);if(boss)boss.name='暗河守卫';}}
     this._clearScene();g._refreshStats();g._refreshWeapons();this.update(0);
+    g.quests?.onDungeonEnter(state,site);
     g._emit('dungeonEnter',{name:state.name,revisit:state.visited.size>1});return true;
   }
   _saveScene(){const state=this.active,g=this.game;if(!state)return;state.enemies=g.enemies;state.gems=g.gems;state.coins=g.coins;state.adventure=g.adventure;}
@@ -108,7 +109,7 @@ export class Dungeon {
     if(g.superSkills)g.superSkills.pending=world.superPending??null;
     if(g.companions){g.companions.camps=world.companionCamps||(world.companionCamp?[world.companionCamp]:[]);g.companions.generation=world.companionGeneration;g.companions.nextAt=Math.max(world.companionNextAt??0,g.companions.nextAt??0);}
     this.active=null;this._world=null;g.regionGrace=Math.max(2,world.regionGrace||0);g.regionTransition={life:.7,maxLife:.7,name:g.stage?.currentIsland?.name||g.region.name,from:state.kind,to:g.region.id};
-    this._clearScene();this._placePlayer(this._returnPoint(world),{doorway:world.door,direction:{x:0,y:1}});g._refreshStats();g._refreshWeapons();g._emit('dungeonExit',{name:state.name,cleared:state.rewardClaimed});return true;
+    this._clearScene();this._placePlayer(this._returnPoint(world),{doorway:world.door,direction:{x:0,y:1}});g._refreshStats();g._refreshWeapons();g.quests?.onDungeonExit(state,caveExit);g._emit('dungeonExit',{name:state.name,cleared:state.rewardClaimed});return true;
   }
   getInteraction(){
     const g=this.game,state=this.active;if(!state||g.status!=='playing')return null;
@@ -119,7 +120,7 @@ export class Dungeon {
       if(state.rewardClaimed&&!state.riftExits)return {id:`${state.id}:treasury-exit`,type:'dungeonExit',label:'携宝返回荒野',x:state.treasure.x,y:state.treasure.y,enabled:true};
     }
     const chest=state.chests.find(c=>c.state==='closed'&&this._near(c,62)&&this.vision.isVisible(c.x,c.y));
-    if(chest){const guarded=g.enemies.some(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===chest.cellId);return {id:chest.id,type:'dungeonChest',label:guarded?'清理房间守卫':state.kind==='hut'?`打开${state.treasureName||'小屋补给'}`:state.kind==='cave'?'打开洞窟宝箱':'打开古堡宝箱',description:guarded?'击败本房间守卫后开启':'金币、灵晶与恢复补给',x:chest.x,y:chest.y,enabled:!guarded};}
+    if(chest){const guarded=g.enemies.some(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===chest.cellId),questLabel=g.quests?.chestLabel(state,chest);return {id:chest.id,type:'dungeonChest',label:guarded?'清理房间守卫':questLabel||(state.kind==='hut'?`打开${state.treasureName||'小屋补给'}`:state.kind==='cave'?'打开洞窟宝箱':'打开古堡宝箱'),description:guarded?'击败本房间守卫后开启':questLabel?'任务零件与屋内补给':'金币、灵晶与恢复补给',x:chest.x,y:chest.y,enabled:!guarded};}
     return null;
   }
   interact(id){
@@ -127,7 +128,8 @@ export class Dungeon {
     if(choice.type==='dungeonExit')return this.exit(choice.id);
     if(choice.type==='dungeonChest'){
       const chest=state.chests.find(c=>c.id===id);if(!chest||chest.state!=='closed')return false;
-      return interiorSceneFor(state).claimChest(this,state,chest);
+      const claimed=interiorSceneFor(state).claimChest(this,state,chest);
+      if(claimed)g.quests?.onChestClaimed(state,chest);return claimed;
     }
     if(choice.type==='castleTreasure'){
       if(!state.bossDefeated||state.rewardClaimed||state.rewardPending||!g.superSkills)return false;

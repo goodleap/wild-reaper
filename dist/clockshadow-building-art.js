@@ -19,8 +19,8 @@ function arch(c,x,y,w,h,color,edge=EDGE){const r=Math.min(w/2,h*.55);c.beginPath
 function spec(prop){const kind=prop.cityKind==='church'?'cathedral':prop.cityKind||prop.cityArt?.sprite||'house';return{kind,w:Math.max(4,finite(prop.width,60)),d:Math.max(4,finite(prop.depth,40)),h:Math.max(0,finite(prop.height,65)),v:typeof prop.style==='number'?Math.abs(prop.style)%4:seedOf(prop.style??prop.cityArt?.style??prop.area)%4};}
 const BUILDINGS=new Set(['house','keep','wing','barracks','warehouse','stable','workshop','school','cathedral']);
 function roofProjection(q){
-  const wall=q.h*.88,front=q.d/2-wall,back=-q.d/2-wall,ridge=-q.h;
-  return{wall,front,back,ridge,minY:Math.min(back,ridge),frontSpan:front-ridge,rearSpan:Math.max(0,ridge-back)};
+  const wall=q.h*.78,front=q.d/2-wall,back=-q.d/2-wall,rise=Math.min(q.w*.2,q.h*.34),ridge=front-rise,backRidge=back-rise,side=Math.min(28,q.w*.15,q.d*.42);
+  return{wall,front,back,ridge,backRidge,side,rise,minY:backRidge,frontSpan:rise,rearSpan:0};
 }
 function buildingParts(q){
   const grand=['keep','wing','barracks','cathedral'].includes(q.kind),target=grand?128:96;
@@ -33,7 +33,7 @@ function buildingParts(q){
     {...q,d:frontDepth,offsetY:rearDepth/2,role:'building'}
   ];
 }
-function roofAttachment(q,t){const r=roofProjection(q);return r.ridge+(r.front-r.ridge)*t;}
+function roofAttachment(q,t){const r=roofProjection(q);return r.backRidge+q.d*t+r.rise*.52;}
 function buildingTop(q){
   if(q.role==='annex')return-q.d/2-q.h;
   if(q.role==='courtyard')return-q.d/2-Math.min(30,q.h);
@@ -67,33 +67,51 @@ function door(c,x,F,w,h,p,{open=false}={}){
 }
 function window(c,x,y,w,h,p,lit=false){arch(c,x,y,w+4,h+4,p.light);arch(c,x,y,w,h,lit?'#d6b674':'#5d7771');line(c,x,y-h+2,x,y-1,WOOD_LIGHT,1.3);line(c,x-w*.45,y-h*.43,x+w*.45,y-h*.43,WOOD_LIGHT,1.1);line(c,x-w*.65,y+2,x+w*.65,y+2,p.shade,2.2);}
 function roof(c,q,p){
-  const {w,v}=q,L=-w/2,R=w/2,r=roofProjection(q),inset=Math.min(22,w*.12),rearY=r.back,frontY=r.front,ridgeY=r.ridge;
-  const rear=[[L-2,rearY],[R+2,rearY],[R-inset,ridgeY],[L+inset,ridgeY]],front=[[L+inset,ridgeY],[R-inset,ridgeY],[R+2,frontY],[L-2,frontY]];
-  // Both eaves project from their real ground edges. The ridge belongs to the
-  // middle of this roof, never to the building's back ground corner.
-  if(r.rearSpan>0){
-    poly(c,rear,p.roofShade);c.save();poly(c,rear,null,null);c.clip();
-    const rows=Math.max(1,Math.ceil(r.rearSpan/24));for(let row=1;row<rows;row++){const y=rearY+r.rearSpan*row/rows;line(c,L,y,R,y,p.roof,1.3);}
-    c.restore();line(c,L-1,rearY,R+1,rearY,p.roofLight,1.5);
+  const {w,d,v}=q,L=-w/2,R=w/2,r=roofProjection(q),s=r.side;
+  const backPeak=[s/2,r.backRidge],frontPeak=[-s/2,r.ridge],backLeft=[L+s-2,r.back],frontLeft=[L-2,r.front],backRight=[R+2,r.back],frontRight=[R-s+2,r.front];
+  const left=[backLeft,backPeak,frontPeak,frontLeft],right=[backPeak,backRight,frontRight,frontPeak];
+  // Both slopes rise to one longitudinal ridge. Its front end stands above
+  // an exposed triangular gable; the back end uses the same oblique depth as
+  // the side wall, so the roof cannot read as an inset tray or a flat facade.
+  poly(c,[[L,r.front],frontPeak,[R-s,r.front]],p.light);
+  line(c,-s/2,r.ridge+5,-s/2,r.front-2,WOOD,1.8);
+  for(const [shape,color,edgeSide]of[[left,p.roofLight,-1],[right,p.roof,1]]){
+    poly(c,shape,color);c.save();poly(c,shape,null,null);c.clip();
+    const rows=Math.max(2,Math.ceil(w/55)),span=(w-s)/2;
+    for(let row=1;row<rows;row++){
+      const t=row/rows,bx=s/2+edgeSide*span*t,fx=-s/2+edgeSide*span*t,by=r.backRidge+r.rise*t,fy=r.ridge+r.rise*t;
+      line(c,bx,by,fx,fy,p.roofShade,1.2);line(c,bx+edgeSide*1.5,by-.8,fx+edgeSide*1.5,fy-.8,color===p.roof?p.roofLight:'#d2c7a55c',.7);
+      const tiles=Math.max(2,Math.ceil(d/32));
+      for(let n=0;n<tiles;n++){
+        const u=(n+(row%2)*.5)/tiles;if(u>=1)continue;
+        const x=bx+(fx-bx)*u,y=by+(fy-by)*u;
+        line(c,x,y,x+edgeSide*span/rows,y+r.rise/rows,p.roofShade,.8);
+      }
+    }
+    c.restore();
   }
-  poly(c,front,p.roof);c.save();poly(c,front,null,null);c.clip();
-  const rows=Math.max(2,Math.ceil(r.frontSpan/22)),step=r.frontSpan/rows;
-  for(let row=1;row<rows;row++){
-    const y=ridgeY+row*step;line(c,L,y,R,y,p.roofShade,1.4);line(c,L+3,y-2,R-3,y-2,p.roofLight,.7);
-    for(let col=0;col<w/38+1;col++){const x=L+col*38+(row%2)*19;if((col+row+v)%3!==0)line(c,x,y+1,x+2,y+step-2,p.roofShade,.7);}
-  }
-  if(v===2)poly(c,[[L+w*.15,ridgeY+r.frontSpan*.58],[L+w*.36,ridgeY+r.frontSpan*.59],[L+w*.34,ridgeY+r.frontSpan*.69],[L+w*.14,ridgeY+r.frontSpan*.68]],'#8b9a7890',null);
-  c.restore();
-  poly(c,[[L-2,rearY],[L+inset,ridgeY],[L-2,frontY]],p.roofLight,EDGE,1.3);poly(c,[[R+2,rearY],[R+2,frontY],[R-inset,ridgeY]],p.roofShade,EDGE,1.3);
-  line(c,L+inset,ridgeY,R-inset,ridgeY,p.roofLight,3);line(c,L-2,frontY+1,R+2,frontY,EDGE,3);line(c,L+1,frontY-2,R-1,frontY-2,p.roofLight,1.3);
+  line(c,...backPeak,...frontPeak,EDGE,3.8);line(c,backPeak[0]-1,backPeak[1]-1,frontPeak[0]-1,frontPeak[1]-1,p.roofLight,2.5);
+  line(c,...frontLeft,...frontPeak,p.roofShade,3.8);line(c,...frontPeak,...frontRight,p.roofShade,3.8);
+  line(c,frontLeft[0]+2,frontLeft[1]-2,frontPeak[0],frontPeak[1]-2,p.roofLight,1.8);
+  line(c,frontPeak[0]+1,frontPeak[1]-2,frontRight[0]-2,frontRight[1]-2,p.roofLight,1.8);
+  line(c,...backLeft,...frontLeft,p.roofShade,2.8);line(c,...backRight,...frontRight,EDGE,2.8);
+  if(v===2){const x=R-s*.7-8,y=r.front-d*.3;line(c,x-7,y-4,x-3,y+4,'#8d9d78',2);}
 }
 function house(c,q,p){
-  const {w,d,h,v,kind}=q,L=-w/2,R=w/2,F=d/2,B=-d/2,wall=roofProjection(q).wall,top=F-wall,annex=kind==='workshop'||kind==='house'&&v===1;
-  if(annex&&w>150){stone(c,L,B-wall,w*.7,d+wall,p,v);stone(c,w*.2,B-wall*.72,w*.3,d+wall*.72,p,v);}else stone(c,L,B-wall,w,d+wall,p,v);line(c,L,F,R,F,EDGE,2);box(c,L,F-6,w,6,p.shade);line(c,L+2,F-6,R-2,F-6,p.light,1.5);
+  const {w,d,h,v,kind}=q,L=-w/2,R=w/2,F=d/2,B=-d/2,r=roofProjection(q),wall=r.wall,top=F-wall,frontR=R-r.side;
+  // The thin foundation retains the exact authored solid rectangle. Above
+  // it, the visible side and front wall share the roof's oblique projection.
+  box(c,L,B,w,d,p.shade);line(c,L,F,R,F,EDGE,2);
+  poly(c,[[frontR,top],[R,B-wall],[R,B],[frontR,F]],p.shade);
+  line(c,frontR,top,frontR,F,EDGE,1.5);
+  for(let y=F-22;y>top+4;y-=22)line(c,frontR+2,y,R-2,y-d,p.stone,1);
+  stone(c,L,top,w-r.side,wall,p,v);
+  line(c,L+r.side,B-wall,L+r.side,B,p.light,1.4);line(c,L,top,L,F,EDGE,1.8);
+  box(c,L,F-6,w,6,p.shade);line(c,L+2,F-6,R-2,F-6,p.light,1.5);
   const royal=['keep','wing','barracks'].includes(kind),church=kind==='cathedral',timber=!royal&&!church;
-  if(timber){for(const x of[L+6,R-9]){box(c,x,top,4,wall-6,WOOD);line(c,x+1,top+2,x+1,F-7,WOOD_LIGHT,1);}if(v%2)line(c,L+9,top+4,L+w*.25,F-8,WOOD,2.6);}
-  const count=Math.max(2,Math.floor(w/75)),dw=Math.min(34,w*.19),dh=Math.min(wall-6,church?52:38);
-  if(!['stable','warehouse'].includes(kind))for(let i=0;i<count;i++){const x=L+(i+.5)*w/count;if(Math.abs(x)<dw*.85)continue;window(c,x,F-12,Math.min(19,w/count*.27),Math.min(wall*.55,church?37:26),p,(i+v)%3===0);}
+  if(timber){for(const x of[L+5,frontR-8]){box(c,x,top,4,wall-6,WOOD);line(c,x+1,top+2,x+1,F-7,WOOD_LIGHT,1);}if(v%2&&w>130)line(c,L+9,top+4,L+w*.25,F-8,WOOD,2.6);}
+  const count=Math.max(2,Math.floor((w-r.side)/75)),dw=Math.min(34,w*.19),dh=Math.min(wall-6,church?52:38);
+  if(!['stable','warehouse'].includes(kind))for(let i=0;i<count;i++){const x=L+(i+.5)*(w-r.side)/count;if(Math.abs(x)<dw*.85)continue;window(c,x,F-12,Math.min(19,(w-r.side)/count*.27),Math.min(wall*.55,church?37:26),p,(i+v)%3===0);}
   if(kind==='stable'){
     for(const x of[-w*.24,w*.24])door(c,x,F-3,Math.min(48,w*.3),Math.min(wall-8,55),p,{open:true});
     for(const x of[L+5,-3,R-8]){box(c,x,top,4,wall-5,WOOD);line(c,x+1,top,x+1,F-7,WOOD_LIGHT,1);}
@@ -107,28 +125,17 @@ function house(c,q,p){
   }else if(kind==='workshop'){door(c,-w*.08,F-2,Math.min(w*.26,54),Math.min(wall-7,48),p,{open:true});arch(c,-w*.08,F-8,Math.min(23,w*.14),Math.min(23,wall*.33),'#826849',null);ellipse(c,-w*.08,F-14,7,4,'#d5a868');}
   else door(c,0,F-2,dw,dh,p);
   if(wall>105&&!['stable','workshop','warehouse','cathedral'].includes(kind)){
-    for(const x of[-w*.25,w*.25].filter(x=>!annex||x<w*.2))window(c,x,F-wall*.61,Math.min(19,w*.1),Math.min(28,wall*.23),p);
+    for(const x of[-w*.25,w*.25])window(c,x,F-wall*.61,Math.min(19,w*.1),Math.min(28,wall*.23),p);
     if(timber)line(c,L+7,F-wall*.53,R-7,F-wall*.53,WOOD,2.5);
   }
-  if(annex&&w>150){
-    c.save();c.translate(-w*.15,0);roof(c,{...q,w:w*.7},p);c.restore();
-    c.save();c.translate(w*.35,0);roof(c,{...q,w:w*.3,h:h*.72},p);c.restore();
-    line(c,w*.2,F-wall*.72,w*.2,F-6,WOOD,3);
-  }else roof(c,q,p);
+  roof(c,q,p);
+  if(timber&&w>120&&r.rise>20)window(c,-r.side/2,top-4,Math.min(15,w*.08),Math.min(15,r.rise*.52),p,v%2===0);
 
-  if(timber&&!['warehouse','stable','workshop'].includes(kind)&&w>150&&h>60){
-    const x=(v%2?-.2:.2)*w,gw=Math.min(56,w*.26),base=top+2,peak=base-Math.min(40,h*.34);
-    // A small roof dormer and projecting front gable keep neighbouring homes
-    // recognisable without changing the grounded silhouette or entrance.
-    poly(c,[[x-gw/2,base],[x-gw/2,base-15],[x,peak],[x+gw/2,base-15],[x+gw/2,base]],p.stone);
-    poly(c,[[x-gw/2-3,base-13],[x,peak-4],[x+gw/2+3,base-13],[x+gw/2,base-10],[x,peak],[x-gw/2,base-10]],p.roofShade);
-    line(c,x-gw/2-2,base-14,x,peak-3,p.roofLight,1.8);window(c,x,base-3,Math.min(15,gw*.28),Math.min(20,base-peak-11),p,v%2===0);
-  }
   if(v===0||v===3){const x=L+10;for(let k=0;k<4;k++){const y=F-8-k*7;line(c,x,y,x+2,y-10,'#6d815a',1.3);poly(c,[[x,y-2],[x-5,y-7],[x-4,y-11],[x+1,y-7]],'#87996a',null);poly(c,[[x+1,y-6],[x+7,y-9],[x+8,y-5],[x+3,y-3]],'#9ba97a',null);}}
   if(kind==='workshop'){
     const x=L+w*.16,y=roofAttachment(q,.26)-17;stone(c,x-10,y-20,20,42,p,v);box(c,x-13,y-23,26,6,p.light,EDGE);box(c,x-8,y-21,16,4,DARK);line(c,x-7,y-8,x+8,y-8,p.shade,1.2);
     const sx=w*.34,sy=F-wall*.4;line(c,sx,sy-12,sx,sy+5,WOOD,2);box(c,sx-10,sy-9,20,15,p.roofShade,EDGE);line(c,sx-4,sy+1,sx+4,sy-5,p.light,2.2);line(c,sx+1,sy-7,sx+6,sy-2,p.light,4);
-  }else if(['house','warehouse'].includes(kind)&&v!==3){const x=L+w*(annex?.38:.75),y=roofAttachment(q,.26)-11;stone(c,x-7,y-15,14,23,p,v);box(c,x-9,y-17,18,4,p.light,EDGE);box(c,x-5,y-15,10,3,p.shade);}
+  }else if(['house','warehouse'].includes(kind)&&v!==3){const x=L+w*.75,y=roofAttachment(q,.26)-11;stone(c,x-7,y-15,14,23,p,v);box(c,x-9,y-17,18,4,p.light,EDGE);box(c,x-5,y-15,10,3,p.shade);}
   if(kind==='warehouse'){const x=-w*.23,y=roofAttachment(q,.62)-7;poly(c,[[x-13,y+8],[x,y-6],[x+13,y+8]],p.roofShade);box(c,x-9,y+5,18,10,p.shade,EDGE);for(const dx of[-5,0,5])line(c,x+dx,y+6,x+dx,y+13,p.light,1);}
 
   if(royal){
@@ -159,17 +166,17 @@ function tower(c,q,p){
 }
 function gate(c,q,p){
   const {w,d,h}=q,L=-w/2,R=w/2,F=d/2,B=-d/2,vertical=d>w,pier=Math.min(32,(vertical?d:w)*.11);
-  if(vertical){for(const y of[B,F-pier]){c.save();c.translate(0,y+pier/2);wall(c,{...q,d:pier},p);c.restore();}return;}
+  // Grounded piers are separate authored solid structures. The vertical
+  // opening has no overhead span; painting wall stubs here made fake posts
+  // that actors could walk through. Horizontal gates retain only their beam.
+  if(vertical)return;
   const spring=F-h*.48,top=B-h+8,innerTop=top+Math.min(24,h*.26);
-  for(const x of[L,R-pier]){stone(c,x,spring-6,pier,F-spring+6,p);box(c,x,F-7,pier,7,p.shade);line(c,x,F-7,x+pier,F-7,p.light,2);box(c,x-1,spring-6,pier+2,7,p.light,EDGE);}
   // A complete stone arch with true negative space, not an opaque facade
   // stretched across the route. The outer and inner curves share springing.
   c.beginPath();c.moveTo(L+pier*.48,spring);c.quadraticCurveTo(L+w*.2,top,0,top);c.quadraticCurveTo(R-w*.2,top,R-pier*.48,spring);c.lineTo(R-pier,spring);c.quadraticCurveTo(R-w*.23,innerTop,0,innerTop);c.quadraticCurveTo(L+w*.23,innerTop,L+pier,spring);c.closePath();c.fillStyle=p.stone;c.fill();c.strokeStyle=EDGE;c.lineWidth=2;c.stroke();
   c.beginPath();c.moveTo(L+pier*.58,spring-2);c.quadraticCurveTo(L+w*.2,top+3,0,top+3);c.quadraticCurveTo(R-w*.2,top+3,R-pier*.58,spring-2);c.strokeStyle=p.light;c.lineWidth=3;c.stroke();
   for(const side of[-1,1])for(let i=1;i<=4;i++){const t=i/5,x=side*(w/2-pier*.75)*t,y=top+(spring-top)*t*t,iy=innerTop+(spring-innerTop)*t*t;line(c,x,y+3,x-side*3,iy-2,p.shade,1.6);}
   poly(c,[[-7,top+1],[7,top+1],[5,innerTop+4],[-5,innerTop+4]],p.light,EDGE,1.2);
-  for(const x of[L+pier*.5,R-pier*.5]){const y=F-17;box(c,x-4,y-13,8,12,'#d4b77b',EDGE);line(c,x-6,y-14,x+6,y-14,WOOD,2);}
-  moss(c,L,F,pier,0);moss(c,R-pier,F,pier,1);
 }
 
 function lantern(c,x,y,h=28){line(c,x,y,x,y-h,WOOD,3);line(c,x,y-h,x+9,y-h+1,WOOD,3);box(c,x+4,y-h+3,11,14,'#d8ba7f',EDGE);box(c,x+7,y-h+5,5,10,'#f1df9c');poly(c,[[x+2,y-h+3],[x+9,y-h+3-5],[x+17,y-h+3]],WOOD,EDGE,1);}
@@ -206,7 +213,34 @@ function small(c,q,p){
   if(kind==='lamp'){ellipse(c,0,F-1,w*.38,d*.36,p.shade,EDGE);c.save();c.translate(-9,0);lantern(c,0,F-3,h-3);c.restore();return;}
   if(kind==='banner'){line(c,L+4,F,L+4,B-h+4,WOOD,3);flag(c,0,B-h+5,w*.8,h*.65,p);return;}
   if(kind==='ruin'){ruin(c,q,p);return;}
-  if(kind==='sewer'){stone(c,L,B-h*.52,w,d+h*.52,p,v);arch(c,0,F-2,w*.68,h*.82,DARK,p.light);line(c,-w*.32,F,w*.32,F,p.light,3);moss(c,L,F,w,v);return;}
+  if(kind==='sewer'){
+    const R=w/2,rim=Math.max(7,w*.12),inner=w-rim*2,landing=B+d*.44;
+    // A ground-level stair mouth descends toward a small dark vaulted landing.
+    // Open treads face the same front interaction anchor; no slab seals it.
+    poly(c,[[L+3,B+2],[R-3,B+2],[R,F-2],[L,F-2]],p.shade,EDGE,1.5);
+    poly(c,[[L+rim,B+8],[R-rim,B+8],[R-rim+2,F-3],[L+rim-2,F-3]],DARK,null);
+    stone(c,L+rim-3,B-4,inner+6,9,p,v);
+    arch(c,0,landing,inner*.88,h*.6,DARK,p.shade);
+    arch(c,0,landing-1,inner*.67,h*.49,'#263b35',null);
+    const steps=5,span=F-landing-4;
+    for(let i=0;i<steps;i++){
+      const t=i/steps,y=landing+span*t,sw=inner*(.72+.28*t),step=span/steps;
+      box(c,-sw/2,y,sw,step,i<2?p.shade:p.stone);
+      line(c,-sw/2,y+step-1,sw/2,y+step-1,i<2?'#768674':p.light,1.8);
+      line(c,-sw/2,y+.5,sw/2,y+.5,'#536454',1.1);
+    }
+    for(const side of[-1,1]){
+      const x=side<0?L:R-rim;
+      poly(c,[[x,B-5],[x+rim,B-5],[x+rim,F-4],[x,F-4]],p.stone,EDGE,1.5);
+      poly(c,[[x,B-5],[x+rim,B-5],[x+rim-1,B+1],[x+1,B+1]],p.light,null);
+      line(c,x+2,B-3,x+2,F-7,p.light,2);
+      for(let y=B+13;y<F-6;y+=16)line(c,x+1,y,x+rim-1,y,p.shade,1.2);
+    }
+    line(c,L+rim-2,F-3,R-rim+2,F-3,p.light,3);
+    moss(c,L,F,rim,v);moss(c,R-rim,F,rim,v+1);
+    const lx=R-rim/2;box(c,lx-3,B-14,6,10,'#dcc589',EDGE);line(c,lx-5,B-15,lx+5,B-15,WOOD,2);
+    return;
+  }
   if(kind==='planter'||kind==='shrub'||kind==='rubble'){poly(c,[[L,F-5],[L+3,B],[w/2-3,B],[w/2,F-5],[w/2-3,F],[L+3,F]],p.shade);line(c,L+2,F-5,w/2-2,F-5,p.light,2);for(let n=0;n<5;n++){const x=L+(n+.5)*w/5,y=B-h*(.35+noise(n+v,7)*.4);poly(c,[[x-w*.17,F-6],[x-w*.19,y+5],[x-w*.08,y-3],[x+w*.09,y-1],[x+w*.2,y+8],[x+w*.17,F-6]],kind==='rubble'?p.stone:n%2?'#879b6d':'#6d875d',kind==='rubble'?EDGE:'#4e694b',1.3);}return;}
   if(kind==='fountain'){ellipse(c,0,1,w*.49,d*.49,p.shade,EDGE);ellipse(c,0,-2,w*.46,d*.41,p.light,EDGE);ellipse(c,0,-3,w*.37,d*.3,'#719b9a');stone(c,-w*.09,-h*.65,w*.18,h*.65,p);ellipse(c,0,-h*.66,w*.25,d*.2,p.light,EDGE);ellipse(c,0,-h*.68,w*.18,d*.13,'#8db6ae');line(c,0,-h*.9,0,-h*.7,'#cee2c8',2);return;}
   if(kind==='statue'){stone(c,L,F-h*.3,w,h*.3,p);poly(c,[[-w*.22,F-h*.3],[-w*.15,B-h*.7],[w*.15,B-h*.7],[w*.22,F-h*.3]],p.stone);ellipse(c,0,B-h*.8,w*.13,h*.13,p.light,EDGE);poly(c,[[-w*.3,B-h*.53],[-w*.21,B-h*.72],[w*.2,B-h*.72],[w*.32,B-h*.5]],p.light);return;}

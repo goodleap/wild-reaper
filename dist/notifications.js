@@ -55,7 +55,8 @@ export function combatNotifications(events,{game,boss,armyFull=false}={}){
   else if(has('portalOpened')&&!has('bossKill'))add('新通路已开放',2,'portal-open','↗');
   if(has('stonevaultOpened'))add('岩灵破开封石 · 秘藏入口已打开',2,'stonevault-open','↗');
   for(const event of events){
-    if(event.type==='evolution')add(`${event.name} · ${event.weaponId==='orbit'?'武器进化':'分支解锁'}`,2,`evolution:${event.weaponId}`,'✦');
+    if(event.type==='questCompleted')add(`委托完成 · ${event.name}`,2,`quest:${event.id}`,'✓');
+    else if(event.type==='evolution')add(`${event.name} · ${event.weaponId==='orbit'?'武器进化':'分支解锁'}`,2,`evolution:${event.weaponId}`,'✦');
     else if(event.type==='companionJoined')add(`${event.name}加入军团`,1,`joined:${event.id??event.name}`,'+');
     else if(event.type==='companionUpkeepWarning')add('军团维持费不足 · 请补充金币',2,'upkeep-warning','!');
     else if(event.type==='companionRecoveryBlocked')add(`${event.name}等待救治 · 需 ${event.cost} 金币`,2,`recovery:${event.id??event.name}`,'!');

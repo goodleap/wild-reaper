@@ -588,32 +588,53 @@ for id,kind,area,x,y,w,d,h in [
     for s in discard:structures.remove(s)
     foundations=[box(s['x']-s['width']/2,s['y']-s['depth']/2,s['x']+s['width']/2,s['y']+s['depth']/2) for s in structures if s['solid']]
     structure('city:landmark:'+id,kind,area,x,y,w,d,h)
-# Long defenses have only authored gaps: west outer wall and north inner wall.
-# They are tiled so their rendering never creates a world-sized canvas.
+# A gateway's beam is overhead. Its grounded piers are independent real
+# foundations, not painted solid-looking posts inside a non-colliding prop.
+for id,area,x,y,w,d in [('west','06',-4500,400,62,320),('south','03',-4500,3550,62,360),('north','11',450,-2990,320,62),('garden','13',4750,-2600,62,360)]:
+    structure('city:gate:'+id,'gate',area,x,y,w,d,110,False,1)
+    vertical=d>w;span=d if vertical else w;pier=min(32,span*.11)
+    if vertical:structures[-1]['visual']=False  # Open span, without an overhead beam or an empty render stamp.
+    for side in [-1,1]:
+        px=x if vertical else x+side*(span-pier)/2
+        py=y+side*(span-pier)/2 if vertical else y
+        placed=structure(f'city:gate-pier:{id}:{side}','wall',area,px,py,w if vertical else pier,pier if vertical else d,58.8,True,1)
+        # A vertical entry can adjoin a turning road or existing building.
+        # Keep that real opening; never force symmetry by blocking the road.
+        assert vertical or placed,f'overhead gate beam needs two real piers: {id}:{side}'
+
+# Place towers before slicing the wall strips. A rejected tower never deletes
+# an existing wall; successful footprints subtract only their exact interval.
+for n,(area,x,y) in enumerate([('06',-4500,170),('06',-4500,630),('03',-4500,3600),('03',-4500,4100),('11',220,-2990),('11',680,-2990),('13',4750,-2840),('13',4750,-2360)]):
+    structure(f'city:gate-tower:{n}','tower',area,x,y,120,120,125)
+
+# Cut complete usable runs first, then tile them. Rejecting whole 240-unit
+# tiles at each tower/road used to leave arbitrary extra breaches beside gates.
+# Road reservations retain their full existing clearance; solid neighbours
+# meet the wall precisely rather than accumulating a per-tile safety gap.
 def wall_line(prefix,area,a,b,gaps):
     horizontal=a[1]==b[1];start=a[0] if horizontal else a[1];end=b[0] if horizontal else b[1]
-    for n,lo in enumerate(range(int(start),int(end),240)):
-        hi=min(lo+240,end)
-        cuts=[(lo,hi)]
-        for g0,g1 in gaps:
-            cuts=[v for low,high in cuts for v in [(low,min(high,g0)),(max(low,g1),high)] if v[1]-v[0]>8]
-        for k,(low,high) in enumerate(cuts):
-            x=(low+high)/2 if horizontal else a[0];y=a[1] if horizontal else (low+high)/2
-            structure(f'city:wall:{prefix}:{n}:{k}','wall',area,x,y,high-low if horizontal else 62,62 if horizontal else high-low,75)
-wall_line('outer-west','06',(-4500,-2350),(-4500,4700),[(240,560),(3670,4030)])
+    strip=box(start,a[1]-31,end,a[1]+31) if horizontal else box(a[0]-31,start,a[0]+31,end)
+    cuts=[(start,end)]
+    def subtract(low,high):
+        nonlocal cuts
+        cuts=[v for lo,hi in cuts for v in [(lo,min(hi,low)),(max(lo,high),hi)] if v[1]-v[0]>.02]
+    for low,high in gaps:subtract(low,high)
+    for obstacle in [protected.buffer(.03),water.buffer(.03),*foundations]:
+        hit=strip.intersection(obstacle)
+        if hit.is_empty:continue
+        parts=list(hit.geoms) if hasattr(hit,'geoms') else [hit]
+        for part in parts:
+            bounds=part.bounds
+            subtract(bounds[0] if horizontal else bounds[1],bounds[2] if horizontal else bounds[3])
+    for run,(low,high) in enumerate(cuts):
+        count=math.ceil((high-low)/240)
+        for n in range(count):
+            lo=low+(high-low)*n/count;hi=low+(high-low)*(n+1)/count
+            x=(lo+hi)/2 if horizontal else a[0];y=a[1] if horizontal else (lo+hi)/2
+            assert structure(f'city:wall:{prefix}:{run}:{n}','wall',area,x,y,hi-lo if horizontal else 62,62 if horizontal else hi-lo,75),f'unexpected wall conflict: {prefix}:{lo}:{hi}'
+wall_line('outer-west','06',(-4500,-2350),(-4500,4700),[(240,560),(3370,3730)])
 wall_line('inner-north','11',(-2800,-2990),(1300,-2990),[(-1080,-820),(290,610)])
 wall_line('garden-east','13',(4750,-4700),(4750,-1700),[(-2780,-2420)])
-# Each gate spans an actual gap and stays non-solid, matching its arch opening.
-for id,area,x,y,w,d in [('west','06',-4500,400,62,320),('south','03',-4500,3850,62,360),('north','11',450,-2990,320,62),('garden','13',4750,-2600,62,360)]:
-    structure('city:gate:'+id,'gate',area,x,y,w,d,110,False,1)
-
-# Flanking towers mark the gate mouths without occupying their openings.
-for n,(area,x,y) in enumerate([('06',-4500,170),('06',-4500,630),('03',-4500,3600),('03',-4500,4100),('11',220,-2990),('11',680,-2990),('13',4750,-2840),('13',4750,-2360)]):
-    footprint=box(x-60,y-60,x+60,y+60)
-    walls=[s for s in structures if s['cityKind']=='wall' and footprint.intersects(box(s['x']-s['width']/2,s['y']-s['depth']/2,s['x']+s['width']/2,s['y']+s['depth']/2))]
-    for s in walls:structures.remove(s)
-    foundations=[box(s['x']-s['width']/2,s['y']-s['depth']/2,s['x']+s['width']/2,s['y']+s['depth']/2) for s in structures if s['solid']]
-    structure(f'city:gate-tower:{n}','tower',area,x,y,120,120,125)
 
 # Building lots around narrow connecting streets make long travel lanes read
 # as inhabited alleys, with intermittent courtyards and vegetation gaps.

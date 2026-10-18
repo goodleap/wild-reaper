@@ -85,7 +85,16 @@ for(const region of completeWorldIds)for(const seed of [0,7,17]){
   for(const route of layout.routes){const a=node(route.ax,route.ay),b=node(route.bx,route.by);nodes.add(a);nodes.add(b);edges.add([a,b].sort().join(':'));}
   assert(edges.size>=nodes.size,'the world retains a loop instead of a tree of dead-end spokes');
   const fixed=layout.kind==='rift-forest';
-  assert(layout.patches.length>=4&&layout.patches.some(patch=>patch.kind===(fixed?'sparse':'brush')),'connected terrain includes readable traversable vegetation patches');
+  if(layout.artStyle==='clockshadow-renewed'){
+    // The authored city has garden/fruit-grove lawns rather than the generic
+    // four-patch recipe. Verify each actual painted lawn remains traversable.
+    const lawns=layout.patches.filter(p=>p.kind==='sparse');assert(lawns.length>=3,'the city retains multiple distinct green pockets');
+    assert.equal(new Set(lawns.map(p=>p.id)).size,lawns.length);
+    for(const lawn of lawns){
+      let traversable=0;for(let y=lawn.y-lawn.ry;y<=lawn.y+lawn.ry;y+=40)for(let x=lawn.x-lawn.rx;x<=lawn.x+lawn.rx;x+=40)if(riftPointInPolygon({x,y},lawn.points)&&terrain.isFree(x,y,22))traversable++;
+      assert(traversable>=4,`${lawn.id}: the visible lawn includes body-wide walkable ground`);
+    }
+  }else assert(layout.patches.length>=4&&layout.patches.some(patch=>patch.kind===(fixed?'sparse':'brush')),'connected terrain includes readable traversable vegetation patches');
   assert(layout.clearings.some(clearing=>clearing.kind==='secret'),'an optional exploration pocket remains available');
   assert(layout.encounters.some(clearing=>clearing.kind==='boss')&&layout.encounters.some(clearing=>clearing.kind==='guard'),'combat clearings have different purposes');
   if(seed===0)networks.add(JSON.stringify(layout.routes.map(({ax,ay,bx,by})=>[ax,ay,bx,by])));

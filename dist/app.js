@@ -86,6 +86,8 @@ import { sceneDialogueAvoidance } from './scene-dialogue-avoidance.js';
 import { createFocusNavigation, isEditableTarget } from './focus-navigation.js';
 import { drawStoryGuideGround } from './story-guidance.js';
 import { createCombatActionControl } from './combat-action-control.js';
+import { renderQuestPanel, updateQuestTracker } from './quest-panel.js';
+import { questSceneProps, drawQuestProp, drawQuestShadowPath } from './quest-art.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
@@ -549,7 +551,7 @@ function observeArchive(){
   archive.observe(game,{visibleEnemies});
   archive.recordStoryCompletion?.(game);
 }
-function checkpointArchive(){if(game){observeArchive();archive.checkpoint(game,{force:true});}else archive.flush();}
+function checkpointArchive(){if(game){observeArchive();archive.checkpoint(game,{force:true});game.quests?.flush();}else archive.flush();}
 function resetArchivePanel(){archiveOpen=false;archiveReturnFocus=null;show('archive-overlay',false);}
 function renderArchive(){
   const content=$('archive-content');
@@ -596,6 +598,13 @@ function closeMap(){
 }
 function renderExpandedMap(){
   if(!game||!mapOpen)return;
+  const questEntries=game.quests?.getEntries()||[];
+  renderQuestPanel($('quest-journal-list'),questEntries,{
+    storageMode:game.quests?.storageMode,
+    onAccept:id=>{game.quests?.accept(id);renderExpandedMap();updateQuestHUD();renderSchedule.invalidate();},
+    onTrack:id=>{game.quests?.track(id);renderExpandedMap();updateQuestHUD();renderSchedule.invalidate();}
+  });
+  show('quest-journal',game.mode==='world'&&questEntries.length>0);
   const target=$('expanded-map-canvas'),mapCtx=target.getContext('2d'),side=420;
   target.width=side;target.height=side;const list=$('map-landmarks');list.replaceChildren();
   const add=(name,detail,index)=>{const row=document.createElement('li'),title=document.createElement('strong'),note=document.createElement('span');title.textContent=(index?`${index}. `:'')+name;note.textContent=detail;row.append(title);row.append(note);list.append(row);};
@@ -618,6 +627,7 @@ function renderExpandedMap(){
   if(!indoor&&game.terrain.island?.layout?.kind==='rift-forest')$('map-legend').textContent=game.terrain.island.layout.artTheme==='ember'?'箭头：你　洞口：矿洞　箱子：补给。密林、岩脊与熔岩形成阻隔；沿山径、缺口和岩桥探索。':game.terrain.island.layout.artTheme==='city'?'箭头：你　洞口：地下通道　箱子：宝藏　菱形：首领或遗迹。城墙、建筑与深水不可步行；沿城门、街巷和石桥探索。':'箭头：你　路标：相邻世界　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。深绿密林、山壁与深水不可步行；沿缺口和桥梁探索。';
   if(game.expedition&&!indoor){$('map-note').textContent='时间已暂停 · 副本全图 · 沿路线完成目标后撤离';$('map-legend').textContent='箭头：你与朝向　旗帜：当前目标与出口　边框：可行走区域。';target.setAttribute('aria-label','副本地图：显示路线、当前目标与撤离点');}else if(!indoor)$('map-legend').textContent+='　圆点：怪物领域。';
   if(game.debug&&indoor)$('map-legend').textContent='箭头：你与朝向　门：出口　箱子：宝箱　菱形：首领。地标预览不解锁房间视野；墙体随探索显示。';
+  if(game.quests?.getMarkers().length)$('map-legend').textContent+='　金色菱形：任务目标。';
 }
 function settleDebugChoices(){
   if(!game?.debugFull||paused||helpOpen||mapOpen||characterOpen||archiveOpen||runEnded||game.sceneTransition.active)return;
@@ -865,6 +875,10 @@ function clearStoryObjective(){
   for(const id of ['story-objective-text','story-progress-label','story-progress-detail'])$(id).textContent='';
   $('story-progress-fill').style.width='0%';$('story-progress-track').setAttribute('aria-valuenow','0');$('story-progress-track').setAttribute('aria-label','剧情进度');
 }
+function updateQuestHUD(){
+  const visible=game?.mode==='world'&&!runEnded&&!paused&&!helpOpen&&!mapOpen&&!characterOpen&&!archiveOpen;
+  updateQuestTracker($('quest-tracker'),visible?game.quests?.getTracker():null,{onOpen:event=>openMap(event)});
+}
 function updateStoryDialogueHUD(live){
   const story=game?.story,line=story?.getDialogue?.(),blocking=!!story?.dialogueBlocking&&!!line&&!runEnded;
   arena.classList.toggle('story-speaking',blocking);
@@ -958,7 +972,7 @@ function updateHUD(){if(!game)return;
     return;
   }
   const measureHud=debugMode,hudBegan=measureHud?cpuNow():0;
-  try{renderSchedule.invalidate();$('run-summary').classList.toggle('story-progress',!!game.story?.active);arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();updateStoryRealmHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.expedition?.name||game.stage?.currentIsland.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;const realmState=game.realms?.getState?.();$('level-label').textContent=`Lv.${p.level}${game.mode==='world'&&realmState?.enabled?` · ${realmState.realmName}`:''}`;$('xp-caption').textContent=`${hudNumber(p.xp)} / ${hudNumber(p.xpNext)}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`${hudNumber(game.crystals||0)} / ${hudNumber(game.crystalsNext||0)}`;$('gold-label').textContent=hudNumber(game.gold||0);$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=game.story?.active||game.stage||game.expedition||game._worldExploration||width>=600?waveProgressLabel():`第 ${game.wave} 波`;$('kills').textContent=game.kills;const stormAllowed=game.canUseSkill?.('storm')??game.story?.allowsSkill?.('storm')!==false;show('game-bottom',!runEnded&&(stormAllowed||!$('context-action').classList.contains('hidden')));if(!stormAllowed)skillRequested=false;stormControl.update({visible:!runEnded&&stormAllowed,enabled:stormAllowed&&p.skillCooldown<=0,text:p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪',mobileText:p.skillCooldown>0?'冷却中':'天雷',icon:p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ',description:`超级技能 Lv.${game.build.getSkill('storm')?.level||0} · 冷却 ${p.skillCooldownMax} 秒`,ariaLabel:p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击',progress:p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1,cooldown:p.skillCooldown>0,id:'storm'});const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',enemyVisual(boss)?.barClass==='bloom-boss');if(boss){$('boss-name').textContent=boss.storyLeader?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 追兵领队`:boss.debugBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 调试 · 10 万生命`:boss.dungeonBoss?`${boss.name||'王城守望者'} · 最终首领`:boss.stageBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · ${boss.stageBossRole==='core'?'核心首领':'可选挑战'}`:boss.worldBoss&&boss.name?boss.name:`${bossDefinition(boss.bossKind||'ancient').name} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}finally{if(measureHud)frameHudMs+=cpuNow()-hudBegan;}
+  try{renderSchedule.invalidate();$('run-summary').classList.toggle('story-progress',!!game.story?.active);arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();updateStoryRealmHUD();updateQuestHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.expedition?.name||game.stage?.currentIsland.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;const realmState=game.realms?.getState?.();$('level-label').textContent=`Lv.${p.level}${game.mode==='world'&&realmState?.enabled?` · ${realmState.realmName}`:''}`;$('xp-caption').textContent=`${hudNumber(p.xp)} / ${hudNumber(p.xpNext)}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`${hudNumber(game.crystals||0)} / ${hudNumber(game.crystalsNext||0)}`;$('gold-label').textContent=hudNumber(game.gold||0);$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=game.story?.active||game.stage||game.expedition||game._worldExploration||width>=600?waveProgressLabel():`第 ${game.wave} 波`;$('kills').textContent=game.kills;const stormAllowed=game.canUseSkill?.('storm')??game.story?.allowsSkill?.('storm')!==false;show('game-bottom',!runEnded&&(stormAllowed||!$('context-action').classList.contains('hidden')));if(!stormAllowed)skillRequested=false;stormControl.update({visible:!runEnded&&stormAllowed,enabled:stormAllowed&&p.skillCooldown<=0,text:p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪',mobileText:p.skillCooldown>0?'冷却中':'天雷',icon:p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ',description:`超级技能 Lv.${game.build.getSkill('storm')?.level||0} · 冷却 ${p.skillCooldownMax} 秒`,ariaLabel:p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击',progress:p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1,cooldown:p.skillCooldown>0,id:'storm'});const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',enemyVisual(boss)?.barClass==='bloom-boss');if(boss){$('boss-name').textContent=boss.storyLeader?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 追兵领队`:boss.debugBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 调试 · 10 万生命`:boss.dungeonBoss?`${boss.name||'王城守望者'} · 最终首领`:boss.stageBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · ${boss.stageBossRole==='core'?'核心首领':'可选挑战'}`:boss.worldBoss&&boss.name?boss.name:`${bossDefinition(boss.bossKind||'ancient').name} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}finally{if(measureHud)frameHudMs+=cpuNow()-hudBegan;}
 }
 
 function debugArmyAction(recruit){
@@ -1529,6 +1543,7 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   const adventure=game?.adventure;
   const visible=prop=>Math.abs(prop.x-camX)<viewWidth/2+70&&Math.abs(prop.y-camY)<viewHeight/2+112;
   const props=(adventure?.props||[]).filter(prop=>prop.hp>0&&visible(prop));
+  props.push(...questSceneProps(game.quests?.getProps()).filter(visible));
   if(adventure?.treasure&&visible(adventure.treasure))props.push({...adventure.treasure,type:'treasure'});
   props.push(...(game?.environment?.props||[]).filter(prop=>prop.state!=='spent'&&visible(prop)));
   if(!game.dungeon?.active)for(const portal of game.regions?.portals||[])if(visible({...portal,y:portal.y-30}))props.push({...portal,type:'portal',...(portal.natural?{kind:'exit',angle:Math.atan2(-(portal.arrivalDirection?.y||0),-(portal.arrivalDirection?.x||0)),isRiftLandmark:true}:{}),sortY:portal.y});
@@ -1544,10 +1559,10 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   return props;
 }
 function drawAdventureShadowPaths(mask,props){
-  for(const prop of props){if(prop.isHutFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'||prop.type==='companionSitePart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
+  for(const prop of props){if(drawQuestShadowPath(mask,prop,SUN)||prop.isHutFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'||prop.type==='companionSitePart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
     mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();}
 }
-function drawAdventureProp(prop){if(prop.isRiftLandmark&&(drawEmberLandmark(ctx,prop,{player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawNativeCityLandmark(ctx,prop,{library:cityArtLibrary,artStyle:game.terrain.island?.layout?.artStyle,player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawRiftLandmark(ctx,prop)))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
+function drawAdventureProp(prop){if(drawQuestProp(ctx,prop))return;if(prop.isRiftLandmark&&(drawEmberLandmark(ctx,prop,{player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawNativeCityLandmark(ctx,prop,{library:cityArtLibrary,artStyle:game.terrain.island?.layout?.artStyle,player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawRiftLandmark(ctx,prop)))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
   if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'){relicArt.drawProp(ctx,prop,combatOptions);return;}
   if(prop.type==='huntMarker'){encounterArt.drawMarker(ctx,prop,combatOptions);return;}
   if(prop.isSettlement){drawSettlement(prop);return;}if(prop.isDungeonTreasure){drawDungeonChest(prop);return;}
@@ -1978,7 +1993,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.pixelRatio=dp
     ctx.restore();vision.drawFog(ctx,offsetX,offsetY,viewWidth,viewHeight);
   }
   ctx.save();if(vision)vision.clipVisible(ctx,offsetX,offsetY);
-  ctx.save();ctx.translate(offsetX,offsetY);drawEncounterGround();drawRelicGround();drawMudGround();drawDungeonGround();drawStoryRealmGround();drawStoryGuideGround(ctx,game.story?.active?game.story.getGuide?.():null,{zoom:worldZoom,bounds:combatOptions.viewBounds});ctx.restore();
+  ctx.save();ctx.translate(offsetX,offsetY);drawEncounterGround();drawRelicGround();drawMudGround();drawDungeonGround();drawStoryRealmGround();drawStoryGuideGround(ctx,game.story?.active?game.story.getGuide?.():game.quests?.getGuide(),{zoom:worldZoom,bounds:combatOptions.viewBounds});ctx.restore();
   const lightingBegan=debugMode?cpuNow():0;drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active||game.expedition?null:(target,view)=>drawMapLights(view.camX,view.camY,target,view.width,view.height));if(debugMode)frameLightingMs+=cpuNow()-lightingBegan;ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(!sceneVisible(gem))continue;if(Math.abs(gem.x-p.x)>viewWidth/2+20||Math.abs(gem.y-p.y)>viewHeight/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   drawCoins();drawSuperFields();drawAbilityGround(ctx,game,{...combatOptions,visible:sceneVisible});

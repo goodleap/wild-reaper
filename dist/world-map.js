@@ -19,7 +19,7 @@ export function minimapBounds(width,height,insets={}){
 }
 export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',dogcamp:'旅犬营地',stonevault:'封石宝库',portal:'传送门',exit:'荒野出口',cave:'洞穴入口',shortcut:'捷径旧门',chest:'宝箱',boss:'首领',territory:'怪物领域',expedition:'副本目标'});
 export function landmarkLabel(marker){return marker.name||LANDMARK_NAMES[marker.type]||'遗迹';}
-export function landmarkState(marker){if(marker.type==='story')return marker.label||'当前剧情目标';if(marker.type==='exit'&&marker.natural)return `前往${marker.destination||'相邻区域'} · 可往返`;if(marker.type==='cave')return '进入地下通道';if(marker.type==='shortcut')return marker.gateOpen?'捷径已打通':marker.description||'从钟楼一侧开启';if(marker.type==='territory')return marker.completed?'已清理':'进入后会惊动怪群';if(marker.type==='expedition')return marker.completed?'已通关':marker.label||'副本目标';if(marker.kind==='victory')return '从正面进入，完成本局';if(marker.type==='stonevault')return marker.completed?'已领取':marker.gateOpen?'通路已开启 · 宝藏待领取':'封石阻挡 · 需要岩灵';if(marker.type==='dogcamp')return marker.completed?'已招募':'可招募寻宝小狗';if(marker.type==='rescue'&&marker.appearance==='golemaltar')return marker.completed?'岩灵已唤醒':'唤醒岩灵试炼';if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
+export function landmarkState(marker){if(marker.type==='quest')return marker.label||'任务目标';if(marker.type==='story')return marker.label||'当前剧情目标';if(marker.type==='exit'&&marker.natural)return `前往${marker.destination||'相邻区域'} · 可往返`;if(marker.type==='cave')return '进入地下通道';if(marker.type==='shortcut')return marker.gateOpen?'捷径已打通':marker.description||'从钟楼一侧开启';if(marker.type==='territory')return marker.completed?'已清理':'进入后会惊动怪群';if(marker.type==='expedition')return marker.completed?'已通关':marker.label||'副本目标';if(marker.kind==='victory')return '从正面进入，完成本局';if(marker.type==='stonevault')return marker.completed?'已领取':marker.gateOpen?'通路已开启 · 宝藏待领取':'封石阻挡 · 需要岩灵';if(marker.type==='dogcamp')return marker.completed?'已招募':'可招募寻宝小狗';if(marker.type==='rescue'&&marker.appearance==='golemaltar')return marker.completed?'岩灵已唤醒':'唤醒岩灵试炼';if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
 // Discovery lives on each region-owned landmark. A map instance never keeps a
@@ -77,6 +77,12 @@ export class WorldMap {
         if(distance<=range)result.push({id:'story:objective',type:'story',x:target.x,y:target.y,dx,dy,distance,name:guide.shortLabel||guide.label||'剧情目标',label:guide.label||'',active:true,color:'#c4f2e5'});
       }
       return result;
+    }
+    // Accepted objectives can mark a destination beyond discovered terrain,
+    // without revealing the terrain itself or unrelated landmarks.
+    for(const marker of game.quests?.getMarkers()||[]){
+      const dx=marker.x-p.x,dy=marker.y-p.y,distance=Math.hypot(dx,dy);
+      if(distance<=range)result.push({...marker,type:'quest',active:true,color:'#e6d598',dx,dy,distance});
     }
     if(game.dungeon?.active){
       for(const marker of game.dungeon.getMap?.({revealMarkers:game.debug===true})?.landmarks||[]){const dx=marker.x-p.x,dy=marker.y-p.y,distance=Math.hypot(dx,dy);if(distance<=range)result.push({...marker,dx,dy,distance});}

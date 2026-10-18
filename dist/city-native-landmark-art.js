@@ -6,7 +6,7 @@ import { relicActivationStrength } from './relic-activation.js';
 // Their raised entrance artwork uses the same native library as the city.
 export function drawNativeCityLandmark(c,site,{library,artStyle,painter=clockshadowBuildingArt}={}){
   if(site?.artTheme!=='city'||!site.isRiftLandmark||!['cave','dungeon','sewer'].includes(site.kind||site.type)&&site.featureId!=='sewer')return false;
-  if(artStyle==='clockshadow-renewed'){painter.draw(c,{...site,cityKind:'sewer',width:68,depth:34,height:48,style:2});return true;}
+  if(artStyle==='clockshadow-renewed'){painter.draw(c,{...site,cityKind:'sewer',width:84,depth:58,height:28,style:2});return true;}
   const sprite=CITY_ART_SPRITES.sewer,width=68,depth=34,drawWidth=sprite.sw*width/sprite.footprintWidth,drawHeight=depth+48*sprite.projectionHeightFactor;
   const rect={x:site.x-sprite.footX/sprite.sw*drawWidth,y:site.y-sprite.footY/sprite.sh*drawHeight+depth/2,width:drawWidth,height:drawHeight};
   return library.draw(c,'sewer',rect);
@@ -16,7 +16,7 @@ export function nativeCitySettlementVisual(site,{artStyle}={}){
   const tower=site.featureId==='belltower',hut=site.type==='supply'||site.type==='occupied';
   if(!tower&&!hut)return null;
   if(artStyle==='clockshadow-renewed'){
-    const prop={...site,y:site.y-site.depth/2,cityKind:tower?'belltower':'house',height:tower?220:70,style:tower?2:1},visual=clockshadowBuildingVisual(prop);
+    const prop={...site,y:site.y-site.depth/2,cityKind:tower?'belltower':'house',height:tower?220:54,style:tower?2:1},visual=clockshadowBuildingVisual(prop);
     const rect={x:visual.maxBounds.minX,y:visual.maxBounds.minY,width:visual.halfWidth*2,height:visual.top+visual.bottom};
     return{...visual,prop,sprite:prop.cityKind,rect,top:site.y-rect.y,bottom:rect.y+rect.height-site.y,sortY:site.y};
   }

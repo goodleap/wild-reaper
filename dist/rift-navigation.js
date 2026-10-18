@@ -1,4 +1,5 @@
 import { riftPointInPolygon } from './rift-collision.js';
+import { blocksObstacle } from './height-rules.js';
 // The authored region/entrance graph chooses the large detour. The existing
 // bounded grid search handles only the next ordinary walking leg.
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -40,6 +41,14 @@ export class RiftNavigation{
       if(this.terrain.riftGateOpen(passage.gateId))continue;
       const gate=passage.gate;
       if(segmentDistanceSq(a,b,{x:gate.ax,y:gate.ay},{x:gate.bx,y:gate.by})<(r+(gate.r??16))**2)return false;
+    }
+    // Dynamic route barriers participate in the same large-scale graph as
+    // authored gates. Local steering alone cannot find a kilometre-long detour.
+    if(this._barrierRevision!==this.terrain.structureRevision){this._barrierRevision=this.terrain.structureRevision;this._routeBarriers=(this.terrain._structures||[]).filter(barrier=>barrier.navigationBarrier);}
+    for(const barrier of this._routeBarriers||[]){
+      if(!blocksObstacle(barrier,profile))continue;
+      const dx=Math.cos(barrier.angle||0)*(barrier.halfLength||0),dy=Math.sin(barrier.angle||0)*(barrier.halfLength||0);
+      if(segmentDistanceSq(a,b,{x:barrier.x-dx,y:barrier.y-dy},{x:barrier.x+dx,y:barrier.y+dy})<(r+(barrier.r||0))**2)return false;
     }
     return true;
   }

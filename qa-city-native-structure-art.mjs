@@ -29,6 +29,9 @@ for(const [kind,width,depth,height,rearRole]of[
   const roofs=plan.parts.filter(part=>part.role==='building');
   assert.equal(roofs.length,1,'deep foundations cannot become repeated full-width tiled roofs');
   const roof=roofs[0],grand=['keep','wing','barracks','cathedral'].includes(kind);
+  assert(roof.side>0,'the front and side walls use an oblique depth projection');
+  assert(roof.ridge<roof.front&&roof.backRidge<roof.back,'both ends of the convex roof ridge rise above their eaves');
+  assert(Math.abs((roof.front-roof.ridge)-(roof.back-roof.backRidge))<1e-8,'the pitched ridge stays at one physical height along its depth');
   assert.equal(roof.width,width,'the main house keeps its authored width instead of shrinking the entire structure');
   assert.equal(roof.frontFoot,depth/2,'the front house and its door stay on the authored front edge');
   assert(roof.frontSpan>0&&roof.frontSpan<=roof.wall*1.25,'the forward roof slope remains comparable to its own facade');

@@ -1,0 +1,39 @@
+/* One tracked objective sits with the map, leaving the centre available to play. */
+#quest-tracker{position:absolute;z-index:3;top:calc(var(--hud-map-size) + 8px);right:0;display:block;width:220px;max-width:calc(100vw - 32px);min-height:44px;padding:5px 8px;border:1px solid #b9d5a832;border-radius:6px;background:#162b22d9;color:#e1ebcf;text-align:left;pointer-events:auto;touch-action:manipulation;box-shadow:none;font:10px/1.45 "PingFang SC",system-ui,sans-serif}
+.quest-tracker-heading{display:flex;align-items:center;gap:5px;min-width:0}
+.quest-tracker-heading strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:550;line-height:16px}
+.quest-tracker-mark{color:#c9dfa3;font-size:13px}.quest-tracker-open{font-size:17px;line-height:16px;color:#adc39c}
+.quest-tracker-goal{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:14px;color:#c3d2b6}
+#quest-tracker:focus-visible,.quest-action:focus-visible{outline:2px solid #d1e8a6;outline-offset:2px}
+#arena.narrow-hud #quest-tracker{width:var(--hud-actions-width);padding:5px 7px}
+#arena.narrow-hud:has(#quest-tracker:not(.hidden)) #combat-notices{top:calc(var(--hud-edge) + var(--safe-top) + var(--hud-map-size) + 68px)}
+.quest-journal{margin:0 0 15px;min-width:0}
+.quest-journal-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+.quest-journal-heading h3{margin:0;color:#dce8cc;font-size:12px;font-weight:550;letter-spacing:.4px}
+.quest-journal-heading>span{font-size:9px;color:#9eb293}
+.quest-journal-list{display:grid;gap:8px}
+.quest-entry{min-width:0;padding:10px;border:1px solid #9fbb8733;border-radius:7px;background:#0a1e1429;outline:none}
+.quest-entry.is-tracked{border-color:#b9d1967a;background:#96b66a0b}
+.quest-entry-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;line-height:1.5}
+.quest-entry-name{color:#e0ebce;font-size:12px;font-weight:550;overflow-wrap:anywhere}
+.quest-entry-status{flex:0 0 auto;color:#b9d59d;font-size:9px;font-weight:400}
+.quest-description{margin:7px 0;color:#b7c8ab;font-size:10px;line-height:1.65}
+.quest-steps{list-style:none;display:grid;gap:6px;padding:0;margin:8px 0}
+.quest-step{display:flex;gap:6px;align-items:baseline;color:#d2dfc2;font-size:10px;line-height:1.5}
+.quest-step-mark{flex:0 0 11px;color:#b7cc95;text-align:center}.quest-step>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.quest-step-count{flex:0 0 auto;color:#c9dfa9;font:10px/1.5 ui-monospace,monospace;white-space:nowrap}
+.quest-step.is-complete{color:#91a687}.quest-step.is-complete .quest-step-mark{color:#b1c994}
+.quest-reward{margin:8px 0 0;padding-top:7px;border-top:1px solid #9db28d26;color:#bcd49e;font-size:10px;line-height:1.6}
+.quest-reward>span{margin-right:6px;color:#99b08f;font-size:9px}
+.quest-entry-actions{display:flex;justify-content:flex-end;margin-top:8px}
+.quest-action{min-height:40px;padding:8px 12px;border:1px solid #b5cf9260;border-radius:6px;background:#a8ca7a14;color:#e0edca;font:11px/1.4 "PingFang SC",system-ui,sans-serif;touch-action:manipulation}
+.quest-entry.is-complete{padding:0;background:none;border-color:#9fbb8725}
+.quest-entry.is-complete>summary{padding:9px 10px;min-height:40px;cursor:pointer;list-style:none;touch-action:manipulation}
+.quest-entry.is-complete>summary::-webkit-details-marker{display:none}
+.quest-entry.is-complete>summary::before{content:'›';color:#9ab387;font-size:15px;line-height:1}
+.quest-entry.is-complete[open]>summary::before{transform:rotate(90deg)}
+.quest-entry.is-complete .quest-entry-name{flex:1;color:#a9bd9c;font-size:11px}.quest-entry.is-complete .quest-entry-status{color:#8ca482}
+.quest-entry-body{padding:0 10px 10px}
+.quest-empty,.quest-save-note{margin:0;color:#9db292;font-size:10px;line-height:1.7}
+.quest-save-note{font-size:9px;color:#92a889}
+@media(hover:hover) and (pointer:fine){#quest-tracker:hover,.quest-action:hover{background:#29432de8;border-color:#c3dba275}.quest-entry.is-complete>summary:hover{background:#b4d48d0c}}

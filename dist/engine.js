@@ -36,6 +36,7 @@ import { StageRun } from './stage-run.js';
 import { ExpeditionRun } from './expedition-run.js';
 import { MonsterTerritories } from './monster-territories.js';
 import { RiftExploration } from './rift-exploration.js';
+import { WorldQuests } from './quest-runtime.js';
 import { StoryRun } from './story-run.js';
 import { SceneContent } from './scene-content.js';
 import { RealmProgression } from './realm-progression.js';
@@ -71,7 +72,7 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='forest',stageId=null,mode=null,dungeonId=null,storyId='prologue'}={}) {
+  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='forest',stageId=null,mode=null,dungeonId=null,storyId='prologue',questStorage}={}) {
     if(mode==='story'){hero='traveler';appearanceId=null;initialWeaponId='sword';stageId=null;dungeonId=null;worldId='forest';debug=false;}
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
@@ -167,10 +168,11 @@ export class Game {
     this.realms=new RealmProgression(this,{costForLevel:xpCost});
     this.story=this.mode==='story'?new StoryRun(this,{id:storyId}):null;
     this.story?.initialize();
+    this.quests=new WorldQuests(this,{storage:questStorage});
   }
 
   onEnemyDefeated(enemy){this.story?.onEnemyDefeated?.(enemy);this.realms?.onEnemyDefeated(enemy);this.onArchiveDefeat?.(enemy);}
-  dispose(reason='exit') {this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();}
+  dispose(reason='exit') {this.quests?.flush();this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();}
 
   _createStoryExplorationContent() {
     const desired={x:this.player.x,y:this.player.y},spawn=this.terrain.island?.layout?.spawn;
@@ -446,6 +448,7 @@ export class Game {
     const portal=this.regions.getInteraction();if(portal)candidates.push(portal);
     const relic=this.relicSites?.getInteraction();if(relic)candidates.push(relic);
     const rift=this.riftExploration?.getInteraction();if(rift)candidates.push(rift);
+    const quest=this.quests?.getInteraction();if(quest)candidates.push(quest);
     const p=this.player,footY=p.y+groundOffset(p,true);
     return candidates.sort((a,b)=>Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
   }
@@ -454,6 +457,7 @@ export class Game {
     const interaction=this.getInteraction();
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
+    if(interaction.category==='quest')return !!this.quests?.interact(interaction.id);
     if(interaction.category==='rift')return !!this.riftExploration?.interact(interaction.id);
     if(interaction.category==='relic'||interaction.type==='relic')return !!this.relicSites?.interact(interaction.id);
     return interaction.type==='portal'||interaction.type==='stageExit'?this.enterPortal(interaction.id):this.settlements.interact(interaction.id);
@@ -557,6 +561,7 @@ export class Game {
     if(this.adventure?.generation)this.adventure._refreshSupplies(true);
     this.companions.onSceneChange?.(arrival?{doorway:portalDoor(arrival),direction:arrival.arrivalDirection||{x:0,y:1}}:null);
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
+    this.quests?.enterWorld();
     this._emit('regionEnter',{regionId:this.region.id,name:nextIsland?.name??this.region.name,regionIndex:this.regionIndex,mapId:this.mapId});return true;
   }
 
@@ -596,6 +601,7 @@ export class Game {
     updateLocomotion(p,oldX,oldY,dt);
     if(p.moving)p.moveFacing=Math.atan2(p.y-oldY,p.x-oldX);
     this.story?.updateActors?.(dt);
+    this.quests?.update();
     if(this.sceneContent.allows('worldContent')&&this.touchInteractions.update())return;
     if(this.sceneContent.allows('worldContent'))this.adventure?.update(dt);
     if(this.sceneContent.allows('worldContent'))this.companions.update(dt);
