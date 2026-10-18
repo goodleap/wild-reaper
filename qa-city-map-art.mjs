@@ -3,10 +3,7 @@ import { createRiftLayout } from './dist/worlds/rift-layout.js';
 import { RiftArt } from './dist/worlds/rift-art.js';
 import { CityMapArt, drawCityOverview } from './dist/worlds/city-map-art.js';
 import { WorldLayoutArt, drawWorldLayoutMap } from './dist/worlds/world-layout-art.js';
-import { cityDetailArt } from './dist/city-detail-art.js';
-import { cityArtLibrary } from './dist/city-art-library.js';
 import { CITY_NATIVE_GROUND_TILE, drawCityNativeGround, drawCityNativeBridgeDeck } from './dist/worlds/city-native-ground.js';
-import { drawCitySampleGround } from './dist/worlds/city-sample-ground.js';
 
 function recording(record=true){
   const state={globalAlpha:.61,globalCompositeOperation:'source-over'},stack=[],calls=[];
@@ -15,7 +12,7 @@ function recording(record=true){
     if(key==='save')return()=>stack.push({...target});
     if(key==='restore')return()=>{assert(stack.length,'balanced city drawing context');const prior=stack.pop();for(const k of Object.keys(target))delete target[k];Object.assign(target,prior);};
     if(key==='createLinearGradient'||key==='createRadialGradient')return()=>({addColorStop(){}});
-    return(...args)=>{for(const v of args)if(typeof v==='number')assert(Number.isFinite(v),`${String(key)} receives finite world coordinates`);if(record)calls.push({key,args,fill:target.fillStyle});};
+    return(...args)=>{for(const v of args)if(typeof v==='number')assert(Number.isFinite(v),`${String(key)} receives finite world coordinates`);if(record)calls.push({key,args,fill:typeof target.fillStyle==='object'?'gradient':target.fillStyle});};
   }});
   return{c,calls,stack};
 }
@@ -44,29 +41,19 @@ const culled=recording();drawCityOverview(culled.c,layout,{scale:.1,labels:true,
 assert(!culled.calls.some(call=>call.key==='fillText'),'offscreen region names are culled');
 
 const canvases=[],factory=()=>{const canvas={width:0,height:0,getContext:()=>recording(false).c};canvases.push(canvas);return canvas;};
-const nativeGround={naturalWidth:1254,naturalHeight:1254,source:'approved-native-ground'},nativeGrass={naturalWidth:1254,naturalHeight:1254,source:'native-grass-and-dirt'};
-cityDetailArt.images.set('ground',nativeGround);
-cityArtLibrary.images.set('grassGround',nativeGrass);
-assert.equal(CITY_NATIVE_GROUND_TILE,320,'the approved paving keeps its 20–28-unit slab scale');
-const native=recording(),sample=recording(),sampleView={minX:-4470,maxX:-3930,minY:-2550,maxY:-2250};
-assert(drawCityNativeGround(native.c,layout,sampleView));assert(drawCitySampleGround(sample.c,layout,sampleView));
-const pavingCalls=draw=>draw.calls.filter(call=>['drawImage','translate','scale'].includes(call.key));
-assert.deepEqual(pavingCalls(native),pavingCalls(sample),'sample and full-city paving share the exact same native texture, reflection and world origin');
-for(const call of native.calls.filter(call=>call.key==='drawImage')){
-  assert.equal(call.args[0],nativeGround);assert.deepEqual(call.args.slice(1),[0,0,320,320]);
-}
+const native=recording(),sampleView={minX:-4470,maxX:-3930,minY:-2550,maxY:-2250};
+assert(drawCityNativeGround(native.c,layout,sampleView));
+assert(native.calls.some(call=>call.key==='quadraticCurveTo'),'warm paving has individual chipped slabs');
+assert(!native.calls.some(call=>call.key==='drawImage'),'paving does not depend on the retired native PNG');
 const reflected=recording();assert(drawCityNativeGround(reflected.c,layout,{minX:-321,minY:-1,maxX:1,maxY:321}));
-assert(reflected.calls.some(call=>call.key==='scale'&&call.args[0]===-1),'negative world tiles also reflect their shared X edge');
-assert(reflected.calls.some(call=>call.key==='scale'&&call.args[1]===-1),'negative world tiles also reflect their shared Y edge');
-assert(!drawCityNativeGround(reflected.c,forest,sampleView),'native city paving cannot replace forest-world artwork');
-assert.throws(()=>drawCityNativeGround(reflected.c,layout,sampleView,{image:null}),/must be preloaded/,'missing approved ground cannot silently leave a different cached floor');
+assert(!drawCityNativeGround(reflected.c,forest,sampleView),'city paving cannot replace forest-world artwork');
 for(const p of layout.passages.filter(p=>p.kind==='bridge')){
   const bridge=recording(),otherApproach=recording();assert(drawCityNativeBridgeDeck(bridge.c,layout,p));
   assert(drawCityNativeBridgeDeck(otherApproach.c,layout,{...p,points:[{x:1e6,y:1e6}],waypoints:[{x:-1e6,y:-1e6}]}));
   assert.deepEqual(bridge.calls,otherApproach.calls,'bridge material depends on the physical deck, never the long approach road');
   const [a,b]=p.deck,dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy),nx=-dy/length*p.width/2,ny=dx/length*p.width/2;
   for(const point of[[a.x+nx,a.y+ny],[b.x+nx,b.y+ny],[b.x-nx,b.y-ny],[a.x-nx,a.y-ny]])assert(bridge.calls.some(call=>['moveTo','lineTo'].includes(call.key)&&call.args.every((v,i)=>almost(v,point[i]))),'deck uses its exact authored length and traversal width');
-  assert(bridge.calls.some(call=>call.key==='drawImage'&&call.args[0]===nativeGround),'bridge uses the same native stone diffuse');
+  assert(bridge.calls.some(call=>call.key==='quadraticCurveTo'),'bridge uses the same stone slab material');
   assert.equal(bridge.stack.length,0);
 }
 // Reproduce the former corner cuts at the same entrance/street junction.
@@ -75,14 +62,13 @@ for(const p of layout.passages.filter(p=>p.kind==='bridge')){
 const sampleFloor=new CityMapArt(factory),sampleScreen=recording();
 sampleFloor.ground._building=()=>{throw new Error('A clipped background house leaked into the depth-sorted sample');};
 sampleFloor.ground._tree=()=>{throw new Error('A tree leaked into cached diffuse floor');};
-sampleFloor.ground._tile=()=>{throw new Error('A procedural city ground replaced the approved native material');};
+sampleFloor.ground._tile=()=>{throw new Error('The generic legacy floor replaced the authored city paving');};
 assert(sampleFloor.paintTile(sampleScreen.c,layout,{minX:-4470,maxX:-3930,minY:-2550,maxY:-2250}));
-assert(sampleScreen.calls.some(call=>call.key==='drawImage'&&call.args[0]===nativeGround));
-assert(!sampleScreen.calls.some(call=>call.key==='stroke'),'the approved castle entrance paving receives no new tint, cracks or overlaid grass');
+assert(sampleScreen.calls.some(call=>call.key==='quadraticCurveTo'));
 assert.equal(sampleScreen.stack.length,0);
 for(const area of layout.areas){
   const areaScreen=recording(),p=area.center;assert(sampleFloor.paintTile(areaScreen.c,layout,{minX:p.x-270,maxX:p.x+270,minY:p.y-225,maxY:p.y+225}));
-  assert(areaScreen.calls.filter(call=>call.key==='drawImage').every(call=>call.args[0]===nativeGround||canvases.includes(call.args[0])),'all 19 districts cache diffuse material only; raised objects belong in the depth queue');
+  assert(areaScreen.calls.filter(call=>call.key==='drawImage').every(call=>canvases.includes(call.args[0])),'ground cache draws only locally created tiles and deep vegetation; complete edge objects belong in depth queue');
   assert.equal(areaScreen.stack.length,0);
 }
 const art=new RiftArt(factory),screen=recording(false),view={camX:layout.spawn.x,camY:layout.spawn.y,width:540,height:985};
@@ -101,6 +87,4 @@ const integration=new WorldLayoutArt(factory);assert(integration.drawGround(scre
 assert(integration.cacheStats.bytes>0,'shared performance diagnostics include city ground');
 assert.equal(screen.c.globalAlpha,.61);assert.equal(full.c.globalAlpha,.61);assert.equal(full.stack.length,0);assert.equal(labeled.stack.length,0);assert.equal(culled.stack.length,0);assert.equal(screen.stack.length,0);
 assert.equal(JSON.stringify(layout),original,'maps and ground drawing cannot modify baked geometry or gameplay state');
-cityDetailArt.images.delete('ground');
-cityArtLibrary.images.delete('grassGround');
-console.log(JSON.stringify({cityMapArt:'passed',structures:layout.cityStructures.length,labels:layout.areas.length,nativeGroundTile:CITY_NATIVE_GROUND_TILE,warmFrames:40,explorationViews:100,cacheBytes:art.cacheStats.bytes,cacheLimitBytes:art.cacheStats.limitBytes,coverage:'exact collision contours and foundations; native 320-unit reflected diffuse across every district and bridge; no raised buildings or trees in floor clips; unchanged castle sample; soft natural ground transitions; exact bridge decks; overview culling; city/forest cache isolation; 540-unit warm frames and capped exploration memory'}));
+console.log(JSON.stringify({cityMapArt:'passed',structures:layout.cityStructures.length,labels:layout.areas.length,nativeGroundTile:CITY_NATIVE_GROUND_TILE,warmFrames:40,explorationViews:100,cacheBytes:art.cacheStats.bytes,cacheLimitBytes:art.cacheStats.limitBytes,coverage:'exact collision contours and foundations; world-anchored warm slabs across districts and bridges; no raised buildings or trees in floor clips; no retired PNG dependency; soft natural ground transitions; exact bridge decks; overview culling; city/forest cache isolation; 540-unit warm frames and capped exploration memory'}));

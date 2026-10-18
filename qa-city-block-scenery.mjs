@@ -4,9 +4,8 @@ import { Island } from './dist/islands.js';
 import { Terrain } from './dist/terrain.js';
 import { RiftCollision } from './dist/rift-collision.js';
 import { createCityBlockScenery, CITY_BLOCK_SCENERY_LIMIT } from './dist/worlds/city-block-scenery.js';
-import { CITY_SAMPLE_BOUNDS, CITY_SAMPLE_HOUSES } from './dist/worlds/city-sample-scene.js';
 
-const layout=createRiftLayout('clockshadow-city'),before=JSON.stringify(layout),sampleBefore=JSON.stringify(CITY_SAMPLE_HOUSES);
+const layout=createRiftLayout('clockshadow-city'),before=JSON.stringify(layout);
 const started=performance.now(),props=createCityBlockScenery(layout),initializationMs=performance.now()-started;
 assert.equal(createCityBlockScenery(layout),props,'normal revisits share one immutable placement result');
 assert.equal(createCityBlockScenery(null).length,0);
@@ -17,7 +16,7 @@ assert.equal(new Set(props.map(p=>p.id)).size,props.length,'world props have sta
 assert(props.filter(p=>p.cityBlockPlacement==='front').length>80,'street-side placement follows the real contour');
 assert(props.filter(p=>p.cityBlockPlacement==='interior').length>100,'blocked street blocks also retain interior buildings');
 assert(props.filter(p=>p.cityArt==='ruin').length>10,'ruined districts use more than the repeated house image');
-assert(props.filter(p=>p.cityArt==='shrub').length>25,'small rooted vegetation breaks up blocked masonry');
+assert(props.filter(p=>['planter','rubble','cart','lamp'].includes(p.cityArt)).length>25,'small rooted vegetation breaks up blocked masonry');
 assert(new Set(props.map(p=>p.area)).size>=12,'placement is distributed across the large world');
 
 const copy=structuredClone(layout),copyBefore=JSON.stringify(copy),replayed=createCityBlockScenery(copy);
@@ -36,11 +35,11 @@ function contourInBox(mask,box){
   const corners=[{x:box.minX,y:box.minY},{x:box.maxX,y:box.minY},{x:box.maxX,y:box.maxY},{x:box.minX,y:box.maxY}];
   return mask.query(box.minX,box.minY,box.maxX,box.maxY).some(edge=>pointInBox(edge.a,box)||pointInBox(edge.b,box)||corners.some((p,i)=>crosses(edge.a,edge.b,p,corners[(i+1)%4])));
 }
-const protectedRects=[...layout.cityStructures,...CITY_SAMPLE_HOUSES].map(rectangle),rects=[];
+const protectedRects=layout.cityStructures.map(rectangle),rects=[];
 let footprintChecks=0;
 for(const p of props){
   assert.equal(p.variant,'city-native');assert.equal(p.region,'clockshadow-city');assert.equal(p.collision,false);
-  assert(['house','ruin','shrub','oak','cypress'].includes(p.cityArt));
+  assert(['house','ruin','workshop','warehouse','stable','planter','rubble','cart','lamp'].includes(p.cityArt));
   assert(p.width>0&&p.depth>0&&p.height>0&&Number.isFinite(p.x+p.y+p.width+p.depth+p.height));
   assert.equal(p.scale,1,'world and actor scale are not used to hide placement errors');
   assert.equal(p.sortY,p.y+p.depth/2,'depth uses the full foundation front');
@@ -53,12 +52,10 @@ for(const p of props){
     assert(!contourInBox(mask,b),'no road or terrain contour can cross any part of the foundation');
     for(const x of [b.minX,p.x,b.maxX])for(const y of [b.minY,p.y,b.maxY]){assert(!mask.inside(x,y));footprintChecks++;}
   }
-  assert(!overlaps(b,CITY_SAMPLE_BOUNDS),'the accepted sample remains reserved');
   assert(protectedRects.every(q=>!overlaps(b,q)),'canonical buildings and accepted sample houses cannot receive a second foundation');
   assert(rects.every(q=>!overlaps(b,q)),'new native buildings and roots do not share ground footprints');
   rects.push(b);
 }
-assert(!props.some(p=>CITY_SAMPLE_HOUSES.some(s=>s.id===p.id||s.x===p.x&&s.y===p.y)),'the approved pair is retained by its original owner');
 
 // Use the production Terrain carrier/indexing and movement code, with the
 // generated artwork supplied as its actual fixed props. The immutable city
@@ -73,6 +70,5 @@ for(const passage of layout.passages)for(const radius of [15,24,49])for(let i=1;
   assert(Math.hypot(moved.x-b.x,moved.y-b.y)<.02,'unchanged full-body movement replays the authored connection');roadSweeps++;
 }
 assert.equal(JSON.stringify(layout),before,'all layout, collision, encounters and routes remain unchanged');
-assert.equal(JSON.stringify(CITY_SAMPLE_HOUSES),sampleBefore,'the two approved native houses retain exact positions and dimensions');
 const artCounts=Object.fromEntries([...new Set(props.map(p=>p.cityArt))].map(art=>[art,props.filter(p=>p.cityArt===art).length]));
-console.log(JSON.stringify({cityBlockScenery:'passed',count:props.length,limit:CITY_BLOCK_SCENERY_LIMIT,artCounts,streetFronts:props.filter(p=>p.cityBlockPlacement==='front').length,interiorLots:props.filter(p=>p.cityBlockPlacement==='interior').length,footprintChecks,roadSweeps,initializationMs:Math.round(initializationMs*100)/100,method:'cached deterministic placement; exact full-rectangle contour exclusion on both masks; ordinary terrain carriers and r15/r24/r49 movement; canonical/sample preservation'}));
+console.log(JSON.stringify({cityBlockScenery:'passed',count:props.length,limit:CITY_BLOCK_SCENERY_LIMIT,artCounts,streetFronts:props.filter(p=>p.cityBlockPlacement==='front').length,interiorLots:props.filter(p=>p.cityBlockPlacement==='interior').length,footprintChecks,roadSweeps,initializationMs:Math.round(initializationMs*100)/100,method:'cached deterministic placement; exact full-rectangle contour exclusion on both masks; ordinary terrain carriers and r15/r24/r49 movement; canonical preservation'}));

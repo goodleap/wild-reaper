@@ -4,7 +4,6 @@ import { createRiftLayout } from './dist/worlds/rift-layout.js';
 import { RiftCollision, riftPointInPolygon } from './dist/rift-collision.js';
 import { createCityBlockScenery } from './dist/worlds/city-block-scenery.js';
 import { createCityGreenScenery, CITY_GREEN_SCENERY_LIMIT } from './dist/worlds/city-green-scenery.js';
-import { CITY_SAMPLE_BOUNDS, CITY_SAMPLE_HOUSES } from './dist/worlds/city-sample-scene.js';
 
 const rect=p=>({minX:p.x-p.width/2,minY:p.y-p.depth/2,maxX:p.x+p.width/2,maxY:p.y+p.depth/2});
 const overlap=(a,b)=>a.maxX>=b.minX&&a.minX<=b.maxX&&a.maxY>=b.minY&&a.minY<=b.maxY;
@@ -23,23 +22,22 @@ let props,elapsed;
 try{const start=performance.now();props=createCityGreenScenery(layout,occupied);elapsed=performance.now()-start;}finally{Math.random=originalRandom;}
 assert.equal(createCityGreenScenery(layout,occupied),props,'warm frames reuse the same prebuilt records');
 assert(Object.isFrozen(props)&&props.every(Object.isFrozen),'render consumers cannot edit cached placement records');
-assert(props.length>=2000&&props.length<=3500&&props.length<=CITY_GREEN_SCENERY_LIMIT,'whole-tree density has a world-sized, bounded population');
+assert(props.length>=500&&props.length<=CITY_GREEN_SCENERY_LIMIT,'mixed edge vegetation has a world-sized, bounded population');
 assert(elapsed<500,'one-time placement must not become a multi-second initialization pass');
 assert.deepEqual(createCityGreenScenery(createRiftLayout('forest')),[],'legacy worlds receive no city vegetation');
 assert.equal(new Set(props.map(p=>p.id)).size,props.length,'each depth-queue item has a stable identity');
 assert.deepEqual(createCityGreenScenery(structuredClone(layout),occupied),props,'equivalent geometry produces identical whole-tree placements');
 
-const masks=new RiftCollision(layout),foundations=[...layout.cityStructures,...CITY_SAMPLE_HOUSES,...occupied].map(rect);
+const masks=new RiftCollision(layout),foundations=[...layout.cityStructures,...occupied].map(rect);
 const reservations=[{...layout.spawn,r:260},...Object.values(layout.plan),...layout.encounters,
   ...layout.interactions.caves.map(p=>({...p,r:145})),...layout.interactions.chests.map(p=>({...p,r:110}))];
 for(const p of props){
   const r=rect(p);
-  assert(p.variant==='city-native'&&p.region==='clockshadow-city'&&p.collision===false&&p.cityGreen,'draw-only native sprites do not create duplicate obstacles');
-  assert(p.width>=32&&p.width<=60&&p.depth>=24&&p.depth<=44&&p.height>=120&&p.height<=170,'tree footprint and projection remain readable at standard view');
+  assert(p.riftPalette===true&&p.region==='clockshadow-city'&&p.collision===false&&p.cityGreen,'draw-only scenery does not create duplicate obstacles');
+  assert(p.width>=24&&p.width<=70&&p.depth>=24&&p.depth<=70&&p.height>20&&p.height<180,'roots and projection remain readable at standard view');
   assert.equal(p.sortY,p.y+p.depth/2,'the normal depth queue uses the true front root edge');
   assert(within(r,layout.bounds),`${p.id}: the entire root rectangle stays inside the world`);
   assert(!foundations.some(f=>overlap(r,f)),`${p.id}: root does not intersect a canonical or raised city building`);
-  assert(!overlap({minX:p.x-95,minY:p.y-167.5,maxX:p.x+95,maxY:p.y+37.5},CITY_SAMPLE_BOUNDS),'the approved art sample remains clear');
   for(const mask of[masks.ground,masks.high]){
     for(const q of[{x:p.x,y:p.y},...corners(r)])assert(!mask.inside(q.x,q.y),`${p.id}: tree roots belong to blocked ground for both bodies and flyers`);
     assert(!mask.query(r.minX,r.minY,r.maxX,r.maxY).some(e=>edgeCrosses(e.a,e.b,r)),`${p.id}: no contour can cross the full root rectangle between its corners`);
@@ -50,13 +48,23 @@ for(const p of props){
   }
   for(const q of reservations){const dx=Math.max(r.minX-q.x,0,q.x-r.maxX),dy=Math.max(r.minY-q.y,0,q.y-r.maxY);assert(dx*dx+dy*dy>=(q.r??130)**2,'objective approach space stays free of roots');}
 }
-const count=(area,art)=>props.filter(p=>(!area||p.area===area)&&(!art||p.cityArt===art)).length;
-assert(count('02','apple')>count('02','oak'),'the former orchard favors fruit trees');
-assert(count('13','cypress')>count('13','oak'),'the formal garden favors clipped cypresses');
-assert(count('S1')>15,'the secret garden has its own complete leafy fringe');
-for(const sx of[-1,1])for(const sy of[-1,1])assert(props.filter(p=>p.x*sx>0&&p.y*sy>0).length>200,'every side of the world receives vegetation');
+const count=(area,kind)=>props.filter(p=>(!area||p.area===area)&&(!kind||p.cityKind===kind)).length;
+for(const kind of ['tree','shrub','rock'])assert(count(null,kind)>30,'the boundary mixes full trees, low plants and rocks');
+assert(props.some(p=>p.riftShrub&&p.heightBand==='low'),'low planting remains distinguishable from trunks');
+assert(count('S1')>10,'the secret garden has its own leafy fringe');
+for(const sx of[-1,1])for(const sy of[-1,1])assert(props.filter(p=>p.x*sx>0&&p.y*sy>0).length>100,'each quarter has vegetation');
+let visibleGardenIslands=0;
+for(const ring of layout.solidBoundaries){
+  if(!ring.hole||ring.points.length<7)continue;
+  const xs=ring.points.map(p=>p.x),ys=ring.points.map(p=>p.y),r={minX:Math.min(...xs),maxX:Math.max(...xs),minY:Math.min(...ys),maxY:Math.max(...ys)},cx=(r.minX+r.maxX)/2,cy=(r.minY+r.maxY)/2;
+  if(r.maxX-r.minX<120||r.maxX-r.minX>650||r.maxY-r.minY<120||r.maxY-r.minY>650||!riftPointInPolygon({x:cx,y:cy},ring.points))continue;
+  const area=layout.areas.reduce((best,a)=>(a.center.x-cx)**2+(a.center.y-cy)**2<(best.center.x-cx)**2+(best.center.y-cy)**2?a:best,layout.areas[0]);
+  if(!['01','02','13','S1'].includes(area.id)||foundations.some(b=>inside(b,{x:cx,y:cy})))continue;
+  assert(props.some(p=>riftPointInPolygon(p,ring.points)),`${ring.id}: a small real garden obstacle cannot remain an empty lawn`);visibleGardenIslands++;
+}
+assert(visibleGardenIslands>=4,'authored interior garden islands receive whole rooted vegetation');
 assert.equal(JSON.stringify(layout),before,'all walkable contours, combat placements, sites and routes remain unchanged');
 assert.equal(JSON.stringify(occupied),occupiedBefore,'natural placement cannot move a previously placed city object');
-console.log(JSON.stringify({cityGreenScenery:'passed',trees:props.length,initializationMs:Math.round(elapsed*100)/100,targetMs:200,
-  types:Object.fromEntries(['oak','cypress','apple'].map(art=>[art,count(null,art)])),areas:Object.fromEntries(['02','13','S1','outer'].map(area=>[area,count(area)])),
-  coverage:'whole-root ground/high contour exclusion; no lake/foundation/site/sample overlap; bounded deterministic cached placement; original geometry unchanged'}));
+console.log(JSON.stringify({cityGreenScenery:'passed',items:props.length,visibleGardenIslands,initializationMs:Math.round(elapsed*100)/100,targetMs:200,
+  types:Object.fromEntries(['tree','shrub','rock'].map(art=>[art,count(null,art)])),areas:Object.fromEntries(['01','02','13','S1'].map(area=>[area,count(area)])),
+  coverage:'whole-root ground/high contour exclusion; no lake/foundation/site overlap; bounded deterministic cached placement; original geometry unchanged'}));

@@ -26,7 +26,7 @@ export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=
   const drainTimers=()=>{for(const [id,task] of [...timers])if(task.at<=now){timers.delete(id);task.callback();}};
   const nodes={},listeners={},document={activeElement:null,hidden:false};
   const gradient={addColorStop(){}};
-  const drawing=new Proxy({measureText:text=>({width:String(text).length*6}),createLinearGradient:()=>gradient,createRadialGradient:()=>gradient,drawImage(){drawImages++;}},{get:(target,key)=>target[key]??(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
+  const drawing=new Proxy({measureText:text=>({width:String(text).length*6}),createLinearGradient:()=>gradient,createRadialGradient:()=>gradient,drawImage(){drawImages++;},getImageData:(x,y,width,height)=>({data:new Uint8ClampedArray(width*height*4)})},{get:(target,key)=>target[key]??(()=>{}),set:(target,key,value)=>(target[key]=value,true)});
   const camel=s=>s.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());
   const eventHandlers=new Map(),observers=[];
   const listen=(key,handler)=>{const handlers=eventHandlers.get(key)||[];handlers.push(handler);eventHandlers.set(key,handlers);listeners[key]=event=>{for(const callback of handlers)callback(event);};};

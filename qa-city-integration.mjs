@@ -14,7 +14,7 @@ assert.equal(game.worldId,ID,'ordinary world identity selects the city map witho
 assert.equal(game.startWorldId,ID);assert.equal(game.debug,false);assert.equal(game.debugOptions.fastMovement,false);
 assert.equal(game.player.speed,forest.player.speed);assert.equal(game.player.r,forest.player.r);
 assert.equal(layout,createRiftLayout(ID));assert.equal(layout.bounds.maxX-layout.bounds.minX,14400);assert.equal(layout.bounds.maxY-layout.bounds.minY,10800);
-assert.equal(layout.worldId,ID);assert.equal(layout.areas.length,19,'the city has 19 independently sized exploration regions');assert.notEqual(layout,createRiftLayout('forest'));assert.notEqual(layout,createRiftLayout('verdant-rift'));
+assert.equal(layout.worldId,ID);assert.equal(layout.artStyle,'clockshadow-renewed');assert.equal(layout.areas.length,19,'the city has 19 independently sized exploration regions');assert.notEqual(layout,createRiftLayout('forest'));assert.notEqual(layout,createRiftLayout('verdant-rift'));
 assert.deepEqual(WORLD_IDS.slice(0,9),['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift'],'saved numeric IDs remain stable');
 assert.deepEqual(worldNeighbors(WORLD_IDS.indexOf(ID)),[],'independent map has no invented cross-world exits');
 assert.equal(trial.region.id,'city');assert.equal(trial.stage.id,'city-trial');assert.notEqual(trial.terrain.island.layout,layout,'the existing city trial stays an independent trial');
@@ -74,9 +74,12 @@ const standing=area=>{
  assert.fail(`no standing space in area ${area.id}`);
 };
 const byArea=new Map(layout.areas.map(a=>[a.id,standing(a)]));
-const followTargets=layout.areas.filter(a=>['02','08'].includes(a.id));
-assert(followTargets.length>=1,'city map has an initial forest walking route');
-for(const area of followTargets)walk(byArea.get(area.id),true);
+// Follow a continuous sequence from the spawn through the main city spine.
+// The authored connections provide real waypoints rather than old sample coords.
+const mainRouteIds=['01-03','03-07','07-08'];
+const mainRoutes=mainRouteIds.map(id=>layout.passages.find(p=>p.id===id));
+assert(mainRoutes.every(Boolean),'the city retains a connected arrival-to-bell-square route');
+for(const route of mainRoutes)for(const point of route.waypoints)walk({...point,id:route.id},true);
 for(let i=0;i<240;i++){game._clock+=1/60;game.companions.update(1/60);}
 for(const member of game.companions.members)assert(distance(foot(game,member),foot(game))<240,'followers finish beside the moving leader');
 assert.equal(recoveries,0,'the visible main route does not require unseen companion recovery');
@@ -109,6 +112,7 @@ function request(id){
  assert.equal(game.sceneTransition.active,false);assert.equal(game.sceneTransition.commitSucceeded,true);
 }
 walk(paired[0]);request(paired[0].id);const underground=game.dungeon.active;assert.equal(underground.artTheme,'city');assert.equal(underground.riftExits.length,2);
+const caveEnemy=underground.enemies.find(e=>e.hp>1);assert(caveEnemy,'the underground journey contains a real encounter');caveEnemy.hp-=1;const caveEnemyHp=caveEnemy.hp;
 const departure=underground.riftExits.find(e=>e.key===paired[1].key),cell=game.dungeon._cellAt(foot(game).x,foot(game).y,underground),goal=game.dungeon._cellAt(departure.x,departure.y,underground);
 const queue=[cell],parents=new Map([[cell.id,null]]);
 for(let i=0;i<queue.length&&!parents.has(goal.id);i++)for(const next of game.dungeon._neighbors(queue[i],underground))if(!parents.has(next.id)){parents.set(next.id,queue[i]);queue.push(next);}
@@ -118,7 +122,7 @@ for(const room of rooms.slice(1))walk(room);
 walk(departure);game.dungeon.update(0);request(departure.id);
 assert.equal(game.dungeon.active,null);assert(distance(foot(game),paired[1])<190,'the opposite cave returns to its own surface mouth');
 assert.equal(game.terrain.island.layout,layout,'cave travel restores the exact surface collision and scenery layout');
-walk(paired[1]);request(paired[1].id);assert.equal(game.dungeon.active,underground,'opposite cave mouths share the same seeded instance');
+walk(paired[1]);request(paired[1].id);assert.equal(game.dungeon.active,underground,'opposite cave mouths share the same seeded instance');assert.equal(caveEnemy.hp,caveEnemyHp,'leaving and re-entering preserves the actual underground combat state');
 const returnExit=underground.riftExits.find(e=>e.key===paired[1].key);walk(returnExit);game.dungeon.update(0);request(returnExit.id);
 const challenge=caves.find(c=>caves.filter(other=>other.caveId===c.caveId).length===1);assert(challenge);
 walk(challenge);request(challenge.id);const challengeState=game.dungeon.active;
@@ -126,29 +130,23 @@ assert.notEqual(challengeState,underground);assert.equal(challengeState.riftExit
 walk(challengeState.riftExits[0]);game.dungeon.update(0);request(challengeState.riftExits[0].id);
 assert.equal(game.dungeon.active,null);assert(distance(foot(game),challenge)<190,'the challenge returns beside the correct surface mouth');
 const caveWalked=walked-caveStart;
-const castleResults=[];
-const castleOrigin={x:-5200,y:-4300},castlePoint=([x,y])=>({x:x+castleOrigin.x,y:y+castleOrigin.y});
-const castleRoutes={
- main:[[1000,1760],[1000,1500],[1000,1220],[1000,950]],
- west:[[1000,1220],[750,1220],[750,780],[310,780],[310,300],[340,220],[1000,220]],
- east:[[1000,220],[1660,220],[1660,780],[1250,780],[1250,1220],[1740,1220],[1920,1250]],
- postern:[[310,680],[80,680]],
- crossCourt:[[750,1220],[1250,1220]]
-};
-walk(castlePoint(castleRoutes.main[0]));
+const districtResults=[];
+const districtRoutes=layout.passages.filter(p=>p.from===p.to&&p.waypoints.length>=4);
+assert(districtRoutes.length>=3,'the rebuilt city has explorable internal routes beyond inter-region connectors');
+// Test a compact loop, a second exit and a far-side district with both body
+// profiles. Other routes are covered by the geometry/navigation suite.
+const selectedDistrictRoutes=[districtRoutes[0],districtRoutes.find(p=>p.from!==districtRoutes[0].from),districtRoutes.at(-1)];
+assert.equal(new Set(selectedDistrictRoutes).size,3,'companion routes cover distinct internal paths');
+walk(selectedDistrictRoutes[0].waypoints[0]);
 assert(game.companions.recruit('stormcaller'));assert(game.companions.recruit('owl'));recoveries=0;
-for(const [name,route] of Object.entries(castleRoutes)){
- const points=route.map(castlePoint);walk(points[0],true);const start=walked;
- for(const point of points.slice(1)){
-  const from=foot(game);
-  assert(!game.terrain.firstBlocker(from.x,from.y,point.x,point.y,game.player.r),`${name}: approved castle leg remains direct and walkable`);
-  walk(point,true);
- }
- castleResults.push({route:name,legs:points.length-1,walked:Math.round(walked-start)});
+for(const route of selectedDistrictRoutes){
+ const points=route.waypoints;walk({...points[0],id:route.id},true);const start=walked;
+ for(const point of points.slice(1))walk({...point,id:route.id},true);
+ districtResults.push({route:route.id,legs:points.length-1,walked:Math.round(walked-start)});
 }
 for(let i=0;i<240;i++){game._clock+=1/60;game.companions.update(1/60);}
-for(const member of game.companions.members)assert(distance(foot(game,member),foot(game))<240,'both body profiles finish the castle passages beside the leader');
-assert.equal(recoveries,0,'the castle routes do not require companion recovery placement');
+for(const member of game.companions.members)assert(distance(foot(game,member),foot(game))<240,'both body profiles finish the district passages beside the leader');
+assert.equal(recoveries,0,'the district routes do not require companion recovery placement');
 game.companions.members=[];
 const chests=game.riftExploration.sites.filter(s=>s.kind==='chest');assert(chests.length>=3);
 for(const chest of chests){walk(chest);const gold=game.gold;assert(game.riftExploration.interact(chest.id));assert(game.gold>gold);assert.equal(game.riftExploration.interact(chest.id),false);claims++;}
@@ -175,4 +173,4 @@ for(const boundary of layout.boundaries){
  if(barrierSamples>=20)break;
 }
 assert(barrierSamples>=5,'the large map retains actual continuous impassable terrain');
-console.log(JSON.stringify({cityIntegration:'passed',world:ID,size:[14400,10800],view:[540,985],areasWalked:byArea.size,caveMouthsWalked:game.riftExploration.sites.filter(s=>s.kind==='cave').length,movementFrames:frames,walkedUnits:Math.round(walked),companionRecoveries:recoveries,barrierSamples,claims,surfaceGatewaysWalked:cityGates.length,bridgeWalks,undergroundRooms:rooms.length,undergroundWalked:Math.round(caveWalked),castleResults,method:'Shipped navigation and movement at unchanged body sizes/speed; default-enemy browser checks are separate'}));
+console.log(JSON.stringify({cityIntegration:'passed',world:ID,size:[14400,10800],view:[540,985],areasWalked:byArea.size,caveMouthsWalked:game.riftExploration.sites.filter(s=>s.kind==='cave').length,movementFrames:frames,walkedUnits:Math.round(walked),companionRecoveries:recoveries,barrierSamples,claims,surfaceGatewaysWalked:cityGates.length,bridgeWalks,undergroundRooms:rooms.length,undergroundWalked:Math.round(caveWalked),districtResults,method:'Shipped navigation and movement at unchanged body sizes/speed; default-enemy browser checks are separate'}));

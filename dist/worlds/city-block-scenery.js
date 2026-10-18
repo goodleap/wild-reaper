@@ -1,11 +1,10 @@
 import { RiftCollision } from '../rift-collision.js';
-import { CITY_SAMPLE_BOUNDS, CITY_SAMPLE_HOUSES } from './city-sample-scene.js';
 
 // Raised city mass is placed once, in the already blocked part of the baked
 // world. These records only index complete artwork in the usual depth queue;
 // neither a new foundation nor a second collision shape is introduced.
 export const CITY_BLOCK_SCENERY_LIMIT=1536;
-const BUILDING_LIMIT=1280,FOLIAGE_LIMIT=256,CELL=256,EMPTY=Object.freeze([]);
+const BUILDING_LIMIT=950,FOLIAGE_LIMIT=190,CELL=256,EMPTY=Object.freeze([]);
 const cache=new WeakMap();
 const urban=Object.freeze({minX:-5400,minY:-4900,maxX:5800,maxY:4100});
 const hash=n=>{const v=Math.sin(n*127.1+41.7)*43758.5453;return v-Math.floor(v);};
@@ -56,14 +55,14 @@ export function createCityBlockScenery(layout){
   if(layout?.worldId!=='clockshadow-city'||layout.artTheme!=='city')return EMPTY;
   if(cache.has(layout))return cache.get(layout);
   const collision=new RiftCollision(layout),occupied=new RectIndex(),props=[];
-  for(const s of [...layout.cityStructures,...CITY_SAMPLE_HOUSES])occupied.add(box(s.x,s.y,s.width,s.depth));
+  for(const s of (layout.cityStructures||[]))occupied.add(box(s.x,s.y,s.width,s.depth));
   const reservations=[{...layout.spawn,r:260},...Object.values(layout.plan||{}),...(layout.encounters||[]),
     ...(layout.interactions?.caves||[]).map(p=>({...p,r:120})),...(layout.interactions?.chests||[]).map(p=>({...p,r:90}))];
   const routes=layout.passages.flatMap(p=>p.waypoints.slice(1).map((b,i)=>({a:p.waypoints[i],b,r:p.width/2+6})));
   const district=p=>layout.areas.reduce((best,a)=>(a.center.x-p.x)**2+(a.center.y-p.y)**2<(best.center.x-p.x)**2+(best.center.y-p.y)**2?a:best,layout.areas[0]);
   function safe(p){
     const rect=box(p.x,p.y,p.width,p.depth);
-    if(!within(rect,urban)||!within(rect,layout.bounds)||overlap(visualBox(p),CITY_SAMPLE_BOUNDS)||occupied.overlaps(rect,14))return false;
+    if(!within(rect,urban)||!within(rect,layout.bounds)||occupied.overlaps(rect,14))return false;
     if(reservations.some(q=>{const dx=Math.max(rect.minX-q.x,0,q.x-rect.maxX),dy=Math.max(rect.minY-q.y,0,q.y-rect.maxY);return dx*dx+dy*dy<(q.r??100)**2;}))return false;
     // Keep even the reserved painted approach width clear. The expanded box
     // is conservative around diagonal trails and exact on ordinary city lanes.
@@ -71,13 +70,15 @@ export function createCityBlockScenery(layout){
     return blockedRectangle(collision.ground,rect)&&blockedRectangle(collision.high,rect);
   }
   function add(p){
-    if(props.length>=CITY_BLOCK_SCENERY_LIMIT||!safe(p))return false;
+    if(!p||props.length>=CITY_BLOCK_SCENERY_LIMIT||!safe(p))return false;
     props.push(carrier(p));occupied.add(box(p.x,p.y,p.width,p.depth));return true;
   }
   function building(id,x,y,placement){
-    const seed=identity(id),area=district({x,y}),ruined=['06','09','11','16'].includes(area.id)?hash(seed+3)<.34:hash(seed+3)<.14;
-    return {id,x:Math.round(x*100)/100,y:Math.round(y*100)/100,width:210,depth:100,height:160,
-      cityArt:ruined?'ruin':'house',cityKind:ruined?'ruin':'house',style:Math.floor(hash(seed+5)*6),seed:hash(seed+7),area:area.id,cityBlockPlacement:placement};
+    const seed=identity(id),area=district({x,y}),ruined=['06','09','11','16'].includes(area.id)?hash(seed+3)<.4:hash(seed+3)<.12;
+    if(['01','02','13','S1'].includes(area.id))return null;
+    const roll=hash(seed+21),kind=ruined?'ruin':area.id==='07'?'warehouse':area.id==='03'&&roll>.5?'workshop':roll>.82?'stable':'house';
+    return {id,x:Math.round(x*100)/100,y:Math.round(y*100)/100,width:168+Math.floor(hash(seed+33)*4)*22,depth:82+Math.floor(hash(seed+37)*3)*12,height:112+Math.floor(hash(seed+41)*4)*13,
+      cityArt:kind,cityKind:kind,style:Math.floor(hash(seed+5)*6),seed:hash(seed+7),area:area.id,cityBlockPlacement:placement};
   }
 
   // Street fronts follow the true contour rather than a screen-space grid.
@@ -94,7 +95,7 @@ export function createCityBlockScenery(layout){
       fronts.push(building(`city-block:front:${i}:${j}`,edge.a.x+dx*along/length-edge.nx*setback,edge.a.y+dy*along/length-edge.ny*setback,'front'));
     }
   }
-  fronts.sort((a,b)=>identity(a.id)-identity(b.id));
+  fronts.splice(0,fronts.length,...fronts.filter(Boolean));fronts.sort((a,b)=>identity(a.id)-identity(b.id));
   let buildings=0;
   for(const p of fronts)if(buildings<BUILDING_LIMIT&&add(p))buildings++;
 
@@ -108,7 +109,7 @@ export function createCityBlockScenery(layout){
     const phase=(Number(area.id.replace(/\D/g,''))%3)*23,stagger=(gy%2?126:0)*(area.id==='07'?.4:1);
     interior.push(building(`city-block:lot:${gx}:${gy}`,gx*252+stagger+phase+(hash(seed+9)-.5)*18,gy*184+(hash(seed+11)-.5)*20,'interior'));
   }
-  interior.sort((a,b)=>hash(identity(a.id)+29)-hash(identity(b.id)+29));
+  interior.splice(0,interior.length,...interior.filter(Boolean));interior.sort((a,b)=>hash(identity(a.id)+29)-hash(identity(b.id)+29));
   for(const p of interior)if(buildings<BUILDING_LIMIT&&add(p))buildings++;
 
   // Small plants fill selected unused blocked pockets, especially beside
@@ -117,9 +118,10 @@ export function createCityBlockScenery(layout){
   let foliage=0;const growth=[];
   for(let gy=Math.floor(urban.minY/144);gy<=Math.ceil(urban.maxY/144);gy++)for(let gx=Math.floor(urban.minX/180);gx<=Math.ceil(urban.maxX/180);gx++){
     const seed=identity(`plant:${gx}:${gy}`);if(hash(seed+5)<.48)continue;
-    const x=gx*180+(hash(seed+7)-.5)*80,y=gy*144+(hash(seed+9)-.5)*60,area=district({x,y}),tree=['02','13'].includes(area.id)&&hash(seed+11)>.55;
+    const x=gx*180+(hash(seed+7)-.5)*80,y=gy*144+(hash(seed+9)-.5)*60,area=district({x,y}),tree=false;
+    if(['01','02','13','S1'].includes(area.id))continue;
     const p={id:`city-block:growth:${gx}:${gy}`,x:Math.round(x*100)/100,y:Math.round(y*100)/100,
-      width:tree?76:44,depth:tree?60:16,height:tree?140:32,cityArt:tree?(hash(seed+13)>.5?'oak':'cypress'):'shrub',cityKind:tree?'tree':'foliage',
+      width:tree?76:44,depth:tree?60:16,height:tree?140:32,cityArt:hash(seed+13)<.4?'rubble':hash(seed+13)<.65?'cart':hash(seed+13)<.8?'lamp':'planter',cityKind:'street-detail',
       style:Math.floor(hash(seed+15)*6),seed:hash(seed+17),area:area.id,cityBlockPlacement:'growth'};
     growth.push(p);
   }

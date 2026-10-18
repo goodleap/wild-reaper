@@ -46,33 +46,10 @@ for(const structure of layout.cityStructures.filter(s=>s.solid)){
 }
 assert(exposedSweeps>100,'exercise exposed faces across the whole city');
 
-// Preserve the accepted castle plan at its original scale, including the
-// 700 × 400 keep. A large icon at the courtyard center cannot satisfy this.
-const castleOrigin={x:-5200,y:-4300};
-const castleAssemblies=[
-  ['主堡',[650,300,1350,700]],['西翼',[420,400,650,700]],['东翼',[1350,400,1580,700]],
-  ['兵营',[250,860,600,1150]],['军械仓库',[1400,860,1750,1120]],['马厩',[250,1270,650,1500]],['工坊',[1370,1320,1750,1500]],
-  ['北墙',[150,100,1850,140]],['西墙北',[150,100,190,590]],['西墙南',[150,770,190,1640]],
-  ['东墙北',[1810,100,1850,1160]],['东墙南',[1810,1340,1850,1640]],['南墙西',[150,1600,900,1640]],['南墙东',[1100,1600,1850,1640]],
-  ['瓮城西',[680,1410,720,1600]],['瓮城东',[1280,1410,1320,1600]],['内门墙西',[680,1370,900,1410]],['内门墙东',[1100,1370,1320,1410]],
-  ['西北塔',[150,100,270,220]],['东北塔',[1730,100,1850,220]],['西南塔',[150,1520,270,1640]],['东南塔',[1730,1520,1850,1640]]
-];
-for(const [name,[minX,minY,maxX,maxY]] of castleAssemblies){
-  const pieces=layout.cityStructures.filter(s=>s.id===`castle:${name}`||s.id.startsWith(`castle:${name}:`));
-  assert(pieces.length,`castle ${name} has physical building modules`);
-  const bounds=[Math.min(...pieces.map(s=>s.x-s.width/2))-castleOrigin.x,Math.min(...pieces.map(s=>s.y-s.depth/2))-castleOrigin.y,Math.max(...pieces.map(s=>s.x+s.width/2))-castleOrigin.x,Math.max(...pieces.map(s=>s.y+s.depth/2))-castleOrigin.y];
-  assert.deepEqual(bounds,[minX,minY,maxX,maxY],`castle ${name} retains its complete footprint`);
-  assert.equal(pieces.reduce((sum,s)=>sum+s.width*s.depth,0),(maxX-minX)*(maxY-minY),`castle ${name} is tiled without omitted volume`);
-}
-const castleRoutes={
-  main:[[1000,1760],[1000,1500],[1000,1220],[1000,950]],
-  west:[[1000,1220],[750,1220],[750,780],[310,780],[310,300],[340,220],[1000,220]],
-  east:[[1000,220],[1660,220],[1660,780],[1250,780],[1250,1220],[1740,1220],[1920,1250]],
-  postern:[[310,680],[80,680]],
-  crossCourt:[[750,1220],[1250,1220]]
-};
+// Every authored inter-quarter street, court loop and interaction approach is
+// tested against the actual complete-body sweep, not just its graph endpoints.
 for(const p of layout.passages.filter(p=>p.gateId))terrain.setRiftGate(p.gateId,true);
-let castleSweeps=0,roadSweeps=0;
+let roadSweeps=0;
 function replay(points,radius,label){
   for(let i=1;i<points.length;i++){
     const a=points[i-1],b=points[i];
@@ -82,13 +59,15 @@ function replay(points,radius,label){
     assert(distance(result,b)<.02,`${label}: actual r${radius} body completes the leg`);
   }
 }
-for(const [name,route] of Object.entries(castleRoutes))for(const radius of [15,24,49]){
-  replay(route.map(([x,y])=>({x:x+castleOrigin.x,y:y+castleOrigin.y})),radius,`castle:${name}`);
-  castleSweeps+=route.length-1;
-}
 for(const passage of layout.passages)for(const radius of [15,24,49]){
   replay(passage.waypoints,radius,passage.id);roadSweeps+=passage.waypoints.length-1;
 }
+assert(layout.passages.filter(p=>p.from===p.to).length>=10,'multiple real streets loop around building blocks');
+assert(layout.cityStructures.some(s=>s.cityKind==='keep'),'the fortress has a real keep');
+assert(layout.cityStructures.some(s=>s.cityKind==='cathedral'),'the cathedral has its own built footprint');
+assert.equal(layout.cityStructures.filter(s=>s.cityKind==='belltower').length,0,'the functional bell tower is not duplicated by scenery');
+assert(layout.cityStructures.filter(s=>s.cityKind==='wall').length>30,'continuous wall modules define controlled gates');
+assert(layout.cityStructures.some(s=>s.cityKind==='fountain'),'the square includes low human-scale furnishings');
 
 const bridges=layout.passages.filter(p=>p.kind==='bridge');
 assert.equal(bridges.length,2);
@@ -106,12 +85,19 @@ for(const bridge of bridges){
   }
 }
 
-// Large within-area holes need explicit graph detours. Test both directions
-// around the keep; the bounded local grid must not be the only global route.
-const navigation=new RiftNavigation(terrain),castlePoint=([x,y])=>({x:x+castleOrigin.x,y:y+castleOrigin.y});
-for(const radius of [15,24,49])for(const [a,b] of [[[1000,950],[1000,220]],[[310,680],[1740,1220]],[[80,680],[1000,1760]]])for(const reverse of [false,true]){
-  const start=castlePoint(reverse?b:a),target=castlePoint(reverse?a:b),route=navigation.route(start,target,radius,'ground');
-  assert(route?.length,`castle internal graph retains a real r${radius} detour`);
-  let prior=start;for(const p of route){assert(!terrain.firstBlocker(prior.x,prior.y,p.x,p.y,radius),'each macro detour leg also clears real terrain');prior=p;}
+// Test graph routes from the camp to every region and fixed objective. Local
+// grid search alone cannot paper over disconnected large-scale streets.
+const navigation=new RiftNavigation(terrain);
+const goals=[...layout.areas.map(a=>a.center),...Object.values(layout.plan),...layout.interactions.caves.map(s=>s.approach),...layout.interactions.chests.map(s=>s.approach)];
+let navigationRoutes=0;
+for(const radius of [15,24,49])for(const target of goals){
+  assert(terrain.isFree(target.x,target.y,radius),'objectives retain body-wide standing room');
+  for(const reverse of [false,true]){
+    const start=reverse?target:layout.spawn,finish=reverse?layout.spawn:target;
+    const route=navigation.route(start,finish,radius,'ground');
+    assert(route?.length,`a real r${radius} route reaches ${finish.x},${finish.y}`);
+    let prior=start;for(const p of route){assert(!terrain.firstBlocker(prior.x,prior.y,p.x,p.y,radius),'every macro leg clears real terrain');prior=p;}
+    navigationRoutes++;
+  }
 }
-console.log(JSON.stringify({cityGeometry:'passed',dimensions:[14400,10800],structures:layout.cityStructures.length,footprintSamples,exposedSweeps,castleAssemblies:castleAssemblies.length,castleSweeps,roadSweeps,waterSweeps}));
+console.log(JSON.stringify({cityGeometry:'passed',dimensions:[14400,10800],structures:layout.cityStructures.length,footprintSamples,exposedSweeps,roadSweeps,waterSweeps,navigationRoutes}));

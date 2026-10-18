@@ -44,27 +44,23 @@ for(const world of WORLD_IDS){
 const g=new Game({debug:true,debugWorld:'volcano'});assert(g._difficultyTime()<70);assert(g._waveTier()<=2);
 g.regions.unlockedConnections.add('0:1');assert(g._difficultyTime()>=45);
 
-// The URL can override the preparation selection. Cold loading must use the
-// resolved Game world and await its assets before the real first scene render.
+// The URL can override the preparation selection. The rebuilt city must draw
+// on a cold start without fetching its retired PNG atlases.
 for(const [search,selectedWorld,expectedWorld]of [['','clockshadow-city','clockshadow-city'],['?debug&world=clockshadow-city','forest','clockshadow-city'],['?debug&world=beach','clockshadow-city','beach']]){
   cityArtLibrary.images.clear();cityArtLibrary.sprites.clear();cityDetailArt.images.clear();
-  let loads=0,draws=0,released=false,cold;
+  let loads=0,draws=0,cold;
   const library=new Proxy(cityArtLibrary,{get(target,key){
     if(key==='preload')return()=>{
-      loads++;assert.equal(cold.run('game'),null,'the previous scene is not replaced while city art loads');
-      assert.equal(cold.run('archive.data.totals.runs'),0);
-      assert(!cityArtLibrary.ready,'each city start begins with empty image caches');
-      return new Promise(resolve=>{cold.run('setTimeout(releaseCityAssets,100)');release=()=>{installCityImages();released=true;resolve(cityArtLibrary);};});
+      loads++;throw new Error('Rebuilt city must not load the retired city PNG atlases');
     };
     const value=target[key];return typeof value==='function'?value.bind(target):value;
   }});
-  let release;
-  cold=harness(search,{moduleOverrides:{cityArtLibrary:library,releaseCityAssets:()=>release(),assertSceneReady:()=>{
-    if(expectedWorld==='clockshadow-city')assert(released&&cityArtLibrary.ready,'first render waits for decoded city art');draws++;
+  cold=harness(search,{moduleOverrides:{cityArtLibrary:library,assertSceneReady:()=>{
+    if(expectedWorld==='clockshadow-city')assert.equal(cold.run('game.terrain.island.layout.artStyle'),'clockshadow-renewed');draws++;
   }}});
   cold.nodes['start-button'].onclick();cold.run(`selectedWorldId=${JSON.stringify(selectedWorld)};renderGame=()=>{assertSceneReady();shippedRenderGame();};`);
   cold.nodes['prepare-start-button'].onclick();await cold.flush();
-  assert.equal(cold.run('game.worldId'),expectedWorld);assert.equal(loads,expectedWorld==='clockshadow-city'?1:0);
+  assert.equal(cold.run('game.worldId'),expectedWorld);assert.equal(loads,0);
   assert(draws>0,'startup warms the actual scene drawing path');assert.equal(cold.run('archive.data.totals.runs'),1);
   assert(!cold.nodes['scene-loading'].classList.contains('has-error'));assert(cold.nodes['scene-loading'].classList.contains('hidden'));
   cold.run("game.dispose('test-complete');");

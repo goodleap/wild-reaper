@@ -50,37 +50,25 @@ const sourceScale=200/693;
 assert(Math.abs((call[1]+1088*sourceScale)-(call[1]+395*sourceScale)-200)<1e-10,'the painted doorway retains the real 200 unit opening');
 assert(Math.abs(call[2]+1040*sourceScale-gate.y-20)<1e-10,'native source foot aligns with world y+20');
 assert(spec.drawWidth>427&&spec.drawHeight>306,'tall twin towers receive their full visual culling bounds');
-const {createRiftLayout}=await import('./dist/worlds/rift-layout.js'),layout=createRiftLayout('clockshadow-city');
-for(const [wallId,minSourceX,maxSourceX]of[['castle:南墙西:0:2',45,395],['castle:南墙东:0:0',1088,1428]]){
-  const wall=layout.cityStructures.find(prop=>prop.id===wallId);assert(wall?.solid,'the original adjoining wall supplies the tower foot collision');
-  const foot={minX:call[1]+minSourceX*sourceScale,maxX:call[1]+maxSourceX*sourceScale,minY:gate.y-20,maxY:gate.y+20},epsilon=1e-8;
-  assert(foot.minX>=wall.x-wall.width/2-epsilon&&foot.maxX<=wall.x+wall.width/2+epsilon&&foot.minY>=wall.y-wall.depth/2-epsilon&&foot.maxY<=wall.y+wall.depth/2+epsilon,'tower feet sit entirely inside existing solid wall rectangles');
+// Legacy source calibration is a renderer unit fixture, not a requirement
+// that the rebuilt world retain the old sample's adjoining wall identities.
+const legacyWallFeet=[
+  {x:-4425,y:-2680,width:250,depth:40,minSourceX:45,maxSourceX:395},
+  {x:-3975,y:-2680,width:250,depth:40,minSourceX:1088,maxSourceX:1428}
+];
+for(const wall of legacyWallFeet){
+  const foot={minX:call[1]+wall.minSourceX*sourceScale,maxX:call[1]+wall.maxSourceX*sourceScale,minY:gate.y-20,maxY:gate.y+20},epsilon=1e-8;
+  assert(foot.minX>=wall.x-wall.width/2-epsilon&&foot.maxX<=wall.x+wall.width/2+epsilon&&foot.minY>=wall.y-wall.depth/2-epsilon&&foot.maxY<=wall.y+wall.depth/2+epsilon,'legacy source tower feet fit their calibrated wall footprint');
 }
 
 const {CITY_SAMPLE_HOUSES}=await import('./dist/worlds/city-sample-scene.js');
-const {RiftCollision}=await import('./dist/rift-collision.js'),originalCollision=new RiftCollision(layout);
 assert.equal(CITY_SAMPLE_HOUSES.length,2);
 assert.deepEqual(CITY_SAMPLE_HOUSES.map(({x,y,width,depth,height,sortY})=>({x,y,width,depth,height,sortY})),[
   {x:-4410,y:-2340,width:210,depth:100,height:160,sortY:-2290},{x:-3990,y:-2340,width:210,depth:100,height:160,sortY:-2290}
 ]);
-function crossesRect(a,b,rect){
-  let lo=0,hi=1;
-  for(const [axis,min,max]of[['x',rect.minX,rect.maxX],['y',rect.minY,rect.maxY]]){
-    const delta=b[axis]-a[axis];
-    if(Math.abs(delta)<1e-12){if(a[axis]<min||a[axis]>max)return false;continue;}
-    const p=(min-a[axis])/delta,q=(max-a[axis])/delta;lo=Math.max(lo,Math.min(p,q));hi=Math.min(hi,Math.max(p,q));if(lo>hi)return false;
-  }return true;
-}
-let houseFootSamples=0;
 for(const house of CITY_SAMPLE_HOUSES){
   assert.equal(house.collision,false,'existing authored geometry remains the sole house-foot blocker');
   const spec=CITY_DETAIL_MANIFEST.props[house.id];assert(spec&&spec.asset==='house');assert.equal(house.width,spec.width);assert.equal(house.depth,spec.depth);assert.equal(house.variant,spec.variant);
-  const rect={minX:house.x-house.width/2,maxX:house.x+house.width/2,minY:house.y-house.depth/2,maxY:house.y+house.depth/2};
-  for(const mask of[originalCollision.ground,originalCollision.high]){
-    for(let y=rect.minY;y<=rect.maxY;y+=5)for(let x=rect.minX;x<=rect.maxX;x+=5){assert(!mask.inside(x,y),'every house-foot sample lies in the original blocked union');houseFootSamples++;}
-    assert(!mask.query(rect.minX,rect.minY,rect.maxX,rect.maxY).some(edge=>crossesRect(edge.a,edge.b,rect)),'no walkable boundary enters the complete house rectangle between samples');
-    const adjacentX=house.x+(house.x<-4200?115:-115);assert(mask.inside(adjacentX,house.y),'negative control detects the nearby original walkable path');
-  }
   let houseCall;
   const houseContext={...ctx,clip(){throw new Error('house PNG must not inherit a floor/mass clip');},drawImage(...args){houseCall={args,alpha:this.globalAlpha};}};
   assert(art.drawProp(houseContext,house,{canopyAlpha:.55}));assert.equal(houseCall.args.length,5,'draw the complete PNG; no source crop rectangle');assert.equal(houseCall.args[0],art.getImage('house'));
@@ -89,7 +77,6 @@ for(const house of CITY_SAMPLE_HOUSES){
   assert(Math.abs(houseCall.args[2]+1186/1254*264-house.y-50)<1e-10,'complete house-front foot lands at original y+50');
   assert.equal(cityDetailVisual(house).sortY,house.sortY,'house enters the existing front-foot depth queue');
 }
-assert.equal(houseFootSamples,3612,'two complete 210x100 house feet are sampled in both original collision unions');
 for(const [id,entry]of Object.entries(CITY_DETAIL_MANIFEST.props)){
   const prop={id,region:CITY_DETAIL_MANIFEST.worldId,variant:entry.variant,width:entry.width,depth:entry.depth,height:entry.height??78,x:100,y:200,sortY:208};
   const visual=cityDetailVisual(prop);assert.equal(visual.sortY,208,'renderer keeps the existing depth queue');assert.equal(visual.maxBounds.minX,prop.x-entry.anchorX);assert.equal(visual.maxBounds.maxY,prop.y+entry.drawHeight-entry.anchorY);
@@ -128,4 +115,10 @@ maskArt.drawProp(ctx,gate,{canopyAlpha:.35,player:{x:gate.x-170,y:gate.y-19.8},f
 for(const house of CITY_SAMPLE_HOUSES){maskArt.drawProp(ctx,house,{canopyAlpha:.35,player:{x:house.x,y:house.y-19.8}});assert.equal(maskArt.cacheStats.lastAppliedOpacity[house.id],.35,'opaque house roof retains body occlusion fading');}
 for(let i=0;i<120;i++)maskArt.drawProp(ctx,gate,{canopyAlpha:.35,player:{x:gate.x+(i%2?0:-170),y:gate.y-19.8}});
 await maskArt.preload();assert.equal(maskReads,maskCount,'warm renders never read canvas pixels');assert.equal(maskDraws,maskCount,'warm renders never rebuild a mask');assert.equal(maskArt.cacheStats.decodes,assetCount);assert.equal(ctx.globalAlpha,.72);
-console.log('City detail artwork: native PNG hashes/sizes, Node-safe import, explicit load/decode failure and retry, exact nine-ID/world/footprint scope, true doorway/tower feet, complete unclipped house PNGs with 3612 blocked-foot samples plus exact boundary checks, depth/context restoration, pixel-based fading, warm one-time masks and image+mask 32 MiB budget passed.');
+// No legacy sample selector may capture a current canonical foundation or
+// its raised view. Full current collision/ownership checks live in coverage QA.
+const {createRiftLayout}=await import('./dist/worlds/rift-layout.js');
+const {createCityScenery}=await import('./dist/worlds/city-scenery.js');
+const layout=createRiftLayout('clockshadow-city');assert.equal(layout.artStyle,'clockshadow-renewed');
+for(const prop of createCityScenery(layout))assert.equal(cityDetailVisual(prop),null,`${prop.id}: the rebuilt city does not fall back to an old sample PNG`);
+console.log('City detail artwork: native PNG hashes/sizes, Node-safe import, explicit load/decode failure and retry, exact nine-ID/world/footprint scope, true doorway/tower feet, complete unclipped house PNGs, exclusion from rebuilt world scenery, depth/context restoration, pixel-based fading, warm one-time masks and image+mask 32 MiB budget passed.');

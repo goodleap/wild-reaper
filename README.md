@@ -33,7 +33,9 @@ npm run test:forest-maintenance
 
 剧情内容的生成、交互和显示共用 `scene-content.js` 的场景权限；章节完成动作通过场景淡出提交通关，并结束本局；不会生成普通探索内容。`story-pursuit.js` 读取章节追兵配置并复用敌人和首领行为；`navigation-route.js` 缓存并校验完整路线，`story-navigation.js` 将其同时提供给演员移动和 `route-ribbon.js` 地面渲染。`unit-arrival.js` 提供共享显形效果，剧情与普通天使共用 `sites/angel-guardian.js` 的守护行为。普通伙伴和剧情演员共用 `follow-movement.js`，修改共享跟随或寻路时同时运行 `npm run test:party`。剧情回归覆盖内容隔离与恢复、连续增援、演员跟随、路线指引、对白暂停、药物交接、通关结算及整章流程。
 
-新增城市地图或调整共享城市素材时运行 `npm run test:city`，覆盖结构占地、全身体通行、建筑深度、桥面、洞穴状态、地图选择与缓存上限。继续运行 `npm run test:forest-maintenance`，并用真实浏览器检查新地图和原古城试炼的画面。城市结构由 `dist/city-art.js` 提供公共素材接口，离线建筑实体与画面字段必须保持同源；不要再给景物添加第二套碰撞轮廓。
+钟影旧都的固定地形、建筑地基及通路可用 `python scripts/build-clockshadow-map.py` 重建（离线 Python 环境需要 Shapely 2.x），随后执行 `npm run build:config`。生成器只更新 `clockshadow-city`；建筑与地基共用配置，`dist/clockshadow-building-art.js` 按需缓存建筑画面，不依赖旧城市 PNG 图集。
+
+修改城市地图或城市素材时运行 `npm run test:city`，覆盖结构占地、全身体通行、建筑深度、桥面、洞穴状态、地图选择与缓存上限，并用真实浏览器检查城市画面。涉及共享地形、寻路或原古城试炼时，再运行相应回归并检查受影响的地图。离线建筑实体与画面字段必须保持同源；不要再给景物添加第二套碰撞轮廓。
 
 修改按钮焦点、弹层或快捷键时运行 `npm run test:focus`，并在浏览器验证鼠标关闭地图后空格施法、触摸准备页和 Tab 导航。输入方式与返回焦点由 `dist/focus-navigation.js` 统一处理；保留文本输入与键盘控件的原生操作。
 
