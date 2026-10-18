@@ -152,13 +152,69 @@ export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,
 }
 
 export class RiftArt {
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.scenery=new SceneryArt(makeCanvas);this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;}
+  constructor(makeCanvas=()=>document.createElement('canvas'),{now=()=>globalThis.performance?.now?.()??Date.now()}={}){this.makeCanvas=makeCanvas;this.now=now;this.scenery=new SceneryArt(makeCanvas);this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;this.motion=null;this.pending=null;this.groundStats={visibleBuilds:0,prefetchBuilds:0,prefetchHits:0,budgetSkips:0,budgetOverruns:0,prefetchMs:0,maxPrefetchMs:0,lastVisibleBuilds:0,lastPrefetchBuilds:0,lastPrefetchMs:0};}
   get cacheStats(){const sources=[this.scenery.cacheStats,this.cityArt?.cacheStats,this.emberArt?.cacheStats].filter(Boolean),sum=key=>sources.reduce((total,source)=>total+(source[key]||0),0);return {entries:this.cache.size+sum('entries'),pixels:this.pixels+sum('pixels'),bytes:this.pixels*4+sum('bytes'),limitBytes:PIXEL_LIMIT*4+sum('limitBytes'),builds:this.builds+sum('builds')};}
-  _tile(layout,tx,ty){let id=this.ids.get(layout);if(!id){id=++this.nextId;this.ids.set(layout,id);}const key=`${id}:${tx}:${ty}`;let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
-    const canvas=this.makeCanvas(),side=TILE+BLEED*2;canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else if(layout.artTheme==='ember'){this.emberArt??=new EmberMapArt(this.makeCanvas);this.emberArt.paintTile(c,layout,view);}else{base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);}
-    image={canvas,pixels:side*side};while(this.pixels+image.pixels>PIXEL_LIMIT&&this.cache.size){const oldest=this.cache.keys().next().value;this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);}this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
+  _key(layout,tx,ty){let id=this.ids.get(layout);if(!id){id=++this.nextId;this.ids.set(layout,id);}return `${id}:${tx}:${ty}`;}
+  _reserve(pixels,protectedKeys,optional){
+    while(this.pixels+pixels>PIXEL_LIMIT&&this.cache.size){let oldest;
+      for(const key of this.cache.keys())if(!protectedKeys?.has(key)){oldest=key;break;}
+      // An exceptionally large view must still render every tile. Optional
+      // work, however, can never evict the current view to make itself fit.
+      if(oldest===undefined){if(optional)return false;oldest=this.cache.keys().next().value;}
+      this.pixels-=this.cache.get(oldest).pixels;this.cache.delete(oldest);
+    }return this.pixels+pixels<=PIXEL_LIMIT;
   }
-  drawGround(c,island,{camX=0,camY=0,width=1100,height=700}={}){const layout=island?.layout;if(layout?.kind!=='rift-forest')return false;const left=camX-width/2,top=camY-height/2;c.save();for(let ty=Math.floor(top/TILE);ty<=Math.floor((top+height)/TILE);ty++)for(let tx=Math.floor(left/TILE);tx<=Math.floor((left+width)/TILE);tx++){const image=this._tile(layout,tx,ty);c.drawImage(image.canvas,BLEED,BLEED,TILE,TILE,tx*TILE-left,ty*TILE-top,TILE,TILE);}c.restore();return true;}
+  _tile(layout,tx,ty,protectedKeys,optional=false){const key=this._key(layout,tx,ty);let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
+    const side=TILE+BLEED*2;if(!this._reserve(side*side,protectedKeys,optional))return null;
+    const canvas=this.makeCanvas();canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else if(layout.artTheme==='ember'){this.emberArt??=new EmberMapArt(this.makeCanvas);this.emberArt.paintTile(c,layout,view);}else{base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);}
+    image={canvas,pixels:side*side,prefetched:optional};this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
+  }
+  _anticipate(layout,view,visible,now){
+    const previous=this.motion;this.motion={layout,...view,now};this.pending=null;
+    const elapsed=previous?now-previous.now:0,dx=view.camX-(previous?.camX??view.camX),dy=view.camY-(previous?.camY??view.camY),distance=Math.hypot(dx,dy);
+    // A paused view, scene change, resize, teleport or stale frame has no
+    // reliable travel direction. There are no timers or background queues.
+    if(!previous||previous.layout!==layout||previous.width!==view.width||previous.height!==view.height||elapsed<=0||elapsed>120||distance<.1||distance>TILE*.5)return;
+    const capacity=Math.floor(PIXEL_LIMIT/(TILE+BLEED*2)**2),room=Math.min(12,capacity-visible.size);if(room<1)return;
+    const vx=dx/distance,vy=dy/distance,lead=Math.min(TILE*1.25,Math.max(TILE*.55,distance/Math.max(.008,elapsed/1000)*.45));
+    const left=view.camX-view.width/2,top=view.camY-view.height/2,right=left+view.width,bottom=top+view.height;
+    const minX=Math.floor((left+Math.min(0,vx*lead))/TILE),maxX=Math.floor((right+Math.max(0,vx*lead))/TILE),minY=Math.floor((top+Math.min(0,vy*lead))/TILE),maxY=Math.floor((bottom+Math.max(0,vy*lead))/TILE),candidates=[];
+    for(let ty=minY;ty<=maxY;ty++)for(let tx=minX;tx<=maxX;tx++){
+      const key=this._key(layout,tx,ty);if(visible.has(key))continue;let enter=-Infinity,exit=Infinity;
+      for(const [low,high,tileLow,velocity]of[[left,right,tx*TILE,vx],[top,bottom,ty*TILE,vy]]){
+        if(Math.abs(velocity)<1e-6){if(tileLow+TILE<low||tileLow>high){exit=-Infinity;break;}continue;}
+        const a=(tileLow-high)/velocity,b=(tileLow+TILE-low)/velocity;enter=Math.max(enter,Math.min(a,b));exit=Math.min(exit,Math.max(a,b));
+      }
+      if(exit<Math.max(0,enter)||enter>lead)continue;
+      candidates.push({tx,ty,key,enter,centerDistance:(tx*TILE+TILE/2-view.camX)**2+(ty*TILE+TILE/2-view.camY)**2});
+    }
+    candidates.sort((a,b)=>a.enter-b.enter||a.centerDistance-b.centerDistance);
+    const ahead=candidates.slice(0,room),protectedKeys=new Set(visible);for(const tile of ahead)protectedKeys.add(tile.key);
+    this.pending={layout,now,protectedKeys,tiles:ahead,visibleBuilds:this.groundStats.lastVisibleBuilds};
+  }
+  cancelGroundPreparation(){this.motion=null;this.pending=null;}
+  // Called once after the rest of the scene has rendered, while the caller's
+  // render/whole-frame CPU timers are still running. A tile is indivisible:
+  // budgetMs is an admission budget, not a promise to interrupt canvas work.
+  prepareGround({budgetMs=0,now=this.now()}={}){
+    const pending=this.pending;this.pending=null;this.groundStats.lastPrefetchBuilds=0;this.groundStats.lastPrefetchMs=0;
+    const idle={built:0,elapsedMs:0,overBudget:false};if(!pending||now-pending.now>120||now<pending.now||pending.visibleBuilds)return idle;
+    const tile=pending.tiles.find(tile=>!this.cache.has(tile.key));if(!tile)return idle;
+    const budget=Math.max(0,Math.min(3,Number(budgetMs)||0));if(budget<1){this.groundStats.budgetSkips++;return idle;}
+    const began=this.now(),image=this._tile(pending.layout,tile.tx,tile.ty,pending.protectedKeys,true),elapsedMs=this.now()-began;if(!image)return idle;
+    const overBudget=elapsedMs>budget,stats=this.groundStats;stats.prefetchBuilds++;stats.prefetchMs+=elapsedMs;stats.maxPrefetchMs=Math.max(stats.maxPrefetchMs,elapsedMs);stats.lastPrefetchBuilds=1;stats.lastPrefetchMs=elapsedMs;if(overBudget)stats.budgetOverruns++;
+    return {built:1,elapsedMs,overBudget};
+  }
+  drawGround(c,island,{camX=0,camY=0,width=1100,height=700,prefetch=false}={}){
+    const layout=island?.layout;this.pending=null;this.groundStats.lastVisibleBuilds=0;this.groundStats.lastPrefetchBuilds=0;this.groundStats.lastPrefetchMs=0;
+    if(layout?.kind!=='rift-forest'){this.motion=null;return false;}
+    const active=prefetch&&layout.artTheme==='city'&&layout.artStyle==='clockshadow-renewed',left=camX-width/2,top=camY-height/2,visible=new Set(),tiles=[];
+    for(let ty=Math.floor(top/TILE);ty<=Math.floor((top+height)/TILE);ty++)for(let tx=Math.floor(left/TILE);tx<=Math.floor((left+width)/TILE);tx++){visible.add(this._key(layout,tx,ty));tiles.push({tx,ty});}
+    const before=this.builds;c.save();for(const {tx,ty}of tiles){const image=this._tile(layout,tx,ty,visible);if(image.prefetched){image.prefetched=false;this.groundStats.prefetchHits++;}c.drawImage(image.canvas,BLEED,BLEED,TILE,TILE,tx*TILE-left,ty*TILE-top,TILE,TILE);}c.restore();
+    this.groundStats.lastVisibleBuilds=this.builds-before;this.groundStats.visibleBuilds+=this.groundStats.lastVisibleBuilds;
+    if(active)this._anticipate(layout,{camX,camY,width,height},visible,this.now());else this.motion=null;
+    return true;
+  }
 }
 
 // Dynamic doorway/shortcut state is deliberately separate from cached floor.

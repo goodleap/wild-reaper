@@ -123,8 +123,10 @@ export class WorldLayoutArt {
     }
     }c.restore();
   }
-  drawGround(c,island,{camX=0,camY=0,width=1100,height=700}={}){
-    if(island?.layout?.kind==='rift-forest')return this.riftArt.drawGround(c,island,{camX,camY,width,height});
+  prepareGround(options){return this.riftArt.prepareGround(options);}
+  drawGround(c,island,{camX=0,camY=0,width=1100,height=700,prefetch=false}={}){
+    if(island?.layout?.kind==='rift-forest')return this.riftArt.drawGround(c,island,{camX,camY,width,height,prefetch});
+    this.riftArt.cancelGroundPreparation();
     const prepared=island&&this._layout(island);if(!prepared)return false;
     const left=camX-width/2,top=camY-height/2;
     c.save();

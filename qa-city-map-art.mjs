@@ -71,6 +71,16 @@ for(const area of layout.areas){
   assert(areaScreen.calls.filter(call=>call.key==='drawImage').every(call=>canvases.includes(call.args[0])),'ground cache draws only locally created tiles and deep vegetation; complete edge objects belong in depth queue');
   assert.equal(areaScreen.stack.length,0);
 }
+// The transient mask and grass surfaces are a bounded working set, reused
+// while new tiles are painted rather than allocated once per traversed tile.
+assert.equal(sampleFloor.cacheStats.workingCanvasAllocations,3,'all natural districts share one work pair and alpha stamp');
+assert(sampleFloor.cacheStats.workingCanvasBytes>0&&sampleFloor.cacheStats.workingCanvasBytes<=(2*1024*1024+256*256)*4);
+const workMask=sampleFloor.workspace.mask,workLayer=sampleFloor.workspace.layer,workStamp=sampleFloor.workspace.stamp;
+sampleFloor.releaseWorkingSet();assert.equal(sampleFloor.cacheStats.workingCanvasBytes,0,'explicit release drops retained work buffers');
+assert.equal(workMask.width,0);assert.equal(workLayer.height,0);assert.equal(workStamp.width,0);
+const natural=layout.areas.find(a=>a.id==='02').center;
+assert(sampleFloor.paintTile(recording().c,layout,{minX:natural.x-194,minY:natural.y-194,maxX:natural.x+194,maxY:natural.y+194}));
+assert.equal(sampleFloor.cacheStats.workingCanvasAllocations,6,'painting after release safely recreates one pair and alpha stamp');
 const art=new RiftArt(factory),screen=recording(false),view={camX:layout.spawn.x,camY:layout.spawn.y,width:540,height:985};
 assert(art.drawGround(screen.c,island,view));const warm=art.cacheStats.builds;
 for(let i=0;i<40;i++)art.drawGround(screen.c,island,{...view,camX:view.camX+i*.01});

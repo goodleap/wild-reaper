@@ -17,9 +17,38 @@ function box(c,x,y,w,h,color,edge=null){c.fillStyle=color;c.fillRect(x,y,w,h);if
 function ellipse(c,x,y,rx,ry,color,edge=null){c.beginPath();c.ellipse(x,y,Math.max(.1,rx),Math.max(.1,ry),0,0,TAU);c.fillStyle=color;c.fill();if(edge){c.strokeStyle=edge;c.lineWidth=1.5;c.stroke();}}
 function arch(c,x,y,w,h,color,edge=EDGE){const r=Math.min(w/2,h*.55);c.beginPath();c.moveTo(x-w/2,y);c.lineTo(x-w/2,y-h+r);c.quadraticCurveTo(x-w/2,y-h,x,y-h);c.quadraticCurveTo(x+w/2,y-h,x+w/2,y-h+r);c.lineTo(x+w/2,y);c.closePath();c.fillStyle=color;c.fill();if(edge){c.strokeStyle=edge;c.lineWidth=1.8;c.stroke();}}
 function spec(prop){const kind=prop.cityKind==='church'?'cathedral':prop.cityKind||prop.cityArt?.sprite||'house';return{kind,w:Math.max(4,finite(prop.width,60)),d:Math.max(4,finite(prop.depth,40)),h:Math.max(0,finite(prop.height,65)),v:typeof prop.style==='number'?Math.abs(prop.style)%4:seedOf(prop.style??prop.cityArt?.style??prop.area)%4};}
+const BUILDINGS=new Set(['house','keep','wing','barracks','warehouse','stable','workshop','school','cathedral']);
+function roofProjection(q){
+  const wall=q.h*.88,front=q.d/2-wall,back=-q.d/2-wall,ridge=-q.h;
+  return{wall,front,back,ridge,minY:Math.min(back,ridge),frontSpan:front-ridge,rearSpan:Math.max(0,ridge-back)};
+}
+function buildingParts(q){
+  const grand=['keep','wing','barracks','cathedral'].includes(q.kind),target=grand?128:96;
+  if(q.d<=Math.max(112,q.h*1.1))return[{...q,offsetY:0,role:'building'}];
+  const frontDepth=Math.min(q.d,target),rearDepth=q.d-frontDepth;
+  // The front house keeps one properly sized roof. The remaining authored
+  // foundation is enclosed by a low annex or closed courtyard, not more tiles.
+  return[
+    {...q,d:rearDepth,h:Math.min(38,q.h*.42),offsetY:-frontDepth/2,role:rearDepth>80?'courtyard':'annex'},
+    {...q,d:frontDepth,offsetY:rearDepth/2,role:'building'}
+  ];
+}
+function roofAttachment(q,t){const r=roofProjection(q);return r.ridge+(r.front-r.ridge)*t;}
+function buildingTop(q){
+  if(q.role==='annex')return-q.d/2-q.h;
+  if(q.role==='courtyard')return-q.d/2-Math.min(30,q.h);
+  const r=roofProjection(q);let top=r.minY;
+  if(q.kind==='workshop')top=Math.min(top,roofAttachment(q,.26)-40);
+  else if(['house','warehouse'].includes(q.kind)&&q.v!==3)top=Math.min(top,roofAttachment(q,.26)-28);
+  return top;
+}
+export function clockshadowBuildingProjection(prop){
+  const q=spec(prop);if(!BUILDINGS.has(q.kind))return null;
+  return{frontFoot:q.d/2,backFoot:-q.d/2,parts:buildingParts(q).map(part=>({role:part.role,width:part.w,depth:part.d,height:part.h,offsetY:part.offsetY,backFoot:part.offsetY-part.d/2,frontFoot:part.offsetY+part.d/2,minY:buildingTop(part),...(part.role==='building'?roofProjection(part):{})}))};
+}
 export function clockshadowBuildingVisual(prop){
-  const q=spec(prop),halfWidth=q.w/2+5,top=q.d/2+q.h+7,bottom=q.d/2+5,x=finite(prop.x,0),y=finite(prop.y,0);
-  return{halfWidth,top,bottom,canopyX:0,canopyY:-q.h/2,canopyRx:halfWidth,canopyRy:(top+bottom)/2,shadowWidth:q.w*.43,shadowLength:q.h*.38+q.d*.12,shadowOffset:q.d*.2,
+  const q=spec(prop),halfWidth=q.w/2+5,top=BUILDINGS.has(q.kind)?-Math.min(...buildingParts(q).map(part=>part.offsetY+buildingTop(part)))+7:q.d/2+q.h+7,bottom=q.d/2+5,x=finite(prop.x,0),y=finite(prop.y,0);
+  return{halfWidth,top,bottom,canopyX:0,canopyY:BUILDINGS.has(q.kind)?(bottom-top)/2:-q.h/2,canopyRx:halfWidth,canopyRy:(top+bottom)/2,shadowWidth:q.w*.43,shadowLength:q.h*.38+q.d*.12,shadowOffset:q.d*.2,
     maxBounds:{minX:x-halfWidth,minY:y-top,maxX:x+halfWidth,maxY:y+bottom},sortY:finite(prop.sortY,y+q.d/2)};
 }
 function stone(c,x,y,w,h,p,v=0){
@@ -37,24 +66,30 @@ function door(c,x,F,w,h,p,{open=false}={}){
   line(c,x-w*.62,F+1,x+w*.62,F+1,p.light,2.8);
 }
 function window(c,x,y,w,h,p,lit=false){arch(c,x,y,w+4,h+4,p.light);arch(c,x,y,w,h,lit?'#d6b674':'#5d7771');line(c,x,y-h+2,x,y-1,WOOD_LIGHT,1.3);line(c,x-w*.45,y-h*.43,x+w*.45,y-h*.43,WOOD_LIGHT,1.1);line(c,x-w*.65,y+2,x+w*.65,y+2,p.shade,2.2);}
-function roof(c,q,p,{flat=false}={}){
-  const {w,d,h,v}=q,L=-w/2,R=w/2,B=-d/2,F=d/2,wall=h*.59,front=F-wall,top=B-h;
-  if(flat){poly(c,[[L,top],[R,top],[R,F-h],[L,F-h]],p.shade);line(c,L+3,top+3,R-3,top+3,p.light,2);return;}
-  const inset=Math.min(24,w*.12),shape=[[L-2,front],[L+inset,top+3],[R-inset,top],[R+2,front-1]];
-  poly(c,shape,p.roof);c.save();poly(c,shape,null,null);c.clip();
-  const rows=Math.max(3,Math.ceil((front-top)/22)),step=(front-top)/rows;
+function roof(c,q,p){
+  const {w,v}=q,L=-w/2,R=w/2,r=roofProjection(q),inset=Math.min(22,w*.12),rearY=r.back,frontY=r.front,ridgeY=r.ridge;
+  const rear=[[L-2,rearY],[R+2,rearY],[R-inset,ridgeY],[L+inset,ridgeY]],front=[[L+inset,ridgeY],[R-inset,ridgeY],[R+2,frontY],[L-2,frontY]];
+  // Both eaves project from their real ground edges. The ridge belongs to the
+  // middle of this roof, never to the building's back ground corner.
+  if(r.rearSpan>0){
+    poly(c,rear,p.roofShade);c.save();poly(c,rear,null,null);c.clip();
+    const rows=Math.max(1,Math.ceil(r.rearSpan/24));for(let row=1;row<rows;row++){const y=rearY+r.rearSpan*row/rows;line(c,L,y,R,y,p.roof,1.3);}
+    c.restore();line(c,L-1,rearY,R+1,rearY,p.roofLight,1.5);
+  }
+  poly(c,front,p.roof);c.save();poly(c,front,null,null);c.clip();
+  const rows=Math.max(2,Math.ceil(r.frontSpan/22)),step=r.frontSpan/rows;
   for(let row=1;row<rows;row++){
-    const y=top+row*step;line(c,L,y,R,y,p.roofShade,1.4);
-    line(c,L+3,y-2,R-3,y-2,p.roofLight,.7);
+    const y=ridgeY+row*step;line(c,L,y,R,y,p.roofShade,1.4);line(c,L+3,y-2,R-3,y-2,p.roofLight,.7);
     for(let col=0;col<w/38+1;col++){const x=L+col*38+(row%2)*19;if((col+row+v)%3!==0)line(c,x,y+1,x+2,y+step-2,p.roofShade,.7);}
   }
-  // An uneven, quiet patch interrupts the otherwise regular tile rhythm.
-  if(v===2)poly(c,[[L+w*.15,top+(front-top)*.58],[L+w*.36,top+(front-top)*.59],[L+w*.34,top+(front-top)*.69],[L+w*.14,top+(front-top)*.68]],'#8b9a7890',null);
-  c.restore();poly(c,[[R-inset,top],[R+2,front-1],[R-inset*.25,front-1]],p.roofShade,null);line(c,L+inset,top+2,R-inset,top,p.roofLight,3);line(c,L-2,front+1,R+2,front,EDGE,3);line(c,L+1,front-2,R-1,front-3,p.roofLight,1.3);
+  if(v===2)poly(c,[[L+w*.15,ridgeY+r.frontSpan*.58],[L+w*.36,ridgeY+r.frontSpan*.59],[L+w*.34,ridgeY+r.frontSpan*.69],[L+w*.14,ridgeY+r.frontSpan*.68]],'#8b9a7890',null);
+  c.restore();
+  poly(c,[[L-2,rearY],[L+inset,ridgeY],[L-2,frontY]],p.roofLight,EDGE,1.3);poly(c,[[R+2,rearY],[R+2,frontY],[R-inset,ridgeY]],p.roofShade,EDGE,1.3);
+  line(c,L+inset,ridgeY,R-inset,ridgeY,p.roofLight,3);line(c,L-2,frontY+1,R+2,frontY,EDGE,3);line(c,L+1,frontY-2,R-1,frontY-2,p.roofLight,1.3);
 }
 function house(c,q,p){
-  const {w,d,h,v,kind}=q,L=-w/2,R=w/2,F=d/2,B=-d/2,wall=h*.59,top=F-wall;
-  stone(c,L,B-wall,w,d+wall,p,v);line(c,L,F,R,F,EDGE,2);box(c,L,F-6,w,6,p.shade);line(c,L+2,F-6,R-2,F-6,p.light,1.5);
+  const {w,d,h,v,kind}=q,L=-w/2,R=w/2,F=d/2,B=-d/2,wall=roofProjection(q).wall,top=F-wall,annex=kind==='workshop'||kind==='house'&&v===1;
+  if(annex&&w>150){stone(c,L,B-wall,w*.7,d+wall,p,v);stone(c,w*.2,B-wall*.72,w*.3,d+wall*.72,p,v);}else stone(c,L,B-wall,w,d+wall,p,v);line(c,L,F,R,F,EDGE,2);box(c,L,F-6,w,6,p.shade);line(c,L+2,F-6,R-2,F-6,p.light,1.5);
   const royal=['keep','wing','barracks'].includes(kind),church=kind==='cathedral',timber=!royal&&!church;
   if(timber){for(const x of[L+6,R-9]){box(c,x,top,4,wall-6,WOOD);line(c,x+1,top+2,x+1,F-7,WOOD_LIGHT,1);}if(v%2)line(c,L+9,top+4,L+w*.25,F-8,WOOD,2.6);}
   const count=Math.max(2,Math.floor(w/75)),dw=Math.min(34,w*.19),dh=Math.min(wall-6,church?52:38);
@@ -71,11 +106,14 @@ function house(c,q,p){
     for(const x of[L+w*.12,R-w*.12])window(c,x,F-15,Math.min(17,w*.1),Math.min(24,wall*.4),p);
   }else if(kind==='workshop'){door(c,-w*.08,F-2,Math.min(w*.26,54),Math.min(wall-7,48),p,{open:true});arch(c,-w*.08,F-8,Math.min(23,w*.14),Math.min(23,wall*.33),'#826849',null);ellipse(c,-w*.08,F-14,7,4,'#d5a868');}
   else door(c,0,F-2,dw,dh,p);
-  const annex=kind==='workshop'||kind==='house'&&v===1;
+  if(wall>105&&!['stable','workshop','warehouse','cathedral'].includes(kind)){
+    for(const x of[-w*.25,w*.25].filter(x=>!annex||x<w*.2))window(c,x,F-wall*.61,Math.min(19,w*.1),Math.min(28,wall*.23),p);
+    if(timber)line(c,L+7,F-wall*.53,R-7,F-wall*.53,WOOD,2.5);
+  }
   if(annex&&w>150){
     c.save();c.translate(-w*.15,0);roof(c,{...q,w:w*.7},p);c.restore();
-    c.save();c.translate(w*.35,0);roof(c,{...q,w:w*.3,h:h*.63},p);c.restore();
-    line(c,w*.2,F-wall*.63,w*.2,F-6,WOOD,3);
+    c.save();c.translate(w*.35,0);roof(c,{...q,w:w*.3,h:h*.72},p);c.restore();
+    line(c,w*.2,F-wall*.72,w*.2,F-6,WOOD,3);
   }else roof(c,q,p);
 
   if(timber&&!['warehouse','stable','workshop'].includes(kind)&&w>150&&h>60){
@@ -88,19 +126,19 @@ function house(c,q,p){
   }
   if(v===0||v===3){const x=L+10;for(let k=0;k<4;k++){const y=F-8-k*7;line(c,x,y,x+2,y-10,'#6d815a',1.3);poly(c,[[x,y-2],[x-5,y-7],[x-4,y-11],[x+1,y-7]],'#87996a',null);poly(c,[[x+1,y-6],[x+7,y-9],[x+8,y-5],[x+3,y-3]],'#9ba97a',null);}}
   if(kind==='workshop'){
-    const x=L+w*.16,y=B-h*.75;stone(c,x-10,y-20,20,42,p,v);box(c,x-13,y-23,26,6,p.light,EDGE);box(c,x-8,y-21,16,4,DARK);line(c,x-7,y-8,x+8,y-8,p.shade,1.2);
+    const x=L+w*.16,y=roofAttachment(q,.26)-17;stone(c,x-10,y-20,20,42,p,v);box(c,x-13,y-23,26,6,p.light,EDGE);box(c,x-8,y-21,16,4,DARK);line(c,x-7,y-8,x+8,y-8,p.shade,1.2);
     const sx=w*.34,sy=F-wall*.4;line(c,sx,sy-12,sx,sy+5,WOOD,2);box(c,sx-10,sy-9,20,15,p.roofShade,EDGE);line(c,sx-4,sy+1,sx+4,sy-5,p.light,2.2);line(c,sx+1,sy-7,sx+6,sy-2,p.light,4);
-  }else if(['house','warehouse'].includes(kind)&&v!==3){const x=L+w*(annex?.38:.75),y=B-h*.8;stone(c,x-7,y-15,14,23,p,v);box(c,x-9,y-17,18,4,p.light,EDGE);box(c,x-5,y-15,10,3,p.shade);}
-  if(kind==='warehouse'){const x=-w*.23,y=B-h*.55;poly(c,[[x-13,y+8],[x,y-6],[x+13,y+8]],p.roofShade);box(c,x-9,y+5,18,10,p.shade,EDGE);for(const dx of[-5,0,5])line(c,x+dx,y+6,x+dx,y+13,p.light,1);}
+  }else if(['house','warehouse'].includes(kind)&&v!==3){const x=L+w*(annex?.38:.75),y=roofAttachment(q,.26)-11;stone(c,x-7,y-15,14,23,p,v);box(c,x-9,y-17,18,4,p.light,EDGE);box(c,x-5,y-15,10,3,p.shade);}
+  if(kind==='warehouse'){const x=-w*.23,y=roofAttachment(q,.62)-7;poly(c,[[x-13,y+8],[x,y-6],[x+13,y+8]],p.roofShade);box(c,x-9,y+5,18,10,p.shade,EDGE);for(const dx of[-5,0,5])line(c,x+dx,y+6,x+dx,y+13,p.light,1);}
 
   if(royal){
-    for(const x of[L+14,R-14]){const tw=Math.min(32,w*.18),th=h*.69;stone(c,x-tw/2,F-th,tw,th,p,v);battlement(c,x-tw/2,F-th-2,tw,p);window(c,x,F-12,8,Math.min(25,th*.4),p);}
-    if(kind==='keep'){const gw=Math.min(w*.32,100),gh=Math.min(h*.78,100),gy=F-gh;stone(c,-gw/2,gy,gw,gh-2,p,v);poly(c,[[-gw/2-3,gy],[0,gy-22],[gw/2+3,gy]],p.roofShade);line(c,-gw/2-1,gy-1,0,gy-21,p.roofLight,2);door(c,0,F-2,Math.min(38,gw*.45),Math.min(50,gh*.72),p);}
+    for(const x of[L+14,R-14]){const tw=Math.min(32,w*.18),th=h*.93;stone(c,x-tw/2,F-th,tw,th,p,v);battlement(c,x-tw/2,F-th-2,tw,p);window(c,x,F-12,8,Math.min(25,th*.4),p);}
+    if(kind==='keep'){const gw=Math.min(w*.32,100),gh=Math.min(h*.96,145),gy=F-gh;stone(c,-gw/2,gy,gw,gh-2,p,v);poly(c,[[-gw/2-3,gy],[0,gy-22],[gw/2+3,gy]],p.roofShade);line(c,-gw/2-1,gy-1,0,gy-21,p.roofLight,2);door(c,0,F-2,Math.min(38,gw*.45),Math.min(68,gh*.72),p);}
     flag(c,-w*.22,top+6,Math.min(23,w*.08),Math.min(29,wall*.7),p);
   }
   if(church){
-    const gw=Math.min(w*.42,106),gt=F-h*.9;poly(c,[[-gw/2,F-4],[-gw/2,top-1],[0,gt],[gw/2,top-1],[gw/2,F-4]],p.stone);line(c,-gw/2,top,0,gt,p.light,2.5);line(c,0,gt,gw/2,top,p.light,2.5);
-    const cy=top-3,rr=Math.min(14,gw*.16);ellipse(c,0,cy,rr+3,rr+3,p.shade);ellipse(c,0,cy,rr,rr,'#9bbaa6',EDGE);for(let k=0;k<6;k++){const a=k*TAU/6;line(c,0,cy,Math.cos(a)*rr,cy+Math.sin(a)*rr,p.light,1.1);}door(c,0,F-2,Math.min(36,gw*.4),Math.min(45,h*.38),p);line(c,0,gt+1,0,gt-7,WOOD,2);line(c,-4,gt-4,4,gt-4,WOOD,2);
+    const gw=Math.min(w*.42,106),gt=F-h*1.13;poly(c,[[-gw/2,F-4],[-gw/2,top-1],[0,gt],[gw/2,top-1],[gw/2,F-4]],p.stone);line(c,-gw/2,top,0,gt,p.light,2.5);line(c,0,gt,gw/2,top,p.light,2.5);
+    const cy=top-3,rr=Math.min(14,gw*.16);ellipse(c,0,cy,rr+3,rr+3,p.shade);ellipse(c,0,cy,rr,rr,'#9bbaa6',EDGE);for(let k=0;k<6;k++){const a=k*TAU/6;line(c,0,cy,Math.cos(a)*rr,cy+Math.sin(a)*rr,p.light,1.1);}door(c,0,F-2,Math.min(36,gw*.4),Math.min(62,h*.42),p);line(c,0,gt+1,0,gt-7,WOOD,2);line(c,-4,gt-4,4,gt-4,WOOD,2);
   }
   moss(c,L,F,w,v);
 }
@@ -193,21 +231,77 @@ function small(c,q,p){
   }
   house(c,q,p);
 }
-function paint(c,q){const p=PALETTES[q.v];c.lineCap='round';c.lineJoin='round';if(q.kind==='wall')wall(c,q,p);else if(['tower','belltower'].includes(q.kind))tower(c,q,p);else if(['gate','arcade'].includes(q.kind))gate(c,q,p);else if(['house','keep','wing','barracks','warehouse','stable','workshop','school','cathedral'].includes(q.kind))house(c,q,p);else small(c,q,p);}
+function lowAnnex(c,q,p){
+  const {w,d,h,v}=q,L=-w/2,R=w/2,B=-d/2,F=d/2;
+  stone(c,L,B-h,w,d+h,p,v);poly(c,[[L,B-h],[R,B-h],[R,F-h],[L,F-h]],p.shade);
+  line(c,L+2,B-h+2,R-2,B-h+2,p.light,2);line(c,L+2,F-h-2,R-2,F-h-2,p.light,2);
+  for(let x=L+45;x<R-10;x+=55)line(c,x,B-h+2,x,F-h-2,'#c1c4a4',1);
+  box(c,L,F-4,w,4,p.shade);line(c,L,F,R,F,EDGE,1.5);
+}
+function closedCourtyard(c,q,p){
+  const {w,d,h,v}=q,L=-w/2,R=w/2,B=-d/2,F=d/2,rim=Math.min(11,w*.07),backH=Math.min(30,h),sideH=Math.min(22,h);
+  // This is a sealed part of the same solid property. Wall feet run along all
+  // four original ground edges; no opening suggests an extra walkable passage.
+  box(c,L,B,w,d,'#bbb59a');
+  for(let y=B+27;y<F-12;y+=36)line(c,L+rim,y,R-rim,y,'#a3a88c',.8);
+  const pots=Math.min(3,Math.floor(w/65));for(let n=0;n<pots;n++){
+    const x=L+w*(n+1)/(pots+1),y=B+Math.min(45,d*.3);box(c,x-10,y-5,20,13,WOOD,EDGE);line(c,x-9,y-3,x+9,y-3,WOOD_LIGHT,1.5);
+    poly(c,[[x-9,y-5],[x-12,y-13],[x-5,y-18],[x,y-12],[x+6,y-19],[x+12,y-12],[x+9,y-5]],n%2?'#8d9b6c':'#6f875d',EDGE,1);
+  }
+  stone(c,L,B-backH,w,backH+rim,p,v);line(c,L+1,B-backH,R-1,B-backH,p.light,3);
+  for(const x of[L,R-rim]){stone(c,x,B-sideH,rim,d+sideH,p,v);box(c,x,B-sideH,rim,d,p.light,EDGE);line(c,x+2,B-sideH+1,x+2,F-sideH-1,'#ece0b9',1.5);}
+  stone(c,L,F-sideH,w,sideH,p,v);line(c,L+2,F-sideH,R-2,F-sideH,p.light,3);moss(c,L,F,w,v);
+}
+function paint(c,q){const p=PALETTES[q.v];c.lineCap='round';c.lineJoin='round';if(q.kind==='wall')wall(c,q,p);else if(['tower','belltower'].includes(q.kind))tower(c,q,p);else if(['gate','arcade'].includes(q.kind))gate(c,q,p);else if(BUILDINGS.has(q.kind)){for(const part of buildingParts(q)){c.save();try{c.translate(0,part.offsetY);if(part.role==='courtyard')closedCourtyard(c,part,p);else if(part.role==='annex')lowAnnex(c,part,p);else house(c,part,p);}finally{c.restore();}}}else small(c,q,p);}
 export class ClockshadowBuildingArt{
-  constructor({makeCanvas=()=>document.createElement('canvas'),limitBytes=LIMIT_BYTES}={}){this.makeCanvas=makeCanvas;this.limitBytes=limitBytes;this.cache=new Map();this.bytes=0;this.builds=0;this.draws=0;}
-  get cacheStats(){return{entries:this.cache.size,bytes:this.bytes,limitBytes:this.limitBytes,builds:this.builds,draws:this.draws};}
-  clear(){for(const stamp of this.cache.values())stamp.canvas.width=stamp.canvas.height=0;this.cache.clear();this.bytes=0;}
+  constructor({makeCanvas=()=>document.createElement('canvas'),limitBytes=LIMIT_BYTES}={}){this.makeCanvas=makeCanvas;this.baseLimitBytes=limitBytes;this.limitBytes=limitBytes;this.cache=new Map();this.descriptions=new WeakMap();this.active=null;this.activeBytes=0;this.bytes=0;this.builds=0;this.draws=0;this.transientBuilds=0;}
+  get cacheStats(){return{entries:this.cache.size,bytes:this.bytes,limitBytes:this.limitBytes,builds:this.builds,draws:this.draws,activeStamps:this.active?.size||0,activeBytes:this.activeBytes,transientBuilds:this.transientBuilds};}
+  setViewport({width=1100,height=700,mobile=false}={}){
+    // The normal desktop view needs the same 12 MiB as a phone. A wider world
+    // view has more distinct buildings; the measured 1728 x 874 view needs
+    // 15.71 MiB simultaneously. Give it bounded reuse room, never more than 24.
+    const scale=mobile?1:Math.max(1,Math.min(2,finite(width*height,770000)/770000)),mib=1024*1024;
+    this.limitBytes=scale===1?this.baseLimitBytes:Math.min(this.baseLimitBytes*2,Math.ceil(this.baseLimitBytes*scale/mib)*mib);
+    this.active=null;this.activeBytes=0;this._trim(0,false);return this.limitBytes;
+  }
+  beginFrame(props=[]){
+    if(this.active)this.active.clear();else this.active=new Set();this.activeBytes=0;
+    // Terrain includes ground-only collision carriers and non-city scenery.
+    // Only native illustrations share this cache. Interactive landmark draws
+    // register their actual normalized spec in _stamp, not their site records.
+    for(const prop of props)if(prop?.variant==='city-native'&&prop.region==='clockshadow-city'&&prop.visual!==false)this._activate(this._describe(prop));
+  }
+  clear(){for(const stamp of this.cache.values())stamp.canvas.width=stamp.canvas.height=0;this.cache.clear();this.descriptions=new WeakMap();this.active=null;this.activeBytes=0;this.bytes=0;this.limitBytes=this.baseLimitBytes;}
+  _describe(prop){
+    let info=this.descriptions.get(prop);if(info)return info;
+    const q=spec(prop),key=[q.kind,q.w,q.d,q.h,q.v].join(':'),cached=this.cache.get(key);
+    if(cached)info=cached.info;
+    else{const visual=clockshadowBuildingVisual(prop),w=Math.ceil(visual.halfWidth*2),h=Math.ceil(visual.top+visual.bottom),ratio=w*h>180000?1:1.25,cw=Math.ceil(w*ratio),ch=Math.ceil(h*ratio),mr=Math.min(1,MASK_SIDE/Math.max(w,h)),mw=Math.ceil(w*mr),mh=Math.ceil(h*mr);info={q,key,w,h,ratio,cw,ch,mw,mh,ox:visual.halfWidth,oy:visual.top,bytes:cw*ch*4+mw*mh};}
+    if(Object.isFrozen(prop))this.descriptions.set(prop,info);return info;
+  }
+  _activate(info){if(this.active&&!this.active.has(info.key)){this.active.add(info.key);this.activeBytes+=info.bytes;}}
+  _trim(incoming=0,protect=true){
+    for(const[key,stamp]of this.cache){if(this.bytes+incoming<=this.limitBytes)break;if(protect&&this.active?.has(key))continue;this.bytes-=stamp.bytes;stamp.canvas.width=stamp.canvas.height=0;this.cache.delete(key);}
+  }
   _stamp(prop){
-    const q=spec(prop),key=[q.kind,q.w,q.d,q.h,q.v].join(':'),existing=this.cache.get(key);if(existing){this.cache.delete(key);this.cache.set(key,existing);return existing;}
-    const visual=clockshadowBuildingVisual(prop),w=Math.ceil(visual.halfWidth*2),h=Math.ceil(visual.top+visual.bottom),ratio=w*h>180000?1:1.25,canvas=this.makeCanvas();canvas.width=Math.ceil(w*ratio);canvas.height=Math.ceil(h*ratio);const c=canvas.getContext('2d');c.setTransform(ratio,0,0,ratio,visual.halfWidth*ratio,visual.top*ratio);paint(c,q);
-    const maskCanvas=this.makeCanvas(),mr=Math.min(1,MASK_SIDE/Math.max(w,h)),mw=Math.ceil(w*mr),mh=Math.ceil(h*mr);maskCanvas.width=mw;maskCanvas.height=mh;const mc=maskCanvas.getContext('2d',{willReadFrequently:true});mc.drawImage(canvas,0,0,mw,mh);const pixels=mc.getImageData(0,0,mw,mh).data,alpha=new Uint8Array(mw*mh);for(let i=0;i<alpha.length;i++)alpha[i]=pixels[i*4+3];maskCanvas.width=maskCanvas.height=0;
-    const stamp={canvas,w,h,ox:visual.halfWidth,oy:visual.top,mask:{width:mw,height:mh,alpha},bytes:canvas.width*canvas.height*4+alpha.byteLength};while(this.bytes+stamp.bytes>this.limitBytes&&this.cache.size){const first=this.cache.keys().next().value,old=this.cache.get(first);this.bytes-=old.bytes;old.canvas.width=old.canvas.height=0;this.cache.delete(first);}if(stamp.bytes<=this.limitBytes){this.cache.set(key,stamp);this.bytes+=stamp.bytes;}this.builds++;return stamp;
+    const info=this._describe(prop),{q,key,w,h,ratio,cw,ch,mw,mh,ox,oy}=info;this._activate(info);const existing=this.cache.get(key);if(existing){this.cache.delete(key);this.cache.set(key,existing);return existing;}
+    const canvas=this.makeCanvas();canvas.width=cw;canvas.height=ch;const c=canvas.getContext('2d');c.setTransform(ratio,0,0,ratio,ox*ratio,oy*ratio);paint(c,q);
+    const maskCanvas=this.makeCanvas();maskCanvas.width=mw;maskCanvas.height=mh;const mc=maskCanvas.getContext('2d',{willReadFrequently:true});
+    // Rasterize the same geometry directly on the tiny CPU-backed mask.
+    // Copying the large display canvas here forces a synchronous GPU readback.
+    mc.setTransform(mw/w,0,0,mh/h,ox*mw/w,oy*mh/h);paint(mc,q);
+    const pixels=mc.getImageData(0,0,mw,mh).data,alpha=new Uint8Array(mw*mh);for(let i=0;i<alpha.length;i++)alpha[i]=pixels[i*4+3];maskCanvas.width=maskCanvas.height=0;
+    const stamp={canvas,w,h,ox,oy,mask:{width:mw,height:mh,alpha},bytes:info.bytes,info,transient:true};
+    if(stamp.bytes<=this.limitBytes){this._trim(stamp.bytes);if(this.bytes+stamp.bytes<=this.limitBytes){stamp.transient=false;this.cache.set(key,stamp);this.bytes+=stamp.bytes;}}
+    // If an extreme view exceeds the cap, preserve its admitted visible set.
+    // One temporary stamp is released after drawing instead of evicting every
+    // other visible stamp and rebuilding them all on the next frame.
+    if(stamp.transient)this.transientBuilds++;this.builds++;return stamp;
   }
   draw(c,prop,{canopyAlpha=1,player=null,footY}={}){
     const stamp=this._stamp(prop),x=prop.x-stamp.ox,y=prop.y-stamp.oy;let covered=!player;
     if(player){const foot=Number.isFinite(footY)?footY:player.y+19.8,mask=stamp.mask;for(const dx of[-10,0,10])for(const dy of[-44,-28,-12]){const sx=Math.floor((player.x+dx-x)/stamp.w*mask.width),sy=Math.floor((foot+dy-y)/stamp.h*mask.height);if(sx>=0&&sy>=0&&sx<mask.width&&sy<mask.height&&mask.alpha[sy*mask.width+sx]>32)covered=true;}}
-    const alpha=covered?Math.max(0,Math.min(1,finite(canopyAlpha,1))):1;c.save();try{c.globalAlpha*=alpha;c.drawImage(stamp.canvas,x,y,stamp.w,stamp.h);}finally{c.restore();}this.draws++;return alpha;
+    const alpha=covered?Math.max(0,Math.min(1,finite(canopyAlpha,1))):1;c.save();try{c.globalAlpha*=alpha;c.drawImage(stamp.canvas,x,y,stamp.w,stamp.h);}finally{c.restore();if(stamp.transient)stamp.canvas.width=stamp.canvas.height=0;}this.draws++;return alpha;
   }
 }
 export const clockshadowBuildingArt=new ClockshadowBuildingArt();

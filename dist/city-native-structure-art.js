@@ -45,7 +45,7 @@ export class CityNativeStructureArt{
   constructor({painter,makeCanvas}={}){this.painter=painter||(makeCanvas?new ClockshadowBuildingArt({makeCanvas}):clockshadowBuildingArt);this.draws=0;this.counts=new Map();this.lastOpacity=new Map();}
   get cacheStats(){return{...this.painter.cacheStats,draws:this.draws,layerDraws:this.draws,drawCounts:Object.fromEntries(this.counts),lastAppliedOpacity:Object.fromEntries(this.lastOpacity)};}
   drawProp(c,prop,options={}){
-    if(!nativeCityVisual(prop))return false;const alpha=this.painter.draw(c,prop,options);this.draws++;this.counts.set(prop.sourceId,(this.counts.get(prop.sourceId)||0)+1);this.lastOpacity.set(prop.sourceId,alpha);return true;
+    if(prop?.variant!=='city-native'||prop.region!==WORLD||!prop.cityArt?.bounds)return false;const alpha=this.painter.draw(c,prop,options);this.draws++;this.counts.set(prop.sourceId,(this.counts.get(prop.sourceId)||0)+1);this.lastOpacity.set(prop.sourceId,alpha);return true;
   }
 }
 export function drawNativeCityBridge(c,passage,{overview=false,painter=clockshadowBuildingArt}={}){

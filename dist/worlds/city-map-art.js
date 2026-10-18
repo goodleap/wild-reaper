@@ -17,10 +17,40 @@ function rings(c,items){c.beginPath();for(const item of items||[])trace(c,item.p
 function lakePath(c,lake){trace(c,lake.points);for(const hole of lake.holes||[])trace(c,hole.points||hole,false);}
 function bounds(points){return points.reduce((b,p)=>{p=xy(p);return{minX:Math.min(b.minX,p.x),minY:Math.min(b.minY,p.y),maxX:Math.max(b.maxX,p.x),maxY:Math.max(b.maxY,p.y)};},{minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity});}
 const overlaps=(a,b,pad=0)=>!b||a.maxX+pad>=b.minX&&a.minX-pad<=b.maxX&&a.maxY+pad>=b.minY&&a.minY-pad<=b.maxY;
+const GRID=384;
+class FloorIndex{
+  constructor(){this.cells=new Map();}
+  add(value,b,pad=0){for(let y=Math.floor((b.minY-pad)/GRID);y<=Math.floor((b.maxY+pad)/GRID);y++)for(let x=Math.floor((b.minX-pad)/GRID);x<=Math.floor((b.maxX+pad)/GRID);x++){const key=`${x}:${y}`;if(!this.cells.has(key))this.cells.set(key,[]);this.cells.get(key).push(value);}}
+  query(b,pad=0){const found=new Set();for(let y=Math.floor((b.minY-pad)/GRID);y<=Math.floor((b.maxY+pad)/GRID);y++)for(let x=Math.floor((b.minX-pad)/GRID);x<=Math.floor((b.maxX+pad)/GRID);x++)for(const item of this.cells.get(`${x}:${y}`)||[])found.add(item);return [...found];}
+}
+// One synchronous tile painter owns one reusable pair. Growing only when
+// needed avoids allocating and immediately destroying two GPU-backed surfaces
+// for every newly revealed floor tile. One shared alpha stamp replaces dozens
+// of identical radial gradients per tile. Oversize callers use temporary surfaces.
+class GroundWorkspace{
+  constructor(makeCanvas){this.makeCanvas=makeCanvas;this.mask=null;this.layer=null;this.stamp=null;this.allocations=0;}
+  acquire(w,h){
+    const temporary=w>1024||h>1024;
+    if(temporary){this.allocations+=2;const mask=this.makeCanvas(),layer=this.makeCanvas();mask.width=layer.width=w;mask.height=layer.height=h;return{mask,layer,temporary};}
+    if(!this.mask){this.mask=this.makeCanvas();this.layer=this.makeCanvas();this.allocations+=2;}
+    for(const canvas of[this.mask,this.layer]){if(canvas.width<w)canvas.width=w;if(canvas.height<h)canvas.height=h;}
+    return{mask:this.mask,layer:this.layer,temporary};
+  }
+  maskStamp(){
+    if(!this.stamp){const stamp=this.makeCanvas();this.allocations++;stamp.width=stamp.height=256;const c=stamp.getContext('2d'),g=c.createRadialGradient(128,128,0,128,128,128);g.addColorStop(0,'#fff');g.addColorStop(.65,'#fff');g.addColorStop(1,'#fff0');c.fillStyle=g;c.fillRect(0,0,256,256);this.stamp=stamp;}
+    return this.stamp;
+  }
+  release(){if(this.mask){this.mask.width=this.mask.height=this.layer.width=this.layer.height=0;}if(this.stamp)this.stamp.width=this.stamp.height=0;this.mask=this.layer=this.stamp=null;}
+  get pixels(){return(this.mask?this.mask.width*this.mask.height+this.layer.width*this.layer.height:0)+(this.stamp?this.stamp.width*this.stamp.height:0);}
+
+}
 const prepared=new WeakMap();
 function records(layout){let data=prepared.get(layout);if(data)return data;
   data={areas:(layout.areas||[]).map(value=>({value,bounds:bounds(value.points)})),lakes:(layout.lakes||[]).map(value=>({value,bounds:bounds(value.points)})),patches:(layout.patches||[]).map(value=>({value,bounds:bounds(value.points)})),bridges:(layout.passages||[]).filter(p=>p.kind==='bridge').map(value=>({value,bounds:bounds(value.deck||value.points)})),structures:(layout.cityStructures||[]).map(value=>({value,bounds:{minX:value.x-value.width/2,minY:value.y-value.depth/2,maxX:value.x+value.width/2,maxY:value.y+value.depth/2}})),routes:[]};
   for(const p of layout.passages||[])for(let i=1;i<(p.waypoints||[]).length;i++)data.routes.push({a:p.waypoints[i-1],b:p.waypoints[i],width:p.width});
+  data.greenAreas=data.areas.filter(record=>GREEN_AREAS.has(record.value.id));data.routeIndex=new FloorIndex();data.structureIndex=new FloorIndex();
+  for(const route of data.routes)data.routeIndex.add(route,{minX:Math.min(route.a.x,route.b.x),minY:Math.min(route.a.y,route.b.y),maxX:Math.max(route.a.x,route.b.x),maxY:Math.max(route.a.y,route.b.y)},route.width*.65);
+  for(const item of data.structures)data.structureIndex.add(item,item.bounds,65);
   data.blockRoofs=createCityBlockScenery(layout).filter(p=>['house','ruin','warehouse','workshop','stable'].includes(p.cityArt));data.collision=new RiftCollision(layout);data.shores=new Map();data.wallRims=new Map();data.naturalRims=new Map();
   for(const edge of data.collision.high.edges){const dx=edge.b.x-edge.a.x,dy=edge.b.y-edge.a.y,len=Math.hypot(dx,dy);if(!len)continue;const count=Math.ceil(len/32);
     for(let i=0;i<count;i++){const t=(i+.5)/count,x=edge.a.x+dx*t,y=edge.a.y+dy*t;let area=null,best=Infinity;for(const a of layout.areas){const d=(a.center.x-x)**2+(a.center.y-y)**2;if(d<best){best=d;area=a;}}
@@ -54,12 +84,11 @@ function dab(c,x,y,r,color,opacity){
 }
 const GREEN_AREAS=new Map([['01','#bdc69a'],['02','#a7bd83'],['13','#acc38c'],['S1','#9db47d']]);
 const OLD_AREAS=new Set(['03','04','05','07','08','09','12','15','16','S2','S3']);
-function maskDab(c,x,y,r,opacity){
-  if(opacity<=0)return;const g=c.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,'#fff');g.addColorStop(.65,'#fff');g.addColorStop(1,'#fff0');
-  c.save();c.globalAlpha*=opacity;c.fillStyle=g;c.fillRect(x-r,y-r,r*2,r*2);c.restore();
+function maskDab(c,x,y,r,opacity,stamp){
+  if(opacity<=0)return;c.save();c.globalAlpha*=opacity;c.drawImage(stamp,x-r,y-r,r*2,r*2);c.restore();
 }
-function grassMask(c,layout,view){
-  const step=72,data=records(layout),areas=data.areas.filter(record=>GREEN_AREAS.has(record.value.id)&&overlaps(record.bounds,view,100)),patches=data.patches.filter(record=>overlaps(record.bounds,view,100));
+function grassMask(c,layout,view,stamp){
+  const step=72,data=records(layout),areas=data.greenAreas.filter(record=>overlaps(record.bounds,view,100)),patches=data.patches.filter(record=>overlaps(record.bounds,view,100)),routes=data.routeIndex.query(view,182);
   for(let gy=Math.floor((view.minY-110)/step);gy<=Math.floor((view.maxY+110)/step);gy++)for(let gx=Math.floor((view.minX-110)/step);gx<=Math.floor((view.maxX+110)/step);gx++){
     const n=hash(gx+53,gy-71),x=(gx+.15+n*.7)*step,y=(gy+.15+hash(gy+37,gx)*.7)*step;
     // Broad grass transitions outside the city replace the old floor-clipped
@@ -68,27 +97,29 @@ function grassMask(c,layout,view){
     for(const {value:area}of areas)if(inPolygon(x,y,area.points))strength=Math.max(strength,clamp(edgeDistance(x,y,area.points)/120));
     for(const {value:patch}of patches)if(inPolygon(x,y,patch.points))strength=Math.max(strength,clamp(edgeDistance(x,y,patch.points)/90)*.48);
     if(!strength)continue;
-    for(const path of data.routes){const d=segmentDistance(x,y,path.a,path.b);if(d<path.width*.65)strength*=.12+.88*clamp((d-path.width*.2)/(path.width*.45));}
-    maskDab(c,x,y,68+n*22,strength);
+    for(const path of routes){const d=segmentDistance(x,y,path.a,path.b);if(d<path.width*.65)strength*=.12+.88*clamp((d-path.width*.2)/(path.width*.45));}
+    maskDab(c,x,y,68+n*22,strength,stamp);
   }
 }
-function naturalGround(c,layout,view,makeCanvas){
+function naturalGround(c,layout,view,workspace){
   const data=records(layout),outside=view.minX<-5400||view.maxX>5800||view.minY<-4900||view.maxY>4100;
-  if(!outside&&!data.areas.some(record=>GREEN_AREAS.has(record.value.id)&&overlaps(record.bounds,view,110))&&!data.patches.some(record=>overlaps(record.bounds,view,110)))return false;
-  const mask=makeCanvas(),layer=makeCanvas(),w=Math.ceil(view.maxX-view.minX),h=Math.ceil(view.maxY-view.minY);mask.width=layer.width=w;mask.height=layer.height=h;
+  if(!outside&&!data.greenAreas.some(record=>overlaps(record.bounds,view,110))&&!data.patches.some(record=>overlaps(record.bounds,view,110)))return false;
+  const w=Math.ceil(view.maxX-view.minX),h=Math.ceil(view.maxY-view.minY),{mask,layer,temporary}=workspace.acquire(w,h);
   try{
-    const m=mask.getContext('2d'),g=layer.getContext('2d');m.setTransform(1,0,0,1,-view.minX,-view.minY);grassMask(m,layout,view);
+    const m=mask.getContext('2d'),g=layer.getContext('2d');
+    for(const [ctx,canvas]of[[m,mask],[g,layer]]){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.clearRect(0,0,canvas.width,canvas.height);}
+    m.setTransform(1,0,0,1,-view.minX,-view.minY);grassMask(m,layout,view,workspace.maskStamp());
     g.fillStyle='#b4c392';g.fillRect(0,0,w,h);g.setTransform(1,0,0,1,-view.minX,-view.minY);
     for(let gy=Math.floor(view.minY/33)-1;gy<=Math.ceil(view.maxY/33);gy++)for(let gx=Math.floor(view.minX/39)-1;gx<=Math.ceil(view.maxX/39);gx++){
       const n=hash(gx+31,gy-47),x=(gx+n)*39,y=(gy+hash(gy,gx))*33;
       if(n<.5){g.fillStyle=n<.25?'#d9dfa350':'#8da27140';g.beginPath();g.ellipse(x,y,2+n*3,1,0,0,Math.PI*2);g.fill();}
       else{g.beginPath();g.moveTo(x-3,y);g.lineTo(x-4,y-4);g.moveTo(x,y+1);g.lineTo(x+2,y-4);g.strokeStyle=n>.8?'#e4e7b177':'#77935f58';g.lineWidth=.9;g.stroke();}
     }
-    g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='destination-in';g.drawImage(mask,0,0);c.drawImage(layer,view.minX,view.minY);return true;
-  }finally{mask.width=mask.height=layer.width=layer.height=0;}
+    g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='destination-in';g.drawImage(mask,0,0,w,h,0,0,w,h);c.drawImage(layer,0,0,w,h,view.minX,view.minY,w,h);return true;
+  }finally{if(temporary)mask.width=mask.height=layer.width=layer.height=0;}
 }
 function deepGreen(c,layout,view,scenery){
-  const data=records(layout),mask=data.collision.high;
+  const data=records(layout),mask=data.collision.high,structures=data.structureIndex.query(view,218);
   // The rooted low tier makes the real outline readable even on a small
   // garden island. It is cached floor cover; complete trunks stay depth sorted.
   for(let by=Math.floor((view.minY-40)/384);by<=Math.floor((view.maxY+40)/384);by++)for(let bx=Math.floor((view.minX-40)/384);bx<=Math.floor((view.maxX+40)/384);bx++)for(const p of data.naturalRims.get(`${bx}:${by}`)||[]){
@@ -99,7 +130,7 @@ function deepGreen(c,layout,view,scenery){
     if(mask.inside(x,y)||(mask.nearest(x,y,110)?.distance??Infinity)<72)continue;
     let area=null,best=Infinity;for(const a of layout.areas){const d=(a.center.x-x)**2+(a.center.y-y)**2;if(d<best){best=d;area=a;}}
     const natural=GREEN_AREAS.has(area?.id)||x<-5400||x>5800||y<-4900||y>4100;if(!natural)continue;
-    if(data.structures.some(q=>x>q.bounds.minX-65&&x<q.bounds.maxX+65&&y>q.bounds.minY-60&&y<q.bounds.maxY+60))continue;
+    if(structures.some(q=>x>q.bounds.minX-65&&x<q.bounds.maxX+65&&y>q.bounds.minY-60&&y<q.bounds.maxY+60))continue;
     const seed=gx*37+gy*59;
     if(n>.83){scenery.drawRock(c,{x,y:y+13,r:24+n*15,rockForm:[0,1,2,4][Math.floor(m*4)],riftPalette:true});scenery.drawShrub(c,{x:x-17,y:y+23,scale:.5,seed,riftPalette:true});}
     else scenery.drawCanopy(c,{x,y,scale:.7+n*.35,treeForm:Math.floor(m*5),riftPalette:true});
@@ -161,13 +192,14 @@ function shoreDetails(c,layout,view){
 function overviewRoof(c,s){const x=s.x-s.width/2,y=s.y-s.depth/2;if(s.solid){c.fillStyle=s.cityKind==='wall'||s.cityKind==='tower'?'#b8bca4':CITY_PALETTE.roof;c.fillRect(x,y,s.width,s.depth);c.strokeStyle='#334f53';c.lineWidth=10;c.strokeRect(x,y,s.width,s.depth);c.strokeStyle='#b6c8c0';c.lineWidth=5;c.beginPath();c.moveTo(x+4,y+4);c.lineTo(x+s.width-4,y+4);c.stroke();}else if(!['gate','arcade'].includes(s.cityKind)){c.fillStyle='#9b997a';c.fillRect(x,y,s.width,s.depth);}}
 
 export class CityMapArt{
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.ground=new WorldArt(makeCanvas);this.scenery=new SceneryArt(makeCanvas);}
-  get cacheStats(){const a=this.ground.cacheStats,b=this.scenery.cacheStats;return Object.fromEntries(['entries','pixels','bytes','limitBytes','builds'].map(key=>[key,(a[key]||0)+(b[key]||0)]));}
+  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.ground=new WorldArt(makeCanvas);this.scenery=new SceneryArt(makeCanvas);this.workspace=new GroundWorkspace(makeCanvas);}
+  get cacheStats(){const a=this.ground.cacheStats,b=this.scenery.cacheStats,result=Object.fromEntries(['entries','pixels','bytes','limitBytes','builds'].map(key=>[key,(a[key]||0)+(b[key]||0)]));const pixels=this.workspace.pixels;return{...result,pixels:result.pixels+pixels,bytes:result.bytes+pixels*4,limitBytes:result.limitBytes+(2*1024*1024+256*256)*4,workingCanvasBytes:pixels*4,workingCanvasAllocations:this.workspace.allocations};}
+  releaseWorkingSet(){this.workspace.release();}
   paintTile(c,layout,view){
     c.save();c.lineCap='round';c.lineJoin='round';blockedMass(c,layout,view);
     // Never clip paving at the collision union: the very same diffuse must
     // continue beneath every foundation and complete depth-sorted sprite.
-    drawCityNativeGround(c,layout,view);naturalGround(c,layout,view,this.makeCanvas);agedPaving(c,layout,view);
+    drawCityNativeGround(c,layout,view);naturalGround(c,layout,view,this.workspace);agedPaving(c,layout,view);
     streetRetainingWalls(c,layout,view);water(c,layout,view,false);shoreDetails(c,layout,view);deepGreen(c,layout,view,this.scenery);
     for(const {value:p,bounds:b}of records(layout).bridges)if(overlaps(b,view,p.width/2))drawCityNativeBridgeDeck(c,layout,p,view);
     c.restore();return true;
