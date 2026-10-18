@@ -92,6 +92,9 @@ export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=
     }
   }
   const root=new Element('qa-root');parseInto(html,root);
+  // bootstrap creates the independent log dialog before importing app.js.
+  const logDialog=new Element('activity-log-dialog','DIALOG');logDialog.open=false;
+  root.querySelector('body').append(logDialog);nodes[logDialog.id]=logDialog;
   const pauseColumn=nodes['pause-button'].parentElement;
   assert(pauseColumn.classList.contains('pause-control'));
   Object.assign(document,{getElementById:id=>{const node=root.querySelector(`#${id}`);assert(node,id);return node;},body:root.querySelector('body'),createElement:tag=>new Element('',tag.toUpperCase()),querySelectorAll:selector=>root.querySelectorAll(selector),addEventListener:(type,handler)=>listen(`document:${type}`,handler)});

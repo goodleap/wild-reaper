@@ -1,6 +1,7 @@
 import { ARCHIVE_PERSISTED_IDS, enemyArchiveId, companionArchiveId, ownedArchiveEntries } from './archive-catalog.js';
 import { UPGRADE_DEFS } from './combat-catalog.js';
 import { HEROES } from './heroes.js';
+import { activityLog } from './activity-log.js';
 
 export const ARCHIVE_STORAGE_KEY='wild-echoes-adventure-archive-v3';
 const V2_ARCHIVE_KEY='wild-echoes-adventure-archive-v2';
@@ -49,26 +50,57 @@ function sanitize(value){
   data.legacy=legacyOf(value.legacy);return data;
 }
 function defaultStorage(){try{return globalThis.localStorage??null;}catch{return null;}}
+const storageTime=()=>globalThis.performance?.now?.()??Date.now();
+const storageEncoder=new TextEncoder();
+const storageBytes=value=>typeof value==='string'?storageEncoder.encode(value).byteLength:0;
+function startStorageLog(log,operation){
+  try{return log.begin('storage',operation==='read'?'读取冒险档案':'保存冒险档案',{
+    storage:'adventure-archive',operation,archiveVersion:3});}catch{return null;}
+}
+function finishStorageLog(log,id,{status='success',summary,details,error}={}){
+  if(!id)return;
+  try{
+    if(error)log.captureError(error,{id,phase:'storage'});
+    log.end(id,{status,summary,details});
+  }catch{}
+}
 
 // This stores observations and run totals, never positions or a resumable run.
 // Counters use monotonic per-run snapshots, so pause/end/save hooks may repeat.
 export class AdventureArchive {
-  constructor({storage=defaultStorage()}={}) {
+  constructor({storage=defaultStorage(),log=activityLog}={}) {
     this.storage=storage;this.storageOk=!!(storage?.getItem&&storage?.setItem);
     this.data=emptyData();this._runs=new WeakMap();this._active=null;this._dirty=false;this._readOnly=false;
-    if(!this.storageOk)return;
+    this._log=log;this._writeLog=null;
+    const started=storageTime(),id=startStorageLog(log,'read');let bytes=0,warnings=0;
+    const warn=(message,reason,details={})=>{warnings++;try{log.event(id,'warning',message,{reason,...details});}catch{}};
+    const finish=(summary,details={},error)=>finishStorageLog(log,id,{status:error?'error':warnings?'warning':'success',summary,
+      details:{operation:'read',bytes,durationMs:storageTime()-started,...details},error});
+    if(!this.storageOk){warn('本地档案存储不可用','storage-unavailable');finish('档案仅保留在本次页面中');return;}
     try{
       // Separate generations prevent older open tabs from erasing chapter
       // records when their checkpoint code writes its previous storage key.
       const current=storage.getItem(ARCHIVE_STORAGE_KEY);
       const raw=current??storage.getItem(V2_ARCHIVE_KEY)??storage.getItem(PREVIOUS_ARCHIVE_KEY);
-      let saved=null;try{saved=raw?JSON.parse(raw):null;}catch{}
-      if([1,2,3].includes(saved?.version)){this.data=sanitize(saved);this._dirty=current===null||saved.version!==3;if(this._dirty)this.flush();return;}
+      bytes=storageBytes(raw);
+      let saved=null;try{saved=raw?JSON.parse(raw):null;}catch{warn('档案 JSON 损坏，继续现有恢复流程','invalid-json');}
+      if([1,2,3].includes(saved?.version)){
+        this.data=sanitize(saved);this._dirty=current===null||saved.version!==3;
+        finish(this._dirty?'档案已读取并准备升级':'档案已读取',{sourceVersion:saved.version,migrated:this._dirty});
+        if(this._dirty)this.flush();return;
+      }
       // A newer release owns its save; an older tab must not overwrite it.
-      if(Number.isFinite(saved?.version)&&saved.version>3){this._readOnly=true;this.storageOk=false;return;}
-      let legacy=null;try{legacy=JSON.parse(storage.getItem(LEGACY_KEY));}catch{}
+      if(Number.isFinite(saved?.version)&&saved.version>3){
+        this._readOnly=true;this.storageOk=false;
+        warn('档案来自更新版本，当前页面保持只读','future-version',{sourceVersion:saved.version});
+        finish('较新版本档案已保留',{sourceVersion:saved.version,readOnly:true});return;
+      }
+      if(saved!==null)warn('档案结构版本无法识别，继续现有恢复流程','unsupported-version');
+      let legacy=null;try{const legacyRaw=storage.getItem(LEGACY_KEY);bytes+=storageBytes(legacyRaw);legacy=JSON.parse(legacyRaw);}
+      catch{warn('旧档案无法读取或解析','legacy-read-or-json');}
       this.data.legacy=legacyOf(legacy);this._dirty=!!this.data.legacy;
-    }catch{this.storageOk=false;}
+      finish(this._dirty?'旧档案记录已恢复':raw?'已准备空白档案':'尚无本地档案',{legacyRecovered:this._dirty});
+    }catch(error){this.storageOk=false;finish('读取档案失败',{},error);}
   }
   begin(game) {
     if(!plain(game))return false;
@@ -187,8 +219,35 @@ export class AdventureArchive {
   }
   flush(){
     if(!this._dirty)return this.storageOk;
-    if(!this.storage?.setItem||this._readOnly){this.storageOk=false;return false;}
-    try{this.storage.setItem(ARCHIVE_STORAGE_KEY,JSON.stringify(this.data));this._dirty=false;this.storageOk=true;return true;}
-    catch{this.storageOk=false;return false;}
+    const started=storageTime();let bytes=0;
+    if(!this.storage?.setItem||this._readOnly){
+      this.storageOk=false;this._recordStorageWrite({started,status:'warning',reason:this._readOnly?'read-only':'storage-unavailable'});return false;
+    }
+    try{
+      const serialized=JSON.stringify(this.data);bytes=storageBytes(serialized);
+      this.storage.setItem(ARCHIVE_STORAGE_KEY,serialized);this._dirty=false;this.storageOk=true;
+      this._recordStorageWrite({started,bytes,status:'success'});return true;
+    }catch(error){this.storageOk=false;this._recordStorageWrite({started,bytes,status:'error',error});return false;}
+  }
+  _recordStorageWrite({started,bytes=0,status,error,reason}){
+    // Checkpoints stay at their existing cadence. Only their diagnostic rows
+    // share a one-minute window, and logger failures never affect the archive.
+    try{
+      const durationMs=storageTime()-started,key=`${status}:${reason||error?.name||''}:${error?.message||''}`;
+      let batch=this._writeLog;
+      const fresh=!batch||batch.key!==key||started-batch.started>=60000;
+      if(fresh)batch=this._writeLog={id:startStorageLog(this._log,'write'),key,started,writes:0,totalBytes:0,totalDurationMs:0,maxDurationMs:0};
+      batch.writes++;batch.totalBytes+=bytes;batch.totalDurationMs+=durationMs;batch.maxDurationMs=Math.max(batch.maxDurationMs,durationMs);
+      const details={operation:'write',archiveVersion:3,writes:batch.writes,bytes,totalBytes:batch.totalBytes,
+        durationMs,totalDurationMs:batch.totalDurationMs,maxDurationMs:batch.maxDurationMs,reason};
+      const summary=status==='success'?`档案已保存（${batch.writes} 次）`:status==='warning'?'档案写入已跳过':'档案保存失败';
+      if(fresh){
+        if(status==='warning')this._log.event(batch.id,'warning',summary,{reason});
+        finishStorageLog(this._log,batch.id,{status,summary,details,error});
+      }else{
+        if(error)this._log.captureError(error,{id:batch.id,phase:'storage'});
+        this._log.update(batch.id,{summary,details});
+      }
+    }catch{}
   }
 }

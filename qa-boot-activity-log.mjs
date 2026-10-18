@@ -1,0 +1,87 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+// Execute the shipped boot flow with controlled transports. The assertions
+// cover failures that ordinary successful resource loading cannot exercise.
+const source=fs.readFileSync(new URL('./dist/bootstrap.js',import.meta.url),'utf8')
+  .replace(/^import .* from '[^']+';\s*$/gm,'')
+  .replace(/await import\('([^']+)'\)/g,"await importModule('$1')");
+const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+async function boot({fallback=false,retry=false,failure}={}){
+  const records=[],events=new Map(),nodes=new Map(),order=[];let current=null,clock=0,flushes=0;
+  const node=id=>{if(!nodes.has(id))nodes.set(id,{textContent:id==='game-version'?'v-test':'{}',disabled:true,setAttribute(){}});return nodes.get(id);};
+  const document={getElementById:node,baseURI:'https://game.example/',hidden:false,
+    addEventListener:(name,callback)=>events.set(name,callback)};
+  const window={location:{search:'?debug=1',reload(){}},navigator:{userAgent:'Boot QA'},innerWidth:390,innerHeight:844,devicePixelRatio:2,
+    addEventListener:(name,callback)=>events.set(name,callback)};
+  const find=id=>records.find(record=>record.id===id);
+  const activityLog={setContext(context){this.context={...this.context,...context};},begin(kind,title){const id=records.length+1;records.push({id,kind,title,details:{},events:[],stages:[]});return id;},
+    setCurrent:id=>current=id,stage:(id,name)=>find(id).stages.push(name),
+    event:(id,level,message,data)=>find(id).events.push({level,message,data}),
+    update(id,{details,...rest}){const record=find(id);Object.assign(record,rest);Object.assign(record.details,details);},
+    captureError(error,{id=current,...options}={}){find(id).events.push({level:'error',error,options});},
+    end(id,{details,...result}){Object.assign(find(id),result);Object.assign(find(id).details,details);},
+    flush(){flushes++;}};
+  const loading={start(){},finish(){},fail(){},};
+  const progress={setStage(){},modulesReady(){},download(){},resolvedDownload(){},completeTask(){},finish(){},stop(){}};
+  const importModule=async path=>{
+    order.push(path);
+    if(path==='./content-config.js')return {
+      getConfigLoadStatus:()=>fallback?{source:'bundled',fallback:true,reason:'Configuration response 503'}:{source:'site',fallback:false},
+      getConfigSnapshot:()=>({contentVersion:'content-test'}),
+      async loadContentConfig({onDownloadProgress,onProgress}){
+        if(!fallback)onDownloadProgress({loaded:12,total:12,done:true});
+        onProgress({stage:'确认配置版本'});
+      }};
+    if(path==='./enemy-art/frostcrown-assets.js')return {FROSTCROWN_ASSET:{path:'../image.png'},frostcrownAssets:{async preload({onProgress}){
+      if(retry){onProgress({phase:'download',loaded:3,total:5});onProgress({phase:'retry',error:Object.assign(new Error('HTTP 503'),{code:'http'})});}
+      onProgress({phase:'download',loaded:0,total:5});onProgress({phase:'download',loaded:5,total:5,done:true});
+      onProgress({phase:'decode'});if(failure==='decode')throw new Error('decode rejected');onProgress({phase:'ready'});
+    }}};
+    if(failure==='app')throw new Error('application import rejected');
+    return {};
+  };
+  const input={document,window,activityLog,createLoadingView:()=>loading,createBootProgress:()=>progress,isDebugEnabled:()=>true,
+    createActivityLogView:()=>order.push('log-view'),waitForPaint:async()=>{},performance:{now:()=>++clock},importModule,console:{error(){}}};
+  await new AsyncFunction(...Object.keys(input),source)(...Object.values(input));
+  return {records,events,document,window,activityLog,order,nodes,get current(){return current;},get flushes(){return flushes;}};
+}
+
+{
+  const fixture=await boot({fallback:true,retry:true}),record=fixture.records[0];
+  assert.equal(fixture.order[0],'log-view','diagnostics can be opened before content or app imports');
+  assert.equal(record.kind,'boot');assert.equal(record.summary,'首页已就绪');
+  assert.equal(fixture.current,null,'completed startup releases ownership of unrelated home-screen errors');
+  assert.equal(record.details.configuration.reason,'Configuration response 503');
+  assert.equal(record.events.filter(event=>event.level==='warning').length,2);
+  const image=record.details.resources['./image.png'];
+  assert.equal(image.loadedBytes,5);assert.equal(image.downloadedBytes,8,'bytes include the failed partial attempt');
+  assert.equal(image.retries,1);assert(image.downloadMs>0&&image.decodeMs>0);
+  const retryStage=record.stages.indexOf('重试下载角色图片 1/1');
+  assert.equal(record.stages[retryStage+1],'下载角色图片','a retry returns to the download stage before decoding');
+  assert.deepEqual(fixture.activityLog.context.viewport,{width:390,height:844});assert.equal(fixture.activityLog.context.dpr,2);
+  assert.equal(fixture.activityLog.context.contentVersion,'content-test');assert.equal(record.context.contentVersion,'content-test');
+  fixture.document.hidden=true;fixture.events.get('visibilitychange')();fixture.events.get('pagehide')();assert.equal(fixture.flushes,2);
+  fixture.document.hidden=false;fixture.events.get('visibilitychange')();assert.equal(fixture.flushes,2,'visible frames do not flush persistence');
+  const runtimeId=fixture.activityLog.begin('gameplay','active');fixture.activityLog.setCurrent(runtimeId);
+  const failure=new Error('runtime exception');fixture.events.get('error')({error:failure,filename:'app.js',lineno:9,colno:4,target:fixture.window});
+  fixture.events.get('unhandledrejection')({reason:new Error('promise failed')});
+  assert.equal(fixture.records[1].events.length,2);assert.equal(fixture.records[1].events[0].options.context.line,9);
+  assert.equal(fixture.records[1].events[0].error,failure,'global error capture retains the original stack');
+  fixture.events.get('error')({filename:'https://user:secret@game.example/app.js?token=secret#private',
+    target:{src:'https://user:secret@assets.example/image.png?credential=secret#private'}});
+  const resource=fixture.records[1].events.at(-1);
+  assert.equal(resource.options.context.filename,'/app.js');assert.equal(resource.options.context.resource,'/image.png');
+  assert(!JSON.stringify(resource).includes('secret'),'resource failure metadata only includes URL paths');
+}
+for(const failure of ['decode','app']){
+  const fixture=await boot({failure}),record=fixture.records[0];
+  assert.equal(fixture.records.length,1,'startup errors stay within the boot activity');
+  assert.equal(fixture.current,null,'failed startup also releases the current activity');
+  assert.equal(record.status,'error');assert.equal(record.events.filter(event=>event.level==='error').length,1);
+  assert.equal(record.events.at(-1).options.phase,failure==='decode'?'解码角色图片':'加载游戏模块');
+  assert(record.details.resources['./content-pack.json'].downloadMs<record.details.resources['./image.png'].downloadMs,
+    'later failures do not extend a completed configuration download');
+  assert.equal(fixture.nodes.get('start-button')?.disabled??true,true,'failed boot does not enable gameplay');
+}
+console.log('Boot activity log QA passed: early access, fallback/retry reasons, cumulative bytes, download/decode timing, boot failures, runtime error ownership and lifecycle flush.');

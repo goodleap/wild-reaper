@@ -88,11 +88,13 @@ export class FrameDiagnostics {
 
   stop() { return this.running ? this._finish('manual') : null; }
 
-  _finish(reason) {
-    if (!this._count) { this.cancel(); return null; }
-    const report = {
+  // A lifecycle checkpoint can persist partial results without ending this
+  // capture, advancing the comparison sequence, or adding a finished report.
+  snapshot(reason = 'partial') {
+    if (!this.running || !this._count) return null;
+    return {
       mode:this.mode, modeLabel:MODE_LABELS[this.mode], reason,
-      startedAt:this._startedAt, metadata:this._metadata,
+      startedAt:this._startedAt, metadata:copyMetadata(this._metadata),
       samples:this._count, activeMs:this._elapsed, fps:this._count * 1000 / this._elapsed,
       raf:{...stats(this._buffers.raf, this._count, true), over25:this._over25, over50:this._over50},
       cpu:stats(this._buffers.cpu, this._count, true),
@@ -101,6 +103,11 @@ export class FrameDiagnostics {
       hud:stats(this._buffers.hud, this._count),
       movingRatio:this._moving / this._count,
     };
+  }
+
+  _finish(reason) {
+    const report = this.snapshot(reason);
+    if (!report) { this.cancel(); return null; }
     if (this.reports.length >= REPORT_LIMIT) this.reports.shift();
     this.reports.push(report);
     this.cancel();

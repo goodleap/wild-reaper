@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {SceneTransition} from './dist/scene-transition.js';
+import {attachSceneActivity} from './dist/activity-scene.js';
+import {ActivityLog} from './dist/activity-log.js';
+
+let clock=1000;
+const log=new ActivityLog({clock:()=>clock,storage:{load:async()=>[],write:async()=>{}},setTimer:()=>0,clearTimer:()=>{}});
+await log.list();
+let before=0,upgrades=0;
+const game={status:'playing',region:{name:'起点'},dungeon:{active:null},_trySkillUpgrade(){upgrades++;}};
+const transition=new SceneTransition(game);
+const observer=attachSceneActivity(game,{log,context:()=>({scene:game.region.name}),beforeStart:()=>before++});
+const advance=()=>{clock+=50;transition.update(.05);};
+assert(transition.run('终点',()=>{game.region.name='终点';return true;}));
+assert(observer.id);const id=observer.id;
+assert.equal(transition.run('拒绝重复',()=>true),false);
+for(let i=0;i<10;i++)advance();
+let record=(await log.list()).find(record=>record.id===id);
+assert.equal(record.status,'success');assert.equal(record.context.scene,'起点');
+assert.equal(record.details.destination.scene,'终点');
+assert.deepEqual(record.stages.map(stage=>stage.name),['过渡开始','切换场景内容','显示目标场景']);
+assert.equal(observer.id,null);assert.equal(before,1);assert.equal(upgrades,1);
+assert(transition.run('不可进入',()=>false));for(let i=0;i<10;i++)advance();
+record=(await log.list())[0];assert.equal(record.status,'warning');assert.equal(record.details.committed,false);
+const problem=new Error('scene fixture');
+assert(transition.run('异常场景',()=>{throw problem;}));const failedId=observer.id;
+advance();advance();assert.throws(advance,error=>error===problem,'original exception is preserved');
+log.captureError(problem);record=(await log.list()).find(record=>record.id===failedId);
+assert.equal(record.status,'error');assert.equal(record.events.length,1);
+assert.equal((await log.list()).filter(record=>record.kind==='runtime').length,0,'rethrow stays in original behavior');
+// Broken telemetry cannot break an otherwise successful handoff.
+game.onSceneTransition=()=>{throw new Error('observer unavailable');};
+const independent=new SceneTransition(game);assert(independent.run('仍可切图',()=>true));
+for(let i=0;i<10;i++)independent.update(.05);
+assert.equal(independent.active,false);assert.equal(independent.commitSucceeded,true);
+console.log('Activity scene lifecycle passed.');

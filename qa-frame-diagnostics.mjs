@@ -91,4 +91,26 @@ d.start(); d.sample(100, active); d.sample(90, active); d.sample(NaN, active);
 d.sample(1000, active); d.sample(1010, {...active, updateMs:NaN, renderMs:-1, hudMs:Infinity, totalMs:-3});
 const invalid = d.stop(); assert.equal(invalid.samples, 1); assert.equal(invalid.cpu.meanMs, 0);
 assert.equal(invalid.update.maxMs, 0); assert.equal(invalid.render.maxMs, 0); assert.equal(invalid.hud.maxMs, 0);
+
+// A background checkpoint does not stop or reset a manual comparison stage.
+const checkpoint = new FrameDiagnostics({durationMs:100});
+assert.equal(checkpoint.snapshot(), null);
+checkpoint.start({viewport:{width:1440}}); checkpoint.sample(0, active);
+assert.equal(checkpoint.snapshot(), null, 'a baseline has no measured frames');
+checkpoint.sample(20, active); checkpoint.sample(40, active);
+const snapshot = checkpoint.snapshot();
+assert.equal(snapshot.reason, 'partial'); assert.equal(snapshot.samples, 2); assert.equal(snapshot.activeMs, 40);
+assert.equal(checkpoint.running, true); assert.equal(checkpoint.elapsedMs, 40); assert.equal(checkpoint.reports.length, 0);
+assert.equal(checkpoint._last, 40); assert.equal(checkpoint._count, 2);
+snapshot.metadata.viewport.width = 1; snapshot.raf.meanMs = 999;
+const secondSnapshot = checkpoint.snapshot('后台暂存');
+assert.equal(secondSnapshot.reason, '后台暂存'); assert.equal(secondSnapshot.metadata.viewport.width, 1440);
+assert.equal(secondSnapshot.raf.meanMs, 20); assert.equal(secondSnapshot.samples, 2);
+checkpoint.breakContinuity();
+checkpoint.sample(10000, active); checkpoint.sample(10020, active); checkpoint.sample(10040, active);
+const resumed = checkpoint.sample(10060, active);
+assert.equal(resumed.reason, 'duration'); assert.equal(resumed.activeMs, 100); assert.equal(resumed.samples, 5);
+assert.equal(resumed.metadata.viewport.width, 1440); assert.equal(resumed.raf.maxMs, 20);
+assert.equal(checkpoint.reports.length, 1); assert.equal(checkpoint.running, false);
+assert.equal(checkpoint.snapshot(), null); assert.equal(secondSnapshot.samples, 2, 'earlier checkpoints remain stable');
 console.log('Frame diagnostics: pacing percentiles, pause continuity, duration, mode isolation, bounded capture/history and local text report passed.');

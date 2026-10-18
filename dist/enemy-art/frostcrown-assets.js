@@ -48,7 +48,7 @@ export class FrostcrownAssets{
     if(this.pending)return this.pending;
     let finished=false,objectURL;
     let download={loaded:0,total:null};
-    const progress=(phase,done)=>{if(!finished)onProgress({phase,...download,done});};
+    const progress=(phase,done,data={})=>{if(!finished)onProgress({phase,...download,done,...data});};
     const attempt=(async()=>{
       try{
         const url=new URL(FROSTCROWN_ASSET.path,import.meta.url).href;
@@ -61,7 +61,7 @@ export class FrostcrownAssets{
             code:'download-stalled',detail:'图片加载长时间未完成'});
         }else{
           const bytes=await fetchResourceBytes(url,{fetchImpl,expectedBytes,maxBytes:8*1024*1024,
-            idleTimeoutMs,totalTimeoutMs:downloadTimeoutMs,onRetry:()=>progress('retry',false),
+            idleTimeoutMs,totalTimeoutMs:downloadTimeoutMs,onRetry:error=>progress('retry',false,{error}),
             onProgress:({loaded,total,done})=>{download={loaded,total};progress('download',done);}});
           objectURL=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
         }

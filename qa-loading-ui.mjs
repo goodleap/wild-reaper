@@ -86,7 +86,7 @@ function fixture(options={}){
   await Promise.resolve();assert(!done);frame();await Promise.resolve();assert(!done,'map work cannot run inside the loading RAF');advance(0);await painted;assert(done);
 }
 const bootstrap=fs.readFileSync(new URL('./dist/bootstrap.js',import.meta.url),'utf8');
-assert.deepEqual([...bootstrap.matchAll(/^import .* from '([^']+)'/gm)].map(match=>match[1]),['./loading-ui.js','./boot-progress.js','./debug-search.js'],'only lightweight loading utilities are in the initial dependency graph');
+assert.deepEqual([...bootstrap.matchAll(/^import .* from '([^']+)'/gm)].map(match=>match[1]),['./loading-ui.js','./boot-progress.js','./debug-search.js','./activity-log.js','./activity-log-view.js'],'only lightweight loading and diagnostic utilities are in the initial dependency graph');
 assert(bootstrap.indexOf("loading.start('boot'")<bootstrap.indexOf("await import('./content-config.js')"));
 assert(bootstrap.indexOf('await loadContentConfig')<bootstrap.indexOf("await import('./app.js')"));
 const html=fs.readFileSync(new URL('./dist/index.html',import.meta.url),'utf8');

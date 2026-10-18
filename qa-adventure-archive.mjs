@@ -117,6 +117,35 @@ const futureStorage=memory({[ARCHIVE_STORAGE_KEY]:JSON.stringify({version:4,impo
 const blocked=new AdventureArchive({storage:{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}}}),offline=run();blocked.begin(offline);offline.runTime=2;blocked.finish(offline);assert(!blocked.storageOk);assert.equal(blocked.data.totals.time,2,'unavailable storage still permits session play and stats');
 const absent=new AdventureArchive({storage:null});assert.doesNotThrow(()=>absent.begin(run()));assert(!absent.storageOk);
 
+{
+  const records=[];
+  const log={begin(kind,title,context){const record={id:records.length+1,kind,title,context,events:[]};records.push(record);return record.id;},
+    event(id,level,message,data){records[id-1].events.push({level,message,data});},
+    captureError(error,{id}){records[id-1].events.push({level:'error',message:error.message});},
+    end(id,result){Object.assign(records[id-1],result);},
+    update(id,update){Object.assign(records[id-1],update);},
+    setCurrent(){assert.fail('archive logging must not replace the active gameplay activity');}};
+  const save=memory(),observed=new AdventureArchive({storage:save,log}),session=run();
+  observed.begin(session);session.runTime=5;observed.checkpoint(session);session.runTime=10;observed.checkpoint(session);
+  const writes=records.filter(record=>record.context.operation==='write');
+  assert.equal(writes.length,1,'frequent successful checkpoints share one diagnostic row');
+  assert.equal(writes[0].details.writes,3);assert(writes[0].details.bytes>0);assert(writes[0].details.durationMs>=0);
+  assert(!JSON.stringify(records).includes('weapon:sword'),'diagnostics never include the saved player archive');
+  const malformed=new AdventureArchive({storage:memory({[ARCHIVE_STORAGE_KEY]:'{private-invalid-json'}),log});
+  assert(records.at(-1).events.some(event=>event.level==='warning'&&event.data.reason==='invalid-json'));
+  assert(!JSON.stringify(records).includes('private-invalid-json'),'malformed JSON is described without copying its contents');
+  assert(malformed.begin(run()),'corrupt archive recovery behavior is preserved');
+  new AdventureArchive({storage:memory({[ARCHIVE_STORAGE_KEY]:JSON.stringify({version:99,private:'save'})}),log});
+  assert.equal(records.at(-1).details.readOnly,true);assert.equal(records.at(-1).status,'warning');
+  let failures=0;const failure=new AdventureArchive({storage:{getItem:()=>null,setItem(){failures++;throw new Error('quota blocked');}},log});
+  failure.begin(run());failure.flush();
+  assert.equal(failures,2);assert.equal(records.at(-1).details.writes,2);
+  assert.equal(records.at(-1).events.filter(event=>event.level==='error').length,2,'every failed write remains observable for core deduplication');
+  const brokenLog=new Proxy({},{get(){return ()=>{throw new Error('logger unavailable');};}});
+  const resilient=new AdventureArchive({storage:memory(),log:brokenLog});
+  assert(resilient.begin(run()));assert(resilient.storageOk,'diagnostic storage failures cannot break archive persistence');
+}
+
 const battle=new Game({terrain:new Terrain({obstacles:[]}),adventure:false}),combatArchive=new AdventureArchive({storage:memory()});
 combatArchive.begin(battle);battle.onEnemyDefeated=enemy=>combatArchive.recordDefeat(battle,enemy);
 battle.enemies=[];battle.events=Array.from({length:100},()=>({type:'fill'}));
