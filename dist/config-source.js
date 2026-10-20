@@ -1,6 +1,6 @@
-// Enable after the API has been deployed. The authored JSON and bundled fallback
-// remain part of every frontend release, regardless of this switch.
-export const USE_SERVER_CONFIG=false;
+// Prefer the API; verified cache and bundled data remain available on failure.
+// Set false to restore same-site configuration loading without API/cache access.
+export const USE_SERVER_CONFIG=true;
 // Development only: e.g. http://127.0.0.1:8787. Production normally stays empty.
 export const SERVER_CONFIG_ORIGIN_OVERRIDE='';
 

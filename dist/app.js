@@ -63,7 +63,7 @@ import { backingResolution, RenderSchedule, FrameMetrics } from './render-perfor
 import { cameraViewport } from './camera-viewport.js';
 import { createDebugViewportControls } from './debug-viewport.js';
 import { FrameDiagnostics } from './frame-diagnostics.js';
-import { getConfigSnapshot } from './content-config.js';
+import { getConfigSnapshot,getConfigLoadStatus } from './content-config.js';
 import { activityLog } from './activity-log.js';
 import { ActivityPerformance } from './activity-performance.js';
 import { attachSceneActivity } from './activity-scene.js';
@@ -172,7 +172,11 @@ D${sample.renderMs.toFixed(1)}ms
 ${dpr.toFixed(2)}×${(canvas.width*canvas.height/1e6).toFixed(1)}M`;
   debugPerformanceNode.title=`RAF 回调间隔 ${sample.rafMs.toFixed(2)} ms；逻辑 CPU ${sample.updateMs.toFixed(2)} ms；绘制提交 CPU ${sample.renderMs.toFixed(2)} ms（不含 GPU）；画布 ${canvas.width} × ${canvas.height}`;
 }
-if(debugMode){$('game-version').textContent+=' · DEBUG';$('game-version').setAttribute('aria-label','游戏版本，调试模式');}
+if(debugMode){
+  const remoteConfig=['server','server-cache','remote'].includes(getConfigLoadStatus().source);
+  $('game-version').textContent+=` · DEBUG · ${remoteConfig?'REMOTE':'LOCAL'}`;
+  $('game-version').setAttribute('aria-label',`游戏版本，调试模式，${remoteConfig?'远程':'本地'}配置`);
+}
 let width=1100,height=700,dpr=1,scaleX=1,scaleY=1,nativeDpr=0,game=null,paused=false,helpOpen=false,mapOpen=false,characterOpen=false,archiveOpen=false,runEnded=false;
 let viewWidth=1100,viewHeight=700,worldZoom=1,viewportControls=null;
 let viewportMode='default',customViewWidth;

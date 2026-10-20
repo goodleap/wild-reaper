@@ -83,15 +83,15 @@ npm run check
 
 首页先加载并校验整包配置，再初始化游戏模块，每次页面会话固定一份只读配置。`dist/config/*.json` 仍是唯一编辑源，整包及内置回退配置始终随前端发布。
 
-`dist/config-source.js` 的 `USE_SERVER_CONFIG` 控制配置来源，默认 `false`，在正式 API 部署并导入兼容配置后再开启：
+`dist/config-source.js` 的 `USE_SERVER_CONFIG` 控制配置来源，当前已启用 `true`；设为 `false` 可切回前端配置：
 
 - `false`：沿用同站 `content-pack.json`，失败时使用内置整包；不查询后端，也不读取后端缓存。
 - `true`：按完整页面 hostname 构造 `https://api.<hostname>`，保留所有子域和 `www`，例如 `wild.example.com` 对应 `api.wild.example.com`。先查询 `/api/config/manifest?clientVersion=v0.0.N&schemaVersion=2`，再下载指定版本的整包。
 - 本地开发可以显式设置 `SERVER_CONFIG_ORIGIN_OVERRIDE`，仅允许 HTTPS 或回环 HTTP 地址；服务器的 CORS 配置须允许前端的完整 origin。API 域名需要独立配置 DNS 和 HTTPS，不能假定 GitHub 默认域名或本机 IP 自动拥有 API 子域。
 
-清单包含客户端兼容范围、配置版本、解压后字节数和 SHA-256；下载后同时检查完整性与现有内容规则。IndexedDB 缓存按 API origin、客户端版本和配置格式版本隔离，最多保留 4 份。API 查询成功且内容未变时复用缓存，网络或校验失败时依次尝试兼容缓存、内置整包；缓存不可用不阻断启动。首页行为日志记录实际来源和回退原因。后端路径使用有界下载与超时，不在战斗过程中请求配置。
+清单包含客户端兼容范围、配置版本、解压后字节数和 SHA-256；下载后同时检查完整性与现有内容规则。IndexedDB 缓存按 API origin、客户端版本和配置格式版本隔离，最多保留 4 份。API 查询成功且内容未变时复用缓存，网络或校验失败时依次尝试兼容缓存、内置整包；缓存不可用不阻断启动。首页行为日志记录实际来源和回退原因。debug 模式首页右下角版本行显示实际来源：`REMOTE` 表示后端配置或已验证的后端缓存，`LOCAL` 表示站点或内置配置；普通模式只显示版本号。后端路径使用有界下载与超时，不在战斗过程中请求配置。
 
-独立后端仓库为 `goodleap/wild-reaper-server`。其发布脚本从已提交的游戏配置生成导入包，通过 SSH 导入后端 SQLite；兼容范围默认锁定该前端版本，扩大范围必须验证旧客户端仍能解释新配置。新增行为、素材或校验规则时，先同步所需后端校验代码并准备兼容发布，再上线启用后端的客户端。具体导入、回退和服务器部署命令见后端 README。API 尚未部署时保持开关关闭即可。
+独立后端仓库为 `goodleap/wild-reaper-server`。其发布脚本从已提交的游戏配置生成导入包，通过 SSH 导入后端 SQLite；兼容范围默认锁定该前端版本，扩大范围必须验证旧客户端仍能解释新配置。新增行为、素材或校验规则时，先同步所需后端校验代码并准备兼容发布，再上线启用后端的客户端。具体导入、回退和服务器部署命令见后端 README。API 不可用或尚无兼容发布时自动回退，启用开关不代表后端部署已完成。
 
 加载接入的专项检查为 `npm run test:config-api`；修改本模块后同时运行 `npm run test:config`、`npm run check`，并在浏览器检查真实 HTTP/CORS、缓存复用、服务离线和关闭开关的路径。
 

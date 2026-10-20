@@ -51,7 +51,7 @@ for(const [label,fetchImpl] of badCases){
 }
 {
   const api=await fresh();let signal;
-  await api.loadContentConfig({timeoutMs:5,fetchImpl:(_url,options)=>{signal=options.signal;return new Promise(()=>{});}});
+  await api.loadContentConfig({serverOptions:null,timeoutMs:5,fetchImpl:(_url,options)=>{signal=options.signal;return new Promise(()=>{});}});
   assert(signal.aborted,'timeout aborts the pending transport');
   assert.equal(api.getConfigLoadStatus().fallback,true);assert.match(api.getConfigLoadStatus().reason,/timed out/);
 }
@@ -67,7 +67,7 @@ for(const [label,fetchImpl] of badCases){
 }
 {
   const api=await fresh(),downloads=[],progress=[];let release,signal;
-  await api.loadContentConfig({timeoutMs:5,onDownloadProgress:event=>downloads.push(event),onProgress:event=>progress.push(event),
+  await api.loadContentConfig({serverOptions:null,timeoutMs:5,onDownloadProgress:event=>downloads.push(event),onProgress:event=>progress.push(event),
     fetchImpl:(_url,options)=>{signal=options.signal;return new Promise(resolve=>{release=resolve;});}});
   const count=downloads.length;release(response(changed()));await Promise.resolve();await Promise.resolve();await Promise.resolve();
   assert(signal.aborted);assert.equal(downloads.length,count,'late responses cannot move the finished loading UI');
@@ -75,7 +75,7 @@ for(const [label,fetchImpl] of badCases){
 }
 {
   const api=await fresh(),downloads=[];let signal,cancelled=false;
-  await api.loadContentConfig({timeoutMs:5,onDownloadProgress:event=>downloads.push(event),fetchImpl:(_url,options)=>{
+  await api.loadContentConfig({serverOptions:null,timeoutMs:5,onDownloadProgress:event=>downloads.push(event),fetchImpl:(_url,options)=>{
     signal=options.signal;return new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('{'));},cancel(){cancelled=true;}}));
   }});
   assert(signal.aborted&&cancelled);assert(downloads.some(event=>event.loaded===1));assert(downloads.every(event=>!event.done));
@@ -83,7 +83,7 @@ for(const [label,fetchImpl] of badCases){
 }
 {
   const api=await fresh(),pack=changed();
-  await api.loadContentConfig({fetchImpl:()=>response(pack)});
+  await api.loadContentConfig({serverOptions:null,fetchImpl:()=>response(pack)});
   assert.equal(api.getConfigLoadStatus().fallback,true,'a mismatched same-site pack never mixes deployments');
   assert.equal(api.getConfigSnapshot().contentVersion,bundledConfig.contentVersion);
 }
