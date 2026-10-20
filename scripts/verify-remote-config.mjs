@@ -1,0 +1,36 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {spawn,spawnSync} from 'node:child_process';
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'wild-reaper-remote-check-')),log=fs.openSync(path.join(temp,'browser.log'),'a',0o600);
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));let chrome,socket,failed=false;
+try {
+ const executable=[process.env.CHROME_PATH,'google-chrome','google-chrome-stable','chromium','chromium-browser'].filter(Boolean).find(name=>spawnSync('which',[name]).status===0);
+ if(!executable)throw new Error('BROWSER_UNAVAILABLE');
+ chrome=spawn(executable,['--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check','--remote-debugging-address=127.0.0.1','--remote-debugging-port=0','--user-data-dir='+path.join(temp,'profile'),'about:blank'],{stdio:['ignore',log,'pipe'],detached:true});
+ let endpoint='';chrome.stderr.on('data',data=>{fs.writeSync(log,data);const match=/DevTools listening on (ws:\/\/[^\s]+)/.exec(data.toString());if(match)endpoint=match[1];});
+ for(let i=0;i<150&&!endpoint;i++){if(chrome.exitCode!==null)break;await sleep(100);}
+ if(!endpoint)throw new Error('BROWSER_START_FAILED');
+ socket=new WebSocket(endpoint);await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',()=>reject(new Error('BROWSER_CONNECTION_FAILED')),{once:true});});
+ let sequence=0;const pending=new Map(),listeners=[];
+ socket.addEventListener('message',event=>{const m=JSON.parse(String(event.data));if(m.id){const item=pending.get(m.id);if(item){pending.delete(m.id);clearTimeout(item.timer);m.error?item.reject(new Error('BROWSER_PROTOCOL_ERROR')):item.resolve(m.result);}}else for(const listener of listeners)listener(m);});
+ function call(method,params={},sessionId){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new Error('BROWSER_COMMAND_TIMEOUT'));},20000);pending.set(id,{resolve,reject,timer});socket.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});}
+ const {targetId}=await call('Target.createTarget',{url:'about:blank'}),{sessionId}=await call('Target.attachToTarget',{targetId,flatten:true});
+ await call('Page.enable',{},sessionId);await call('Runtime.enable',{},sessionId);await call('Network.enable',{},sessionId);await call('Network.setCacheDisabled',{cacheDisabled:true},sessionId);
+ const observed={manifestStatus:0,manifestEntries:0,resourceResponses:0,versionUrl:'',versionStatus:0,failedRequests:0},manifestRequests=new Set();
+ function entries(value){if(Array.isArray(value))return value.length;if(!value||typeof value!=='object')return 0;let n=0;for(const [key,item] of Object.entries(value)){if(/^(resources|files|entries|configs|modules|items)$/i.test(key)&&item&&typeof item==='object')n=Math.max(n,Array.isArray(item)?item.length:Object.keys(item).length);if(item&&typeof item==='object')n=Math.max(n,entries(item));}return n;}
+ listeners.push(m=>{if(m.sessionId!==sessionId)return;const p=m.params||{};if(m.method==='Network.responseReceived'){let u;try{u=new URL(p.response.url)}catch{return}if(u.origin!=='https://api.gomyu.com'||!u.pathname.startsWith('/api/config'))return;if(u.pathname.includes('manifest')){observed.manifestStatus=p.response.status;manifestRequests.add(p.requestId);}else if(u.pathname.includes('version')){observed.versionUrl=p.response.url;observed.versionStatus=p.response.status;}else if(p.response.status===200)observed.resourceResponses++;}else if(m.method==='Network.loadingFinished'&&manifestRequests.has(p.requestId)){call('Network.getResponseBody',{requestId:p.requestId},sessionId).then(b=>{const text=b.base64Encoded?Buffer.from(b.body,'base64').toString():b.body;observed.manifestEntries=Math.max(observed.manifestEntries,entries(JSON.parse(text)));}).catch(()=>{});}else if(m.method==='Network.loadingFailed')observed.failedRequests++;});
+ await call('Page.addScriptToEvaluateOnNewDocument',{source:"(()=>{const s={remote:false,starts:[]};Object.defineProperty(window,'__wildReaperConfigProbe',{value:s});for(const m of ['fillText','strokeText']){const original=CanvasRenderingContext2D.prototype[m];CanvasRenderingContext2D.prototype[m]=function(text,x,y,...rest){const label=String(text);if(/\\bREMOTE\\b/.test(label))s.remote=true;if(/^(开始游戏|开始冒险|新游戏|进入游戏|开始生存|启程|Start Game|Play)$/.test(label.trim())){const t=this.getTransform(),r=this.canvas.getBoundingClientRect();s.starts.push({x:r.left+(t.a*x+t.c*y+t.e)*r.width/this.canvas.width,y:r.top+(t.b*x+t.d*y+t.f)*r.height/this.canvas.height});s.starts=s.starts.slice(-8);}return original.call(this,text,x,y,...rest);};}})();"},sessionId);await call('Page.navigate',{url:'https://gomyu.com/wild-reaper/?debug'},sessionId);
+ let remote=false,clicked=false;
+ for(let i=0;i<120;i++){
+  await sleep(1000);const data=await call('Runtime.evaluate',{expression:"JSON.stringify({remote:!!window.__wildReaperConfigProbe?.remote||/\\bREMOTE\\b/.test(document.body?.innerText||''),start:window.__wildReaperConfigProbe?.starts?.at(-1)||null})",returnByValue:true},sessionId);let state={};try{state=JSON.parse(data.result.value)}catch{}
+  if(state.remote&&observed.manifestStatus===200&&observed.manifestEntries>0){remote=true;break;}
+  if(!clicked&&i>8&&state.start){await call('Input.dispatchMouseEvent',{type:'mousePressed',x:state.start.x,y:state.start.y,button:'left',clickCount:1},sessionId);await call('Input.dispatchMouseEvent',{type:'mouseReleased',x:state.start.x,y:state.start.y,button:'left',clickCount:1},sessionId);clicked=true;}
+ }
+ if(!remote){console.error('MANIFEST_HTTP='+observed.manifestStatus);console.error('MANIFEST_ENTRY_COUNT='+observed.manifestEntries);console.error('VERSION_HTTP='+observed.versionStatus);console.error('FAILED_RESOURCE_REQUESTS='+observed.failedRequests);throw new Error('REMOTE_CONFIGURATION_NOT_CONFIRMED');}
+ let nextCompatible=false;if(observed.versionUrl){const u=new URL(observed.versionUrl),m=/^v0\.0\.(\d+)$/.exec(u.searchParams.get('clientVersion')||'');if(m){u.searchParams.set('clientVersion','v0.0.'+(Number(m[1])+1));nextCompatible=(await fetch(u)).ok;}}
+ if(!nextCompatible)throw new Error('NEXT_FRONTEND_VERSION_COMPATIBILITY_NOT_CONFIRMED');
+ console.log('CONFIGURATION_MANIFEST=VALID');console.log('CONFIGURATION_MANIFEST_ENTRY_COUNT='+observed.manifestEntries);console.log('FRONTEND_CONFIG_SOURCE=REMOTE');console.log('NEXT_FRONTEND_VERSION_COMPATIBLE=YES');
+}catch(error){failed=true;console.error('CONFIGURATION_ACCEPTANCE=FAILED');console.error('REASON='+(/^[A-Z_]+$/.test(error.message)?error.message:'REMOTE_ACCEPTANCE_ERROR'));}
+finally{try{socket?.close()}catch{}if(chrome?.pid){try{process.kill(-chrome.pid,'SIGTERM')}catch{}await sleep(500);if(chrome.exitCode===null){try{process.kill(-chrome.pid,'SIGKILL')}catch{}}}fs.closeSync(log);fs.rmSync(temp,{recursive:true,force:true});}
+if(failed)process.exitCode=1;

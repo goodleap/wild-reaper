@@ -1,0 +1,60 @@
+name: Publish game configuration
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dist/config/**'
+      - 'config-compatibility.json'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Configuration operation
+        type: choice
+        options: [publish, rollback, history]
+        default: publish
+      revision_id:
+        description: Historical configuration ID, required for rollback
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: wild-reaper-game-configuration
+  cancel-in-progress: false
+jobs:
+  configuration:
+    if: github.repository == 'goodleap/wild-reaper' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CONFIG_OPERATION: ${{ inputs.operation || 'publish' }}
+      CONFIG_REVISION_ID: ${{ inputs.revision_id }}
+    steps:
+      - name: Check out configuration source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare restricted SSH access
+        env:
+          CONFIG_SSH_HOST: ${{ secrets.CONFIG_SSH_HOST }}
+          CONFIG_SSH_USER: ${{ secrets.CONFIG_SSH_USER }}
+          CONFIG_SSH_PORT: ${{ secrets.CONFIG_SSH_PORT }}
+          CONFIG_SSH_PRIVATE_KEY: ${{ secrets.CONFIG_SSH_PRIVATE_KEY }}
+          CONFIG_SSH_KNOWN_HOSTS: ${{ secrets.CONFIG_SSH_KNOWN_HOSTS }}
+        run: node scripts/config-deploy.mjs setup
+      - name: Validate and build the complete configuration package
+        if: env.CONFIG_OPERATION == 'publish'
+        run: npm run build:config
+      - name: Publish, roll back, or list configuration history
+        run: node scripts/config-deploy.mjs "$CONFIG_OPERATION"
+      - name: Verify configuration API and REMOTE game configuration
+        if: env.CONFIG_OPERATION != 'history'
+        run: node scripts/verify-remote-config.mjs
+      - name: Remove temporary credentials and backend tools
+        if: always()
+        run: node scripts/config-deploy.mjs cleanup
