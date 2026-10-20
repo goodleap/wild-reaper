@@ -51,10 +51,14 @@ jobs:
         if: env.CONFIG_OPERATION == 'publish'
         run: npm run build:config
       - name: Publish, roll back, or list configuration history
-        run: node scripts/config-deploy.mjs "$CONFIG_OPERATION"
+        run: |
+          set -o pipefail
+          node scripts/config-deploy.mjs "$CONFIG_OPERATION" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Verify configuration API and REMOTE game configuration
         if: env.CONFIG_OPERATION != 'history'
-        run: node scripts/verify-remote-config.mjs
+        run: |
+          set -o pipefail
+          node scripts/verify-remote-config.mjs | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Remove temporary credentials and backend tools
         if: always()
         run: node scripts/config-deploy.mjs cleanup

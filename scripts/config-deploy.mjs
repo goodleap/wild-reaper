@@ -40,7 +40,7 @@ try {
   fs.writeFileSync(path.join(temp,'result.json'),JSON.stringify({revisionId:Number(id[1]),source}),{mode:0o600});console.log('CONFIG_PUBLICATION=SUCCESS');console.log('PUBLISHED_CONFIG_ID='+id[1]);
  } else if(operation==='rollback') {
   const id=process.env.CONFIG_REVISION_ID||'';if(!/^[1-9]\d{0,14}$/.test(id))throw new Error('ROLLBACK_REVISION_REQUIRED');
-  if(!ssh('rollback-config '+id).includes('CONFIG_ROLLBACK=SUCCESS'))throw new Error('ROLLBACK_RECEIPT_MISSING');console.log('CONFIG_ROLLBACK=SUCCESS');console.log('ACTIVE_CONFIG_ID='+id);
+  const receipt=ssh('rollback-config '+id);const active=/ACTIVE_CONFIG_ID=(\d+)/.exec(receipt);if(!active||!receipt.includes('CONFIG_ROLLBACK=SUCCESS'))throw new Error('ROLLBACK_RECEIPT_MISSING');console.log('CONFIG_ROLLBACK=SUCCESS');console.log('ACTIVE_CONFIG_ID='+active[1]);
  } else if(operation==='history') {
   for(const line of ssh('history-config').split(/\r?\n/))if(/^CONFIG_HISTORY=/.test(line))console.log(line);
  } else if(operation==='cleanup') {
