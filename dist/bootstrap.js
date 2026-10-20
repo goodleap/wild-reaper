@@ -62,6 +62,7 @@ try{
   await waitForPaint();
   startDownload(configPath);
   await loadContentConfig({expectedBytes:manifest.assets?.[configPath],
+    clientVersion:document.getElementById('game-version')?.textContent?.trim().split(/\s/)[0],
     onDownloadProgress:event=>{downloadProgress(configPath,event);progress.download(configPath,event);},
     onProgress:({stage})=>setStage('正在读取内容配置',stage)});
   const configStatus=getConfigLoadStatus();
@@ -70,9 +71,12 @@ try{
   if(!resources[configPath].downloadComplete)resources[configPath].downloadMs=now()-resources[configPath].startedAt;
   resources[configPath].downloadComplete=true;
   activityLog.update(bootId,{context:{contentVersion},details:{configuration:configStatus}});recordResources();
-  if(configStatus.fallback)activityLog.event(bootId,'warning','配置下载或校验失败，使用内置配置',{reason:configStatus.reason});
+  if(configStatus.fallback)activityLog.event(bootId,'warning',
+    configStatus.source==='server-cache'?'配置服务不可用，使用已验证缓存':'配置下载或校验失败，使用内置配置',
+    {source:configStatus.source,reason:configStatus.reason});
   progress.resolvedDownload(configPath);progress.completeTask('config');
-  setStage('正在准备画面与操作',configStatus.fallback?'已启用内置配置':'加载图片模块');
+  setStage('正在准备画面与操作',configStatus.fallback?
+    (configStatus.source==='server-cache'?'已启用缓存配置':'已启用内置配置'):'加载图片模块');
   await waitForPaint();
   setStage('正在准备画面与操作','加载图片模块');
   const {frostcrownAssets,FROSTCROWN_ASSET}=await import('./enemy-art/frostcrown-assets.js');
