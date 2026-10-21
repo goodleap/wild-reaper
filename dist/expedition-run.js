@@ -4,15 +4,14 @@ import { Island } from './islands.js';
 import { enemyDefinition } from './enemy-definitions.js';
 import { REGIONS, regionFor } from './world-definitions.js';
 import { Environment } from './environment.js';
-import { Adventure } from './adventure.js';
 import { Settlements } from './settlements.js';
 import { RelicSites } from './relic-sites.js';
-import { getConfigSection } from './content-config.js';
+import { ExpeditionScenes, expeditionAdventure } from './expedition-scenes.js';
+import { ShipTerrain } from './ship-terrain.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const foot=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-const supplyRules=getConfigSection('economy').pickups;
 
 function expeditionObstacle(prop){
   const type=prop.variant==='expedition-tree'?'tree':prop.variant==='expedition-log'?'log':'rock';
@@ -44,18 +43,36 @@ export class ExpeditionRun {
     this.game=game;this.definition=definition;this.id=id;this.name=definition.name;
     this.elapsed=0;this.currentSegment=0;this.completed=false;this.exitOpen=false;this.rewardClaimed=false;this.initialized=false;
     this.groups=definition.segments.map((segment,index)=>({definition:segment,index,members:[],active:false,cleared:false}));
+    this.scenes=definition.scenes?new ExpeditionScenes(this):null;
   }
+  get sceneDefinition(){return this.scenes?.definition??this.definition;}
+  get currentSceneId(){return this.scenes?.currentId??null;}
+  get sceneName(){return this.sceneDefinition.name??this.name;}
   get allowAmbient(){return this.id==='survival'&&!this.exitOpen&&!this.completed;}
   get objectiveLabel(){
     if(this.completed)return `${this.name} · 已通关`;
     if(this.exitOpen)return this.id==='moon'?'前往北方信标 · 进入光圈完成副本':this.id==='ship'?'前往船首 · 进入光圈完成副本':'撤离点已开放 · 前往东侧光圈';
     if(this.id==='survival')return `守住营地 · 剩余 ${Math.max(0,Math.ceil(this.definition.duration-this.elapsed))} 秒`;
     const group=this.groups[this.currentSegment],remaining=group.members.filter(enemy=>enemy.hp>0).length;
+    if(this.scenes&&group.definition.sceneId!==this.currentSceneId)return `前往${group.definition.name} · 沿楼梯继续突破`;
     return `${this.currentSegment+1}/${this.groups.length} · ${group.definition.name} · 剩余 ${remaining} 敌人`;
   }
   get markers(){
     const active=this.groups[this.currentSegment];
-    return [...(active&&!active.cleared?[{id:`expedition:group:${active.index}`,...active.definition.center,name:active.definition.name,label:active.active?'清理当前敌群':'接近后交战',color:this.definition.color,type:'expedition',state:active.active?'active':'ready',active:active.active,discovered:true}]:[]),{id:'expedition:exit',...this.definition.exit,name:this.id==='moon'?'月面信标':'撤离点',label:this.completed?'副本已完成':this.exitOpen?'前往出口':'完成目标后开放',color:this.exitOpen?'#c9e2a1':'#8d9292',type:'expedition',state:this.completed?'completed':this.exitOpen?'active':'locked',active:this.exitOpen&&!this.completed,completed:this.completed,discovered:true}];
+    const links=(this.sceneDefinition.links||[]).map(link=>({id:link.id,x:link.x,y:link.y,type:'expedition',kind:link.kind,name:link.label,label:this._linkEnabled(link)?'楼梯通行 · 可往返':'清理本层敌军后通行',state:this._linkEnabled(link)?'active':'locked',active:this._linkEnabled(link),discovered:true}));
+    return [...(active&&!active.cleared&&(!this.scenes||active.definition.sceneId===this.currentSceneId)?[{id:`expedition:group:${active.index}`,...active.definition.center,name:active.definition.name,label:active.active?'清理当前敌群':'接近后交战',color:this.definition.color,type:'expedition',state:active.active?'active':'ready',active:active.active,discovered:true}]:[]),...links,...(!this.scenes||this.definition.exit.sceneId===this.currentSceneId?[{id:'expedition:exit',...this.definition.exit,name:this.id==='moon'?'月面信标':'撤离点',label:this.completed?'副本已完成':this.exitOpen?'前往出口':'完成目标后开放',color:this.exitOpen?'#c9e2a1':'#8d9292',type:'expedition',state:this.completed?'completed':this.exitOpen?'active':'locked',active:this.exitOpen&&!this.completed,completed:this.completed,discovered:true}]:[])];
+  }
+  _linkEnabled(link){return link.requiresSegment==null||this.groups[link.requiresSegment]?.cleared===true;}
+  getInteraction(){
+    const g=this.game;if(!this.scenes||g.status!=='playing'||this.completed)return null;
+    const point=foot(g),link=this.sceneDefinition.links.filter(link=>distance(point,link)<=100).sort((a,b)=>distance(point,a)-distance(point,b))[0];
+    if(!link)return null;const enabled=this._linkEnabled(link);
+    return {id:link.id,type:'expeditionPassage',label:enabled?link.label:'清理本层敌军',description:enabled?'保留各层探索与战斗进度':'击败本层敌军后开放楼梯',x:link.x,y:link.y,enabled,touchRadius:34};
+  }
+  interact(id){
+    const choice=this.getInteraction();if(!choice||!choice.enabled||choice.id!==id)return false;
+    if(this.game.sceneTransition?.active&&!this.game.sceneTransition.committing)return false;
+    return this.scenes.enter(this.sceneDefinition.links.find(link=>link.id===id));
   }
   initialize(){
     if(this.initialized)return;this.initialized=true;
@@ -63,18 +80,19 @@ export class ExpeditionRun {
     g.regionIndex=REGIONS.findIndex(region=>region.id===(d.worldMapId??d.themeId));g.region=regionFor(g.regionIndex);g.worldId=g.startWorldId=g.region.id;g.mapId=`expedition:${this.id}`;
     // A borrowed island changes terrain, not the challenge's elapsed-time
     // difficulty or its existing wave and evacuation rules.
-    g.terrain=new ExpeditionTerrain(d);g._islandWorlds=false;g.enemies=[];g.gems=[];g.coins=[];g.bullets=[];g.enemyBullets=[];g.effects=[];
+    g.terrain=this.scenes?new ShipTerrain(this.sceneDefinition,d.themeId):new ExpeditionTerrain(d);g._islandWorlds=false;g.enemies=[];g.gems=[];g.coins=[];g.bullets=[];g.enemyBullets=[];g.effects=[];
+    if(this.scenes){g.mapId=`expedition:${this.id}:${this.currentSceneId}`;g.sceneKind='expedition';}
     g.player.x=d.start.x;g.player.y=d.start.y-groundOffset(g.player,true);g._moveEntity(g.player,0,0,true);
     g.portal=null;g.regions.portals=[];g.regions.guarded=true;g.regions.states.clear();g.regions._rewardQueue=[];g.regions.rewardPortal=null;g._regionRewardPending=false;
-    g.encounters=null;g.environment=new Environment(g,{generation:false,surfaces:d.worldMapId?g.region.naturalIsland?.surfaces:null});g.adventure=new Adventure(g,{generation:false});
-    g.adventure.props=(d.supplies||[]).map((supply,index)=>({id:`expedition:${this.id}:supply:${index}`,type:'supply',...supply,r:18,aimY:supply.y-12,sortY:supply.y,hp:supplyRules.supplyHp,maxHp:supplyRules.supplyHp,hit:0,seed:(index+1)*.173}));
+    g.encounters=null;g.environment=new Environment(g,{generation:false,surfaces:d.worldMapId?g.region.naturalIsland?.surfaces:null});g.adventure=expeditionAdventure(g,this.sceneDefinition,this.scenes?`${this.id}:${this.currentSceneId}`:this.id);
     g.settlements=new Settlements(g,{generation:false});g.relicSites=new RelicSites(g,{generation:false});
     g.companions.generation=false;g.companions.camps=[];g.elites.generation=false;g.nextBossAt=Infinity;g.regionGrace=0;
     g.waveDirector.reset();g._spawn=.5;
-    for(const group of this.groups)this._spawnGroup(group);
-    this._setGates();g._rebuildGrid();
+    for(const group of this.groups)if(!this.scenes||group.definition.sceneId===this.currentSceneId)this._spawnGroup(group);
+    this._setGates();g._rebuildGrid();this.scenes?.capture();
   }
   _spawnGroup(group){
+    if(group.spawned)return;group.spawned=true;
     const g=this.game,d=group.definition,types=Object.entries(d.enemies).flatMap(([type,count])=>Array(count).fill(type));
     for(const [index,type]of types.entries()){
       const enemy=g._spawnEnemy(type,1),base=enemyDefinition(type),angle=index*2.399963229728653,radius=65+Math.floor(index/6)*42;
@@ -86,10 +104,11 @@ export class ExpeditionRun {
     }
   }
   _setGates(){
+    if(this.scenes)return;
     const b=this.definition.bounds,axis=this.definition.axis;
     this.game.terrain.setStructures(this.groups.filter(group=>!group.cleared).map(group=>({id:`expedition-gate:${group.index}`,type:'log',variant:'expedition-gate',visual:false,r:14,angle:axis==='x'?Math.PI/2:0,halfLength:axis==='x'?(b.maxY-b.minY)/2:(b.maxX-b.minX)/2,x:axis==='x'?group.definition.gate:(b.minX+b.maxX)/2,y:axis==='y'?group.definition.gate:(b.minY+b.maxY)/2})),'expedition-gates');
   }
-  canTarget(enemy){return !enemy.expeditionId||(enemy.expeditionId===this.id&&enemy.expeditionSegment===this.currentSegment&&!this.completed);}
+  canTarget(enemy){return !enemy.expeditionId||(enemy.expeditionId===this.id&&enemy.expeditionSegment===this.currentSegment&&!this.completed&&(!this.scenes||this.groups[enemy.expeditionSegment]?.definition.sceneId===this.currentSceneId));}
   awaken(enemy){
     if(!this.canTarget(enemy))return false;
     const group=this.groups[enemy.expeditionSegment];if(group&&!group.cleared){group.active=true;for(const member of group.members)member.guardActive=true;}return true;
@@ -101,7 +120,7 @@ export class ExpeditionRun {
       if(this.elapsed>=this.definition.duration)this._openExit();
     }else{
       const group=this.groups[this.currentSegment];
-      if(group&&!group.cleared){
+      if(group&&!group.cleared&&(!this.scenes||group.definition.sceneId===this.currentSceneId)){
         if(distance(foot(g),group.definition.center)<=group.definition.triggerRadius||group.members.some(enemy=>enemy.hp<enemy.maxHp))group.active=true;
         for(const enemy of group.members)if(enemy.hp>0){enemy.guardActive=group.active;enemy.guardReturnTarget=null;}
         if(group.members.length&&group.members.every(enemy=>enemy.hp<=0)){
@@ -112,7 +131,7 @@ export class ExpeditionRun {
         }
       }
     }
-    if(this.exitOpen&&distance(foot(g),this.definition.exit)<=this.definition.exit.r)this.complete();
+    if(this.exitOpen&&(!this.scenes||this.definition.exit.sceneId===this.currentSceneId)&&distance(foot(g),this.definition.exit)<=this.definition.exit.r)this.complete();
   }
   _openExit(){
     if(this.exitOpen)return;this.exitOpen=true;
@@ -120,9 +139,10 @@ export class ExpeditionRun {
   }
   complete(){
     const g=this.game;
-    if(this.completed||!this.exitOpen||g.status!=='playing'||g.player.hp<=0||g.sceneTransition?.active||g.dungeon?.active||g.superSkills.pending||g.regions.rewardPortal||g.regions._rewardQueue.length||distance(foot(g),this.definition.exit)>this.definition.exit.r)return false;
+    if(this.completed||!this.exitOpen||this.scenes&&this.currentSceneId!==this.definition.exit.sceneId||g.status!=='playing'||g.player.hp<=0||g.sceneTransition?.active||g.dungeon?.active||g.superSkills.pending||g.regions.rewardPortal||g.regions._rewardQueue.length||distance(foot(g),this.definition.exit)>this.definition.exit.r)return false;
     this.completed=true;
     if(!this.rewardClaimed){this.rewardClaimed=true;g.grantResources(this.definition.reward,'expeditionComplete');}
     g.status='victory';g._emit('victory',{expeditionId:this.id,stageName:this.name});return true;
   }
+  dispose(){this.scenes?.dispose();if(this.scenes)for(const group of this.groups)if(group.definition.sceneId!==this.currentSceneId)group.members=[];}
 }

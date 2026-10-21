@@ -53,7 +53,7 @@ export class Adventure {
     const navigation=terrainNavigation(terrain),origin=this._foot(),target={x,y};
     // The player's present ground position is already reached. Starting here
     // also avoids repeatedly replaying a whole-world trip from the camp.
-    const route=navigation.rift.route(origin,target,r,'ground');let reachable=!!route,from=origin;
+    const route=navigation.rift?navigation.rift.route(origin,target,r,'ground'):[target];let reachable=!!route,from=origin;
     // The authored graph proves the large detour; each leg must also fit
     // between real props and structures, including its final pickup position.
     for(const to of route||[]){

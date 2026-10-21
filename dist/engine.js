@@ -176,7 +176,7 @@ export class Game {
   }
 
   onEnemyDefeated(enemy){this.story?.onEnemyDefeated?.(enemy);this.realms?.onEnemyDefeated(enemy);this.onArchiveDefeat?.(enemy);}
-  dispose(reason='exit') {this.quests?.flush();this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();}
+  dispose(reason='exit') {this.quests?.flush();this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();this.expedition?.dispose();}
 
   _createStoryExplorationContent() {
     const desired={x:this.player.x,y:this.player.y},spawn=this.terrain.island?.layout?.spawn;
@@ -448,6 +448,7 @@ export class Game {
     if(!this.sceneContent.allows('worldContent'))return null;
     if(this.dungeon.active)return this.dungeon.getInteraction();
     const candidates=[];
+    const expedition=this.expedition?.getInteraction?.();if(expedition)candidates.push(expedition);
     const settlement=this.settlements.getInteraction();if(settlement)candidates.push(settlement);
     const portal=this.regions.getInteraction();if(portal)candidates.push(portal);
     const relic=this.relicSites?.getInteraction();if(relic)candidates.push(relic);
@@ -461,6 +462,7 @@ export class Game {
     const interaction=this.getInteraction();
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
+    if(interaction.type==='expeditionPassage')return !!this.expedition?.interact(interaction.id);
     if(interaction.category==='quest')return !!this.quests?.interact(interaction.id);
     if(interaction.category==='rift')return !!this.riftExploration?.interact(interaction.id);
     if(interaction.category==='relic'||interaction.type==='relic')return !!this.relicSites?.interact(interaction.id);

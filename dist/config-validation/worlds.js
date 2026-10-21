@@ -1,6 +1,7 @@
 import { TERRAIN_GENERATOR_IDS } from '../worlds/generator-ids.js';
 import { validateWorldLayout } from './world-layout.js';
 import { validateRiftLayout } from './rift-layout.js';
+import { validateExpeditionScenes } from './expedition-scenes.js';
 import { WATER_SHAPES } from '../water-geometry.js';
 
 const persistentWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
@@ -120,6 +121,7 @@ export function validateWorlds(sections){
       const world=worldDefs.find(w=>w.id===d.worldMapId);
       if(d.worldMapId!==d.themeId||!world.naturalIsland||d.axis!=='arena')fail(p+'.worldMapId layout');
     }
+    if(d.id==='ship'||d.scenes!=null){validateExpeditionScenes(d,p,{enemyIds,pickupTypes:sections.economy?.pickups?.types||[]});continue;}
     const bounds=object(d.bounds,p+'.bounds');for(const key of ['minX','maxX','minY','maxY'])number(bounds[key],p+'.bounds.'+key,-1e5,1e5);
     if(bounds.maxX-bounds.minX<300||bounds.maxY-bounds.minY<300)fail(p+'.bounds.size');
     const point=(value,path,margin=0)=>{object(value,path);number(value.x,path+'.x',bounds.minX+margin,bounds.maxX-margin);number(value.y,path+'.y',bounds.minY+margin,bounds.maxY-margin);};

@@ -23,7 +23,7 @@ function pop(heap){
 }
 function endpoints(obstacle){const dx=Math.cos(obstacle.angle||0)*(obstacle.halfLength||0),dy=Math.sin(obstacle.angle||0)*(obstacle.halfLength||0);return [{x:obstacle.x-dx,y:obstacle.y-dy},{x:obstacle.x+dx,y:obstacle.y+dy}];}
 export class TerrainNavigation {
-  constructor(terrain){this.terrain=terrain;this.rift=terrain.rift?new RiftNavigation(terrain):null;this.revision=terrain.structureRevision||0;this.layers=new Map();this.plans=0;this.searches=0;this.expanded=0;this.lastExpanded=0;}
+  constructor(terrain){this.terrain=terrain;this.rift=terrain.rift&&terrain.island?.layout?.areas?new RiftNavigation(terrain):null;this.revision=terrain.structureRevision||0;this.layers=new Map();this.plans=0;this.searches=0;this.expanded=0;this.lastExpanded=0;}
   clear(){this.layers.clear();this.revision=this.terrain.structureRevision||0;}
   layer(radius,profile){
     if(this.revision!==(this.terrain.structureRevision||0))this.clear();

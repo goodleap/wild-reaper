@@ -33,7 +33,9 @@ function reachable(terrain,start,r,targets=[]){
   };
 }
 
-for(const d of EXPEDITIONS){
+// Connected ship floors have independent populations and entry points;
+// qa-ship-scenes.mjs replays their actual stairs and full-body routes.
+for(const d of EXPEDITIONS.filter(d=>!d.scenes)){
   const terrain=new ExpeditionTerrain(d),canReach=reachable(terrain,d.start,22,[d.exit,...d.supplies,...d.segments.map(s=>s.center)]);
   assert(canReach(d.exit),`${d.id}: exit reachable at companion radius`);
   for(const p of [...d.supplies,...d.segments.map(s=>s.center)])assert(canReach(p),`${d.id}: objective/supply ${p.x},${p.y} reachable`);
@@ -60,7 +62,6 @@ for(const d of EXPEDITIONS){
 }
 
 for(const [id,from,to]of [
-  ['ship',{x:-960,y:0},{x:-620,y:0}],
   ['moon',{x:0,y:130},{x:0,y:-180}],
 ])for(const companion of [false,true]){
   const g=new Game({mode:'dungeon',dungeonId:id}),e=g._spawnEnemy('beetle');
@@ -86,7 +87,7 @@ for(const mutate of [
   d=>{d.details[0].kind='unhandled';},d=>{d.details[0].rx=-1;},
   d=>{d.supplies[0].drop='unknown';},d=>{d.obstacles[0].treeForm=8;},
 ]){
-  const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions[1]);
+  const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions.find(d=>d.id==='moon'));
   assert.throws(()=>validateContentPack(pack),/Invalid world configuration|Non-finite number/);
 }
 console.log('Expedition layouts: route clearance, objective/supply connectivity, enemy/companion detours and return, resolved spawns, once-only supplies and schema passed.');

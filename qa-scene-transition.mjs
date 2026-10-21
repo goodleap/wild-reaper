@@ -98,7 +98,7 @@ const lockedGate=locked.portal;lockedGate.state='locked';place(locked,portalDoor
 const lockedRevision=locked.sceneTransition.inputRevision;
 assert.equal(locked.getInteraction().enabled,false);assert.equal(locked.requestInteraction(lockedGate.id),false,'disabled entrances do not run a misleading transition');
 assert.equal(locked.sceneTransition.active,false);assert.equal(locked.sceneTransition.inputRevision,lockedRevision);
-assert.equal(locked.regionIndex,0);assert.equal(locked.sceneTransition.opacity,0);
+assert.equal(locked.worldId,'rift-forest');assert.equal(locked.sceneTransition.opacity,0);
 
 const rejected=fresh(),badDoor=site(rejected,'castle');place(rejected,badDoor.door);
 const boss=rejected._spawnEnemy('boss',1);boss.guardActive=true;
@@ -125,12 +125,12 @@ assert.equal(deferred.crystals,41,'the transition never spends the pending upgra
 
 const travel=fresh(),bossGate=travel._spawnEnemy('boss',1);Object.assign(bossGate,{x:180,y:0,hp:0});
 travel.regions.openPortal(bossGate);travel.regions.flushReward();assert(travel.chooseSuper(travel.getSuperChoices()[0].id));
-const portal=travel.portal,oldTerrain=travel.terrain;place(travel,portalDoor(portal));
+const portal=travel.portal,oldTerrain=travel.terrain,oldRegionIndex=travel.regionIndex;place(travel,portalDoor(portal));
 const saved=persistent(travel);assert(travel.requestInteraction(portal.id));travel.update(.05);travel.update(.05);
-assert.equal(travel.regionIndex,0);assert.equal(travel.terrain,oldTerrain);travel.update(.05);
-assert.equal(travel.regionIndex,1);assert.equal(travel.sceneTransition.opacity,1);finish(travel);assert.deepEqual(persistent(travel),saved);
+assert.equal(travel.regionIndex,oldRegionIndex);assert.equal(travel.terrain,oldTerrain);travel.update(.05);
+assert.equal(travel.regionIndex,portal.nextRegionIndex);assert.equal(travel.sceneTransition.opacity,1);finish(travel);assert.deepEqual(persistent(travel),saved);
 const back=travel.regions.portals.find(p=>p.direction==='back');place(travel,portalDoor(back));assert(travel.requestInteraction(back.id));finish(travel);
-assert.equal(travel.regionIndex,0);assert.equal(travel.terrain,oldTerrain);assert.deepEqual(persistent(travel),saved,'portal round trips freeze time and preserve progression');
+assert.equal(travel.regionIndex,oldRegionIndex);assert.equal(travel.terrain,oldTerrain);assert.deepEqual(persistent(travel),saved,'portal round trips freeze time and preserve progression');
 assert.equal(travel.superSkills.pending,null,'transitions do not replay the portal reward');
 
 console.log('Scene transitions: opaque atomic cuts, short first-castle activation and 0.15/0.25-second fades, full simulation freeze, input revisions, pause/time-clamp safety, immediate shops/chests and persistent castle/hut/portal round trips passed.');

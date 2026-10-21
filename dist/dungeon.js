@@ -2,7 +2,7 @@ import { groundOffset } from './terrain.js';
 import { enemyGroupProvoked } from './combat-tactics.js';
 import { Adventure } from './adventure.js';
 import { clearBossAttacks } from './bosses.js';
-import { resetLocomotion } from './locomotion.js';
+import { clearSceneActors, placeScenePlayer } from './scene-actors.js';
 import { DungeonVision } from './dungeon-vision.js';
 import { interiorSceneFor } from './sites/interior-scenes.js';
 import { featureForSite } from './world-sites.js';
@@ -40,16 +40,10 @@ export class Dungeon {
       spawn:g._spawn,superPending:g.superSkills?.pending,companionCamps:c?.camps,companionGeneration:c?.generation,companionNextAt:c?.nextAt,enteredClock:g._clock};
   }
   _clearScene(){
-    this.game.realms?.cancel('scene-change');
-    const g=this.game;g.attacks?.clearTrails();g.bullets=[];g.enemyBullets=[];g.effects=[];g.orbitals=[];g.storm=null;g._pulseEchoes=[];g._grid.clear();
-    g.superSkills?.clearScene();g.barrier?.clearScene();g.abilities?.clearScene();
-    for(const member of g.companions?.members||[])member._echoes=[];
-    // No old warning may resolve at an unrelated position after a boundary.
-    for(const enemy of g.enemies){enemy.charge=null;enemy.cast=null;enemy._chargeSegment=null;enemy.slam=null;enemy._groupProvokedUntil=0;clearBossAttacks(enemy);enemy._navTimer=0;enemy._navObstacle=null;}
+    clearSceneActors(this.game);
   }
   _placePlayer(point,arrival=null){
-    const g=this.game,p=g.player;p.x=point.x;p.y=point.y-groundOffset(p,true);g._moveEntity(p,0,0,true);p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;resetLocomotion(p);
-    if(arrival){p.facing=Math.atan2(arrival.direction.y,arrival.direction.x);g.companions?.onSceneChange?.(arrival);}
+    placeScenePlayer(this.game,point,arrival);
   }
   _populate(state){return populateCastle(this,state);}
   enter(site){

@@ -92,7 +92,9 @@ for(const [dungeonId,themeId] of [['ship','beach'],['moon','mountain']]){
   const h=harness('',{storage,coarse:true});click(h,'start-button');
   const assertDungeon=()=>{
     const game=h.run('game');
-    assert.equal(game.mode,'dungeon');assert.equal(game.expedition.id,dungeonId);assert.equal(game.mapId,`expedition:${dungeonId}`);
+    assert.equal(game.mode,'dungeon');assert.equal(game.expedition.id,dungeonId);
+    assert.equal(game.mapId,dungeonId==='ship'?'expedition:ship:aft-deck':`expedition:${dungeonId}`);
+    if(dungeonId==='ship')assert.equal(game.expedition.currentSceneId,'aft-deck','start and restart enter the first ship deck');
     assert.equal(game.region.id,themeId);assert.equal(game.terrain.region,themeId);
     assert.equal(game.worldId,themeId,'the running expedition reports its own world');
     assert.equal(game.startWorldId,themeId,'the expedition start identity matches its actual scene');

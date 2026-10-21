@@ -15,22 +15,26 @@ const advance=(g,seconds)=>{for(let i=0;i<Math.ceil(seconds/.05);i++)g.update(.0
 assert.equal(STAGES.length,8,'the eight existing trials remain available');
 assert.deepEqual(EXPEDITIONS.map(d=>d.id),['survival','ship','moon']);
 for(const d of EXPEDITIONS){
-  const g=make(d.id),run=g.expedition;
+  const g=make(d.id),run=g.expedition,scene=run.sceneDefinition;
   assert.equal(g.stage,null);assert.equal(g.territories.groups.length,0);
   assert.equal(g.regions.portals.length,0);assert.equal(g.settlements.sites.length,0);assert.equal(g.environment.props.length,0);assert.equal(g.relicSites.sites.length,0);
   assert.equal(g.encounters,null);assert.equal(g.environment.generation,false);assert.equal(g.adventure.generation,false);assert.equal(g.companions.generation,false);
-  assert.equal(g.adventure.props.length,d.supplies.length,'authored side routes reuse ordinary supplies');
+  assert.equal(g.adventure.props.length,scene.supplies.length,'authored side routes reuse ordinary supplies');
   assert.equal(run.markers.at(-1).discovered,true);
-  assert(g.terrain.isFree(d.start.x,d.start.y,g.player.r));assert(g.terrain.isFree(d.exit.x,d.exit.y,g.player.r));
+  assert(g.terrain.isFree(d.start.x,d.start.y,g.player.r));
+  if(!d.scenes||d.exit.sceneId===run.currentSceneId)assert(g.terrain.isFree(d.exit.x,d.exit.y,g.player.r));
   for(const [dx,dy]of [[-10000,0],[10000,0],[0,-10000],[0,10000]]){
     const p=g.terrain.moveCircle(d.start.x,d.start.y,dx,dy,15);
-    assert(p.x>=d.bounds.minX+15&&p.x<=d.bounds.maxX-15&&p.y>=d.bounds.minY+15&&p.y<=d.bounds.maxY-15,'bounds constrain foot movement');
+    assert(p.x>=scene.bounds.minX+15&&p.x<=scene.bounds.maxX-15&&p.y>=scene.bounds.minY+15&&p.y<=scene.bounds.maxY-15,'bounds constrain foot movement');
   }
-  assert.equal(run.complete(),false);place(g,d.exit);run.update(.05);assert.equal(g.status,'playing','reaching an unopened exit cannot complete');place(g,d.start);
+  assert.equal(run.complete(),false);
+  if(!d.scenes||d.exit.sceneId===run.currentSceneId){place(g,d.exit);run.update(.05);assert.equal(g.status,'playing','reaching an unopened exit cannot complete');place(g,d.start);}
   const before=run.elapsed;g.status='paused';run.update(10);g.update(.05);assert.equal(run.elapsed,before);g.status='dead';run.update(10);assert.equal(run.elapsed,before);assert.equal(run.complete(),false);g.status='playing';
 }
 
-for(const id of ['ship','moon']){
+// The ship's connected scenes, independent populations and return state are
+// exercised by qa-ship-scenes.mjs. The moon retains its full linear gate checks.
+for(const id of ['moon']){
   const g=make(id),run=g.expedition,d=run.definition,axis=d.axis;
   const count=g.enemies.length;
   advance(g,2);assert.equal(g.enemies.length,count,'distant fixed groups survive ordinary enemy culling');assert.equal(g.waveDirector.count,0);
@@ -76,10 +80,14 @@ const count=survival.enemies.length,waves=survival.waveDirector.count;survival._
 place(survival,run.definition.exit);run.update(.05);assert.equal(survival.status,'victory');assert(run.rewardClaimed);
 assert.equal(make('survival').expedition.elapsed,0,'a new run resets its survival timer');
 
-for(const mutate of [d=>{d.axis='z';},d=>{d.reward.gold=-1;},d=>{d.exit.x=1e9;},d=>{d.segments[0].enemies.unknown=1;},d=>{d.segments[1].gate=d.segments[0].gate;}]){
-  const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions[1]);assert.throws(()=>validateContentPack(pack),/Invalid world configuration/);
+for(const mutate of [d=>{d.axis='z';},d=>{d.reward.gold=-1;},d=>{d.exit.x=1e9;},d=>{d.segments[0].enemies.unknown=1;}]){
+  const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions[1]);assert.throws(()=>validateContentPack(pack),/Invalid (?:world|expedition scene) configuration/);
 }
+{const pack=structuredClone(getConfigSnapshot()),moon=pack.sections.stages.expeditions[2];moon.segments[1].gate=moon.segments[0].gate;assert.throws(()=>validateContentPack(pack),/Invalid world configuration/);}
 const calls=[],ctx=new Proxy({}, {get(target,key){return target[key]??((...args)=>{for(const n of args)if(typeof n==='number')assert(Number.isFinite(n),`finite draw argument ${key}`);calls.push(key);});},set(target,key,value){target[key]=value;return true;}});
+ctx.createLinearGradient=ctx.createRadialGradient=()=>({addColorStop(){}});
+ctx.measureText=text=>({width:String(text).length*7});
+globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>ctx})};
 for(const id of ['survival','ship','moon']){
   const g=make(id),borrowed=!!g.expedition.definition.worldMapId;
   assert.equal(drawExpeditionGround(ctx,g,g.player.x,g.player.y,900,600),!borrowed);

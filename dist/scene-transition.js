@@ -1,6 +1,6 @@
 import { beginRelicActivation, advanceRelicActivation } from './relic-activation.js';
 export const SCENE_TRANSITION_RULES=Object.freeze({outDuration:.15,inDuration:.25,castleRitualDuration:.2});
-const SCENE_INTERACTIONS=new Set(['portal','castle','supply','occupied','dungeonExit','riftCave']);
+const SCENE_INTERACTIONS=new Set(['portal','castle','supply','occupied','dungeonExit','riftCave','expeditionPassage']);
 const clamp=v=>Math.max(0,Math.min(1,v));
 const smooth=v=>{const t=clamp(v);return t*t*(3-2*t);};
 
@@ -47,7 +47,7 @@ export class SceneTransition {
       catch(error){this._observe('error',error);throw error;}
       finally{this.committing=false;this._commit=null;}
       this._observe('commit-end');
-      if(!this._scripted)this.name=this.game.dungeon.active?.name||this.game.stage?.currentIsland?.name||this.game.region.name;
+      if(!this._scripted)this.name=this.game.dungeon.active?.name||this.game.expedition?.sceneName||this.game.stage?.currentIsland?.name||this.game.region.name;
       this.game.regionTransition=null;this.phase='in';this.elapsed=0;return;
     }
     this.opacity=1-smooth(this.elapsed/SCENE_TRANSITION_RULES.inDuration);

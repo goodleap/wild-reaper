@@ -18,7 +18,7 @@
     "test:unit-counts": "node qa-unit-counts.mjs && node qa-unit-counts-ui.mjs",
     "test:clarity": "node qa-telegraph-clarity.mjs && node qa-attack-capsule.mjs",
     "test:attack-depth": "node qa-attack-depth.mjs && node qa-ability-depth.mjs && node qa-attack-trail-depth.mjs && node qa-legacy-attack-depth.mjs",
-    "test:exploration": "node qa-monster-territories.mjs && node qa-expeditions.mjs && node qa-exploration-integration.mjs && node qa-scene-dialogue.mjs && node qa-scene-dialogue-visibility.mjs && node qa-scene-dialogue-avoidance.mjs && node qa-adventure-prepare.mjs",
+    "test:exploration": "node qa-monster-territories.mjs && node qa-expeditions.mjs && node qa-ship-scenes.mjs && node qa-exploration-integration.mjs && node qa-scene-dialogue.mjs && node qa-scene-dialogue-visibility.mjs && node qa-scene-dialogue-avoidance.mjs && node qa-adventure-prepare.mjs",
     "test:viewport": "node qa-camera-viewport.mjs && node qa-debug-viewport.mjs",
     "test:distances": "node qa-player-distances.mjs && node qa-enemy-distances.mjs && node qa-boss-ranges.mjs",
     "test:maps": "node qa-world-layout.mjs && node qa-world-navigation.mjs && node qa-map-encounters.mjs && node qa-world-layout-art.mjs && node qa-expedition-layout.mjs",
@@ -34,6 +34,7 @@
     "test:frostcrown": "node qa-frostcrown-art.mjs && node qa-frostcrown-geometry.mjs && node qa-frostcrown-support-hits.mjs && node qa-frostcrown-environment.mjs",
     "test:ember": "node qa-ember-geometry.mjs && node qa-ember-integration.mjs",
     "test:activity-log": "node qa-activity-log.mjs && node qa-activity-performance.mjs && node qa-activity-scene.mjs && node qa-boot-activity-log.mjs && node qa-activity-integration.mjs",
-    "test:quests": "node qa-quest-store.mjs && node qa-quests-integration.mjs"
+    "test:quests": "node qa-quest-store.mjs && node qa-quests-integration.mjs",
+    "test:ship": "node qa-ship-scenes.mjs && node qa-ship-art.mjs && node qa-expeditions.mjs && node qa-expedition-layout.mjs && node qa-scene-transition.mjs"
   }
 }

@@ -51,13 +51,13 @@ assert.match(html,/<button id="start-button"[^>]*>[\s\S]*?<span>开始游戏<\/s
   assert.equal(h.run('clock'),prepareClock,'preparation does not keep the title scene animation running');
   assert.equal(node(h,'stage-options').children.length,STAGES.length+EXPEDITIONS.length);assert.equal(node(h,'weapon-options').children.length,3);
   for(const canvas of node(h,'stage-options').querySelectorAll('canvas'))assert.equal(canvas.width/canvas.height,4/3,'all dungeon previews use the same map frame');
-  assert.equal(prepare.querySelectorAll('canvas[data-world-archive-art]').length,STAGES.length);
+  assert.equal(prepare.querySelectorAll('canvas[data-world-archive-art]').length,STAGES.length+EXPEDITIONS.filter(d=>d.worldMapId).length,'island trials and the restored survival map use their world previews');
   assert.equal(prepare.querySelectorAll('canvas[data-archive-art]').length,3);
   assert(h.drawImages()>0,'real theme portrait helpers draw into the mocked canvas');
 
   choose(h,'mode','dungeon');choose(h,'stage','snow-trial');choose(h,'weapon','arrow');
   const setup=JSON.parse(h.storage.get('wild-echoes-setup'));
-  assert.deepEqual(setup,{mode:'dungeon',worldId:'forest',dungeonId:null,stageId:'snow-trial',weaponId:'arrow',heroId:'traveler',appearanceId:'traveler-v2'});
+  assert.deepEqual(setup,{mode:'dungeon',worldId:'rift-forest',dungeonId:null,stageId:'snow-trial',weaponId:'arrow',heroId:'traveler',appearanceId:'traveler-v2'});
   assert.match(node(h,'prepare-summary').textContent,/雪原试炼.*帅气王子.*翠羽飞矢/);
   for(const id of ['prepare-archive-button','prepare-help-button']){
     click(h,id);assert.equal(h.run('prepareOpen'),true);key(h,'Escape');
