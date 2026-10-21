@@ -37,10 +37,11 @@ const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof v
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const legacyWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
 const existingWorldIds=[...legacyWorldIds,'verdant-rift','clockshadow-city'];
-assert.deepEqual(WORLD_IDS,[...existingWorldIds,'ember-realm-large'],'append the ember world without renumbering the ten existing worlds');
+assert.deepEqual(WORLD_IDS,[...existingWorldIds,'ember-realm-large','rift-forest'],'append the separated rift world without renumbering the existing worlds');
 for(const [id,hash]of Object.entries(expected.exports)){
   const module=await import(`./dist/${id}.js`),data=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(module).filter(([,value])=>typeof value!=='function'))));
   if(data.WORLD_IDS)data.WORLD_IDS=data.WORLD_IDS.slice(0,8);
+  if(data.WORLD_CONNECTIONS)data.WORLD_CONNECTIONS=data.WORLD_CONNECTIONS.map(edge=>edge.map(index=>index===WORLD_IDS.indexOf('rift-forest')?0:index));
   if(data.REGIONS)data.REGIONS=data.REGIONS.slice(0,8);
   if(data.DUNGEON_RULES){
     const rules=JSON.parse(readFileSync(new URL('./dist/config/geography.json',import.meta.url))).interiors;
@@ -49,8 +50,8 @@ for(const [id,hash]of Object.entries(expected.exports)){
       data[key].maxStates=legacyWorldIds.length*rules[profile].maxStatesPerWorld;
     }
   }
-  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;delete w.layout;delete w.authored;}
-  if(data.REGIONS){assert.equal(data.REGIONS[0].name,'裂谷林海');assert.equal(data.REGIONS[0].shortName,'裂谷');assert.equal(digest(data.REGIONS.slice(1)),'fd814dc1ee3286e77cc1a1d51ffe609ee2d74d3d8012ae13a78f91f80bc5d46a','the other seven world catalogues remain unchanged');}
+  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;delete w.layout;delete w.authored;delete w.seed;delete w.naturalIsland;}
+  if(data.REGIONS){assert.equal(data.REGIONS[0].name,'低语之森');assert.equal(data.REGIONS[0].shortName,'低语');data.REGIONS[0].name='裂谷林海';data.REGIONS[0].shortName='裂谷';assert.equal(digest(data.REGIONS.slice(1)),'fd814dc1ee3286e77cc1a1d51ffe609ee2d74d3d8012ae13a78f91f80bc5d46a','the other seven world catalogues remain unchanged');}
   assert.equal(digest(data),hash,`${id}: authored values preserved`);
 }
 for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
@@ -63,11 +64,14 @@ for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
   assert.equal(digest(out),expected.traces[world.id],`${world.id}: exact deterministic terrain placements`);
   assert(Object.isFrozen(world)&&Object.isFrozen(world.terrain));
 }
-assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,11);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
+assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,12);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
-assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['forest','verdant-rift','clockshadow-city','ember-realm-large'],'all fixed maps and the ember world retain separate identities');
-assert.equal(sections.worlds.definitions[0].authored.areas.length,18);
+assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['rift-forest','verdant-rift','clockshadow-city','ember-realm-large'],'all fixed maps retain separate identities from the restored natural island');
+const rift=sections.worlds.definitions.find(world=>world.id==='rift-forest');
+assert.equal(rift.authored.areas.length,18);
+assert.equal(sections.worlds.definitions.find(world=>world.id==='forest').authored,undefined);
+assert(sections.worlds.definitions.find(world=>world.id==='forest').naturalIsland,'the original forest uses its natural layout data');
 const verdant=sections.worlds.definitions.find(world=>world.id==='verdant-rift');
 assert.equal(verdant.authored.worldId,verdant.id);assert.equal(verdant.authored.id,'verdant-rift:1');
 assert.equal(verdant.authored.bounds.maxX-verdant.authored.bounds.minX,14400);assert.equal(verdant.authored.bounds.maxY-verdant.authored.bounds.minY,10800);
@@ -91,13 +95,13 @@ reject(s=>s.stages.definitions[1].core.id='forest-heart','duplicate map identity
 reject(s=>s.geography.siteFeatures.shipwreck.guardPackId='unknown','unknown guard pack');
 reject(s=>s.worlds.definitions[3].terrain.placements.default[0].properties.scale={base:1,gain:1,roll:'code'},'numeric recipes cannot execute code');
 reject(s=>delete s.geography.environmentRules.mushroom.growthTimePeriod,'missing environmental formula input');
-reject(s=>s.worlds.definitions[0].layout.bossKind='unknown','layout boss references an existing boss');
-reject(s=>s.worlds.definitions[0].layout.paths[0][0][0]=Infinity,'layout routes contain finite world points');
-reject(s=>s.worlds.definitions[0].layout.patches[0][0]='unrendered','layout patches use known terrain themes');
-reject(s=>s.worlds.definitions[0].layout.lakes[0][2]=-1,'layout lakes have positive supported bounds');
-reject(s=>s.worlds.definitions[0].authored.passages[0].to='missing','fixed map passage endpoints reference real areas');
-reject(s=>delete s.worlds.definitions[0].authored.plan['portal:3'],'fixed map retains every existing world connection');
-reject(s=>s.worlds.definitions[0].authored.boundaries[0].points[0].x=Infinity,'baked collision geometry stays finite');
+reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').layout.bossKind='unknown','layout boss references an existing boss');
+reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').layout.paths[0][0][0]=Infinity,'layout routes contain finite world points');
+reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').layout.patches[0][0]='unrendered','layout patches use known terrain themes');
+reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').layout.lakes[0][2]=-1,'layout lakes have positive supported bounds');
+reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').authored.passages[0].to='missing','fixed map passage endpoints reference real areas');
+reject(s=>delete s.worlds.definitions.find(world=>world.id==='rift-forest').authored.plan['portal:3'],'fixed map retains every existing world connection');
+reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').authored.boundaries[0].points[0].x=Infinity,'baked collision geometry stays finite');
 reject(s=>s.worlds.definitions.find(world=>world.id==='verdant-rift').authored.worldId='forest','authored map state cannot alias the legacy forest');
 reject(s=>s.worlds.definitions.find(world=>world.id==='verdant-rift').authored.interactions.caves[0].seed=-1,'cave seeds remain finite supported values');
 for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
@@ -109,4 +113,4 @@ for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
   assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
 }
-console.log('World configuration checked: 11 world identities with the ten existing indices preserved, 8 unchanged stages, 10 unchanged legacy routes, separate authored maps/ember world and unchanged legacy values/terrain traces; invalid cross-references rejected.');
+console.log('World configuration checked: 12 world identities with all eleven existing indices preserved, 8 unchanged stages, 10 legacy routes with their rift endpoint migrated, separate authored maps/ember world and unchanged legacy values/terrain traces; invalid cross-references rejected.');

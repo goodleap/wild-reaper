@@ -46,7 +46,7 @@ function segmentDistance(x,y,x1,y1,x2,y2){
 }
 
 export class Environment {
-  constructor(game,{generation=true}={}){
+  constructor(game,{generation=true,surfaces=null}={}){
     this.game=game;this.generation=generation;this.props=[];this.muds=[];
     this.world=worldForId(game.region?.id);this.region=this.world.id;this.rules=this.world.environment;
     this.seed=mapSeed(game);
@@ -59,10 +59,12 @@ export class Environment {
     this.muds=(game.terrain?.island?.layout?.emberScene?.surfaces||[]).map(surface=>({...surface}));
     // This map's deep-water polygons and bridge cutouts share the baked
     // terrain mask. Legacy wading pools must not repaint or close its paths.
-    this._macroWaters=this._fixedWater?[]:game.terrain?.island?.layout?.lakes??[];
+    this._staticWater=Array.isArray(surfaces);
+    this._macroWaters=this._staticWater?surfaces.map(surface=>({...surface})):this._fixedWater?[]:game.terrain?.island?.layout?.lakes??[];
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();this._contactFeet=new WeakMap();
     if(generation)this._refresh(true);
+    else if(this._staticWater)this._refreshWater(true,this._foot());
     this.mechanisms=new RegionalMechanisms(this,{generation});
     this.worldHazards=new WorldHazards(this,{generation});
   }
@@ -108,7 +110,7 @@ export class Environment {
     return result;
   }
   _mudCandidate(tx,ty){
-    if(this._fixedWater)return null;
+    if(this._fixedWater||this._staticWater)return null;
     const key=`${tx},${ty}`;if(this._waterCandidates.has(key))return this._waterCandidates.get(key);
     const remember=mud=>{this._waterCandidates.set(key,mud);while(this._waterCandidates.size>192)this._waterCandidates.delete(this._waterCandidates.keys().next().value);return mud;};
     const water=this.rules.water,chance=water.chance;
@@ -178,9 +180,9 @@ export class Environment {
   watersInBounds(bounds){
     if(!bounds||!['minX','minY','maxX','maxY'].every(k=>Number.isFinite(bounds[k]))||bounds.minX>bounds.maxX||bounds.minY>bounds.maxY)return [];
     const waters=[],ids=new Set(),add=m=>{if(m&&intersects(waterBounds(m),bounds)&&!ids.has(m.id||m)){ids.add(m.id||m);waters.push(m);}};
-    if(this.generation){
+    if(this.generation||this._staticWater){
       for(const lake of this._macroWaters)add(lake);
-      for(let tx=Math.floor((bounds.minX-330)/CELL);tx<=Math.floor((bounds.maxX+330)/CELL);tx++)for(let ty=Math.floor((bounds.minY-330)/CELL);ty<=Math.floor((bounds.maxY+330)/CELL);ty++)add(this._mudAt(tx,ty));
+      if(!this._staticWater)for(let tx=Math.floor((bounds.minX-330)/CELL);tx<=Math.floor((bounds.maxX+330)/CELL);tx++)for(let ty=Math.floor((bounds.minY-330)/CELL);ty<=Math.floor((bounds.maxY+330)/CELL);ty++)add(this._mudAt(tx,ty));
     }
     for(const mud of this.muds)add(mud);
     return waters;
@@ -210,7 +212,7 @@ export class Environment {
     for(const lake of this._macroWaters)if(!ids.has(lake.id)&&intersects(waterBounds(lake,35),load))candidates.push(lake);
     // A large water can cross into view while its owning cell is still well
     // outside it. Query by maximum extent and retain by its whole footprint.
-    for(let tx=Math.floor((load.minX-330)/CELL);tx<=Math.floor((load.maxX+330)/CELL);tx++)for(let ty=Math.floor((load.minY-330)/CELL);ty<=Math.floor((load.maxY+330)/CELL);ty++){
+    if(!this._staticWater)for(let tx=Math.floor((load.minX-330)/CELL);tx<=Math.floor((load.maxX+330)/CELL);tx++)for(let ty=Math.floor((load.minY-330)/CELL);ty<=Math.floor((load.maxY+330)/CELL);ty++){
       const id=`mud:${tx},${ty}`;if(ids.has(id))continue;
       const mud=this._mudAt(tx,ty);if(!mud)continue;const b=waterBounds(mud,35);
       if(intersects(b,load)&&(initial||!intersects(b,view)))candidates.push(mud);
@@ -325,7 +327,7 @@ export class Environment {
     this.props=this.props.filter(o=>o.state!=='spent');
     if(g.status!=='playing')return;
     this._contactMushrooms(dt);
-    if(this.generation){this._refreshClock-=dt;if(this._refreshClock<=0){this._refreshClock=.5;this._refresh();}}
+    if(this.generation||this._staticWater){this._refreshClock-=dt;if(this._refreshClock<=0){this._refreshClock=.5;if(this.generation)this._refresh();else this._refreshWater(false,this._foot());}}
     this.mechanisms.update(dt);
     if(g.status==='playing')this.worldHazards.update(dt);
   }

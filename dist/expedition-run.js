@@ -1,5 +1,6 @@
 import { getExpeditionDefinition } from './expedition-definitions.js';
 import { Terrain, groundOffset, sceneryVisual } from './terrain.js';
+import { Island } from './islands.js';
 import { enemyDefinition } from './enemy-definitions.js';
 import { REGIONS, regionFor } from './world-definitions.js';
 import { Environment } from './environment.js';
@@ -24,11 +25,15 @@ function expeditionObstacle(prop){
 // Bounds participate in the same foot-based movement as ordinary terrain.
 // Explicit props and gates keep the authored route free of random obstacles.
 export class ExpeditionTerrain extends Terrain {
-  constructor(definition){super({region:definition.themeId,obstacles:definition.obstacles.map(expeditionObstacle)});this.bounds=definition.bounds;}
+  constructor(definition){
+    const region=definition.worldMapId??definition.themeId,island=definition.worldMapId?new Island({region,seed:0}):null;
+    super({region,island,...(island?{seed:0}:{obstacles:definition.obstacles.map(expeditionObstacle)})});
+    this.bounds=island?.bounds??definition.bounds;
+  }
   _inside(x,y,r=0){const b=this.bounds;return x-r>=b.minX&&x+r<=b.maxX&&y-r>=b.minY&&y+r<=b.maxY;}
   _bound(x,y,r=0){const b=this.bounds,nx=clamp(x,b.minX+r,b.maxX-r),ny=clamp(y,b.minY+r,b.maxY-r);return {x:nx,y:ny,blocked:nx!==x||ny!==y};}
   isFree(x,y,r=0,profile='ground'){return this._inside(x,y,r)&&super.isFree(x,y,r,profile);}
-  isDry(x,y,r=0){return this._inside(x,y,r);}
+  isDry(x,y,r=0){return this.island?this.island.isDry(x,y,r):this._inside(x,y,r);}
   resolveCircle(x,y,r,profile='ground'){const bounded=this._bound(x,y,r),result=super.resolveCircle(bounded.x,bounded.y,r,profile),end=this._bound(result.x,result.y,r);return {...end,blocked:bounded.blocked||result.blocked||end.blocked};}
   moveCircle(x,y,dx,dy,r,profile='ground'){const result=super.moveCircle(x,y,dx,dy,r,profile),end=this._bound(result.x,result.y,r);return {...end,blocked:result.blocked||end.blocked};}
 }
@@ -55,11 +60,13 @@ export class ExpeditionRun {
   initialize(){
     if(this.initialized)return;this.initialized=true;
     const g=this.game,d=this.definition;
-    g.regionIndex=REGIONS.findIndex(region=>region.id===d.themeId);g.region=regionFor(g.regionIndex);g.worldId=g.startWorldId=g.region.id;g.mapId=`expedition:${this.id}`;
+    g.regionIndex=REGIONS.findIndex(region=>region.id===(d.worldMapId??d.themeId));g.region=regionFor(g.regionIndex);g.worldId=g.startWorldId=g.region.id;g.mapId=`expedition:${this.id}`;
+    // A borrowed island changes terrain, not the challenge's elapsed-time
+    // difficulty or its existing wave and evacuation rules.
     g.terrain=new ExpeditionTerrain(d);g._islandWorlds=false;g.enemies=[];g.gems=[];g.coins=[];g.bullets=[];g.enemyBullets=[];g.effects=[];
     g.player.x=d.start.x;g.player.y=d.start.y-groundOffset(g.player,true);g._moveEntity(g.player,0,0,true);
     g.portal=null;g.regions.portals=[];g.regions.guarded=true;g.regions.states.clear();g.regions._rewardQueue=[];g.regions.rewardPortal=null;g._regionRewardPending=false;
-    g.encounters=null;g.environment=new Environment(g,{generation:false});g.adventure=new Adventure(g,{generation:false});
+    g.encounters=null;g.environment=new Environment(g,{generation:false,surfaces:d.worldMapId?g.region.naturalIsland?.surfaces:null});g.adventure=new Adventure(g,{generation:false});
     g.adventure.props=(d.supplies||[]).map((supply,index)=>({id:`expedition:${this.id}:supply:${index}`,type:'supply',...supply,r:18,aimY:supply.y-12,sortY:supply.y,hp:supplyRules.supplyHp,maxHp:supplyRules.supplyHp,hit:0,seed:(index+1)*.173}));
     g.settlements=new Settlements(g,{generation:false});g.relicSites=new RelicSites(g,{generation:false});
     g.companions.generation=false;g.companions.camps=[];g.elites.generation=false;g.nextBossAt=Infinity;g.regionGrace=0;

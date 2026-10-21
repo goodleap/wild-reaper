@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {Game} from './dist/engine.js';
 import {groundOffset} from './dist/terrain.js';
 import {terrainNavigation} from './dist/terrain-navigation.js';
-const g=new Game({mode:'world',debug:true,debugWorld:'forest'}),t=g.terrain,l=t.island.layout;g.enemies=[];g._inView=()=>true;
+const g=new Game({mode:'world',debug:true,debugWorld:'rift-forest'}),t=g.terrain,l=t.island.layout;g.enemies=[];g._inView=()=>true;
 const completed=[];
 // Keep followers visible throughout the replay, so the offscreen recovery
 // mechanism cannot disguise an unreachable route or a teleport.

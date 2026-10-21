@@ -3,7 +3,7 @@
     {
       "id": "prologue",
       "name": "序章 · 林海余烬",
-      "worldId": "forest",
+      "worldId": "rift-forest",
       "heroIds": ["traveler"],
       "weaponIds": ["sword"],
       "anchors": {"wakeArea": "01", "meetingArea": "02", "refugeArea": "03", "searchPassage": "01-02", "escapePassage": "02-03"},

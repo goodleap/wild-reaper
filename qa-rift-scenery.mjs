@@ -3,7 +3,7 @@ import { Island } from './dist/islands.js';
 import { Terrain } from './dist/terrain.js';
 import { blocksObstacle } from './dist/height-rules.js';
 
-const island=new Island({region:'forest'}),terrain=new Terrain({region:'forest',island}),layout=island.layout,b=island.bounds;
+const island=new Island({region:'rift-forest'}),terrain=new Terrain({region:'rift-forest',island}),layout=island.layout,b=island.bounds;
 const props=terrain.query(b.minX,b.minY,b.maxX,b.maxY),edge=props.filter(p=>p.riftEdge),groups=props.filter(p=>p.riftGroup),sparse=props.filter(p=>p.id.startsWith('rift-sparse:'));
 assert(edge.length>300,'the shared contour is dressed with depth-sorted material units');
 assert(groups.length>45&&sparse.length>=25,'interior groups supplement the existing traversable groves');
@@ -28,7 +28,7 @@ for(const prop of [...groups,...sparse]){
   if(prop.riftShrub){assert.equal(prop.heightBand,'low');assert(prop.visual.top<66,'a shrub uses its own measured silhouette');}
 }
 // New games and arbitrary query order cannot rearrange a narrow local route.
-const secondIsland=new Island({region:'forest',seed:81}),second=new Terrain({region:'forest',island:secondIsland,seed:81});
+const secondIsland=new Island({region:'rift-forest',seed:81}),second=new Terrain({region:'rift-forest',island:secondIsland,seed:81});
 for(const area of [...layout.areas].reverse())second.query(area.center.x-240,area.center.y-240,area.center.x+240,area.center.y+240);
 const snapshot=items=>items.filter(p=>p.riftPalette).map(p=>[p.id,p.x,p.y,p.type,p.r,p.riftShrub??false]).sort((a,b)=>a[0].localeCompare(b[0]));
 assert.deepEqual(snapshot(second.query(b.minX,b.minY,b.maxX,b.maxY)),snapshot(props));

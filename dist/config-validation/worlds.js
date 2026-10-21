@@ -1,6 +1,7 @@
 import { TERRAIN_GENERATOR_IDS } from '../worlds/generator-ids.js';
 import { validateWorldLayout } from './world-layout.js';
 import { validateRiftLayout } from './rift-layout.js';
+import { WATER_SHAPES } from '../water-geometry.js';
 
 const persistentWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
 const fail=path=>{throw new TypeError(`Invalid world configuration: ${path}`);};
@@ -37,6 +38,24 @@ function placements(terrain,path){
   }
 }
 
+function naturalIsland(value,path,reservations){
+  object(value,path);const plan=object(value.plan,path+'.plan');
+  for(const key of reservations)if(!Object.hasOwn(plan,key))fail(path+'.plan.'+key);
+  if(Object.keys(plan).length>64)fail(path+'.plan');
+  for(const [key,p]of Object.entries(plan)){
+    text(key,path+'.plan key');object(p,path+'.plan point');
+    number(p.x,path+'.plan.x',-10000,10000);number(p.y,path+'.plan.y',-10000,10000);number(p.r,path+'.plan.r',1,500);
+  }
+  const ids=new Set();
+  for(const s of list(value.surfaces,path+'.surfaces',0,256)){
+    object(s,path+'.surface');text(s.id,path+'.surface.id');if(ids.has(s.id))fail(path+'.surface duplicate');ids.add(s.id);
+    if(s.type!=='mud'||s.kind!=='water'||!WATER_SHAPES.includes(s.shape))fail(path+'.surface type');
+    number(s.x,path+'.surface.x',-10000,10000);number(s.y,path+'.surface.y',-10000,10000);
+    number(s.rx,path+'.surface.rx',1,500);number(s.ry,path+'.surface.ry',1,500);number(s.angle,path+'.surface.angle',-Math.PI*2,Math.PI*2);
+    number(s.seed,path+'.surface.seed',0,1);number(s.scale,path+'.surface.scale',.1,6.25);bool(s.island,path+'.surface.island');
+  }
+}
+
 export function validateWorlds(sections){
   const worlds=object(sections.worlds,'worlds'),stages=object(sections.stages,'stages'),geo=object(sections.geography,'geography');
   const worldDefs=list(worlds.definitions,'worlds.definitions',1),order=list(worlds.order,'worlds.order',1),worldIds=new Set(worldDefs.map(w=>w.id));
@@ -50,7 +69,11 @@ export function validateWorlds(sections){
   }
   for(const w of worldDefs){
     const p='world '+text(w.id,'world.id');for(const key of ['name','shortName'])text(w[key],p+'.'+key);
-    validateWorldLayout(w.layout,bossIds,p+'.layout');
+    if(w.seed!=null)integer(w.seed,p+'.seed',0,2147483647);
+    if(w.naturalIsland){
+      if(w.layout!=null||w.authored!=null||!Number.isInteger(w.seed))fail(p+'.naturalIsland layout');
+      naturalIsland(w.naturalIsland,p+'.naturalIsland',geo.siteReservations.map(spec=>spec[0]));
+    }else validateWorldLayout(w.layout,bossIds,p+'.layout');
     if(w.authored){const neighbors=worlds.connections.flatMap(([a,b])=>a===w.id?[order.indexOf(b)]:b===w.id?[order.indexOf(a)]:[]);validateRiftLayout(w.authored,p+'.authored',bossIds,geo.siteReservations.map(spec=>spec[0]),neighbors,w.id);}
     profile(w.profile,p+'.profile');positive(w.danger,p+'.danger');object(w.colors,p+'.colors');
     for(const key of ['ground','light','dark','accent','mist','grass','stone'])text(w.colors[key],p+'.colors.'+key);
@@ -91,6 +114,11 @@ export function validateWorlds(sections){
     const p='expedition '+text(d.id,'expedition.id');if(expeditionIds.has(d.id)||stageIds.has(d.id))fail(p+'.duplicate');expeditionIds.add(d.id);
     for(const key of ['name','shortName','summary','objective','rewardLabel','color'])text(d[key],p+'.'+key);
     ref(d.themeId,worldIds,p+'.themeId');if(!['arena','x','y'].includes(d.axis))fail(p+'.axis');reward(d.reward,p+'.reward');
+    if(d.worldMapId!=null){
+      ref(d.worldMapId,worldIds,p+'.worldMapId');
+      const world=worldDefs.find(w=>w.id===d.worldMapId);
+      if(d.worldMapId!==d.themeId||!world.naturalIsland||d.axis!=='arena')fail(p+'.worldMapId layout');
+    }
     const bounds=object(d.bounds,p+'.bounds');for(const key of ['minX','maxX','minY','maxY'])number(bounds[key],p+'.bounds.'+key,-1e5,1e5);
     if(bounds.maxX-bounds.minX<300||bounds.maxY-bounds.minY<300)fail(p+'.bounds.size');
     const point=(value,path,margin=0)=>{object(value,path);number(value.x,path+'.x',bounds.minX+margin,bounds.maxX-margin);number(value.y,path+'.y',bounds.minY+margin,bounds.maxY-margin);};

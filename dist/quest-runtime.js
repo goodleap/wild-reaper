@@ -4,7 +4,7 @@ import { CLOCK_BRIDGE,questDefinition,questsForWorld } from './quest-definitions
 import { QuestStore } from './quest-store.js';
 
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-const CITY='clockshadow-city',FOREST='forest';
+const CITY='clockshadow-city',FOREST='rift-forest';
 const foot=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 const point=(value,label)=>value?{x:value.x,y:value.y,label}:null;
 

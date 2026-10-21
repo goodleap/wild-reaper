@@ -96,7 +96,7 @@ export class Settlements {
     // Only a debug run's initial region gives its existing castle first
     // placement; ordinary regions keep the usual site ordering.
     const castleIndex=SITE_DEFS.findIndex(def=>def.type==='castle');
-    const nearbyCastle=this.game.debugOptions?.testFacilities&&(this.game.regionIndex===0||this.game.stage)?this._createSite(SITE_DEFS[castleIndex],castleIndex,{nearSpawn:true}):null;
+    const nearbyCastle=this.game.debugOptions?.testFacilities&&(['forest','rift-forest'].includes(this.game.region?.id)||this.game.stage)?this._createSite(SITE_DEFS[castleIndex],castleIndex,{nearSpawn:true}):null;
     if(nearbyCastle){this.sites.push(nearbyCastle);this._setStructures();}
     SITE_DEFS.forEach((def,index)=>{if(nearbyCastle&&def.type==='castle')return;const site=this._createSite(def,index);if(site){this.sites.push(site);this._setStructures();}});
     this.ensureAngels();
@@ -124,7 +124,7 @@ export class Settlements {
     // Remove only portal-anchored angels; the original spawn haven persists.
     for(let i=this.sites.length-1;i>=0;i--){const site=this.sites[i];if(site.type==='angel'&&(site.anchorId?.startsWith('portal:')||site.id?.startsWith('angel:portal:')))this.sites.splice(i,1);}
     const g=this.game,stageSanctuary=!!(g.stage&&g._features?.settlements);if((!this.generation&&!stageSanctuary)||g.dungeon?.active)return;
-    const spawn=g.stage?g.stage.currentIsland.role==='outer':(g.regionIndex||0)===0||!!g.terrain.island?.layout?.worldId;
+    const spawn=g.stage?g.stage.currentIsland.role==='outer':['forest','rift-forest'].includes(g.region?.id)||!!g.terrain.island?.layout?.worldId;
     const riftSpawn=g.terrain.island?.layout?.kind==='rift-forest'?g.terrain.island.layout.landmarks?.spawn:null;
     const anchors=spawn?[{id:`spawn:${mapIdentity(g)}`,x:riftSpawn?.x??0,y:riftSpawn?.y??19.8}]:[];
     for(const anchor of anchors) {

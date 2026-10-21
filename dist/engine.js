@@ -37,7 +37,7 @@ import { ExpeditionRun } from './expedition-run.js';
 import { MonsterTerritories } from './monster-territories.js';
 import { RiftExploration } from './rift-exploration.js';
 import { WorldQuests } from './quest-runtime.js';
-import { StoryRun } from './story-run.js';
+import { StoryRun, STORY_DEFINITIONS } from './story-run.js';
 import { SceneContent } from './scene-content.js';
 import { RealmProgression } from './realm-progression.js';
 import { RelicSites } from './relic-sites.js';
@@ -72,8 +72,12 @@ export function xpCost(level) {
 // Crystals retain the measured skill-choice pacing independently of kill XP.
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
-  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='forest',stageId=null,mode=null,dungeonId=null,storyId='prologue',questStorage}={}) {
-    if(mode==='story'){hero='traveler';appearanceId=null;initialWeaponId='sword';stageId=null;dungeonId=null;worldId='forest';debug=false;}
+  constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='rift-forest',stageId=null,mode=null,dungeonId=null,storyId='prologue',questStorage}={}) {
+    if(mode==='story'){
+      const story=STORY_DEFINITIONS.find(entry=>entry.id===storyId);
+      if(!story)throw new RangeError(`Unknown story: ${storyId}`);
+      hero='traveler';appearanceId=null;initialWeaponId='sword';stageId=null;dungeonId=null;worldId=story.worldId;debug=false;
+    }
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
     this.debugOptions=normalizeDebugOptions(debugOptions,this.debug);
@@ -85,11 +89,11 @@ export class Game {
     this.stage=stageId&&!dungeonId?new StageRun(this,stageId):null;
     this.expedition=dungeonId?new ExpeditionRun(this,dungeonId):null;
     const selectedWorld=this.debug&&debugWorld?debugWorld:worldId;
-    this.regionIndex=this.stage?.currentIsland.themeIndex??(this.mode==='world'?Math.max(0,REGIONS.findIndex(region=>region.id===selectedWorld)):0);
+    this.regionIndex=this.stage?.currentIsland.themeIndex??(['world','story'].includes(this.mode)?Math.max(0,REGIONS.findIndex(region=>region.id===selectedWorld)):0);
     this.mapId=this.stage?.currentMapId??this.regionIndex;
     this.region=regionFor(this.regionIndex);
     this.worldId=this.region.id;this.startWorldId=this.worldId;
-    const seed=this.stage?.currentIsland.seed??this.regionIndex;
+    const seed=this.stage?.currentIsland.seed??this.region.seed??this.regionIndex;
     this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:this.stage?.currentIsland})});
     this.sceneContent=new SceneContent(this,{story:this.mode==='story'});
     const worldContent=this.sceneContent.allows('worldContent');
@@ -526,7 +530,7 @@ export class Game {
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;
     if(!this.regions.restoreWorld(this.mapId)) {
-      const seed=nextIsland?.seed??this.regionIndex,generate=!this.stage?.isBossIsland,emberScene=this.region.authored?.emberScene,ambient=generate&&!emberScene,residents=generate&&!emberScene?.sample;
+      const seed=nextIsland?.seed??this.region.seed??this.regionIndex,generate=!this.stage?.isBossIsland,emberScene=this.region.authored?.emberScene,ambient=generate&&!emberScene,residents=generate&&!emberScene?.sample;
       this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:nextIsland})});this.enemies=[];this.gems=[];this.coins=[];
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.riftExploration=null;this.discoveredMap=new Set();
       this.companions.camps=[];this.companions.generation=ambient&&this._features.companions;this.companions.nextAt=this.time+35;

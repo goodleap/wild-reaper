@@ -37,8 +37,8 @@ assert.equal(g.quests.getGuide().target.objectiveId,firstTarget,'crossing a near
 const revision=g.terrain.structureRevision;
 for(let i=0;i<120;i++)g.quests.update();
 assert.equal(g.terrain.structureRevision,revision,'idle journal updates do not rebuild collision or navigation');
-for(const worldId of ['forest','clockshadow-city']){
-  const game=new Game({mode:'world',worldId,questStorage:null}),site=game.riftExploration.sites.find(site=>worldId==='forest'?site.key==='cave05':site.key==='wine-cellar');
+for(const worldId of ['rift-forest','clockshadow-city']){
+  const game=new Game({mode:'world',worldId,questStorage:null}),site=game.riftExploration.sites.find(site=>worldId==='rift-forest'?site.key==='cave05':site.key==='wine-cellar');
   game.player.x=site.x;game.player.y=site.y-groundOffset(game.player,true);assert(game.interact(site.id));
   const guide=game.quests.getGuide();assert(guide?.complete,'the dungeon guide reaches its actual objective');
   assert(guide.path.length>20,'the guide travels the maze instead of drawing a direct line');

@@ -9,7 +9,7 @@ function context(record=false){
   const c=new Proxy(values,{get(target,key){if(key in target)return target[key];if(key==='save')return()=>stack.push({...target});if(key==='restore')return()=>{assert(stack.length,'balanced drawing context');const prior=stack.pop();for(const key of Object.keys(target))delete target[key];Object.assign(target,prior);};if(key==='createLinearGradient'||key==='createRadialGradient')return()=>({addColorStop(){}});return(...args)=>{for(const arg of args)if(typeof arg==='number')assert(Number.isFinite(arg),`${String(key)} needs finite coordinates`);if(record)calls.push({key,args,style:target.fillStyle});};}});
   return {c,calls,stack};
 }
-const layout=createRiftLayout(),island={region:'forest',layout},before=JSON.stringify(layout),mapped=context(true);
+const layout=createRiftLayout(),island={region:'rift-forest',layout},before=JSON.stringify(layout),mapped=context(true);
 assert(drawRiftOverview(mapped.c,layout,{scale:.1}));
 for(const color of ['ground','forest','grass','water'])assert(mapped.calls.some(call=>call.style===RIFT_PALETTE[color]),`the map uses the authored ${color} palette`);
 const vertices=new Set(mapped.calls.filter(call=>call.key==='moveTo'||call.key==='lineTo').map(call=>call.args.join(',')));

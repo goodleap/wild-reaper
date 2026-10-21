@@ -122,13 +122,21 @@ function drawObjectives(c,run,time){
 // Screen-coordinate ground pass. Actors and attacks retain the ordinary
 // depth queue; only the static floor and route marks are replaced here.
 export function drawExpeditionGround(c,game,camX,camY,width,height){
-  const run=game?.expedition;if(!run)return false;
+  const run=game?.expedition;if(!run||run.definition.worldMapId)return false;
   const view={minX:camX-width/2,minY:camY-height/2,maxX:camX+width/2,maxY:camY+height/2};
   c.save();c.translate(width/2-camX,height/2-camY);
   if(run.id==='ship')shipGround(c,run.definition,view,game._clock||0);
   else if(run.id==='moon')moonGround(c,run.definition,view);
   else survivalGround(c,run.definition,view);
   drawLayout(c,run,view);
+  drawObjectives(c,run,game._clock||0);c.restore();return true;
+}
+
+// Borrowed world terrain retains the ordinary ground and coast renderer;
+// the challenge still owns its existing evacuation marker.
+export function drawExpeditionObjectives(c,game,camX,camY,width,height){
+  const run=game?.expedition;if(!run)return false;
+  c.save();c.translate(width/2-camX,height/2-camY);
   drawObjectives(c,run,game._clock||0);c.restore();return true;
 }
 

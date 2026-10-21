@@ -203,7 +203,7 @@ layout = {
 }
 path=ROOT/"dist/config/worlds.json"
 worlds=json.loads(path.read_text())
-forest=next(w for w in worlds["definitions"] if w["id"]=="forest")
+forest=next(w for w in worlds["definitions"] if w["id"]=="rift-forest")
 forest["name"]="裂谷林海"
 forest["shortName"]="裂谷"
 bosses=json.loads((ROOT/"dist/config/enemies.json").read_text())["bosses"]

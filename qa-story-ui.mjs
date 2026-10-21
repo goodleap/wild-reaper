@@ -40,7 +40,7 @@ assert.match(node(h,'prepare-summary').textContent,/苍翠断脊.*公主.*翠羽
 choose(h,'mode-story');
 click(h,'prepare-start-button');await h.flush();
 assert.equal(h.run('game.mode'),'story');
-assert.equal(h.run('game.startWorldId'),'forest','story always starts on its authored first world');
+assert.equal(h.run('game.startWorldId'),'rift-forest','story always starts on its authored first world');
 assert.equal(JSON.parse(storage.get('wild-echoes-setup')).worldId,'verdant-rift');
 assert.equal(h.run('game.hero.id'),'traveler');
 assert.equal(h.run('game.initialWeaponId'),'sword');

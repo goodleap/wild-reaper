@@ -83,7 +83,7 @@ advance(talking,3,60);assert(distance(foot(talking.princess),foot(talking.g.play
 // After taking the medicine the full route remains active. The princess leads
 // on exactly that curve, then stays at the summoning location while the hero
 // moves away to fight; no separate guessed destination direction is involved.
-const summonWorld=new Game({mode:'world',debug:true,debugWorld:'forest'}),summonLayout=summonWorld.terrain.island.layout;
+const summonWorld=new Game({mode:'world',debug:true,debugWorld:'rift-forest'}),summonLayout=summonWorld.terrain.island.layout;
 const summonStart=summonLayout.areas.find(area=>area.id==='02').center,summonEnd=summonLayout.areas.find(area=>area.id==='03').center;
 const summoning=fixture({terrain:summonWorld.terrain,player:summonStart,actor:summonStart,target:summonEnd,step:'burst'});
 summoning.story._helpReady=false;summoning.story.anchors={refuge:summonEnd};let summonFrames=0;
@@ -108,7 +108,7 @@ summonWorld.dispose();
 // semantics and the shared local route. Combat is exercised by story-run QA.
 const routeResults=[];
 for(const hz of [30,60,120]){
-  const g=new Game({mode:'world',debug:true,debugWorld:'forest'}),layout=g.terrain.island.layout;
+  const g=new Game({mode:'world',debug:true,debugWorld:'rift-forest'}),layout=g.terrain.island.layout;
   const meeting=layout.areas.find(area=>area.id==='02').center,refuge=layout.areas.find(area=>area.id==='03').center;
   const path=layout.passages.find(passage=>passage.id==='02-03').waypoints;
   const f=fixture({terrain:g.terrain,player:meeting,actor:meeting,target:refuge,step:'fading'});let stopped=0,toggles=0,last=null,maxGap=0,frames=0;

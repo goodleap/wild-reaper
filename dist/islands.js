@@ -42,6 +42,13 @@ export class Island {
     this._edges=this.points.map((a,i)=>{const b=this.points[(i+1)%COUNT],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);return {a,b,nx:-dy/len,ny:dx/len};});
     this._innerRadius=Math.sqrt(Math.min(...this._edges.map(e=>distanceSq(0,0,e.a.x,e.a.y,e.b.x,e.b.y))));
     this._contours=new Map([[0,this.points]]);
+    const natural=!definition&&regionFor(this.worldId).naturalIsland;
+    if(natural){
+      // Fixed reservations use the shared coastline, terrain and collision rules.
+      this.plan=natural.plan;this.layout=null;
+      this.routes=Object.freeze(Object.values(this.plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
+      return;
+    }
     const rotate=this.worldId*.52+(hash(this.seed+19)-.5)*.16;
     const specs=this.role==='boss'?[]:ISLAND_SITE_RESERVATIONS;
     const plan={};for(const [key,angle,radius,r] of specs){const a=angle+rotate;let d=radius;while(d>500&&!this.isDry(Math.cos(a)*d,Math.sin(a)*d,r+100))d-=40;plan[key]=Object.freeze({x:Math.cos(a)*d,y:Math.sin(a)*d,r});}

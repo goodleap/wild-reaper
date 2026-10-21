@@ -29,7 +29,7 @@ function water(c,id,art,kind='water',x=151,y=106,rx=64,ry=30){
   art('water').draw(c,{x,y,rx,ry,kind,shape:'ellipse',seed:.23,angle:-.15},{...OPTIONS,region:id});
 }
 function worldPortrait(c,id,art){
-  if(worldForId(id).authored?.worldId===id){
+  if(worldForId(id).authored?.kind==='rift-forest'){
     const layout=createRiftLayout(id),b=layout.bounds,scale=Math.min(232/(b.maxX-b.minX),142/(b.maxY-b.minY));
     c.save();c.translate(120,75);c.scale(scale,scale);c.translate(-(b.minX+b.maxX)/2,-(b.minY+b.maxY)/2);
     drawRiftOverview(c,layout,{scale,labels:false,landmarks:true});c.restore();return;

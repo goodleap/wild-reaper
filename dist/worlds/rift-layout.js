@@ -3,7 +3,7 @@ import { getConfigSection } from '../content-config.js';
 const cached=new Map();
 // The complete walkable union is baked offline. All scene, map and collision
 // consumers share this immutable geometry; the seed never changes an exit.
-export function createRiftLayout(worldId='forest'){
+export function createRiftLayout(worldId='rift-forest'){
   if(cached.has(worldId))return cached.get(worldId);
   const source=getConfigSection('worlds').definitions.find(world=>world.id===worldId)?.authored;
   if(!source||source.kind!=='rift-forest')throw new Error(`Missing baked world layout: ${worldId}`);

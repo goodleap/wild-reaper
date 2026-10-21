@@ -73,7 +73,7 @@ function measureSeal(terrain,layout,passage){
   assert(candidates.length,`Passage ${passage.id} must have a real neck outside its connected regions`);
   return candidates.sort((a,b)=>a.width-b.width)[0];
 }
-const island=new Island({region:'forest',seed:0}),terrain=new Terrain({region:'forest',seed:0,island}),layout=island.layout;
+const island=new Island({region:'rift-forest',seed:0}),terrain=new Terrain({region:'rift-forest',seed:0,island}),layout=island.layout;
 assert(layout?.areas,'the starting forest uses the authored region map');
 assert.equal(layout.areas.length,18);assert.deepEqual(layout.areas.map(a=>a.id).sort(),Array.from({length:18},(_,i)=>String(i+1).padStart(2,'0')));
 assert.equal(Math.round(island.bounds.maxX-island.bounds.minX),7200);assert.equal(Math.round(island.bounds.maxY-island.bounds.minY),5400);

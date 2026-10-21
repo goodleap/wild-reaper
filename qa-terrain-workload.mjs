@@ -19,7 +19,7 @@ const make=()=>{
   terrain.rift=new RiftCollision({boundaries:[outer,lake],solidBoundaries:[outer]});
   return terrain;
 };
-const forest=new Terrain({region:'forest',island:new Island({region:'forest',seed:0})});
+const forest=new Terrain({region:'rift-forest',island:new Island({region:'rift-forest',seed:0})});
 // Authored-world queries equal an independent scan of the actual immutable
 // layout plus live structures. Procedural cells must never be consulted.
 const indexed=[...new Set([...forest._layoutIndex.values()].flat())];

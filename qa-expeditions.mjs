@@ -3,7 +3,8 @@ import { Game } from './dist/engine.js';
 import { EXPEDITIONS } from './dist/expedition-definitions.js';
 import { STAGES } from './dist/stage-definitions.js';
 import { groundOffset } from './dist/terrain.js';
-import { drawExpeditionGround, drawExpeditionProp, drawExpeditionPreview } from './dist/expedition-art.js';
+import { drawExpeditionGround, drawExpeditionObjectives, drawExpeditionProp, drawExpeditionPreview } from './dist/expedition-art.js';
+import { ENVIRONMENT_BALANCE } from './dist/environment.js';
 import { validateContentPack } from './dist/content-schema.js';
 import { getConfigSnapshot } from './dist/content-config.js';
 
@@ -56,6 +57,19 @@ for(const id of ['ship','moon']){
 }
 
 const survival=make('survival'),run=survival.expedition;
+assert.equal(run.definition.worldMapId,'forest');
+assert.equal(survival.terrain.island.region,'forest','the first challenge uses the restored island');
+assert.equal(survival._islandWorlds,false,'terrain reuse does not enable cross-island progression');
+survival.time=120;assert.equal(survival._difficultyTime(),120);assert.equal(survival._waveTier(),null);survival.time=0;
+const surfaces=survival.region.naturalIsland.surfaces;
+assert(surfaces.length>0,'the restored layout includes its inland water');
+assert.equal(survival.environment.watersInBounds(survival.terrain.bounds).length,surfaces.length,'placement sees water outside the visible cache');
+assert(survival.environment.muds.length<=ENVIRONMENT_BALANCE.maxMuds,'water retains the existing bounded visible cache');
+const distantSurface=surfaces.find(surface=>Math.hypot(surface.x,surface.y)>1500);
+assert(distantSurface);place(survival,distantSurface);survival.environment.update(.6);
+assert(survival.environment.muds.some(surface=>surface.id===distantSurface.id),'moving across the island loads the existing fixed water');
+assert.equal(survival.environment.props.length,0,'fixed water does not enable mushrooms or ambient events');
+place(survival,run.definition.start);survival.environment.update(.6);
 advance(survival,1);assert(survival.enemies.length>0,'survival retains ambient attacks from outside the view');
 advance(survival,run.definition.duration+1);assert.equal(survival.status,'playing');assert(run.exitOpen);assert(survival.waveDirector.count>0,'survival retains authored horde waves');assert.equal(run.allowAmbient,false);
 const count=survival.enemies.length,waves=survival.waveDirector.count;survival._spawn=0;advance(survival,.5);assert(survival.enemies.length<=count);assert.equal(survival.waveDirector.count,waves,'no new wave starts after evacuation opens');
@@ -67,10 +81,12 @@ for(const mutate of [d=>{d.axis='z';},d=>{d.reward.gold=-1;},d=>{d.exit.x=1e9;},
 }
 const calls=[],ctx=new Proxy({}, {get(target,key){return target[key]??((...args)=>{for(const n of args)if(typeof n==='number')assert(Number.isFinite(n),`finite draw argument ${key}`);calls.push(key);});},set(target,key,value){target[key]=value;return true;}});
 for(const id of ['survival','ship','moon']){
-  const g=make(id);assert(drawExpeditionGround(ctx,g,g.player.x,g.player.y,900,600));assert(drawExpeditionPreview(ctx,id,280,150));
+  const g=make(id),borrowed=!!g.expedition.definition.worldMapId;
+  assert.equal(drawExpeditionGround(ctx,g,g.player.x,g.player.y,900,600),!borrowed);
+  if(borrowed)assert(drawExpeditionObjectives(ctx,g,g.player.x,g.player.y,900,600));else assert(drawExpeditionPreview(ctx,id,280,150));
   for(const prop of g.terrain.query(-4000,-4000,4000,4000))if(prop.visual!==false){
     const handled=drawExpeditionProp(ctx,prop);
-    assert(handled||prop.type==='tree'||prop.type==='log','expedition props use custom art or ordinary tree/log depth rendering');
+    assert(handled||prop.type==='tree'||prop.type==='log'||borrowed&&prop.type==='rock','expedition props reuse their existing depth rendering');
   }
 }
 assert.equal(calls.filter(key=>key==='save').length,calls.filter(key=>key==='restore').length,'art preserves the actor depth renderer context');

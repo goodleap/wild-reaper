@@ -13,7 +13,7 @@ for(const mushroom of mushrooms)assert(Math.hypot(mushroom.x-camp.x,mushroom.y-c
 for(const vine of vines)assert(Math.hypot(vine.x-camp.x,vine.y-camp.y)>=REGIONAL_MECHANISM_RULES.safeRadius+vine.r,'generated vines keep the original safety distance from the new camp');
 assert.equal(environment.mechanisms.props.some(vine=>vine.id==='vine:-6,3'),false,'the previously generated vine beside the starting angel is excluded');
 assert.equal(safeWorld.adventure.spawnTreasure(camp.x,camp.y),null,'a guarded treasure cannot be generated in the reserved camp');
-const g=new Game({mode:'world',environment:false});
+const g=new Game({mode:'world',environment:false}),homeIndex=g.regionIndex;
 const put=(point)=>{g.player.x=point.x;g.player.y=point.y-groundOffset(g.player,true);g.regionGrace=0;};
 const finish=()=>{for(let i=0;i<30&&g.sceneTransition.active;i++)g.sceneTransition.update(.05);assert.equal(g.sceneTransition.active,false);assert.equal(g.sceneTransition.commitSucceeded,true);for(let i=0;i<8&&g.status==='upgrade';i++)assert(g.chooseUpgrade(g.getUpgradeChoices()[0].id),'finish a legitimate quest crystal reward before the next doorway');};
 const request=id=>{assert.equal(g.requestInteraction(id),true,`request ${id}`);finish();};
@@ -64,8 +64,8 @@ assert(Math.hypot(g.player.x-cave05.x,g.player.y+groundOffset(g.player,true)-cav
 assert(g.companions.recruit('owl'));assert(g.companions.recruit('stormcaller'));
 for(const target of [1,2,3]){
   const out=g.regions.portals.find(p=>p.nextRegionIndex===target);put(portalDoor(out));request(out.id);
-  assert.equal(g.regionIndex,target);const back=g.regions.portals.find(p=>p.nextRegionIndex===0);assert(back&&back.state==='active');
-  put(portalDoor(back));request(back.id);assert.equal(g.regionIndex,0);
+  assert.equal(g.regionIndex,target);const back=g.regions.portals.find(p=>p.nextRegionIndex===homeIndex);assert(back&&back.state==='active');
+  put(portalDoor(back));request(back.id);assert.equal(g.regionIndex,homeIndex);
   assert.equal(g.riftExploration,exploration);assert.equal(chest.state,'claimed');assert.equal(gate.open,true);
   assert.equal(g.terrain.riftGateOpen?.('bell-shortcut'),true);assert.equal(g.dungeon.states.get(cave.id),cave);
   assert.equal(g.touchInteractions.update(),false,'a world arrival does not bounce back');

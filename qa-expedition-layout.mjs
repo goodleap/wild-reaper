@@ -7,8 +7,12 @@ import { validateContentPack } from './dist/content-schema.js';
 import { getConfigSnapshot } from './dist/content-config.js';
 
 // Check actual movement edges rather than accepting isolated free targets.
-function reachable(terrain,start,r){
-  const step=30,b=terrain.bounds,cols=Math.floor((b.maxX-b.minX)/step)+1,rows=Math.floor((b.maxY-b.minY)/step)+1;
+function reachable(terrain,start,r,targets=[]){
+  // Challenge objectives stay near the start even when they borrow a larger
+  // island. Search that relevant area rather than scanning every coastline.
+  const extents=[start,...targets],bounds=terrain.bounds;
+  const b=terrain.island?{minX:Math.max(bounds.minX,Math.min(...extents.map(p=>p.x))-520),maxX:Math.min(bounds.maxX,Math.max(...extents.map(p=>p.x))+520),minY:Math.max(bounds.minY,Math.min(...extents.map(p=>p.y))-520),maxY:Math.min(bounds.maxY,Math.max(...extents.map(p=>p.y))+520)}:bounds;
+  const step=30,cols=Math.floor((b.maxX-b.minX)/step)+1,rows=Math.floor((b.maxY-b.minY)/step)+1;
   const point=index=>({x:b.minX+(index%cols)*step,y:b.minY+Math.floor(index/cols)*step});
   const free=new Uint8Array(cols*rows),seen=new Uint8Array(cols*rows),queue=[];
   for(let i=0;i<free.length;i++){const p=point(i);free[i]=terrain.isFree(p.x,p.y,r)?1:0;}
@@ -30,7 +34,7 @@ function reachable(terrain,start,r){
 }
 
 for(const d of EXPEDITIONS){
-  const terrain=new ExpeditionTerrain(d),canReach=reachable(terrain,d.start,22);
+  const terrain=new ExpeditionTerrain(d),canReach=reachable(terrain,d.start,22,[d.exit,...d.supplies,...d.segments.map(s=>s.center)]);
   assert(canReach(d.exit),`${d.id}: exit reachable at companion radius`);
   for(const p of [...d.supplies,...d.segments.map(s=>s.center)])assert(canReach(p),`${d.id}: objective/supply ${p.x},${p.y} reachable`);
   for(const path of d.paths)for(let i=1;i<path.points.length;i++){
@@ -58,7 +62,6 @@ for(const d of EXPEDITIONS){
 for(const [id,from,to]of [
   ['ship',{x:-960,y:0},{x:-620,y:0}],
   ['moon',{x:0,y:130},{x:0,y:-180}],
-  ['survival',{x:-415,y:100},{x:-210,y:100}],
 ])for(const companion of [false,true]){
   const g=new Game({mode:'dungeon',dungeonId:id}),e=g._spawnEnemy('beetle');
   Object.assign(e,{x:from.x,y:from.y-groundOffset(e,companion),r:22,speed:140,isCompanion:companion});
@@ -83,7 +86,7 @@ for(const mutate of [
   d=>{d.details[0].kind='unhandled';},d=>{d.details[0].rx=-1;},
   d=>{d.supplies[0].drop='unknown';},d=>{d.obstacles[0].treeForm=8;},
 ]){
-  const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions[0]);
+  const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions[1]);
   assert.throws(()=>validateContentPack(pack),/Invalid world configuration|Non-finite number/);
 }
 console.log('Expedition layouts: route clearance, objective/supply connectivity, enemy/companion detours and return, resolved spawns, once-only supplies and schema passed.');

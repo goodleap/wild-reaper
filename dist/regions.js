@@ -1,4 +1,5 @@
 import { getConfigSection } from './content-config.js';
+import { mapSeed } from './map-context.js';
 import { enemyDefinition } from './enemy-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
@@ -69,7 +70,7 @@ export class Regions {
     if(planned&&safe(origin.x,origin.y))return {x:origin.x,y:origin.y};
     const radii=planned?[32,64,96]:forward?[1120,1270,1420,1570,1720,1870,2020,2170]:[90,150,220,300,400];
     for(const radius of radii)for(let i=0;i<48;i++) {
-      const a=(g.regionIndex*.93)+(planned?0:target*Math.PI*.82)+i*Math.PI/24,x=Math.round(origin.x+Math.cos(a)*radius),y=Math.round(origin.y+Math.sin(a)*radius);
+      const a=(mapSeed(g)*.93)+(planned?0:(regionFor(target).seed??target)*Math.PI*.82)+i*Math.PI/24,x=Math.round(origin.x+Math.cos(a)*radius),y=Math.round(origin.y+Math.sin(a)*radius);
       if(safe(x,y))return {x,y};
     }
     // Exhausted bounded searches omit this gate; a player-position fallback

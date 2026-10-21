@@ -20,10 +20,10 @@ const baseline={
 };
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const fingerprint=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
-const forest=worldForId('forest').authored;
+const forest=worldForId('rift-forest').authored;
 assert.equal(fingerprint(forest),'8ea13ab1b15b2e5e625794cb63cd16cec37482658a188aa3c1df710c9d439e80','the complete v0.0.102 forest geometry, routes and content remain unchanged');
 assert.equal(new Set(WORLD_IDS).size,REGIONS.length,'world IDs must be unique');
-assert.deepEqual(WORLD_IDS,['forest',...Object.keys(baseline),'verdant-rift','clockshadow-city','ember-realm-large'],'all ten existing world indices are persistent and the ember world is appended');
+assert.deepEqual(WORLD_IDS,['forest',...Object.keys(baseline),'verdant-rift','clockshadow-city','ember-realm-large','rift-forest'],'all eleven existing world indices are persistent and the rift world is appended');
 assert.equal(worldForId('__unregistered__'),REGIONS[0]);
 for(const [index,world] of REGIONS.entries()){
   assert.equal(worldForId(world.id),world);assert.equal(regionFor(index),world);
@@ -50,7 +50,9 @@ for(const [index,world] of REGIONS.entries()){
     const island=new Island({region:world.id,seed}),terrain=new Terrain({region:world.id,seed,island});
     const game={region:world,regionIndex:index,terrain,player:{x:0,y:0,r:15},viewWidth:1100,viewHeight:700};
     const env=new Environment(game,{generation:false});game.environment=env;
-    digest.update(JSON.stringify({points:island.points,plan:island.plan,routes:island.routes,layout:island.layout}));
+    // Only the renamed destination identity is normalized; every coordinate and route remains pinned.
+    const geometry=JSON.stringify({points:island.points,plan:island.plan,routes:island.routes,layout:island.layout}).replaceAll('portal:'+WORLD_IDS.indexOf('rift-forest'),'portal:0');
+    digest.update(geometry);
     for(let tx=-4;tx<=4;tx++)for(let ty=-4;ty<=4;ty++){
       digest.update(JSON.stringify(terrain._cell(tx,ty)));
       if((tx+ty)%3===0)digest.update(JSON.stringify([env._mudAt(tx,ty),env._mushroomsAt(tx,ty),env.mechanisms._candidate(tx,ty),env.worldHazards._candidate(tx,ty)]));
@@ -58,4 +60,4 @@ for(const [index,world] of REGIONS.entries()){
   }
   assert.equal(digest.digest('hex'),baseline[world.id],`${world.id}: existing generation changed`);
 }
-console.log('World configuration: 11 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 7 original procedural generation hashes passed.');
+console.log('World configuration: 12 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 7 original procedural generation hashes passed.');

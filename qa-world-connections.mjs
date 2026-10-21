@@ -7,28 +7,29 @@ import { REGIONS, WORLD_IDS, WORLD_CONNECTIONS, worldNeighbors } from './dist/wo
 import { portalDoor } from './dist/portal-geometry.js';
 
 const legacyIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(WORLD_IDS,[...legacyIds,'verdant-rift','clockshadow-city','ember-realm-large']);
-const existingRegions=REGIONS;
-assert.deepEqual(WORLD_CONNECTIONS,[[0,1],[1,2],[0,2],[0,3],[3,4],[4,5],[5,6],[6,7],[7,2],[4,2]],'all ten legacy world connections retain their identities');
+assert.deepEqual(WORLD_IDS,[...legacyIds,'verdant-rift','clockshadow-city','ember-realm-large','rift-forest']);
+const existingRegions=REGIONS,riftIndex=WORLD_IDS.indexOf('rift-forest');
+assert.deepEqual(WORLD_CONNECTIONS,[[riftIndex,1],[1,2],[riftIndex,2],[riftIndex,3],[3,4],[4,5],[5,6],[6,7],[7,2],[4,2]],'all ten routes retain their endpoints after separating the rift identity');
 assert.equal(new Set(WORLD_CONNECTIONS.map(([a,b])=>worldConnectionId(a,b))).size,WORLD_CONNECTIONS.length);
-const reachable=new Set([0]),queue=[0];
+const reachable=new Set([riftIndex]),queue=[riftIndex];
 for(const index of queue)for(const target of worldNeighbors(index)){
   assert(worldNeighbors(target).includes(index));assert.notEqual(index,target);
   if(!reachable.has(target)){reachable.add(target);queue.push(target);}
 }
-assert.deepEqual([...reachable].sort((a,b)=>a-b),legacyIds.map((_,index)=>index),'the original connected component is preserved');
+assert.deepEqual([...reachable].sort((a,b)=>a-b),[1,2,3,4,5,6,7,riftIndex],'the original connected component follows the rift map');
+assert.deepEqual(worldNeighbors(0),[],'the commemorative challenge does not acquire world-travel exits');
 assert.deepEqual(worldNeighbors(8),[],'the independent new map is entered through world selection');
 assert.deepEqual(worldNeighbors(9),[],'the independent city retains its selection identity');
 assert.deepEqual(worldNeighbors(10),[],'the ember world cannot create a hidden world connection');
 const outlines=new Set();
 // Run the unchanged connection and route requirements on every full world,
 // including all fixed ember slots and all three bridge passages.
-for(const [index,region] of existingRegions.entries())for(const seed of [0,index,17,91]) {
+for(const [index,region] of existingRegions.entries())for(const seed of region.naturalIsland?[region.seed]:[0,index,17,91]) {
   const island=new Island({region:region.id,seed}),portals=worldNeighbors(index).map(target=>island.plan[`portal:${target}`]);
   if(seed===0)outlines.add(JSON.stringify(region.authored?region.authored.boundaries:island.points));
   assert.equal(island.points.length,region.authored?4:128,'authored maps retain rectangular bounds; procedural coasts retain their bounded geometry');
   assert.deepEqual(new Island({region:region.id,seed}).plan,island.plan,'generation is deterministic');
-  assert.equal(Object.keys(island.plan).filter(key=>key.startsWith('portal:')).length,portals.length);
+  assert.equal(Object.keys(island.plan).filter(key=>key.startsWith('portal:')).length,region.naturalIsland?2:portals.length,'historic clearings can remain without activating inter-world travel');
   for(const key of ['merchant','supply','occupied','castle','hunt','rescue','rune','rescue-warden','dogcamp','owlroost','golemaltar','stonevault'])assert(island.plan[key],`${region.id} retains ${key}`);
   for(const portal of portals){
     assert(island.isDry(portal.x,portal.y,region.authored?24:portal.r+100));
@@ -80,7 +81,7 @@ const feet=point=>{game.player.x=point.x;game.player.y=point.y-groundOffset(game
 const verify=()=>{
   assert.equal(game.terrain.region,game.region.id);
   assert.equal(game.terrain.island.region,game.region.id);
-  assert.deepEqual(game.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),worldNeighbors(game.regionIndex));
+  assert.deepEqual(game.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),[...worldNeighbors(game.regionIndex)].sort((a,b)=>a-b));
   for(const portal of game.regions.portals){
     const door=portalDoor(portal);assert(game.terrain.isFree(door.x,door.y,game.player.r));
     assert(game.terrain.island.isDry(portal.x,portal.y,portal.natural?24:200));
@@ -105,19 +106,19 @@ function travel(target){
   assert.deepEqual({kills:game.kills,gold:game.gold,crystals:game.crystals,claimed:game.regions.claimedConnections.size},before,'arrival never grants another guardian reward');
   assert(game.regions.states.size<REGIONS.length);assert.equal(game.regions.endlessUnlocked,false,'world exploration never enables the survival wave rules');
 }
-for(const target of [1,2,0,3,4,5,6,7,2,4])travel(target);
+for(const target of [1,2,riftIndex,3,4,5,6,7,2,4])travel(target);
 assert.equal(game.regions.defeatedConnectionsCount,WORLD_CONNECTIONS.length);
 const naturalConnections=WORLD_CONNECTIONS.filter(([a,b])=>REGIONS[a].authored||REGIONS[b].authored).length;
 assert.equal(game.regions.claimedConnections.size,WORLD_CONNECTIONS.length-naturalConnections,'only defeated guardian routes grant guardian rewards');
-assert.equal(game.regions.states.size,legacyIds.length-1,'the new starting map is not generated during legacy travel');
+assert.equal(game.regions.states.size,legacyIds.length-1,'unconnected maps are not generated during travel');
 const rewards={kills:game.kills,gold:game.gold,crystals:game.crystals};
-for(const target of [3,0,2,7,6,5,4,2,1,0])travel(target);
+for(const target of [3,riftIndex,2,7,6,5,4,2,1,riftIndex])travel(target);
 assert.deepEqual({kills:game.kills,gold:game.gold,crystals:game.crystals},rewards,'return routes cannot farm completed gates');
 const standalone=new Game({mode:'world',worldId:'verdant-rift'});
 assert.equal(standalone.regionIndex,8);assert.equal(standalone.worldId,'verdant-rift');assert.equal(standalone.startWorldId,'verdant-rift');
 assert.equal(standalone.regions.portals.length,0);assert.equal(standalone.portal,null);assert.equal(standalone.regions.states.size,0);
 assert.notEqual(standalone.terrain.island.layout,worldForLegacy());
-function worldForLegacy(){return new Island({region:'forest'}).layout;}
+function worldForLegacy(){return new Island({region:'rift-forest'}).layout;}
 const exploration=standalone.riftExploration,chest=exploration.sites.find(site=>site.kind==='chest');assert(chest);
 chest.state='claimed';const mapId=standalone.mapId;standalone.regions.saveWorld();standalone.riftExploration=null;
 assert(standalone.regions.restoreWorld(mapId));assert.equal(standalone.riftExploration,exploration);assert.equal(chest.state,'claimed','map snapshots preserve claimed rewards');

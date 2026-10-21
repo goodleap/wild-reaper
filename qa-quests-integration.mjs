@@ -4,6 +4,7 @@ import { groundOffset } from './dist/terrain.js';
 import { CLOCK_BRIDGE } from './dist/quest-definitions.js';
 import { QUEST_STORAGE_KEY } from './dist/quest-store.js';
 import { portalDoor } from './dist/portal-geometry.js';
+import { WORLD_IDS } from './dist/world-definitions.js';
 import { harness } from './qa-app-harness.mjs';
 
 const memory=()=>{const data=new Map();return {data,getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,String(value))};};
@@ -82,7 +83,7 @@ collectGear(staleCity);assert.equal(entry(staleCity,'clock-bridge').status,'comp
 const saved=storage.getItem(QUEST_STORAGE_KEY),debug=fresh('clockshadow-city',storage,{debug:true});assert(bridgeBlocked(debug));
 assert.equal(entry(debug,'clock-bridge').status,'available');collectGear(debug);assert.equal(storage.getItem(QUEST_STORAGE_KEY),saved,'debug cannot overwrite formal progress');
 
-const forest=fresh('forest',storage),cave05=forest.riftExploration.sites.find(site=>site.key==='cave05'),cave15=forest.riftExploration.sites.find(site=>site.key==='cave15');
+const forest=fresh('rift-forest',storage),cave05=forest.riftExploration.sites.find(site=>site.key==='cave05'),cave15=forest.riftExploration.sites.find(site=>site.key==='cave15');
 assert(cave05&&cave15);approach(forest,cave05);request(forest,cave05.id);
 let cave=forest.dungeon.active;const same=cave.riftExits.find(exit=>exit.key==='cave05');leave(forest,same);
 assert(!done(forest,'underground-return','crossing'),'entering and backing out the same mouth is not a crossing');
@@ -96,9 +97,9 @@ put(forest,{x:gate.x-dx,y:gate.y-dy});assert.equal(forest.requestInteraction(gat
 put(forest,north);request(forest,gate.id);assert.equal(entry(forest,'underground-return').status,'completed');assert(forest.terrain.riftGateOpen('bell-shortcut'));
 const out=forest.regions.portals.find(portal=>portal.nextRegionIndex===1);assert(out);approach(forest,portalDoor(out));request(forest,out.id);
 assert.equal(forest.worldId,'marsh');assert.equal(forest.quests.getEntries().length,0);assert.equal(forest.quests.getProps().length,0);assert.equal(forest.quests.getGuide(),null);
-const back=forest.regions.portals.find(portal=>portal.nextRegionIndex===0);approach(forest,portalDoor(back));request(forest,back.id);
-assert.equal(forest.worldId,'forest');assert(forest.terrain.riftGateOpen('bell-shortcut'));assert.equal(entry(forest,'underground-return').status,'completed');
-const reopenedForest=fresh('forest',storage);assert(reopenedForest.terrain.riftGateOpen('bell-shortcut'));assert.equal(entry(reopenedForest,'underground-return').status,'completed');
+const back=forest.regions.portals.find(portal=>portal.nextRegionIndex===WORLD_IDS.indexOf('rift-forest'));approach(forest,portalDoor(back));request(forest,back.id);
+assert.equal(forest.worldId,'rift-forest');assert(forest.terrain.riftGateOpen('bell-shortcut'));assert.equal(entry(forest,'underground-return').status,'completed');
+const reopenedForest=fresh('rift-forest',storage);assert(reopenedForest.terrain.riftGateOpen('bell-shortcut'));assert.equal(entry(reopenedForest,'underground-return').status,'completed');
 for(const options of [{mode:'story'},{mode:'dungeon',dungeonId:'survival'}]){
   const game=new Game({...options,questStorage:storage});assert.equal(game.quests.getEntries().length,0);assert.equal(game.quests.getProps().length,0);assert.equal(game.quests.getGuide(),null);
 }

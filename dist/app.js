@@ -76,7 +76,7 @@ import { drawDamageOverlay } from './damage-numbers.js';
 import { drawCastleActivation } from './relic-activation.js';
 import { sceneEntityVisible, sceneItemVisible, sceneItemLayer, compareSceneDepth } from './scene-rendering.js';
 import { visitSceneUnits } from './unit-counts.js';
-import { drawExpeditionGround, drawExpeditionProp } from './expedition-art.js';
+import { drawExpeditionGround, drawExpeditionObjectives, drawExpeditionProp } from './expedition-art.js';
 import { SceneDialogue } from './scene-dialogue.js';
 import { drawSceneDialogue } from './scene-dialogue-renderer.js';
 import { drawScriptedSceneDialogue } from './scene-script-dialogue.js';
@@ -198,13 +198,13 @@ let prepareOpen=false,prepareArtReady=false,startLoading=false,activeStartPromis
 const sceneLoadingView=createLoadingView(document,{setTimer:setTimeout,clearTimer:clearTimeout});
 const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer:setTimeout});
 const explorableWorlds=Object.freeze([
-  Object.freeze({id:'forest',name:'裂谷林海',radioId:'world-rift-forest',previewId:'world-preview',description:'从南岸营地出发，探索 18 片相连区域。沿桥梁和山口寻找通路，发现隐秘洞穴与荒野领主。'}),
+  Object.freeze({id:'rift-forest',name:'裂谷林海',radioId:'world-rift-forest',previewId:'world-preview',description:'从南岸营地出发，探索 18 片相连区域。沿桥梁和山口寻找通路，发现隐秘洞穴与荒野领主。'}),
   Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'}),
   Object.freeze({id:'clockshadow-city',name:'钟影旧都',radioId:'world-clockshadow-city',previewId:'world-preview-clockshadow-city',description:'从南郊驿站出发，沿双层城墙、石桥和运河探索古城。穿过市场、工坊与钟楼广场，进入可探索的旧城堡庭院，寻找地下通道、隐秘庭院与古城领主。'}),
   Object.freeze({id:'ember-realm-large',name:'熔火之境',radioId:'world-ember-realm-large',previewId:'world-preview-ember-realm-large',description:'探索 17 片相连区域，沿三座岩桥、山口与矿脊捷径穿越熔岩峡谷。从暖灰营地出发，寻找热泉绿洲、三处矿洞、旧铸聚落与熔晶秘谷，挑战火山口和熔炉遗台的领主。'})
 ]);
 const explorationWorld=id=>explorableWorlds.find(world=>world.id===id)||explorableWorlds[0];
-let selectedMode='world',selectedWorldId='forest',selectedDungeonId='survival',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
+let selectedMode='world',selectedWorldId='rift-forest',selectedDungeonId='survival',selectedStageId=STAGES[0].id,selectedHeroId=HEROES[0].id,selectedAppearanceId=HEROES[0].appearanceId,selectedWeaponId=initialWeaponIds.includes('sword')?'sword':initialWeaponIds[0];
 let selectedStoryId='prologue',realmMaterials=null;
 try{
   const saved=JSON.parse(localStorage.getItem('wild-echoes-setup'));
@@ -323,7 +323,7 @@ function preparationChoice({id,name,group,color,art,role}){
 }
 for(const expedition of EXPEDITIONS){
   const {label,radio,portrait}=preparationChoice({id:expedition.id,name:expedition.name,group:'stage',color:expedition.color||'#b9d99b',art:''});
-  portrait.removeAttribute('data-world-archive-art');dungeonPortraits.set(expedition.id,portrait);
+  if(expedition.worldMapId)portrait.setAttribute('data-world-archive-art',`world:${expedition.worldMapId}`);else{portrait.removeAttribute('data-world-archive-art');dungeonPortraits.set(expedition.id,portrait);}
   radio.id=`dungeon-${expedition.id}`;radio.name='destination';label.setAttribute('data-expedition',expedition.id);
   $('stage-options').append(label);dungeonRadios.set(expedition.id,radio);
   radio.addEventListener('change',()=>{if(radio.checked){selectedDungeonId=expedition.id;saveSetup();refreshStageSetup();revealSelectedStage();}});
@@ -381,7 +381,7 @@ function drawWorldPreview(){
 }
 function refreshWorldSetup(){
   const world=explorationWorld(selectedWorldId),story=selectedMode==='story';selectedWorldId=world.id;
-  for(const option of explorableWorlds){const radio=$(option.radioId);radio.checked=option.id===(story?'forest':world.id);radio.disabled=story;show(option.radioId,!story);radio.parentElement.classList.toggle('hidden',story&&option.id!=='forest');}
+  for(const option of explorableWorlds){const radio=$(option.radioId);radio.checked=option.id===(story?'rift-forest':world.id);radio.disabled=story;show(option.radioId,!story);radio.parentElement.classList.toggle('hidden',story&&option.id!=='rift-forest');}
   $('world-count').textContent=`${explorableWorlds.length} 张地图`;show('world-count',!story);
   $('world-description').textContent=world.description;refreshPreparationSummary();
 }
@@ -465,7 +465,7 @@ function startGame(){
   arena.setAttribute('aria-busy','true');
   saveSetup();
   const loadout=preparationLoadout();
-  const options={hero:loadout.heroId,appearanceId:loadout.appearanceId,difficulty:'normal',mode:selectedMode,storyId:selectedMode==='story'?selectedStoryId:null,worldId:selectedMode==='story'?'forest':selectedMode==='world'?selectedWorldId:null,dungeonId:selectedMode==='dungeon'?selectedDungeonId:null,initialWeaponId:loadout.weaponId,stageId:selectedMode==='dungeon'&&!selectedDungeonId?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
+  const options={hero:loadout.heroId,appearanceId:loadout.appearanceId,difficulty:'normal',mode:selectedMode,storyId:selectedMode==='story'?selectedStoryId:null,worldId:selectedMode==='story'?'rift-forest':selectedMode==='world'?selectedWorldId:null,dungeonId:selectedMode==='dungeon'?selectedDungeonId:null,initialWeaponId:loadout.weaponId,stageId:selectedMode==='dungeon'&&!selectedDungeonId?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
   const startLogId=activityLog.begin('start','开始冒险',{...activityContext(),selection:options});
   activityLog.setCurrent(startLogId);activityLog.stage(startLogId,'创建游戏');
   // Unlock audio in the originating click, before yielding to the loading view.
@@ -1233,9 +1233,9 @@ function sunBeamPath(beam,target=ctx){
 function drawMapLights(camX,camY,target=ctx,viewWidth=game?.viewWidth??width,viewHeight=game?.viewHeight??height){mapLightCache.draw(target,{camX,camY,width:viewWidth,height:viewHeight,region:game?.region?.id||'forest'});}
 function drawIntroLights(target){const pad=Math.max(40,width*.08);target.save();target.globalAlpha=.075;target.fillStyle='#dee8a0';sunBeamPath(sunBeamGeometry(width*.74-SUN.x/SUN.y*pad,-pad,height+pad*2,width*.04,width*.07),target);target.fill();target.restore();}
 function background(camX,camY,intro){const {width,height}=sceneViewport(intro);
-  if(!intro&&game?.expedition&&!game.dungeon?.active){decorativeShadowShapes.length=0;drawExpeditionGround(ctx,game,camX,camY,width,height);return;}
+  if(!intro&&game?.expedition&&!game.expedition.definition.worldMapId&&!game.dungeon?.active){decorativeShadowShapes.length=0;drawExpeditionGround(ctx,game,camX,camY,width,height);return;}
   if(!intro&&!game?.dungeon?.active&&game?.terrain?.island?.layout?.kind==='rift-forest'){decorativeShadowShapes.length=0;worldLayoutArt.drawGround(ctx,game.terrain.island,{camX,camY,width,height,prefetch:groundPrefetchActive});return;}
-  if(!intro&&!game?.dungeon?.active&&game?.terrain?.island){decorativeShadowShapes.length=0;islandArt.draw(ctx,game.terrain.island,{camX,camY,width,height,time:game._clock,reduced,dense:combatOptions.dense},()=>backgroundLand(camX,camY,false));return;}
+  if(!intro&&!game?.dungeon?.active&&game?.terrain?.island){decorativeShadowShapes.length=0;islandArt.draw(ctx,game.terrain.island,{camX,camY,width,height,time:game._clock,reduced,dense:combatOptions.dense},()=>backgroundLand(camX,camY,false));if(game.expedition)drawExpeditionObjectives(ctx,game,camX,camY,width,height);return;}
   backgroundLand(camX,camY,intro);
 }
 function backgroundLand(camX,camY,intro){const {width,height}=sceneViewport(intro);decorativeShadowShapes.length=0;if(!intro&&game?.dungeon?.active){drawDungeonBackground(camX,camY);return;}if(!intro&&game?.region?.id!=='forest'&&game?.region){drawRegionBackground(camX,camY);worldLayoutArt.drawGround(ctx,game.terrain?.island,{camX,camY,width,height});return;}ctx.fillStyle='#2b4130';ctx.fillRect(0,0,width,height);const hX=intro?(width<760?.62:.73)*width:width*.5,hY=intro?(width<760?.71:.52)*height:height*.5;if(intro)glow(hX,hY,width*.6,'#76995b30');

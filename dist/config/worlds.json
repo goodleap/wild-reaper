@@ -10,11 +10,12 @@
     "volcano",
     "verdant-rift",
     "clockshadow-city",
-    "ember-realm-large"
+    "ember-realm-large",
+    "rift-forest"
   ],
   "connections": [
     [
-      "forest",
+      "rift-forest",
       "marsh"
     ],
     [
@@ -22,11 +23,11 @@
       "ruins"
     ],
     [
-      "forest",
+      "rift-forest",
       "ruins"
     ],
     [
-      "forest",
+      "rift-forest",
       "beach"
     ],
     [
@@ -56,7 +57,7 @@
   ],
   "definitions": [
     {
-      "id": "forest",
+      "id": "rift-forest",
       "name": "裂谷林海",
       "shortName": "裂谷",
       "colors": {
@@ -45294,7 +45295,8 @@
           "waterLight": "#4395b7",
           "bridge": "#bd884c"
         }
-      }
+      },
+      "seed": 0
     },
     {
       "id": "marsh",
@@ -212771,6 +212773,1004 @@
           ],
           "details": []
         }
+      }
+    },
+    {
+      "id": "forest",
+      "name": "低语之森",
+      "shortName": "低语",
+      "colors": {
+        "ground": "#263e30",
+        "light": "#35503a",
+        "dark": "#182b22",
+        "accent": "#a9d991",
+        "mist": "#c1d6a9",
+        "grass": "#648052",
+        "stone": "#788170"
+      },
+      "enemyWeights": {
+        "slime": 1,
+        "beetle": 1,
+        "bat": 1,
+        "brute": 1,
+        "boar": 1,
+        "spore": 1,
+        "rootbinder": 1,
+        "boglurker": 0,
+        "prismguard": 0,
+        "tidepriest": 0,
+        "shieldguard": 0,
+        "stoneape": 0,
+        "windhunter": 0.6,
+        "frostmage": 0,
+        "flamelizard": 0
+      },
+      "profile": {
+        "x": 4350,
+        "y": 4100,
+        "phase": 0.2,
+        "bays": 0.08
+      },
+      "danger": 1,
+      "coast": {},
+      "biomeZones": [],
+      "terrain": {
+        "generatorId": "natural",
+        "hashOffset": 0,
+        "variants": {},
+        "layoutId": "woodland"
+      },
+      "environment": {
+        "hashOffset": 0,
+        "mushroomChance": 0.57,
+        "water": {
+          "chance": 0.36,
+          "families": 4,
+          "kind": "water",
+          "zoneKinds": null,
+          "innerIslands": false
+        },
+        "mechanism": {
+          "type": "vine",
+          "chance": 0.64
+        },
+        "hazard": null,
+        "damagingSurface": null,
+        "waterMovement": {
+          "idle": 0.74,
+          "active": 0.74
+        },
+        "waterImmersion": {
+          "idle": 1,
+          "active": 1
+        }
+      },
+      "art": {
+        "coast": {
+          "deep": "#193e48",
+          "sea": "#25535a",
+          "shallow": "#537e71",
+          "sand": "#97996d",
+          "grain": "#d8cc98",
+          "edge": "#779b85",
+          "fringe": "#415439"
+        },
+        "mapCoast": {
+          "land": "#476246",
+          "sand": "#919a6b",
+          "sea": "#264e54",
+          "shallow": "#507776"
+        },
+        "light": {
+          "id": "forest",
+          "rgb": "225,237,172",
+          "glow": "#c7d98a12",
+          "strength": 1,
+          "clear": "#e3ebaf00"
+        }
+      },
+      "seed": 0,
+      "naturalIsland": {
+        "plan": {
+          "merchant": {
+            "x": 695.1356261685369,
+            "y": 144.52149055166927,
+            "r": 105
+          },
+          "supply": {
+            "x": -679.7856036990602,
+            "y": 800.2446707123418,
+            "r": 125
+          },
+          "occupied": {
+            "x": -653.5716395570146,
+            "y": -1601.7940291956252,
+            "r": 225
+          },
+          "castle": {
+            "x": -2480.27446479698,
+            "y": 812.6121948851467,
+            "r": 360
+          },
+          "hunt": {
+            "x": 1042.0571063917728,
+            "y": 1504.3327381328925,
+            "r": 280
+          },
+          "rescue": {
+            "x": 1377.730170996356,
+            "y": -1531.4893326191834,
+            "r": 240
+          },
+          "rune": {
+            "x": -1864.3573104150123,
+            "y": -1312.467835454302,
+            "r": 185
+          },
+          "rescue-warden": {
+            "x": -868.4881639778142,
+            "y": -707.1975035521868,
+            "r": 240
+          },
+          "dogcamp": {
+            "x": 1376.2742849901633,
+            "y": 388.2899592763314,
+            "r": 115
+          },
+          "owlroost": {
+            "x": -1536.6095978428812,
+            "y": 322.0728858769995,
+            "r": 240
+          },
+          "golemaltar": {
+            "x": -177.14115673298144,
+            "y": -2624.027631445847,
+            "r": 270
+          },
+          "stonevault": {
+            "x": 2796.079666576127,
+            "y": 436.8506588750162,
+            "r": 240
+          },
+          "portal:1": {
+            "x": -514.6456195170961,
+            "y": 2762.469888761118,
+            "r": 310
+          },
+          "portal:2": {
+            "x": 2655.0410991340127,
+            "y": -1695.06836496622,
+            "r": 310
+          }
+        },
+        "surfaces": [
+          {
+            "id": "mud:-1,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": -414.7893621090625,
+            "y": -450.4578339235275,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.3048690135474317,
+            "shape": "bays",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-1,0",
+            "type": "mud",
+            "kind": "water",
+            "x": -364.77947705802217,
+            "y": 252.28237396766198,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.13961647075484507,
+            "shape": "elongated",
+            "angle": -0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-1,5",
+            "type": "mud",
+            "kind": "water",
+            "x": -56.80429745987783,
+            "y": 2857.229259274542,
+            "rx": 80,
+            "ry": 34,
+            "seed": 0.19994755378502305,
+            "shape": "elongated",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:-2,-7",
+            "type": "mud",
+            "kind": "water",
+            "x": -591.5388479238521,
+            "y": -3170.926597849006,
+            "rx": 128,
+            "ry": 75.2,
+            "seed": 0.31781407868038514,
+            "shape": "kidney",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:-2,0",
+            "type": "mud",
+            "kind": "water",
+            "x": -925.5852174955944,
+            "y": 71.96326815984794,
+            "rx": 128,
+            "ry": 80,
+            "seed": 0.17805210126243765,
+            "shape": "rounded",
+            "angle": -0.28,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:-2,2",
+            "type": "mud",
+            "kind": "water",
+            "x": -913.4820683623781,
+            "y": 1479.0738864703221,
+            "rx": 80,
+            "ry": 50,
+            "seed": 0.09010691663570469,
+            "shape": "rounded",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:-3,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": -1286.3959067068063,
+            "y": -54.97897792296715,
+            "rx": 128,
+            "ry": 54.400000000000006,
+            "seed": 0.07782520520413527,
+            "shape": "elongated",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:-3,-3",
+            "type": "mud",
+            "kind": "water",
+            "x": -1305.6532526650117,
+            "y": -1468.2131073918777,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.14221509622075246,
+            "shape": "elongated",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-3,-4",
+            "type": "mud",
+            "kind": "water",
+            "x": -1110.440122003804,
+            "y": -1822.5817195490104,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.03841249119795975,
+            "shape": "bays",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:-3,-6",
+            "type": "mud",
+            "kind": "water",
+            "x": -1297.6118743175757,
+            "y": -2664.9547274786514,
+            "rx": 128,
+            "ry": 75.2,
+            "seed": 0.0895530461857561,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:-3,3",
+            "type": "mud",
+            "kind": "water",
+            "x": -1445.3356156925147,
+            "y": 1655.3268343247648,
+            "rx": 288,
+            "ry": 180,
+            "seed": 0.2150808083024458,
+            "shape": "rounded",
+            "angle": 0,
+            "island": false,
+            "scale": 3.6
+          },
+          {
+            "id": "mud:-3,4",
+            "type": "mud",
+            "kind": "water",
+            "x": -1443.6833156018197,
+            "y": 2497.97450808672,
+            "rx": 200,
+            "ry": 117.5,
+            "seed": 0.3252786384546198,
+            "shape": "kidney",
+            "angle": 0.28,
+            "island": false,
+            "scale": 2.5
+          },
+          {
+            "id": "mud:-4,0",
+            "type": "mud",
+            "kind": "water",
+            "x": -1807.0843972018338,
+            "y": 222.0537356461864,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.18099204124882817,
+            "shape": "kidney",
+            "angle": -0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-4,1",
+            "type": "mud",
+            "kind": "water",
+            "x": -1626.5451987029287,
+            "y": 983.392030013341,
+            "rx": 128,
+            "ry": 54.400000000000006,
+            "seed": 0.3226784601210966,
+            "shape": "elongated",
+            "angle": 0,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:-4,5",
+            "type": "mud",
+            "kind": "water",
+            "x": -1764.4128226992325,
+            "y": 2918.3438206817664,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.15793005322484532,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-5,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": -2455.9282080522244,
+            "y": -275.50838834699823,
+            "rx": 52,
+            "ry": 32.5,
+            "seed": 0.0016794109978945926,
+            "shape": "rounded",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-5,-4",
+            "type": "mud",
+            "kind": "water",
+            "x": -2491.4384759608074,
+            "y": -2007.5029068626743,
+            "rx": 80,
+            "ry": 50,
+            "seed": 0.12667199565248666,
+            "shape": "rounded",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:-5,0",
+            "type": "mud",
+            "kind": "water",
+            "x": -2392.3464827214775,
+            "y": 225.4800839049858,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.014986578309617471,
+            "shape": "kidney",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-5,4",
+            "type": "mud",
+            "kind": "water",
+            "x": -2384.219055477006,
+            "y": 2390.040234340704,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.10716131472509005,
+            "shape": "elongated",
+            "angle": -0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-6,-3",
+            "type": "mud",
+            "kind": "water",
+            "x": -2662.400948765446,
+            "y": -1104.6157360819984,
+            "rx": 128,
+            "ry": 75.2,
+            "seed": 0.20138739890535362,
+            "shape": "kidney",
+            "angle": -0.28,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:-6,1",
+            "type": "mud",
+            "kind": "water",
+            "x": -3016.433406958211,
+            "y": 591.5553887708986,
+            "rx": 52,
+            "ry": 32.5,
+            "seed": 0.18628517314937199,
+            "shape": "rounded",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-7,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": -3193.199828471034,
+            "y": -53.60796128318759,
+            "rx": 80,
+            "ry": 34,
+            "seed": 0.029006104628933826,
+            "shape": "elongated",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:-7,-2",
+            "type": "mud",
+            "kind": "water",
+            "x": -3174.4652257026523,
+            "y": -572.8599129936832,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.049789084878284484,
+            "shape": "elongated",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-8,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": -3922.5669134009513,
+            "y": -265.64244446795783,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.021629299044434447,
+            "shape": "kidney",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-8,-2",
+            "type": "mud",
+            "kind": "water",
+            "x": -3703.0309557470378,
+            "y": -758.8326629020862,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.3104636441930779,
+            "shape": "bays",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-8,0",
+            "type": "mud",
+            "kind": "water",
+            "x": -3753.2255679966242,
+            "y": 422.9358662957442,
+            "rx": 200,
+            "ry": 85,
+            "seed": 0.1947796018430381,
+            "shape": "elongated",
+            "angle": -0.28,
+            "island": false,
+            "scale": 2.5
+          },
+          {
+            "id": "mud:-8,1",
+            "type": "mud",
+            "kind": "water",
+            "x": -4108.4025954114495,
+            "y": 809.423569895007,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.09015463933974388,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:-8,3",
+            "type": "mud",
+            "kind": "water",
+            "x": -3703.7506593701896,
+            "y": 2015.8197479456371,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.12334874279986252,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:-9,0",
+            "type": "mud",
+            "kind": "water",
+            "x": -4284.35981572938,
+            "y": 434.115766575111,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.09290806340322888,
+            "shape": "bays",
+            "angle": -0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:0,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": 459.12616572468835,
+            "y": -76.16247773520297,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.10171172345781088,
+            "shape": "bays",
+            "angle": -0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:0,-2",
+            "type": "mud",
+            "kind": "water",
+            "x": 265.22125246265205,
+            "y": -959.4123959960183,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.27696560557888006,
+            "shape": "bays",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:0,-3",
+            "type": "mud",
+            "kind": "water",
+            "x": 256.73739747927175,
+            "y": -1467.7432501468634,
+            "rx": 80,
+            "ry": 50,
+            "seed": 0.3428717499191407,
+            "shape": "rounded",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:0,-6",
+            "type": "mud",
+            "kind": "water",
+            "x": 457.17223667598375,
+            "y": -2654.946745078231,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.1996316262120672,
+            "shape": "elongated",
+            "angle": -0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:0,-7",
+            "type": "mud",
+            "kind": "water",
+            "x": 404.09347136654253,
+            "y": -3208.0666796894743,
+            "rx": 200,
+            "ry": 85,
+            "seed": 0.1912018172297394,
+            "shape": "elongated",
+            "angle": -0.28,
+            "island": false,
+            "scale": 2.5
+          },
+          {
+            "id": "mud:0,3",
+            "type": "mud",
+            "kind": "water",
+            "x": 213.35474268795224,
+            "y": 1878.4805096228956,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.329968077767262,
+            "shape": "bays",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:0,5",
+            "type": "mud",
+            "kind": "water",
+            "x": 260.36259083036566,
+            "y": 3063.7478774803835,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.026500409101572586,
+            "shape": "elongated",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:1,-2",
+            "type": "mud",
+            "kind": "water",
+            "x": 922.7613013348018,
+            "y": -759.7419995103701,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.2883058520455961,
+            "shape": "bays",
+            "angle": -0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:1,-4",
+            "type": "mud",
+            "kind": "water",
+            "x": 928.8360482112636,
+            "y": -1661.8848684483905,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.19234895858971868,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:1,-5",
+            "type": "mud",
+            "kind": "water",
+            "x": 683.0001176363439,
+            "y": -2345.8421554349247,
+            "rx": 128,
+            "ry": 54.400000000000006,
+            "seed": 0.12876103622693336,
+            "shape": "elongated",
+            "angle": -0.28,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:1,3",
+            "type": "mud",
+            "kind": "water",
+            "x": 970.5456027876877,
+            "y": 2015.2897893436107,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.04202821078069974,
+            "shape": "bays",
+            "angle": -0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:1,4",
+            "type": "mud",
+            "kind": "water",
+            "x": 672.3651020229445,
+            "y": 2332.7833870327972,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.25348368833510904,
+            "shape": "kidney",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:2,-2",
+            "type": "mud",
+            "kind": "water",
+            "x": 1490.9455559883731,
+            "y": -594.7957327290263,
+            "rx": 80,
+            "ry": 50,
+            "seed": 0.3491468535576132,
+            "shape": "rounded",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:2,-3",
+            "type": "mud",
+            "kind": "water",
+            "x": 1497.978964809468,
+            "y": -1109.1106872954756,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.12956983605545247,
+            "shape": "bays",
+            "angle": -0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:2,3",
+            "type": "mud",
+            "kind": "water",
+            "x": 1495.856081813517,
+            "y": 2031.0866723306767,
+            "rx": 128,
+            "ry": 75.2,
+            "seed": 0.16238540757331066,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:3,-6",
+            "type": "mud",
+            "kind": "water",
+            "x": 1976.9090281066542,
+            "y": -3015.806826985188,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.295932802153402,
+            "shape": "bays",
+            "angle": -0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:3,-7",
+            "type": "mud",
+            "kind": "water",
+            "x": 1675.9279570185668,
+            "y": -3212.2879441040545,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.007981813962032902,
+            "shape": "elongated",
+            "angle": 0.28,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:4,-2",
+            "type": "mud",
+            "kind": "water",
+            "x": 2486.147956186143,
+            "y": -913.8979060846265,
+            "rx": 128,
+            "ry": 75.2,
+            "seed": 0.08269726515572984,
+            "shape": "bays",
+            "angle": 0,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:4,-3",
+            "type": "mud",
+            "kind": "water",
+            "x": 2203.475985378091,
+            "y": -1126.253182343085,
+            "rx": 80,
+            "ry": 50,
+            "seed": 0.31869368223124184,
+            "shape": "rounded",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:4,-4",
+            "type": "mud",
+            "kind": "water",
+            "x": 2327.6152702927357,
+            "y": -1985.4742103949307,
+            "rx": 80,
+            "ry": 34,
+            "seed": 0.12321040732058464,
+            "shape": "elongated",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:4,0",
+            "type": "mud",
+            "kind": "water",
+            "x": 2316.869634612239,
+            "y": 271.11557339701614,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.16648408288551764,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:4,3",
+            "type": "mud",
+            "kind": "water",
+            "x": 2473.1710072724177,
+            "y": 1978.8928959733516,
+            "rx": 80,
+            "ry": 34,
+            "seed": 0.06892709898238536,
+            "shape": "elongated",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:5,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": 2856.210984788573,
+            "y": -425.92144656666494,
+            "rx": 52,
+            "ry": 30.55,
+            "seed": 0.26227464443218196,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:5,2",
+            "type": "mud",
+            "kind": "water",
+            "x": 2891.7268503246305,
+            "y": 1260.3761362141813,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.19490932132066519,
+            "shape": "kidney",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:5,4",
+            "type": "mud",
+            "kind": "water",
+            "x": 2669.5412561819016,
+            "y": 2369.2341403351747,
+            "rx": 80,
+            "ry": 50,
+            "seed": 0.3050306057994021,
+            "shape": "rounded",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:5,5",
+            "type": "mud",
+            "kind": "water",
+            "x": 2712.0198014175694,
+            "y": 2679.3453444748766,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.03137081098248018,
+            "shape": "kidney",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:6,-1",
+            "type": "mud",
+            "kind": "water",
+            "x": 3262.3041395312757,
+            "y": -265.92083478783604,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.35826633942633634,
+            "shape": "bays",
+            "angle": 0.28,
+            "island": false,
+            "scale": 1
+          },
+          {
+            "id": "mud:6,0",
+            "type": "mud",
+            "kind": "water",
+            "x": 3585.866683447269,
+            "y": 280.99458412497046,
+            "rx": 52,
+            "ry": 22.1,
+            "seed": 0.20977467203192646,
+            "shape": "elongated",
+            "angle": 0,
+            "island": false,
+            "scale": 0.65
+          },
+          {
+            "id": "mud:6,3",
+            "type": "mud",
+            "kind": "water",
+            "x": 3377.300556595699,
+            "y": 1658.035527978785,
+            "rx": 128,
+            "ry": 75.2,
+            "seed": 0.08945182144088903,
+            "shape": "bays",
+            "angle": 0,
+            "island": false,
+            "scale": 1.6
+          },
+          {
+            "id": "mud:8,1",
+            "type": "mud",
+            "kind": "water",
+            "x": 4219.380545203157,
+            "y": 806.9048999033666,
+            "rx": 80,
+            "ry": 47,
+            "seed": 0.27034590786115587,
+            "shape": "bays",
+            "angle": 0,
+            "island": false,
+            "scale": 1
+          }
+        ]
       }
     }
   ]
