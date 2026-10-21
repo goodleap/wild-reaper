@@ -43,7 +43,7 @@ assert.equal(allArtKeys.size,WORLD_ARCHIVE_WORLDS.length+WORLD_ARCHIVE_LOCATIONS
 assert.equal(worldArchiveSelection({category:'unknown',selectedId:'stonevault'}).selected.id,'forest');
 assert.equal(worldArchiveSelection({category:'relics',selectedId:'forest'}).selected.id,'castle');
 assert.match(archivePanelHTML({}, {tab:'world',worldCategory:'relics',worldSelectedId:'stonevault'}),/进入宝库获得/);
-assert.match(worldArchiveHTML({selectedId:'marsh'}),/关卡模式：[\s\S]*往返[\s\S]*自由探索：[\s\S]*跨世界通道/,'the guide distinguishes trial travel from guarded world connections');
+assert.match(worldArchiveHTML({selectedId:'marsh'}),/自由探索：[\s\S]*无需击败驻门首领[\s\S]*往返/,'the remade marsh describes natural travel and persistent exploration');
 assert.match(worldArchiveHTML({selectedId:'rift-forest'}),/自然山口和长桥[\s\S]*无需击败驻门首领/,'the original authored map describes natural travel');
 assert.match(worldArchiveHTML({selectedId:'verdant-rift'}),/世界选择[\s\S]*独立地图[\s\S]*没有跨世界出口/,'the new authored map describes its actual independent entry');
 assert(!worldArchiveHTML({selectedId:'verdant-rift'}).match(/archive-small-note[^>]*>[^<]*击败驻门首领/),'the new world does not promise guardian-locked exits');

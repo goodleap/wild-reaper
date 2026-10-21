@@ -6,7 +6,7 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
   const compact=worldId==='rift-forest';
   if(compact&&(layout.id!=='rift-forest:1'||layout.worldId&&layout.worldId!==worldId))fail('identity');
   if(!compact&&(!/^[a-z][a-z0-9-]{0,63}$/.test(worldId)||layout.worldId!==worldId||layout.id!==`${worldId}:1`))fail('identity');
-  if(layout.artTheme!=null&&!['forest','city','ember'].includes(layout.artTheme))fail('artTheme');
+  if(layout.artTheme!=null&&!['forest','marsh','city','ember'].includes(layout.artTheme))fail('artTheme');
   const city=layout.artTheme==='city',ember=layout.artTheme==='ember';
   const array=(value,key,min,max)=>{if(!Array.isArray(value)||value.length<min||value.length>max)fail(key);return value;};
   const number=(value,key,min=-10000,max=10000)=>{if(!Number.isFinite(value)||value<min||value>max)fail(key);};
@@ -28,6 +28,16 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
   }
   for(const key of ['boundaries','solidBoundaries'])for(const ring of array(layout[key],key,1,city?512:64)){polygon(ring.points,key+'.points');if(typeof ring.hole!=='boolean')fail(key+'.hole');}
   for(const lake of array(layout.lakes,'lakes',1,32)){text(lake.id,'lake.id');polygon(lake.points,'lake.points');if(typeof lake.hole!=='boolean')fail('lake.hole');}
+  if(layout.surfaces!=null){
+    const surfaceIds=new Set();
+    for(const surface of array(layout.surfaces,'surfaces',0,32)){
+      text(surface.id,'surface.id');if(surfaceIds.has(surface.id))fail('surface duplicate');surfaceIds.add(surface.id);
+      if(surface.type!=='mud'||surface.kind!=='water'||!WATER_SHAPES.includes(surface.shape))fail('surface.type');
+      point(surface,'surface');if(surface.x<bounds.minX||surface.x>bounds.maxX||surface.y<bounds.minY||surface.y>bounds.maxY)fail('surface.bounds');
+      number(surface.rx,'surface.rx',1,500);number(surface.ry,'surface.ry',1,500);number(surface.angle,'surface.angle',-Math.PI*2,Math.PI*2);
+      number(surface.seed,'surface.seed',0,1);number(surface.scale,'surface.scale',.1,6.25);if(typeof surface.island!=='boolean')fail('surface.island');
+    }
+  }
   if(compact)for(const key of ['spawn','cave05','cave15','shortcut08','shortcut13','shortcutGate','boss11','boss17','exitNorth','exitSouth','exitWest','treasure18','treasure07'])point(layout.landmarks?.[key],'landmark.'+key);
   else {
     const inBounds=(p,key)=>{point(p,key);if(p.x<bounds.minX||p.x>bounds.maxX||p.y<bounds.minY||p.y>bounds.maxY)fail(key+'.bounds');};

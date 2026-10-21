@@ -71,8 +71,8 @@ function reachablePaths(game,goals,radius=22){
 }
 
 const reports=[],networks=new Set();let lakeChecks=0;
-const completeWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'];
-assert.deepEqual(WORLD_IDS,[...completeWorldIds,'ember-realm-large'],'the complete ember world appends without changing the ten existing fixtures');
+const completeWorldIds=['rift-forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city'];
+assert.deepEqual(WORLD_IDS,['forest',...completeWorldIds.slice(1),'ember-realm-large','rift-forest'],'the historical challenge and mature exploration maps retain their distinct identities');
 // Preserve every original population/loop/objective requirement on the ten
 // existing maps. The complete ember world below uses its authored targets
 // rather than assuming the old random vegetation and mission recipe.
@@ -99,7 +99,7 @@ for(const region of completeWorldIds)for(const seed of [0,7,17]){
   assert(layout.encounters.some(clearing=>clearing.kind==='boss')&&layout.encounters.some(clearing=>clearing.kind==='guard'),'combat clearings have different purposes');
   if(seed===0)networks.add(JSON.stringify(layout.routes.map(({ax,ay,bx,by})=>[ax,ay,bx,by])));
   if(region!=='city')assert(layout.lakes.length>0,`${region}: named water terrain must actually generate`);
-  assert.deepEqual(game.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),worldNeighbors(game.regionIndex));
+  assert.deepEqual(game.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),[...worldNeighbors(game.regionIndex)].sort((a,b)=>a-b));
   for(const type of ['merchant','supply','occupied','castle'])assert(game.settlements.sites.some(site=>site.type===type),`${region}/${seed}: missing ${type}`);
   for(const kind of ['stormcaller','warden','dog','owl','golem'])assert(game.relicSites.sites.some(site=>site.kind===kind),`${region}/${seed}: missing ${kind} recruitment`);
   assert(game.relicSites.sites.some(site=>site.type==='stonevault'),`${region}/${seed}: optional vault retained`);

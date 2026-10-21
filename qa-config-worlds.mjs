@@ -67,7 +67,7 @@ for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
 assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,12);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
-assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['rift-forest','verdant-rift','clockshadow-city','ember-realm-large'],'all fixed maps retain separate identities from the restored natural island');
+assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['rift-forest','marsh','verdant-rift','clockshadow-city','ember-realm-large'],'the remade marsh and all existing fixed maps retain separate identities');
 const rift=sections.worlds.definitions.find(world=>world.id==='rift-forest');
 assert.equal(rift.authored.areas.length,18);
 assert.equal(sections.worlds.definitions.find(world=>world.id==='forest').authored,undefined);
@@ -104,6 +104,7 @@ reject(s=>delete s.worlds.definitions.find(world=>world.id==='rift-forest').auth
 reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').authored.boundaries[0].points[0].x=Infinity,'baked collision geometry stays finite');
 reject(s=>s.worlds.definitions.find(world=>world.id==='verdant-rift').authored.worldId='forest','authored map state cannot alias the legacy forest');
 reject(s=>s.worlds.definitions.find(world=>world.id==='verdant-rift').authored.interactions.caves[0].seed=-1,'cave seeds remain finite supported values');
+reject(s=>delete s.worlds.definitions.find(world=>world.id==='marsh').authored,'the current marsh selection requires its complete authored map');
 for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   const g=new Game({hero:'princess',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
   g.time=time;g.enemies=[];g.player.x=g.player.y=0;g.player.invuln=0;

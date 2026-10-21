@@ -10,8 +10,9 @@ import { groundOffset } from './dist/terrain.js';
 // failure/retry behavior have their own asset QA and real Chromium capture.
 const harness=(search='',options={})=>createHarness(search,{...options,moduleOverrides:{cityDetailArt:{preload:async()=>{},drawProp:()=>false,ready:false},cityArtLibrary:{preload:async()=>{},draw:()=>true,coversPlayer:()=>true}}});
 const worlds=[
-  {id:'forest',radio:'world-rift-forest',preview:'world-preview',name:'裂谷林海',width:7200,height:5400},
+  {id:'rift-forest',radio:'world-rift-forest',preview:'world-preview',name:'裂谷林海',width:7200,height:5400},
   {id:'verdant-rift',radio:'world-verdant-rift',preview:'world-preview-verdant-rift',name:'苍翠断脊',width:14400,height:10800},
+  {id:'marsh',radio:'world-marsh',preview:'world-preview-marsh',name:'迷雾沼泽',width:14400,height:10800},
   {id:'clockshadow-city',radio:'world-clockshadow-city',preview:'world-preview-clockshadow-city',name:'钟影旧都',width:14400,height:10800},
   {id:'ember-realm-large',radio:'world-ember-realm-large',preview:'world-preview-ember-realm-large',name:'熔火之境',width:14400,height:10800}
 ];
@@ -52,14 +53,14 @@ const assertDestination=(h,world)=>{
 };
 
 assert.deepEqual(WORLD_IDS.slice(0,8),['forest','marsh','ruins','beach','city','mountain','snow','volcano'],'existing world identities remain stable');
-assert.equal(WORLD_IDS[8],'verdant-rift');assert.equal(WORLD_IDS[9],'clockshadow-city');assert.equal(WORLD_IDS[10],'ember-realm-large');assert.equal(WORLD_IDS.length,11);
-assert.notEqual(createRiftLayout('forest'),createRiftLayout('verdant-rift'),'authored map caches do not alias');
+assert.equal(WORLD_IDS[8],'verdant-rift');assert.equal(WORLD_IDS[9],'clockshadow-city');assert.equal(WORLD_IDS[10],'ember-realm-large');assert.equal(WORLD_IDS[11],'rift-forest');assert.equal(WORLD_IDS.length,12);
+assert.notEqual(createRiftLayout('rift-forest'),createRiftLayout('verdant-rift'),'authored map caches do not alias');
 assert.notEqual(createRiftLayout('ember-realm-large'),createRiftLayout('clockshadow-city'),'the ember world does not reuse a previous map cache');
 
 for(const world of worlds){
   const h=harness('',{coarse:true}),rail=node(h,'world-options');click(h,'start-button');
-  assert.equal(rail.children.length,4,'normal preparation exposes the three existing authored worlds plus the ember world');
-  assert.equal(node(h,'world-count').textContent,'4 张地图');
+  assert.equal(rail.children.length,5,'normal preparation exposes the four existing authored worlds and the remade marsh');
+  assert.equal(node(h,'world-count').textContent,'5 张地图');
   for(const destination of worlds){
     const portrait=node(h,destination.preview);
     assert.equal(portrait.getAttribute('role'),'img');assert.match(portrait.getAttribute('aria-label'),new RegExp(destination.name));
@@ -70,12 +71,12 @@ for(const world of worlds){
   assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0,'previewing a destination never starts an adventure');
   assert.match(node(h,'prepare-summary').textContent,new RegExp(world.name));
   assert.equal(node(h,'world-mode-note').getAttribute('aria-describedby'),'world-description');
-  assert.match(node(h,'world-description').textContent,world.id==='forest'?/南岸营地/:world.id==='clockshadow-city'?/南郊驿站.*旧城堡庭院/:world.id==='ember-realm-large'?/17.*三.*桥.*矿洞/:/西南营地.*跨河桥/);
+  assert.match(node(h,'world-description').textContent,world.id==='rift-forest'?/南岸营地/:world.id==='marsh'?/干地堤岸.*苇荡.*根林/:world.id==='clockshadow-city'?/南郊驿站.*旧城堡庭院/:world.id==='ember-realm-large'?/17.*三.*桥.*矿洞/:/西南营地.*跨河桥/);
   assert.equal(saved(h).worldId,world.id);
   selectMode(h,'dungeon');selectMode(h,'world');assert(node(h,world.radio).checked,'mode switching retains world choice');
   click(h,'prepare-back-button');click(h,'start-button');assert(node(h,world.radio).checked);
   click(h,'prepare-start-button');await h.flush();assertDestination(h,world);
-  click(h,'map-button');assert.match(node(h,'map-legend').textContent,world.id==='clockshadow-city'?/城墙、建筑与深水.*城门、街巷和石桥/:world.id==='ember-realm-large'?/密林、岩脊与熔岩.*山径、缺口和岩桥/:/深绿密林、山壁与深水/);click(h,'close-map');
+  click(h,'map-button');assert.match(node(h,'map-legend').textContent,world.id==='marsh'?/根林与深水不可步行.*干地堤岸、缺口和木桥/:world.id==='clockshadow-city'?/城墙、建筑与深水.*城门、街巷和石桥/:world.id==='ember-realm-large'?/密林、岩脊与熔岩.*山径、缺口和岩桥/:/深绿密林、山壁与深水/);click(h,'close-map');
   const previousGame=h.run('game');quiet(h);h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();
   assertDestination(h,world);assert.notEqual(h.run('game'),previousGame);assert.equal(saved(h).worldId,world.id);
   h.run('home();');click(h,'start-button');assert(node(h,world.radio).checked);
@@ -106,12 +107,12 @@ for(const [dungeonId,themeId] of [['ship','beach'],['moon','mountain']]){
   click(h,'prepare-start-button');await h.flush();assertDestination(h,worlds[1]);assert.equal(h.run('game.hero.id'),'princess');assert.equal(h.run('game.initialWeaponId'),'arrow');
 }
 
-// Unknown or old world fields fall back to the first world without erasing
-// valid independent loadout preferences. New saves store a canonical string.
-for(const worldId of [undefined,null,'rift-forest','snow','missing','__proto__',['verdant-rift'],{}]){
+// Invalid or unavailable destinations retain independent loadout preferences.
+// Valid selections always store the current canonical world identity.
+for(const worldId of [undefined,null,'snow','missing','__proto__',['verdant-rift'],{}]){
   const storage=new Map([['wild-echoes-setup',JSON.stringify({mode:'world',worldId,heroId:'elder',appearanceId:'elder-v2',weaponId:'orbit'})]]);
   const h=harness('',{storage,coarse:true});click(h,'start-button');assert(node(h,'world-rift-forest').checked);assert(node(h,'hero-elder-v2').checked);assert(node(h,'weapon-orbit').checked);
-  click(h,'prepare-start-button');await h.flush();assertDestination(h,worlds[0]);assert.equal(h.run('game.initialWeaponId'),'orbit');assert.equal(saved(h).worldId,'forest');
+  click(h,'prepare-start-button');await h.flush();assertDestination(h,worlds[0]);assert.equal(h.run('game.initialWeaponId'),'orbit');assert.equal(saved(h).worldId,'rift-forest');
 }
 
 // Browsing and keyboard focus reveal a card without selecting it. Resizing
@@ -119,11 +120,11 @@ for(const worldId of [undefined,null,'rift-forest','snow','missing','__proto__',
 {
   const h=harness(),rail=node(h,'world-options');rail.clientWidth=168;rail.scrollWidth=346;
   rail.children.forEach((card,index)=>{card.offsetLeft=index*178;card.offsetWidth=168;});
-  click(h,'start-button');node(h,'world-verdant-rift').focus();assert.equal(h.run('selectedWorldId'),'forest');assert(rail.scrollLeft>0);
+  click(h,'start-button');node(h,'world-verdant-rift').focus();assert.equal(h.run('selectedWorldId'),'rift-forest');assert(rail.scrollLeft>0);
   selectWorld(h,'verdant-rift');
   for(const [width,height] of [[320,568],[393,717],[844,390],[1440,900]]){
     h.resize(width,height);assert.equal(h.run('selectedWorldId'),'verdant-rift');assert(node(h,'world-verdant-rift').checked);assert.equal(node(h,'prepare-start-button').disabled,false);
   }
   assert(!h.fire(rail,'touchstart').defaultPrevented);assert(!h.fire(rail,'touchmove').defaultPrevented);
 }
-console.log('World selection: three existing authored destinations plus the ember world, full-map previews, launch/restart identity, distinct layouts and spawns, complete ember encounter and fixed-site ownership, 540 camera, remembered independent preferences, legacy fallback, non-selecting focus and resize state passed (VM DOM / mocked Canvas).');
+console.log('World selection: five authored destinations including the remade marsh, full-map previews, launch/restart identity, distinct layouts and spawns, complete ember encounter and fixed-site ownership, 540 camera, remembered independent preferences, invalid-selection fallback, non-selecting focus and resize state passed (VM DOM / mocked Canvas).');

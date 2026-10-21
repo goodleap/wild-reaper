@@ -7,8 +7,8 @@ import { MonsterTerritories } from './dist/monster-territories.js';
 
 const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
 const report=[];
-const completeWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city','ember-realm-large'];
-assert.deepEqual(WORLD_IDS,completeWorldIds);
+const completeWorldIds=['rift-forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city','ember-realm-large'];
+assert.deepEqual(WORLD_IDS,['forest',...completeWorldIds.slice(1),'rift-forest']);
 // Every complete map exercises real finite populations, open Boss rewards
 // and persistence. Fixed ember chests replace random supply generation.
 for(const region of completeWorldIds){
@@ -27,7 +27,7 @@ for(const region of completeWorldIds){
   assert.equal(bosses.length,layout.kind==='rift-forest'?2:1,`${region}: authored optional field bosses`);
   const group=bosses[0],boss=group.members[0],gates=g.regions.portals.map(p=>({id:p.id,state:p.state,bossId:p.bossId})),connections=[...g.regions.unlockedConnections];
   assert(boss.worldBoss&&boss.bossKind);assert(!boss.portalId);
-  if(region==='forest'){
+  if(region==='rift-forest'){
     const fresh=new Game({mode:'world'});fresh.enemies=fresh.enemies.filter(e=>!e.territoryId);fresh.bossCount=12;
     const late=new MonsterTerritories(fresh).groups.find(p=>p.kind==='boss').members[0];
     assert.deepEqual([late.maxHp,late.damage,late.xp],[boss.maxHp,boss.damage,boss.xp],'field difficulty is independent of prior Boss encounters');
@@ -75,7 +75,7 @@ for(const region of completeWorldIds){
       g.environment._waterCandidates.clear();g.environment._waterLayout.clear();g.terrain._cache.clear();
       assert.equal(JSON.stringify(g.terrain.island.layout.lakes.find(m=>m.id===lake.id)),before,'cache eviction preserves the authored lake polygon');
       assert.deepEqual(sample.map(p=>g.terrain.rift.circleFree(p.x,p.y,15,'ground')),collision,'distant fixed shores retain collision independently of streamed scenery');
-      assert.equal(g.environment._macroWaters.length,0,'legacy water pools do not repaint the authored lake and its bridges');
+      assert.equal(g.environment._macroWaters.length,layout.surfaces?.length??0,'only deliberately authored shallow pools supplement deep-water geometry');
       shores+=sample.length;continue;
     }
     g.environment.muds=[];
@@ -90,6 +90,6 @@ for(const region of completeWorldIds){
   }
   report.push({region,groups:g.territories.groups.length,guards:guards.length,lakes:layout.lakes.length,shores});
 }
-const debugForest=new Game({mode:'world',debug:true,debugWorld:'forest'});
+const debugForest=new Game({mode:'world',debug:true,debugWorld:'rift-forest'});
 assert(debugForest.territories.groups.filter(group=>group.kind==='guard').every(group=>group.members.some(enemy=>enemy.affix)),'debug facilities also retain the guarded junction elites');
 console.log(JSON.stringify({mapEncounters:'passed',worlds:report}));

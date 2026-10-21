@@ -96,13 +96,14 @@ for(const layer of nav.layers.values()){
 // Exercise the actual authored geometry, including registered site walls and
 // exact deep-water contours. These actors use the production movement method.
 const actual=[];
-for(const region of ['forest','city','mountain','marsh']){
+for(const region of ['rift-forest','city','mountain','marsh']){
   const world=new Game({mode:'world',debug:true,debugWorld:region}),terrain=world.terrain,layout=terrain.island.layout;
   assert(layout,`${region}: the real world has a layout`);
   let pair=null;
   if(layout.kind==='rift-forest'){
-    pair={from:{...layout.areas.find(a=>a.id==='13').center},to:{...layout.areas.find(a=>a.id==='08').center}};
-    assert(!terrain.riftGateOpen('bell-shortcut'),'the closed shortcut requires walking the eastern connection');
+    const areas=region==='marsh'?['07','09']:['13','08'];
+    pair={from:{...layout.areas.find(a=>a.id===areas[0]).center},to:{...layout.areas.find(a=>a.id===areas[1]).center}};
+    if(region==='rift-forest')assert(!terrain.riftGateOpen('bell-shortcut'),'the closed shortcut requires walking the eastern connection');
   }else if(region==='forest'){
     const patch=layout.patches.find(p=>p.kind==='forest'&&p.density>=1),d=Math.max(patch.rx,patch.ry)+80;
     for(let i=0;i<6&&!pair;i++){

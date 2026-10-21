@@ -10,7 +10,6 @@ import { Environment } from './dist/environment.js';
 // was already stale in that release. Pin the complete canonical v0.0.102
 // authored data instead, alongside independent body/navigation checks.
 const baseline={
-  marsh:'f31e0625da438c05e843a95ecb7ef8ab1548a5dfef30e5ed31cb309913e02e59',
   ruins:'6a890b34c07c16301f1a1e41bfb25a2d824ece470e3304eeb3c564b8f72533ec',
   beach:'b6484e2ce39ccbd4318f96633707e60f34ef8b79535650ce948411fb7cf66be1',
   city:'765fea00a703d396a9b7e757de6a1c2910608e236f20deb65c666aee47ab7244',
@@ -23,7 +22,7 @@ const fingerprint=value=>createHash('sha256').update(JSON.stringify(canonical(va
 const forest=worldForId('rift-forest').authored;
 assert.equal(fingerprint(forest),'8ea13ab1b15b2e5e625794cb63cd16cec37482658a188aa3c1df710c9d439e80','the complete v0.0.102 forest geometry, routes and content remain unchanged');
 assert.equal(new Set(WORLD_IDS).size,REGIONS.length,'world IDs must be unique');
-assert.deepEqual(WORLD_IDS,['forest',...Object.keys(baseline),'verdant-rift','clockshadow-city','ember-realm-large','rift-forest'],'all eleven existing world indices are persistent and the rift world is appended');
+assert.deepEqual(WORLD_IDS,['forest','marsh',...Object.keys(baseline),'verdant-rift','clockshadow-city','ember-realm-large','rift-forest'],'all eleven existing world indices are persistent and the rift world is appended');
 assert.equal(worldForId('__unregistered__'),REGIONS[0]);
 for(const [index,world] of REGIONS.entries()){
   assert.equal(worldForId(world.id),world);assert.equal(regionFor(index),world);
@@ -60,4 +59,4 @@ for(const [index,world] of REGIONS.entries()){
   }
   assert.equal(digest.digest('hex'),baseline[world.id],`${world.id}: existing generation changed`);
 }
-console.log('World configuration: 12 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 7 original procedural generation hashes passed.');
+console.log('World configuration: 12 immutable world identities, exact v0.0.102 forest source, separate authored caches, usable body anchors and all 6 remaining original procedural generation hashes passed.');

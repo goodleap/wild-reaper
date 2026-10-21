@@ -28,7 +28,7 @@ function validateText(value,path){
     if(!validColor(value))throw new Error(`Invalid color at ${path}`);
   }
 }
-function validateJSON(value,path='config',depth=0,budget={remaining:200000}) {
+function validateJSON(value,path='config',depth=0,budget={remaining:250000}) {
   if(depth>32||--budget.remaining<0)throw new Error('Content configuration is too large');
   if(value===null||typeof value==='boolean')return;
   if(typeof value==='number'){if(!Number.isFinite(value))throw new Error(`Non-finite number at ${path}`);return;}

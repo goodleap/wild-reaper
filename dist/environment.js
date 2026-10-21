@@ -59,8 +59,9 @@ export class Environment {
     this.muds=(game.terrain?.island?.layout?.emberScene?.surfaces||[]).map(surface=>({...surface}));
     // This map's deep-water polygons and bridge cutouts share the baked
     // terrain mask. Legacy wading pools must not repaint or close its paths.
-    this._staticWater=Array.isArray(surfaces);
-    this._macroWaters=this._staticWater?surfaces.map(surface=>({...surface})):this._fixedWater?[]:game.terrain?.island?.layout?.lakes??[];
+    const placedSurfaces=surfaces??game.terrain?.island?.layout?.surfaces;
+    this._staticWater=Array.isArray(placedSurfaces);
+    this._macroWaters=this._staticWater?placedSurfaces.map(surface=>({...surface})):this._fixedWater?[]:game.terrain?.island?.layout?.lakes??[];
     this._shore={type:'shore',island:game.terrain?.island,x:0,y:0,rx:1,ry:1};
     this._refreshClock=0;this._fixtureId=0;this._consumed=new ConsumedMushrooms();this._waterCandidates=new Map();this._waterLayout=new Map();this._contactFeet=new WeakMap();
     if(generation)this._refresh(true);

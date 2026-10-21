@@ -200,6 +200,7 @@ const paintLoading=()=>waitForPaint({requestFrame:requestAnimationFrame,setTimer
 const explorableWorlds=Object.freeze([
   Object.freeze({id:'rift-forest',name:'裂谷林海',radioId:'world-rift-forest',previewId:'world-preview',description:'从南岸营地出发，探索 18 片相连区域。沿桥梁和山口寻找通路，发现隐秘洞穴与荒野领主。'}),
   Object.freeze({id:'verdant-rift',name:'苍翠断脊',radioId:'world-verdant-rift',previewId:'world-preview-verdant-rift',description:'面积约为裂谷林海的四倍。从西南营地出发，穿越长林、岩脊与古老遗迹。沿两座跨河桥和北方山口探索广阔区域，发现回环、隐秘洞道与荒野领主。'}),
+  Object.freeze({id:'marsh',name:'迷雾沼泽',radioId:'world-marsh',previewId:'world-preview-marsh',description:'沿干地堤岸穿过苇荡和根林，寻找跨越深水的桥梁。探索隐秘洞道、沉没遗址和湿地深处的领主。'}),
   Object.freeze({id:'clockshadow-city',name:'钟影旧都',radioId:'world-clockshadow-city',previewId:'world-preview-clockshadow-city',description:'从南郊驿站出发，沿双层城墙、石桥和运河探索古城。穿过市场、工坊与钟楼广场，进入可探索的旧城堡庭院，寻找地下通道、隐秘庭院与古城领主。'}),
   Object.freeze({id:'ember-realm-large',name:'熔火之境',radioId:'world-ember-realm-large',previewId:'world-preview-ember-realm-large',description:'探索 17 片相连区域，沿三座岩桥、山口与矿脊捷径穿越熔岩峡谷。从暖灰营地出发，寻找热泉绿洲、三处矿洞、旧铸聚落与熔晶秘谷，挑战火山口和熔炉遗台的领主。'})
 ]);
@@ -628,7 +629,7 @@ function renderExpandedMap(){
   result.markers.forEach((marker,index)=>add(landmarkLabel(marker),`${landmarkState(marker)} · 距离 ${Math.round(marker.distance)}`,index+1));
   if(!result.markers.length)add(game.terrain?.island&&!indoor?'尚未发现岛上地标':'附近尚无已发现地标',indoor?'沿门口继续探索，迷雾会随视野展开。':'靠近建筑后会记录位置；已完成的建筑仍会保留。');
   $('map-legend').textContent=indoor?'箭头：你与朝向　门：出口　箱子：宝箱　菱形：已发现首领。墙体缺口为通路，暗处保留探索记忆。':'箭头：你　拱门：传送门　双翼：天使　屋顶：小屋　城垛：城堡　菱形：遗迹。灰雾尚未探索；绿门可往返，红门有首领。';
-  if(!indoor&&game.terrain.island?.layout?.kind==='rift-forest')$('map-legend').textContent=game.terrain.island.layout.artTheme==='ember'?'箭头：你　洞口：矿洞　箱子：补给。密林、岩脊与熔岩形成阻隔；沿山径、缺口和岩桥探索。':game.terrain.island.layout.artTheme==='city'?'箭头：你　洞口：地下通道　箱子：宝藏　菱形：首领或遗迹。城墙、建筑与深水不可步行；沿城门、街巷和石桥探索。':'箭头：你　路标：相邻世界　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。深绿密林、山壁与深水不可步行；沿缺口和桥梁探索。';
+  if(!indoor&&game.terrain.island?.layout?.kind==='rift-forest')$('map-legend').textContent=game.terrain.island.layout.artTheme==='marsh'?'箭头：你　路标：相邻世界　洞口：地下通道　箱子：宝藏　菱形：首领或遗迹。根林与深水不可步行；沿干地堤岸、缺口和木桥探索。':game.terrain.island.layout.artTheme==='ember'?'箭头：你　洞口：矿洞　箱子：补给。密林、岩脊与熔岩形成阻隔；沿山径、缺口和岩桥探索。':game.terrain.island.layout.artTheme==='city'?'箭头：你　洞口：地下通道　箱子：宝藏　菱形：首领或遗迹。城墙、建筑与深水不可步行；沿城门、街巷和石桥探索。':'箭头：你　路标：相邻世界　洞口：地下通道　木门：捷径　箱子：宝藏　菱形：首领或遗迹。深绿密林、山壁与深水不可步行；沿缺口和桥梁探索。';
   if(game.expedition&&!indoor){$('map-note').textContent='时间已暂停 · 副本全图 · 沿路线完成目标后撤离';$('map-legend').textContent='箭头：你与朝向　旗帜：当前目标与出口　边框：可行走区域。';target.setAttribute('aria-label','副本地图：显示路线、当前目标与撤离点');}else if(!indoor)$('map-legend').textContent+='　圆点：怪物领域。';
   if(game.debug&&indoor)$('map-legend').textContent='箭头：你与朝向　门：出口　箱子：宝箱　菱形：首领。地标预览不解锁房间视野；墙体随探索显示。';
   if(game.quests?.getMarkers().length)$('map-legend').textContent+='　金色菱形：任务目标。';

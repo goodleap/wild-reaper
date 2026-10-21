@@ -1,4 +1,5 @@
 import { SceneryArt } from '../scenery-art.js';
+import { RegionalArt } from '../regional-art.js';
 import { RiftCollision } from '../rift-collision.js';
 import { CityMapArt, drawCityOverview } from './city-map-art.js';
 import { paintCityGround, paintCityWall } from '../city-scenery-art.js';
@@ -8,6 +9,8 @@ import { EmberMapArt, drawEmberOverview } from './ember-map-art.js';
 // Detailed floor and deep forest are rasterized only in visible, bounded tiles.
 // The complete trees and shrubs at the forest edge use the world depth queue.
 export const RIFT_PALETTE=Object.freeze({ground:'#f3e4b9',groundShade:'#dfd2a9',grass:'#b4ca88',grassLight:'#c7d79e',forest:'#2c4e3d',forestDark:'#1d3a2e',forestLight:'#426750',cliff:'#68615a',cliffLight:'#91877b',cliffDark:'#454540',water:'#226a96',waterDeep:'#1d5982',waterEdge:'#438eb4',bridge:'#bb894c',bridgeLight:'#e2b879',bridgeDark:'#644b32'});
+export const MARSH_PALETTE=Object.freeze({ground:'#a2ab84',groundShade:'#879675',grass:'#91a36f',grassLight:'#b6c293',forest:'#365c48',forestDark:'#294a3d',forestLight:'#53765a',cliff:'#738477',cliffLight:'#a0aa8b',cliffDark:'#485d51',water:'#426f69',waterDeep:'#315852',waterEdge:'#799b83',bridge:'#a48c60',bridgeLight:'#d0bf8e',bridgeDark:'#56604c'});
+const paletteFor=layout=>layout?.artTheme==='marsh'?MARSH_PALETTE:RIFT_PALETTE;
 const TAU=Math.PI*2,TILE=384,BLEED=2,PIXEL_LIMIT=6*1024*1024,FONT='"PingFang SC",system-ui,sans-serif';
 const preparedLayouts=new WeakMap();
 const ROCK_KINDS=new Set(['quarry','ravine','pass','ruins','fortress']);
@@ -49,39 +52,39 @@ function prepared(layout){let data=preparedLayouts.get(layout);if(data)return da
   preparedLayouts.set(layout,data);return data;}
 function lakePath(c,lake){trace(c,lake.points);for(const hole of lake.holes||[])trace(c,hole.points||hole,false);}
 function strokeLine(c,ax,ay,bx,by,color,width){c.beginPath();c.moveTo(ax,ay);c.lineTo(bx,by);c.strokeStyle=color;c.lineWidth=width;c.stroke();}
-function bridge(c,p,{overview=false}={}){
-  const colors=RIFT_PALETTE;c.save();trace(c,p.points);c.fillStyle=colors.bridgeDark;c.fill();c.clip();
+function bridge(c,p,{overview=false,colors=RIFT_PALETTE}={}){
+  c.save();trace(c,p.points);c.fillStyle=colors.bridgeDark;c.fill();c.clip();
   c.fillStyle=colors.bridge;c.fillRect(...(()=>{const b=bounds(p.points);return [b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY];})());
   const route=p.waypoints||[];
   for(let i=1;i<route.length;i++){
     const a=point(route[i-1]),b=point(route[i]),dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy),width=p.width||130;
     if(length<1)continue;const angle=Math.atan2(dy,dx),spacing=overview?38:17;c.save();c.translate(a.x,a.y);c.rotate(angle);
-    for(let x=0;x<length+spacing;x+=spacing){const n=hash(x+p.width,i);c.fillStyle=n>.5?'#c49354':'#af7e45';c.fillRect(x+1,-width*.5,spacing-2,width);strokeLine(c,x+2,-width*.5,x+2,width*.5,colors.bridgeLight,overview?5:1.5);if(!overview)strokeLine(c,x+6,-width*.3,x+7,width*.3,'#815d383e',.8);}
+    for(let x=0;x<length+spacing;x+=spacing){const n=hash(x+p.width,i);c.fillStyle=colors===MARSH_PALETTE?(n>.5?'#ad9971':'#95835d'):(n>.5?'#c49354':'#af7e45');c.fillRect(x+1,-width*.5,spacing-2,width);strokeLine(c,x+2,-width*.5,x+2,width*.5,colors.bridgeLight,overview?5:1.5);if(!overview)strokeLine(c,x+6,-width*.3,x+7,width*.3,'#815d383e',.8);}
     for(const side of [-1,1]){const y=side*(width*.5-8);strokeLine(c,0,y,length,y,colors.bridgeDark,overview?12:8);strokeLine(c,0,y-2,length,y-2,colors.bridgeLight,overview?5:2.5);for(let x=12;x<length;x+=74){c.fillStyle=colors.bridgeDark;c.fillRect(x-5,y-8,10,16);c.fillStyle=colors.bridgeLight;c.fillRect(x-3,y-8,6,4);}}
     c.restore();
   }
   c.restore();trace(c,p.points);c.strokeStyle=colors.bridgeDark;c.lineWidth=overview?9:2;c.stroke();
 }
 function base(c,layout,{viewBounds,overview=false}={}){
-  const p=RIFT_PALETTE,data=prepared(layout),b=viewBounds||layout.bounds;c.fillStyle=p.forest;c.fillRect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);
+  const p=paletteFor(layout),marsh=layout.artTheme==='marsh',data=prepared(layout),b=viewBounds||layout.bounds;c.fillStyle=p.forest;c.fillRect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);
   // A subdued soil seam sits below full vegetation silhouettes. It is not a
   // painted cliff strip; the landform's material comes from actual scenery.
   if(overview){rings(c,layout.solidBoundaries||layout.boundaries||[]);c.strokeStyle='#364a32';c.lineWidth=20;c.stroke();}
   for(const {value:lake,bounds:b}of data.lakes){if(!overlaps(b,viewBounds,10))continue;lakePath(c,lake);c.fillStyle=p.water;c.fill('evenodd');if(!overview){c.save();lakePath(c,lake);c.clip('evenodd');c.strokeStyle='#5b98a324';c.lineWidth=70;c.stroke();c.strokeStyle='#81b1ad39';c.lineWidth=30;c.stroke();c.strokeStyle='#add0be75';c.lineWidth=6;c.stroke();c.restore();}else{c.strokeStyle=p.waterEdge;c.lineWidth=16;c.stroke();}}
   rings(c,layout.boundaries||[]);c.fillStyle=p.ground;c.fill('evenodd');
   c.save();rings(c,layout.boundaries||[]);c.clip('evenodd');
-  c.strokeStyle=overview?p.grass:'#9caf6b66';c.lineWidth=overview?26:14;c.stroke();
+  c.strokeStyle=overview?p.grass:marsh?'#71856866':'#9caf6b66';c.lineWidth=overview?26:14;c.stroke();
   for(const {value:area,bounds:b}of data.areas){if(!overlaps(b,viewBounds))continue;const quarry=area.kind==='quarry',ruin=['ruins','fortress','pass'].includes(area.kind);if(!quarry&&!ruin)continue;
-    if(overview){trace(c,area.points);c.fillStyle=quarry?'#ede0bd':'#e4ddbd';c.fill();}
-    else{const radius=Math.max(b.maxX-b.minX,b.maxY-b.minY)*.58,g=c.createRadialGradient(area.center.x,area.center.y,20,area.center.x,area.center.y,radius);g.addColorStop(0,quarry?'#c5bea744':'#c6ccb75c');g.addColorStop(.65,quarry?'#d4c8a82c':'#cbd2b33b');g.addColorStop(1,'#ddd4b300');c.fillStyle=g;c.fillRect(area.center.x-radius,area.center.y-radius,radius*2,radius*2);}}
-  for(const {value:patch,bounds:b}of data.patches){if(!overlaps(b,viewBounds,12))continue;trace(c,patch.points);if(!overview){c.strokeStyle='#b4ca8844';c.lineWidth=18;c.stroke();}c.fillStyle=p.grass;c.fill();}
+    if(overview){trace(c,area.points);c.fillStyle=marsh?'#b1b394':quarry?'#ede0bd':'#e4ddbd';c.fill();}
+    else{const radius=Math.max(b.maxX-b.minX,b.maxY-b.minY)*.58,g=c.createRadialGradient(area.center.x,area.center.y,20,area.center.x,area.center.y,radius);g.addColorStop(0,marsh?'#b5b69a6b':quarry?'#c5bea744':'#c6ccb75c');g.addColorStop(.65,marsh?'#b1b29432':quarry?'#d4c8a82c':'#cbd2b33b');g.addColorStop(1,'#ddd4b300');c.fillStyle=g;c.fillRect(area.center.x-radius,area.center.y-radius,radius*2,radius*2);}}
+  for(const {value:patch,bounds:b}of data.patches){if(!overlaps(b,viewBounds,12))continue;trace(c,patch.points);if(!overview){c.strokeStyle=marsh?'#91a36f44':'#b4ca8844';c.lineWidth=18;c.stroke();}c.fillStyle=p.grass;c.fill();}
   c.restore();
-  for(const {value:p,bounds:b}of data.bridges)if(overlaps(b,viewBounds,10))bridge(c,p,{overview});
+  for(const {value:passage,bounds:b}of data.bridges)if(overlaps(b,viewBounds,10))bridge(c,passage,{overview,colors:p});
 }
 // Deep thickets are full painted scenery, not ellipses clipped to the path.
 // Anchors are evaluated against the same indexed mask as movement. Near-edge
 // scenery is reserved for the depth-sorted props; far crowns are cheap stamps.
-function blockedScenery(c,layout,view,scenery){
+function blockedScenery(c,layout,view,scenery,regional){
   const data=prepared(layout),mask=data.collision.high;
   for(let gy=Math.floor((view.minY-150)/62);gy<=Math.floor((view.maxY+150)/62);gy++)for(let gx=Math.floor((view.minX-150)/71);gx<=Math.floor((view.maxX+150)/71);gx++){
     const n=hash(gx+13,gy+11),m=hash(gy-33,gx+4),x=(gx+.15+n*.7)*71,y=(gy+.1+m*.8)*62;
@@ -89,6 +92,7 @@ function blockedScenery(c,layout,view,scenery){
     let nearest=null,best=Infinity;for(const area of layout.areas){const d=(area.center.x-x)**2+(area.center.y-y)**2;if(d<best){best=d;nearest=area;}}
     const stony=rockyArea(layout,nearest),seed=gx*37+gy*59;
     if(stony&&n<.81){scenery.drawRock(c,{x,y:y+16,r:36+n*24,rockForm:[0,1,2,4][Math.floor(m*4)],riftPalette:true});if(n>.55)scenery.drawShrub(c,{x:x-18,y:y+27,scale:.55+n*.22,seed,riftPalette:true});}
+    else if(regional&&n<.19&&distance>150){regional.drawDeadTree(c,{x,y:y+46,scale:.86+m*.2,treeForm:Math.floor(m*5)});scenery.drawShrub(c,{x:x-12,y:y+48,scale:.57+n*.5,seed,riftPalette:true});}
     else scenery.drawCanopy(c,{x,y,scale:.81+n*.35,treeForm:Math.floor(m*5),riftPalette:true});
   }
 }
@@ -103,15 +107,44 @@ function shoreDetails(c,layout,view){
     const xx=x+nx*7,yy=y+ny*7;
     // Small warm stones and short reeds bridge water, wet earth and grass.
     if(n<.33){for(let i=0;i<3;i++){const px=xx+(hash(x+i,y)-.5)*21,py=yy+(hash(y+i,x)-.5)*10;c.beginPath();c.moveTo(px-3,py);c.quadraticCurveTo(px-4,py-4,px,py-4.5);c.quadraticCurveTo(px+5,py-3,px+4,py+1);c.quadraticCurveTo(px,py+3,px-3,py);c.fillStyle=i%2?'#8b967f':'#b5b79b';c.fill();strokeLine(c,px-1,py-3,px+3,py-2,'#e1d9b178',.8);}}
+    else if(layout.artTheme==='marsh')marshReeds(c,xx,yy,.83+n*.3,x+y);
     else if(n>.53){for(let i=0;i<5;i++){const px=xx+(i-2)*3,py=yy+(i%2)*2,h=7+hash(i+x,y)*17;c.strokeStyle=i%2?'#7e9d5b':'#507651';c.lineWidth=1.2;c.beginPath();c.moveTo(px,py);c.quadraticCurveTo(px+(i-2)*.9,py-h*.55,px+(i-2)*2,py-h);c.stroke();if(i===1||i===3)strokeLine(c,px+(i-2)*2,py-h,px+(i-2)*2+.5,py-h+5,'#78684a',2.3);}}
   }
 }
-function groundDetails(c,layout,view,scenery){
-  const p=RIFT_PALETTE,data=prepared(layout);
+function marshReeds(c,x,y,s,seed){
+  // Short rooted fans are floor cover, painted once into the terrain tile.
+  for(let i=0;i<5;i++){const dx=(i-2)*2.2*s,lean=(i-2)*3*s,h=(12+hash(seed+i,13)*19)*s;
+    c.beginPath();c.moveTo(x+dx,y);c.quadraticCurveTo(x+dx+lean*.25,y-h*.68,x+dx+lean,y-h);c.quadraticCurveTo(x+dx+lean*.12,y-h*.4,x+dx+1.3*s,y);c.fillStyle=['#597852','#788e60','#a6b37a','#66855a','#92a46e'][i];c.fill();
+    if(i===1||i===3)strokeLine(c,x+dx+lean,y-h,x+dx+lean+.4*s,y-h-5*s,'#a49c69',2*s);
+  }
+}
+function marshFloorPatches(c,layout,view,regional){
+  // Transparent peat, moss and worn masonry share the established regional
+  // sprites. Jittered world anchors keep the cached tiles seamless in motion.
+  const spacing=340,reach=200;
+  for(let gy=Math.floor((view.minY-reach)/spacing);gy<=Math.floor((view.maxY+reach)/spacing);gy++)for(let gx=Math.floor((view.minX-reach)/spacing);gx<=Math.floor((view.maxX+reach)/spacing);gx++){
+    const n=hash(gx+91,gy-37);if(n<.27)continue;
+    const x=(gx+.12+hash(gx-8,gy+31)*.76)*spacing,y=(gy+.12+hash(gy+6,gx-71)*.76)*spacing,s=.8+n*.52;
+    if(x+146*s<view.minX||x-146*s>view.maxX||y+108*s<view.minY||y-108*s>view.maxY)continue;
+    const image=regional._patch('marsh',Math.floor(n*3));c.drawImage(image.canvas,x-146*s,y-108*s,292*s,216*s);
+  }
+  for(const {value:area,bounds:b}of prepared(layout).areas){
+    if(!['ruins','fortress','village'].includes(area.kind)||!overlaps(b,view,200))continue;
+    const offsets=[[-280,100],[-95,175],[170,115],[290,-120],[80,-210],[-220,-175]],seed=Number(area.id)||0;
+    for(let i=0;i<offsets.length;i++){
+      const [dx,dy]=offsets[i],n=hash(seed*17+i,83),x=area.center.x+dx+(n-.5)*70,y=area.center.y+dy+(hash(i+31,seed)-.5)*65,s=.9+n*.36;
+      if(x+146*s<view.minX||x-146*s>view.maxX||y+108*s<view.minY||y-108*s>view.maxY)continue;
+      const image=regional._patch('ruins',i%3);c.drawImage(image.canvas,x-146*s,y-108*s,292*s,216*s);
+    }
+  }
+}
+function groundDetails(c,layout,view,scenery,regional){
+  const p=paletteFor(layout),marsh=layout.artTheme==='marsh',data=prepared(layout);
   c.save();rings(c,layout.boundaries||[]);c.clip('evenodd');
+  if(marsh&&regional)marshFloorPatches(c,layout,view,regional);
   for(let gy=Math.floor(view.minY/39)-1;gy<=Math.floor(view.maxY/39)+1;gy++)for(let gx=Math.floor(view.minX/39)-1;gx<=Math.floor(view.maxX/39)+1;gx++){
     const n=hash(gx+17,gy),x=(gx+hash(gx,gy+7))*39,y=(gy+hash(gy,gx+39))*39;
-    c.fillStyle=n>.5?'#8a835c30':'#fff6d777';c.beginPath();c.ellipse(x,y,1+n*2,.5+n*.5,-.2,0,TAU);c.fill();
+    c.fillStyle=marsh?(n>.5?'#4c665b32':'#e1ddba65'):(n>.5?'#8a835c30':'#fff6d777');c.beginPath();c.ellipse(x,y,1+n*2,.5+n*.5,-.2,0,TAU);c.fill();
     if(n>.78){strokeLine(c,x+5,y-1,x+8,y-5,'#99a56777',1);strokeLine(c,x+7,y,x+12,y-3,'#8ca26477',1);}
   }
   for(const {value:patch,bounds:b}of data.patches){if(!overlaps(b,view))continue;c.save();trace(c,patch.points);c.clip();
@@ -124,18 +157,20 @@ function groundDetails(c,layout,view,scenery){
     for(let gy=Math.floor(Math.max(view.minY,b.minY)/83)-1;gy<=Math.floor(Math.min(view.maxY,b.maxY)/83)+1;gy++)for(let gx=Math.floor(Math.max(view.minX,b.minX)/83)-1;gx<=Math.floor(Math.min(view.maxX,b.maxX)/83)+1;gx++){
       const n=hash(gx+41,gy-19);if(n<.38)continue;const x=(gx+.2+n*.6)*83,y=(gy+.15+hash(gy+9,gx)*.7)*83;
       c.fillStyle='#7b965242';c.beginPath();c.ellipse(x,y+1,12+n*6,5,0,0,TAU);c.fill();
-      for(let i=0;i<5;i++){const xx=x+(i-2)*6,yy=y-5-Math.sin(i*Math.PI/4)*(7+n*6);strokeLine(c,x,y,xx,yy,'#69894f',1);c.beginPath();c.ellipse((x+xx)/2,(y+yy)/2,7+n*2,2.6,Math.atan2(yy-y,xx-x),0,TAU);c.fillStyle=i%2?'#8eaf65':'#a5be7b';c.fill();}
+      if(marsh&&n>.57)marshReeds(c,x,y,.65+n*.25,gx*17+gy*23);
+      else for(let i=0;i<5;i++){const xx=x+(i-2)*6,yy=y-5-Math.sin(i*Math.PI/4)*(7+n*6);strokeLine(c,x,y,xx,yy,'#69894f',1);c.beginPath();c.ellipse((x+xx)/2,(y+yy)/2,7+n*2,2.6,Math.atan2(yy-y,xx-x),0,TAU);c.fillStyle=i%2?'#8eaf65':'#a5be7b';c.fill();}
     }c.restore();
   }c.restore();
   for(const {value:lake,bounds:b}of data.lakes){if(!overlaps(b,view))continue;c.save();lakePath(c,lake);c.clip('evenodd');
     for(let gy=Math.floor(view.minY/50)-1;gy<=Math.floor(view.maxY/50)+1;gy++)for(let gx=Math.floor(view.minX/61)-1;gx<=Math.floor(view.maxX/61)+1;gx++){
-      const n=hash(gx+71,gy),x=(gx+n)*61,y=(gy+hash(gy,gx+31))*50;strokeLine(c,x,y,x+11+n*22,y-1,'#8ac6cc30',1);strokeLine(c,x+4,y+4,x+10+n*10,y+3,'#103e6c33',1.5);
+      const n=hash(gx+71,gy),x=(gx+n)*61,y=(gy+hash(gy,gx+31))*50;strokeLine(c,x,y,x+11+n*22,y-1,marsh?'#b1c6a437':'#8ac6cc30',1);strokeLine(c,x+4,y+4,x+10+n*10,y+3,marsh?'#254c4538':'#103e6c33',1.5);
+      if(marsh&&n>.9){for(let i=0;i<3;i++){const xx=x+(i-1)*10,yy=y+(i%2)*5,rx=4+hash(gx+i,gy)*4;c.beginPath();c.ellipse(xx,yy,rx,rx*.48,-.12,0,TAU);c.fillStyle=i%2?'#8da374':'#708f68';c.fill();strokeLine(c,xx,yy,xx+rx,yy+.5,'#365f4e',.8);}}
     }c.restore();
   }
-  blockedScenery(c,layout,view,scenery);
+  blockedScenery(c,layout,view,scenery,regional);
   undergrowth(c,layout,view,scenery);
   shoreDetails(c,layout,view);
-  for(const {value:p,bounds:b}of data.bridges)if(overlaps(b,view,10))bridge(c,p);
+  for(const {value:passage,bounds:b}of data.bridges)if(overlaps(b,view,10))bridge(c,passage,{colors:p});
 }
 
 export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,viewBounds}={}){
@@ -153,7 +188,7 @@ export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,
 
 export class RiftArt {
   constructor(makeCanvas=()=>document.createElement('canvas'),{now=()=>globalThis.performance?.now?.()??Date.now()}={}){this.makeCanvas=makeCanvas;this.now=now;this.scenery=new SceneryArt(makeCanvas);this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;this.motion=null;this.pending=null;this.groundStats={visibleBuilds:0,prefetchBuilds:0,prefetchHits:0,budgetSkips:0,budgetOverruns:0,prefetchMs:0,maxPrefetchMs:0,lastVisibleBuilds:0,lastPrefetchBuilds:0,lastPrefetchMs:0};}
-  get cacheStats(){const sources=[this.scenery.cacheStats,this.cityArt?.cacheStats,this.emberArt?.cacheStats].filter(Boolean),sum=key=>sources.reduce((total,source)=>total+(source[key]||0),0);return {entries:this.cache.size+sum('entries'),pixels:this.pixels+sum('pixels'),bytes:this.pixels*4+sum('bytes'),limitBytes:PIXEL_LIMIT*4+sum('limitBytes'),builds:this.builds+sum('builds')};}
+  get cacheStats(){const sources=[this.scenery.cacheStats,this.cityArt?.cacheStats,this.emberArt?.cacheStats,this.marshRegional?.cacheStats].filter(Boolean),sum=key=>sources.reduce((total,source)=>total+(source[key]||0),0);return {entries:this.cache.size+sum('entries'),pixels:this.pixels+sum('pixels'),bytes:this.pixels*4+sum('bytes'),limitBytes:PIXEL_LIMIT*4+sum('limitBytes'),builds:this.builds+sum('builds')};}
   _key(layout,tx,ty){let id=this.ids.get(layout);if(!id){id=++this.nextId;this.ids.set(layout,id);}return `${id}:${tx}:${ty}`;}
   _reserve(pixels,protectedKeys,optional){
     while(this.pixels+pixels>PIXEL_LIMIT&&this.cache.size){let oldest;
@@ -166,7 +201,7 @@ export class RiftArt {
   }
   _tile(layout,tx,ty,protectedKeys,optional=false){const key=this._key(layout,tx,ty);let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
     const side=TILE+BLEED*2;if(!this._reserve(side*side,protectedKeys,optional))return null;
-    const canvas=this.makeCanvas();canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else if(layout.artTheme==='ember'){this.emberArt??=new EmberMapArt(this.makeCanvas);this.emberArt.paintTile(c,layout,view);}else{base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery);}
+    const canvas=this.makeCanvas();canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else if(layout.artTheme==='ember'){this.emberArt??=new EmberMapArt(this.makeCanvas);this.emberArt.paintTile(c,layout,view);}else{if(layout.artTheme==='marsh')this.marshRegional??=new RegionalArt(this.makeCanvas);base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery,layout.artTheme==='marsh'?this.marshRegional:null);}
     image={canvas,pixels:side*side,prefetched:optional};this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
   }
   _anticipate(layout,view,visible,now){
