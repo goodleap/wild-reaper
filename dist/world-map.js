@@ -4,6 +4,7 @@ import { REGIONS } from './world-definitions.js';
 import { COAST_RULES } from './placement-rules.js';
 import { drawWorldLayoutMap } from './worlds/world-layout-art.js';
 import { drawShipSceneMap } from './ship-art.js';
+import { drawMoonMap } from './moon-art.js';
 
 export const WORLD_MAP_RULES=Object.freeze({range:900,discoveryRadius:340,explorationCell:100});
 const TAU=Math.PI*2;
@@ -122,7 +123,8 @@ export class WorldMap {
     for(let gx=ox+step;gx<x+width-pad;gx+=step)segment(ctx,gx,y+pad,gx,y+height-pad);
     for(let gy=oy;gy>y+pad;gy-=step)segment(ctx,x+pad,gy,x+width-pad,gy);
     for(let gy=oy+step;gy<y+height-pad;gy+=step)segment(ctx,x+pad,gy,x+width-pad,gy);
-    if(game.expedition?.definition.scenes){ctx.save();ctx.translate(cx-p.x*scale,cy-p.y*scale);ctx.scale(scale,scale);drawShipSceneMap(ctx,game.expedition.sceneDefinition,{scale});ctx.restore();}
+    if(game.expedition?.id==='moon'){ctx.save();ctx.translate(cx-p.x*scale,cy-p.y*scale);ctx.scale(scale,scale);drawMoonMap(ctx,game.expedition.definition,{scale});ctx.restore();}
+    else if(game.expedition?.definition.scenes){ctx.save();ctx.translate(cx-p.x*scale,cy-p.y*scale);ctx.scale(scale,scale);drawShipSceneMap(ctx,game.expedition.sceneDefinition,{scale});ctx.restore();}
     else if(game.expedition){const b=game.terrain.bounds;ctx.fillStyle='#657d7030';ctx.strokeStyle='#b2bc9d';ctx.lineWidth=1.2;ctx.fillRect(cx+(b.minX-p.x)*scale,cy+(b.minY-p.y)*scale,(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);ctx.strokeRect(cx+(b.minX-p.x)*scale,cy+(b.minY-p.y)*scale,(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);}
     if(game.dungeon?.active){
       const vision=game.dungeon.vision;
@@ -227,7 +229,8 @@ export class WorldMap {
     const markers=this.getMarkers(game,{range:Math.hypot(b.maxX-b.minX,b.maxY-b.minY)+1});
     ctx.save();rounded(ctx,x,y,width,height,9);ctx.fillStyle='#101f1ce8';ctx.fill();ctx.strokeStyle='#a6b99b50';ctx.stroke();
     ctx.save();rounded(ctx,x+6,y+6,width-12,height-12,5);ctx.clip();ctx.fillStyle='#657d7030';ctx.strokeStyle='#b2bc9d';ctx.lineWidth=1.2;
-    if(game.expedition.definition.scenes){ctx.save();ctx.translate(cx-center.x*scale,cy-center.y*scale);ctx.scale(scale,scale);drawShipSceneMap(ctx,game.expedition.sceneDefinition,{scale,labels:false});ctx.restore();}
+    if(game.expedition.id==='moon'){ctx.save();ctx.translate(cx-center.x*scale,cy-center.y*scale);ctx.scale(scale,scale);drawMoonMap(ctx,game.expedition.definition,{scale});ctx.restore();}
+    else if(game.expedition.definition.scenes){ctx.save();ctx.translate(cx-center.x*scale,cy-center.y*scale);ctx.scale(scale,scale);drawShipSceneMap(ctx,game.expedition.sceneDefinition,{scale,labels:false});ctx.restore();}
     else {ctx.fillRect(mx(b.minX),my(b.minY),(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);ctx.strokeRect(mx(b.minX),my(b.minY),(b.maxX-b.minX)*scale,(b.maxY-b.minY)*scale);}
     ctx.fillStyle='#bed0b1';ctx.font=`600 15px ${FONT}`;ctx.textAlign='center';ctx.fillText('N',cx,y+20);
     for(const [index,marker]of markers.entries()){

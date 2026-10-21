@@ -25,6 +25,8 @@ npm test
 
 破浪甲板的离线源为 `scripts/build-ship-map.py`，用 Python 标准库重建 `dist/config/stages.json` 的 `ship.scenes`；随后构建配置并运行 `npm run test:ship`。各层只载入当前场景，往返保留战斗和拾取状态；地图绘制与移动碰撞读取同一场景轮廓。
 
+寂静月面使用 `python scripts/build-moon-map.py` 重建 `dist/config/stages.json` 中的 `moon`，随后构建配置并运行 `npm run test:moon`。地形绘制、碰撞和地图预览共用 `landform` 数据，战斗关口使用 `gateSpan` 对应的隘口范围。
+
 地形滑动、植物色板和独立地图的集成检查可运行：
 
 ```sh

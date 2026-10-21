@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { EXPEDITIONS } from './dist/expedition-definitions.js';
 import { ExpeditionTerrain } from './dist/expedition-run.js';
+import { MoonTerrain } from './dist/moon-terrain.js';
 import { groundOffset } from './dist/terrain.js';
+import { movementProfile } from './dist/height-rules.js';
 import { validateContentPack } from './dist/content-schema.js';
 import { getConfigSnapshot } from './dist/content-config.js';
 
@@ -36,7 +38,7 @@ function reachable(terrain,start,r,targets=[]){
 // Connected ship floors have independent populations and entry points;
 // qa-ship-scenes.mjs replays their actual stairs and full-body routes.
 for(const d of EXPEDITIONS.filter(d=>!d.scenes)){
-  const terrain=new ExpeditionTerrain(d),canReach=reachable(terrain,d.start,22,[d.exit,...d.supplies,...d.segments.map(s=>s.center)]);
+  const terrain=d.id==='moon'?new MoonTerrain(d):new ExpeditionTerrain(d),canReach=reachable(terrain,d.start,22,[d.exit,...d.supplies,...d.segments.map(s=>s.center)]);
   assert(canReach(d.exit),`${d.id}: exit reachable at companion radius`);
   for(const p of [...d.supplies,...d.segments.map(s=>s.center)])assert(canReach(p),`${d.id}: objective/supply ${p.x},${p.y} reachable`);
   for(const path of d.paths)for(let i=1;i<path.points.length;i++){
@@ -45,12 +47,12 @@ for(const d of EXPEDITIONS.filter(d=>!d.scenes)){
   }
   for(const prop of terrain.query(-4000,-4000,4000,4000)){
     assert(!terrain.isFree(prop.x,prop.y,15),`${d.id}: visible solid has physical collision`);
-    assert(prop.visual&&prop.visual.halfWidth>0&&prop.visual.top>0,'solid has an explicit visual footprint');
+    assert(prop.moonSolid?.kind==='crater'?prop.visual===false:prop.visual&&prop.visual.halfWidth>0&&prop.visual.top>0,'depth scenery has an explicit visual footprint; lunar craters are painted in the ground pass');
   }
   const g=new Game({mode:'dungeon',dungeonId:d.id}),run=g.expedition;
   for(const group of run.groups)for(const e of group.members){
     const foot={x:e.x,y:e.y+groundOffset(e)};
-    assert(g.terrain.isFree(foot.x,foot.y,e.r),`${d.id}: group ${group.index} spawns outside solid scenery`);
+    assert(g.terrain.isFree(foot.x,foot.y,e.r,movementProfile(e)),`${d.id}: group ${group.index} spawns outside solid scenery in its own height layer`);
     assert.deepEqual(e.expeditionHome,foot,'home uses the resolved spawn, not an obstructed original point');
   }
   const count=g.adventure.props.length,supply=g.adventure.props[0];
@@ -61,10 +63,11 @@ for(const d of EXPEDITIONS.filter(d=>!d.scenes)){
   assert.equal(new Game({mode:'dungeon',dungeonId:d.id}).adventure.props.length,count,'new expedition restores its own supplies');
 }
 
-for(const [id,from,to]of [
-  ['moon',{x:0,y:130},{x:0,y:-180}],
-])for(const companion of [false,true]){
-  const g=new Game({mode:'dungeon',dungeonId:id}),e=g._spawnEnemy('beetle');
+for(const companion of [false,true]){
+  const id='moon',g=new Game({mode:'dungeon',dungeonId:id}),e=g._spawnEnemy('beetle');
+  g.terrain=new MoonTerrain(g.expedition.definition);
+  const pair=g.expedition.definition.landform.solids.map(s=>({from:{x:s.x-s.width/2-65,y:s.y},to:{x:s.x+s.width/2+65,y:s.y}})).find(({from,to})=>g.terrain.isFree(from.x,from.y,22)&&g.terrain.isFree(to.x,to.y,22)&&g.terrain.firstBlocker(from.x,from.y,to.x,to.y,22));
+  assert(pair,'moon has a physical obstacle with reachable flanks');const {from,to}=pair;
   Object.assign(e,{x:from.x,y:from.y-groundOffset(e,companion),r:22,speed:140,isCompanion:companion});
   // Set the foot again after radius adjustment, which can scale enemy art.
   e.y=from.y-groundOffset(e,companion);g.enemies=[e];
@@ -85,7 +88,7 @@ for(const [id,from,to]of [
 for(const mutate of [
   d=>{d.paths[0].width=Infinity;},d=>{d.paths[0].points[0].x=1e8;},
   d=>{d.details[0].kind='unhandled';},d=>{d.details[0].rx=-1;},
-  d=>{d.supplies[0].drop='unknown';},d=>{d.obstacles[0].treeForm=8;},
+  d=>{d.supplies[0].drop='unknown';},d=>{d.landform.solids[0].heightBand='unknown';},
 ]){
   const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions.find(d=>d.id==='moon'));
   assert.throws(()=>validateContentPack(pack),/Invalid world configuration|Non-finite number/);

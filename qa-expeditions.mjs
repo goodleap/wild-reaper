@@ -33,7 +33,7 @@ for(const d of EXPEDITIONS){
 }
 
 // The ship's connected scenes, independent populations and return state are
-// exercised by qa-ship-scenes.mjs. The moon retains its full linear gate checks.
+// exercised by qa-ship-scenes.mjs. Moon gates cross the authored narrow passes.
 for(const id of ['moon']){
   const g=make(id),run=g.expedition,d=run.definition,axis=d.axis;
   const count=g.enemies.length;
@@ -43,7 +43,7 @@ for(const id of ['moon']){
     const next=run.groups[group.index+1]?.members[0];
     if(next){const hp=next.hp;assert.equal(g._hurtEnemy(next,hp+1),0,'later groups cannot be sniped through a closed segment gate');assert.equal(next.hp,hp);}
     const center=group.definition.center;place(g,center);run.update(.05);assert(group.members.every(enemy=>enemy.guardActive),'approach activates the current group');
-    const gate=group.definition.gate,direction=axis==='x'?1:-1,from={x:axis==='x'?gate-direction*60:0,y:axis==='y'?gate-direction*60:0},delta={x:axis==='x'?direction*120:0,y:axis==='y'?direction*120:0};
+    const gate=group.definition.gate,span=group.definition.gateSpan,middle=span?(span.minX+span.maxX)/2:0,direction=axis==='x'?1:-1,from={x:axis==='x'?gate-direction*60:middle,y:axis==='y'?gate-direction*60:0},delta={x:axis==='x'?direction*120:0,y:axis==='y'?direction*120:0};
     const closed=g.terrain.moveCircle(from.x,from.y,delta.x,delta.y,15);
     assert(direction*(closed[axis]-gate)<0,'closed gate blocks forward movement');
     assert(g.enemies.includes(group.members[0]));

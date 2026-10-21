@@ -2,6 +2,7 @@ import { TERRAIN_GENERATOR_IDS } from '../worlds/generator-ids.js';
 import { validateWorldLayout } from './world-layout.js';
 import { validateRiftLayout } from './rift-layout.js';
 import { validateExpeditionScenes } from './expedition-scenes.js';
+import { validateMoonLandform } from './moon-landform.js';
 import { WATER_SHAPES } from '../water-geometry.js';
 
 const persistentWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
@@ -121,6 +122,7 @@ export function validateWorlds(sections){
       const world=worldDefs.find(w=>w.id===d.worldMapId);
       if(d.worldMapId!==d.themeId||!world.naturalIsland||d.axis!=='arena')fail(p+'.worldMapId layout');
     }
+    if(d.id==='moon'&&d.scenes!=null)fail(p+'.scene mode');
     if(d.id==='ship'||d.scenes!=null){validateExpeditionScenes(d,p,{enemyIds,pickupTypes:sections.economy?.pickups?.types||[]});continue;}
     const bounds=object(d.bounds,p+'.bounds');for(const key of ['minX','maxX','minY','maxY'])number(bounds[key],p+'.bounds.'+key,-1e5,1e5);
     if(bounds.maxX-bounds.minX<300||bounds.maxY-bounds.minY<300)fail(p+'.bounds.size');
@@ -143,7 +145,7 @@ export function validateWorlds(sections){
       for(const [i,vertex]of list(path.points,q+'.points',2,64).entries())point(vertex,q+'.points.'+i,10);
     }
     for(const [index,detail]of list(d.details||[],p+'.details',0,48).entries()){
-      const q=p+'.details.'+index;if(!['hatch','rope','crater','landing','wreckage','clearing','grove','camp'].includes(detail.kind))fail(q+'.kind');
+      const q=p+'.details.'+index;if(!['hatch','rope','crater','landing','wreckage','clearing','grove','camp',...(d.id==='moon'?['beacon','tracks','scuff','rubble']:[])].includes(detail.kind))fail(q+'.kind');
       number(detail.rx,q+'.rx',1,320);number(detail.ry,q+'.ry',1,320);point(detail,q);
     }
     for(const [index,supply]of list(d.supplies||[],p+'.supplies',0,12).entries()){
@@ -163,6 +165,7 @@ export function validateWorlds(sections){
         if(count<1||count>60)fail(q+'.enemy count');
       }
     }
+    if(d.id==='moon')validateMoonLandform(d,p);
   }
   const reservations=new Set();for(const spec of list(geo.siteReservations,'geography.siteReservations',1,128)){
     list(spec,'site reservation',4,4);text(spec[0],'reservation.id');if(reservations.has(spec[0]))fail('duplicate site reservation');reservations.add(spec[0]);number(spec[1],'reservation.angle',-1e5,1e5);positive(spec[2],'reservation.distance');positive(spec[3],'reservation.radius');

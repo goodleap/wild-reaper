@@ -8,6 +8,7 @@ import { Settlements } from './settlements.js';
 import { RelicSites } from './relic-sites.js';
 import { ExpeditionScenes, expeditionAdventure } from './expedition-scenes.js';
 import { ShipTerrain } from './ship-terrain.js';
+import { MoonTerrain } from './moon-terrain.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const foot=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
@@ -80,7 +81,7 @@ export class ExpeditionRun {
     g.regionIndex=REGIONS.findIndex(region=>region.id===(d.worldMapId??d.themeId));g.region=regionFor(g.regionIndex);g.worldId=g.startWorldId=g.region.id;g.mapId=`expedition:${this.id}`;
     // A borrowed island changes terrain, not the challenge's elapsed-time
     // difficulty or its existing wave and evacuation rules.
-    g.terrain=this.scenes?new ShipTerrain(this.sceneDefinition,d.themeId):new ExpeditionTerrain(d);g._islandWorlds=false;g.enemies=[];g.gems=[];g.coins=[];g.bullets=[];g.enemyBullets=[];g.effects=[];
+    g.terrain=this.scenes?new ShipTerrain(this.sceneDefinition,d.themeId):this.id==='moon'?new MoonTerrain(d):new ExpeditionTerrain(d);g._islandWorlds=false;g.enemies=[];g.gems=[];g.coins=[];g.bullets=[];g.enemyBullets=[];g.effects=[];
     if(this.scenes){g.mapId=`expedition:${this.id}:${this.currentSceneId}`;g.sceneKind='expedition';}
     g.player.x=d.start.x;g.player.y=d.start.y-groundOffset(g.player,true);g._moveEntity(g.player,0,0,true);
     g.portal=null;g.regions.portals=[];g.regions.guarded=true;g.regions.states.clear();g.regions._rewardQueue=[];g.regions.rewardPortal=null;g._regionRewardPending=false;
@@ -106,7 +107,7 @@ export class ExpeditionRun {
   _setGates(){
     if(this.scenes)return;
     const b=this.definition.bounds,axis=this.definition.axis;
-    this.game.terrain.setStructures(this.groups.filter(group=>!group.cleared).map(group=>({id:`expedition-gate:${group.index}`,type:'log',variant:'expedition-gate',visual:false,r:14,angle:axis==='x'?Math.PI/2:0,halfLength:axis==='x'?(b.maxY-b.minY)/2:(b.maxX-b.minX)/2,x:axis==='x'?group.definition.gate:(b.minX+b.maxX)/2,y:axis==='y'?group.definition.gate:(b.minY+b.maxY)/2})),'expedition-gates');
+    this.game.terrain.setStructures(this.groups.filter(group=>!group.cleared).map(group=>{const span=group.definition.gateSpan;return {id:`expedition-gate:${group.index}`,type:'log',variant:'expedition-gate',visual:false,r:14,angle:axis==='x'?Math.PI/2:0,halfLength:span?(span.maxX-span.minX)/2:axis==='x'?(b.maxY-b.minY)/2:(b.maxX-b.minX)/2,x:axis==='x'?group.definition.gate:span?(span.minX+span.maxX)/2:(b.minX+b.maxX)/2,y:axis==='y'?group.definition.gate:(b.minY+b.maxY)/2};}),'expedition-gates');
   }
   canTarget(enemy){return !enemy.expeditionId||(enemy.expeditionId===this.id&&enemy.expeditionSegment===this.currentSegment&&!this.completed&&(!this.scenes||this.groups[enemy.expeditionSegment]?.definition.sceneId===this.currentSceneId));}
   awaken(enemy){

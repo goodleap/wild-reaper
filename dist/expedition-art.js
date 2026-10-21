@@ -1,5 +1,6 @@
 import { getExpeditionDefinition } from './expedition-definitions.js';
 import { drawShipGround, drawShipLinks, drawShipProp, drawShipSceneMap } from './ship-art.js';
+import { drawMoonGround, drawMoonProp, drawMoonGates, drawMoonPreview } from './moon-art.js';
 
 const TAU=Math.PI*2;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
@@ -8,28 +9,6 @@ const oval=(c,x,y,rx,ry,color)=>{c.beginPath();c.ellipse(x,y,rx,ry,0,0,TAU);c.fi
 const polygon=(c,points,color,edge=null)=>{c.beginPath();points.forEach(([x,y],i)=>c[i?'lineTo':'moveTo'](x,y));c.closePath();c.fillStyle=color;c.fill();if(edge){c.strokeStyle=edge;c.lineWidth=2;c.stroke();}};
 const label=(c,text,x,y,color='#e2d7b5')=>{c.font='600 13px "PingFang SC",system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillStyle=color;c.fillText(text,x,y);};
 
-function crater(c,x,y,r){
-  oval(c,x,y,r+5,r*.63+4,'#c4c4b721');oval(c,x,y+3,r,r*.62,'#4b525b');oval(c,x,y+6,r-5,Math.max(1,r*.54),'#6c737a');
-  c.beginPath();c.ellipse(x,y,r,r*.62,0,Math.PI,TAU);c.strokeStyle='#cad0c74d';c.lineWidth=3;c.stroke();
-  oval(c,x-r*.3,y+5,r*.34,r*.16,'#555d657a');
-}
-function moonGround(c,d,view){
-  const b=d.bounds;c.fillStyle='#424a54';c.fillRect(view.minX,view.minY,view.maxX-view.minX,view.maxY-view.minY);
-  c.fillStyle='#828a90';c.fillRect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);
-  c.save();c.beginPath();c.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);c.clip();
-  for(let y=Math.floor(view.minY/82)*82;y<view.maxY+82;y+=82)for(let x=Math.floor(view.minX/90)*90;x<view.maxX+90;x+=90){
-    const value=hash(x,y),px=x+value*50,py=y+hash(y,x)*50;
-    if(Math.abs(px)>125&&value>.37)crater(c,px,py,12+value*31);
-    for(let i=0;i<5;i++){const xx=x+hash(x+i*13,y)*90,yy=y+hash(y+i*29,x)*82;line(c,xx,yy,xx+3+value*6,yy-1,i%2?'#c9d0cc43':'#424d5a46',1);}
-  }
-  c.restore();
-  for(const x of [b.minX,b.maxX]){
-    line(c,x,b.minY,x,b.maxY,'#b5bdb458',4);
-    for(let y=b.minY;y<b.maxY;y+=94){const side=x<0?-1:1;polygon(c,[[x,y],[x+side*25,y-17],[x+side*53,y+20],[x+side*29,y+68],[x,y+94]],'#58616b','#46505b');}
-  }
-  for(const y of [b.minY,b.maxY])line(c,b.minX,y,b.maxX,y,'#c2c9c17a',5);
-  for(const y of [-120,-780,-1440,-2060])for(const x of [-110,110]){oval(c,x,y,6,3,'#3e4953');line(c,x,y,x,y-17,'#5e6e77',3);oval(c,x,y-17,3,2,'#c6d9c3');}
-}
 function survivalGround(c,d,view){
   const b=d.bounds;c.fillStyle='#304536';c.fillRect(view.minX,view.minY,view.maxX-view.minX,view.maxY-view.minY);
   c.fillStyle='#58664a';c.fillRect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);
@@ -62,9 +41,6 @@ function drawLayout(c,run,view){
     }else if(kind==='rope'){
       for(let i=0;i<5;i++){c.beginPath();c.ellipse(x,y,rx-i*5,Math.max(3,ry-i*3),-.2,0,TAU);c.strokeStyle=i%2?'#c5ab76':'#6d593c';c.lineWidth=2.5;c.stroke();}
       line(c,x+rx-6,y+5,x+rx+20,y+18,'#ccb17a',3);
-    }else if(kind==='crater'){
-      c.save();c.translate(x,y);c.scale(1,ry/(rx*.62));crater(c,0,0,rx);c.restore();
-      for(let i=0;i<13;i++){const a=i*TAU/13,v=hash(x+i,y);oval(c,x+Math.cos(a)*(rx+7),y+Math.sin(a)*(ry+5),3+v*4,2+v*3,'#bbc0b53a');}
     }else if(kind==='landing'){
       oval(c,x,y,rx,ry,'#a4aba012');c.save();c.setLineDash([12,14]);c.beginPath();c.ellipse(x,y,rx*.8,ry*.8,0,0,TAU);c.strokeStyle='#d0d8bb57';c.lineWidth=3;c.stroke();c.restore();
       for(const sign of [-1,1]){line(c,x+sign*rx*.7,y-14,x+sign*rx*.7,y+14,'#c9d7b9',3);line(c,x-14,y+sign*ry*.7,x+14,y+sign*ry*.7,'#c9d7b9',3);}
@@ -85,7 +61,8 @@ function drawLayout(c,run,view){
 }
 function drawObjectives(c,run,time){
   const d=run.definition,b=run.sceneDefinition?.bounds||d.bounds;
-  for(const group of run.id==='ship'?[]:run.groups){
+  if(run.id==='moon')drawMoonGates(c,run);
+  for(const group of run.id==='ship'||run.id==='moon'?[]:run.groups){
     const gate=group.definition.gate,closed=!group.cleared,color=closed?'#e2ba7b':'#bcdba2';
     c.save();c.globalAlpha=closed?.78:.24;
     if(d.axis==='x'){line(c,gate,b.minY+20,gate,b.maxY-20,color,closed?5:2);for(let y=b.minY+45;y<b.maxY-20;y+=36)line(c,gate-5,y-7,gate+5,y+7,color,2);}
@@ -111,7 +88,7 @@ export function drawExpeditionGround(c,game,camX,camY,width,height){
     drawShipGround(c,run.sceneDefinition,view,game._clock||0);
     drawShipLinks(c,run);drawObjectives(c,run,game._clock||0);c.restore();return true;
   }
-  else if(run.id==='moon')moonGround(c,run.definition,view);
+  else if(run.id==='moon'){drawMoonGround(c,run.definition,view);drawObjectives(c,run,game._clock||0);c.restore();return true;}
   else survivalGround(c,run.definition,view);
   drawLayout(c,run,view);
   drawObjectives(c,run,game._clock||0);c.restore();return true;
@@ -127,16 +104,10 @@ export function drawExpeditionObjectives(c,game,camX,camY,width,height){
 
 export function drawExpeditionProp(c,prop,options){
   if(drawShipProp(c,prop,options))return true;
-  if(!['expedition-moonrock','expedition-wreck','expedition-camprock'].includes(prop.variant))return false;
+  if(drawMoonProp(c,prop,options))return true;
+  if(prop.variant!=='expedition-camprock')return false;
   const r=prop.r;c.save();c.translate(prop.x,prop.y);
-  if(prop.variant==='expedition-wreck'){
-    polygon(c,[[-r,r*.2],[-r*.9,-r*.7],[-r*.3,-r*1.2],[r*.85,-r*.6],[r,r*.4],[r*.15,r*.65]],'#788c8f','#394f59');
-    polygon(c,[[-r*.9,-r*.7],[-r*.3,-r*1.2],[r*.85,-r*.6],[r*.22,-r*.35]],'#b8c2b9','#566c73');
-    polygon(c,[[-r*.55,-r*.56],[-r*.25,-r*.82],[r*.35,-r*.53],[r*.07,-r*.19]],'#435966','#9eafa8');
-    polygon(c,[[r*.12,-r*.12],[r*.72,-r*.34],[r*.78,r*.27],[r*.18,r*.41]],'#516974','#a6b1a680');
-    for(let i=0;i<3;i++)line(c,-r*.7+i*r*.21,r*.08,-r*.62+i*r*.21,r*.4,'#b8bd9a8f',3);
-    line(c,-r*.25,-r*.8,-r*.48,-r*1.45,'#b4bfb5',3);oval(c,-r*.48,-r*1.45,4,3,'#c4d7af');
-  }else{
+  {
     const camp=prop.variant==='expedition-camprock';
     polygon(c,[[-r,r*.2],[-r*.82,-r*.55],[-r*.23,-r*1.15],[r*.52,-r*.94],[r,-r*.13],[r*.68,r*.54],[-r*.32,r*.65]],camp?'#7d8568':'#808890',camp?'#414e42':'#46515c');
     polygon(c,[[-r*.82,-r*.55],[-r*.23,-r*1.15],[r*.52,-r*.94],[r*.1,-r*.35],[-r*.2,-r*.52]],camp?'#a5ac83':'#b3b8b4');
@@ -148,6 +119,7 @@ export function drawExpeditionProp(c,prop,options){
 
 // Static, deliberately simpler versions for preparation cards.
 export function drawExpeditionPreview(c,id,width,height){
+  if(id==='moon'){c.clearRect(0,0,width,height);return drawMoonPreview(c,getExpeditionDefinition('moon'),width,height);}
   c.save();c.clearRect(0,0,width,height);
   c.fillStyle=id==='ship'?'#294c58':id==='moon'?'#263442':'#253c36';c.fillRect(0,0,width,height);
   // Keep the full scene and its proportions in the shared 4:3 card frame.
@@ -161,12 +133,6 @@ export function drawExpeditionPreview(c,id,width,height){
       c.font='600 9px "PingFang SC",system-ui,sans-serif';c.textAlign='left';c.fillStyle='#e0d9b8';c.fillText(`${i+1} · ${scene.name}`,9,cy+27);
       if(i<scenes.length-1){line(c,246,cy+18,246,cy+36,'#c3cda47a',1.3);polygon(c,[[242,cy+32],[246,cy+39],[250,cy+32]],'#c3cda4');}
     }
-  }else if(id==='moon'){
-    for(let i=0;i<27;i++){c.fillStyle=i%3?'#d8dccc':'#9eaec0';c.fillRect(hash(i,3)*280,hash(i,8)*95-30,1,1);}
-    oval(c,221,25,12,12,'#779ba5');oval(c,217,22,7,10,'#a5b9a5');
-    polygon(c,[[0,76],[41,59],[87,78],[133,58],[188,68],[231,53],[280,72],[280,180],[0,180]],'#7f8991');
-    for(const [x,y,r]of [[32,109,20],[87,84,11],[199,121,29],[246,85,15]])crater(c,x,y,r);
-    line(c,140,124,140,73,'#b5c0ba',2);oval(c,140,72,4,3,'#def0d4');oval(c,140,129,18,7,'#b1cbb055');
   }else{
     oval(c,140,93,82,45,'#596748');oval(c,140,95,37,20,'#8d7e55');
     for(let i=0;i<9;i++){const a=i*TAU/9,x=140+Math.cos(a)*111,y=83+Math.sin(a)*53;oval(c,x,y,8,6,'#a0b576');oval(c,x-2,y-2,1.3,1.3,'#e1ddac');}
