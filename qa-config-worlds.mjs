@@ -11,11 +11,14 @@ import { Environment } from './dist/environment.js';
 // Fixed fingerprints preserve authored content and deterministic terrain.
 // New macro layouts are checked through schema and navigation tests below;
 // the existing enemy values and standalone terrain recipes retain their hash.
+// The catalogue fingerprint includes the approved ruins/coast/mountain art
+// and color updates; their enemy, hazard and terrain recipes are unchanged.
+// Stage cards derive their accent from those same world palettes.
 const expected={
   "exports": {
     "environment": "5a2e7540eee34a6d3ef9ea0b5029222765e9f6bd5b0b869552f15993a5f164c3",
-    "world-definitions": "6b1ab206e047d336c42195f544a6c01e51f8926daeea2c6e71020de5fe2ae19e",
-    "stage-definitions": "db9a79f08bbbb15d4659f34dae6c9aa87bfe658c8c31d8870dcf025035665af7",
+    "world-definitions": "02ed523a2d3b4383861d34ccb6ddf0d03c7858652b16a4ff89704d7398f8a102",
+    "stage-definitions": "717be7b0bfdae842f252e4bcd4c8bb3e2953065de9dce4c53bda4dabd634b504",
     "world-sites": "31546e1f1db7a911f55177cd5395ee8bc3d508b7f6c6254f978018f2b9bb0a3a",
     "world-hazards": "1bda6969e34de2b9e50c502f2c9359998fb901561f39acf1daab0b4a2cfcc222",
     "regional-mechanisms": "b538127784763cf62edb39e73602c627e4238224678f7e1a1323ee64fd169aad",
@@ -51,7 +54,7 @@ for(const [id,hash]of Object.entries(expected.exports)){
     }
   }
   if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;delete w.layout;delete w.authored;delete w.seed;delete w.naturalIsland;}
-  if(data.REGIONS){assert.equal(data.REGIONS[0].name,'低语之森');assert.equal(data.REGIONS[0].shortName,'低语');data.REGIONS[0].name='裂谷林海';data.REGIONS[0].shortName='裂谷';assert.equal(digest(data.REGIONS.slice(1)),'fd814dc1ee3286e77cc1a1d51ffe609ee2d74d3d8012ae13a78f91f80bc5d46a','the other seven world catalogues remain unchanged');}
+  if(data.REGIONS){assert.equal(data.REGIONS[0].name,'低语之森');assert.equal(data.REGIONS[0].shortName,'低语');data.REGIONS[0].name='裂谷林海';data.REGIONS[0].shortName='裂谷';assert.equal(digest(data.REGIONS.slice(1)),'0cdc2e96bc0b632bae659df8f50cdc5a1f58ca198dca8ffc8dac963add1e5a83','legacy world catalogues retain the reviewed ruins/coast/mountain appearance updates and existing gameplay values');}
   assert.equal(digest(data),hash,`${id}: authored values preserved`);
 }
 for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
@@ -67,7 +70,7 @@ for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
 assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,12);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
-assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['rift-forest','marsh','verdant-rift','clockshadow-city','ember-realm-large'],'the remade marsh and all existing fixed maps retain separate identities');
+assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['rift-forest','marsh','ruins','beach','mountain','verdant-rift','clockshadow-city','ember-realm-large'],'all remade and existing fixed maps retain separate identities');
 const rift=sections.worlds.definitions.find(world=>world.id==='rift-forest');
 assert.equal(rift.authored.areas.length,18);
 assert.equal(sections.worlds.definitions.find(world=>world.id==='forest').authored,undefined);
@@ -104,7 +107,7 @@ reject(s=>delete s.worlds.definitions.find(world=>world.id==='rift-forest').auth
 reject(s=>s.worlds.definitions.find(world=>world.id==='rift-forest').authored.boundaries[0].points[0].x=Infinity,'baked collision geometry stays finite');
 reject(s=>s.worlds.definitions.find(world=>world.id==='verdant-rift').authored.worldId='forest','authored map state cannot alias the legacy forest');
 reject(s=>s.worlds.definitions.find(world=>world.id==='verdant-rift').authored.interactions.caves[0].seed=-1,'cave seeds remain finite supported values');
-reject(s=>delete s.worlds.definitions.find(world=>world.id==='marsh').authored,'the current marsh selection requires its complete authored map');
+for(const id of ['marsh','ruins','beach','mountain'])reject(s=>delete s.worlds.definitions.find(world=>world.id===id).authored,`${id}: the current selection requires its complete authored map`);
 for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   const g=new Game({hero:'princess',terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
   g.time=time;g.enemies=[];g.player.x=g.player.y=0;g.player.invuln=0;
@@ -114,4 +117,4 @@ for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
   assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
 }
-console.log('World configuration checked: 12 world identities with all eleven existing indices preserved, 8 unchanged stages, 10 legacy routes with their rift endpoint migrated, separate authored maps/ember world and unchanged legacy values/terrain traces; invalid cross-references rejected.');
+console.log('World configuration checked: 12 world identities with all eleven existing indices preserved, 8 unchanged stage encounter definitions, 10 legacy routes with their rift endpoint migrated, separate authored maps/ember world, reviewed catalogue art and unchanged gameplay/terrain traces; invalid cross-references rejected.');

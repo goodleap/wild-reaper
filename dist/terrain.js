@@ -5,6 +5,7 @@ import { nativeCityVisual } from './city-native-structure-art.js';
 import { emberVisual } from './ember-art.js';
 import { ruinsVisual } from './ruins-art.js';
 import { beachVisual } from './beach-art.js';
+import { mountainVisual } from './mountain-art.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { groundFootprint, surfaceAllows } from './placement-rules.js';
 import { blocksObstacle, obstacleHeight } from './height-rules.js';
@@ -64,6 +65,7 @@ export function sceneryVisual(prop){
   const ember=emberVisual(prop);if(ember)return Object.freeze(ember);
   const ruins=ruinsVisual(prop);if(ruins)return Object.freeze(ruins);
   const beach=beachVisual(prop);if(beach)return Object.freeze(beach);
+  const mountain=mountainVisual(prop);if(mountain)return Object.freeze(mountain);
   const detail=cityDetailVisual(prop);if(detail)return Object.freeze(detail);
   const native=nativeCityVisual(prop);if(native)return Object.freeze(native);
   if(prop.variant==='city-structure')return Object.freeze(cityStructureVisual(prop));
