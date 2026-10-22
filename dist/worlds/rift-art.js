@@ -7,6 +7,8 @@ import { drawCityLandmark } from '../city-structure-art.js';
 import { EmberMapArt, drawEmberOverview } from './ember-map-art.js';
 import { RuinsMapArt, drawRuinsOverview } from './ruins-map-art.js';
 import { drawRuinsLandmark } from '../ruins-art.js';
+import { BeachMapArt, drawBeachOverview } from './beach-map-art.js';
+import { drawBeachLandmark } from '../beach-art.js';
 // The authored valley uses the same polygons for art, collision and maps.
 // Detailed floor and deep forest are rasterized only in visible, bounded tiles.
 // The complete trees and shrubs at the forest edge use the world depth queue.
@@ -176,6 +178,7 @@ function groundDetails(c,layout,view,scenery,regional){
 }
 
 export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,viewBounds}={}){
+  if(layout?.artTheme==='beach')return drawBeachOverview(c,layout,{scale,labels,landmarks,viewBounds});
   if(layout?.artTheme==='ruins')return drawRuinsOverview(c,layout,{scale,labels,landmarks,viewBounds});
   if(layout?.artTheme==='ember')return drawEmberOverview(c,layout,{scale,labels,landmarks,viewBounds});
   if(layout?.artTheme==='city')return drawCityOverview(c,layout,{scale,labels,landmarks,viewBounds});
@@ -191,7 +194,7 @@ export function drawRiftOverview(c,layout,{scale=1,labels=false,landmarks=false,
 
 export class RiftArt {
   constructor(makeCanvas=()=>document.createElement('canvas'),{now=()=>globalThis.performance?.now?.()??Date.now()}={}){this.makeCanvas=makeCanvas;this.now=now;this.scenery=new SceneryArt(makeCanvas);this.cache=new Map();this.pixels=0;this.builds=0;this.ids=new WeakMap();this.nextId=0;this.motion=null;this.pending=null;this.groundStats={visibleBuilds:0,prefetchBuilds:0,prefetchHits:0,budgetSkips:0,budgetOverruns:0,prefetchMs:0,maxPrefetchMs:0,lastVisibleBuilds:0,lastPrefetchBuilds:0,lastPrefetchMs:0};}
-  get cacheStats(){const sources=[this.scenery.cacheStats,this.cityArt?.cacheStats,this.emberArt?.cacheStats,this.ruinsArt?.cacheStats,this.marshRegional?.cacheStats].filter(Boolean),sum=key=>sources.reduce((total,source)=>total+(source[key]||0),0);return {entries:this.cache.size+sum('entries'),pixels:this.pixels+sum('pixels'),bytes:this.pixels*4+sum('bytes'),limitBytes:PIXEL_LIMIT*4+sum('limitBytes'),builds:this.builds+sum('builds')};}
+  get cacheStats(){const sources=[this.scenery.cacheStats,this.cityArt?.cacheStats,this.emberArt?.cacheStats,this.ruinsArt?.cacheStats,this.beachArt?.cacheStats,this.marshRegional?.cacheStats].filter(Boolean),sum=key=>sources.reduce((total,source)=>total+(source[key]||0),0);return {entries:this.cache.size+sum('entries'),pixels:this.pixels+sum('pixels'),bytes:this.pixels*4+sum('bytes'),limitBytes:PIXEL_LIMIT*4+sum('limitBytes'),builds:this.builds+sum('builds')};}
   _key(layout,tx,ty){let id=this.ids.get(layout);if(!id){id=++this.nextId;this.ids.set(layout,id);}return `${id}:${tx}:${ty}`;}
   _reserve(pixels,protectedKeys,optional){
     while(this.pixels+pixels>PIXEL_LIMIT&&this.cache.size){let oldest;
@@ -204,7 +207,7 @@ export class RiftArt {
   }
   _tile(layout,tx,ty,protectedKeys,optional=false){const key=this._key(layout,tx,ty);let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
     const side=TILE+BLEED*2;if(!this._reserve(side*side,protectedKeys,optional))return null;
-    const canvas=this.makeCanvas();canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else if(layout.artTheme==='ember'){this.emberArt??=new EmberMapArt(this.makeCanvas);this.emberArt.paintTile(c,layout,view);}else if(layout.artTheme==='ruins'){this.ruinsArt??=new RuinsMapArt(this.makeCanvas);this.ruinsArt.paintTile(c,layout,view);}else{if(layout.artTheme==='marsh')this.marshRegional??=new RegionalArt(this.makeCanvas);base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery,layout.artTheme==='marsh'?this.marshRegional:null);}
+    const canvas=this.makeCanvas();canvas.width=canvas.height=side;const c=canvas.getContext('2d'),view={minX:tx*TILE-BLEED,minY:ty*TILE-BLEED,maxX:(tx+1)*TILE+BLEED,maxY:(ty+1)*TILE+BLEED};c.setTransform(1,0,0,1,BLEED-tx*TILE,BLEED-ty*TILE);c.lineCap='round';c.lineJoin='round';if(layout.artTheme==='city'){this.cityArt??=new CityMapArt(this.makeCanvas);this.cityArt.paintTile(c,layout,view);}else if(layout.artTheme==='ember'){this.emberArt??=new EmberMapArt(this.makeCanvas);this.emberArt.paintTile(c,layout,view);}else if(layout.artTheme==='ruins'){this.ruinsArt??=new RuinsMapArt(this.makeCanvas);this.ruinsArt.paintTile(c,layout,view);}else if(layout.artTheme==='beach'){this.beachArt??=new BeachMapArt(this.makeCanvas);this.beachArt.paintTile(c,layout,view);}else{if(layout.artTheme==='marsh')this.marshRegional??=new RegionalArt(this.makeCanvas);base(c,layout,{viewBounds:view});groundDetails(c,layout,view,this.scenery,layout.artTheme==='marsh'?this.marshRegional:null);}
     image={canvas,pixels:side*side,prefetched:optional};this.cache.set(key,image);this.pixels+=image.pixels;this.builds++;return image;
   }
   _anticipate(layout,view,visible,now){
@@ -258,6 +261,7 @@ export class RiftArt {
 // Dynamic doorway/shortcut state is deliberately separate from cached floor.
 // Call from the existing world depth queue at the landmark's ground anchor.
 export function drawRiftLandmark(c,site){
+  if(drawBeachLandmark(c,site))return true;
   if(drawRuinsLandmark(c,site))return true;
   if(site?.artTheme==='city')return drawCityLandmark(c,site);
   if(!['cave','shortcut','exit'].includes(site?.kind))return false;const p=RIFT_PALETTE;c.save();c.translate(site.x,site.y);

@@ -40,6 +40,7 @@ const badCases=[
   ['milestone-target',()=>{const pack=changed();pack.sections.codex.milestones[0].target=0;return response(pack);}],
   ['milestone-duplicate',()=>{const pack=changed();pack.sections.codex.milestones[1].id=pack.sections.codex.milestones[0].id;return response(pack);}],
   ['large-response',()=>({ok:true,headers:{get:name=>name==='content-length'?String(4*1024*1024+1):null},text:async()=>{throw Error('body must not be read');}})],
+  ['node-budget',()=>{const pack=changed();pack.extra=Array(500000).fill(0);return response(pack);}],
   ['prototype-key',()=>({ok:true,text:async()=>JSON.stringify(changed()).replace('"schemaVersion":2','"__proto__":{},"schemaVersion":2')})]
 ];
 for(const [label,fetchImpl] of badCases){
@@ -49,6 +50,7 @@ for(const [label,fetchImpl] of badCases){
   assert.equal(api.getConfigLoadStatus().source,'bundled');assert.equal(api.getConfigLoadStatus().fallback,true,label);
   assert(api.getConfigLoadStatus().reason);
   if(label==='large-response')assert.match(api.getConfigLoadStatus().reason,/exceeds supported size/,'oversized response is rejected before its body is read');
+  if(label==='node-budget')assert.match(api.getConfigLoadStatus().reason,/Content configuration is too large/,'JSON traversal retains a bounded node budget');
 }
 {
   const api=await fresh();let signal;

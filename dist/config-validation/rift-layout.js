@@ -6,7 +6,7 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
   const compact=worldId==='rift-forest';
   if(compact&&(layout.id!=='rift-forest:1'||layout.worldId&&layout.worldId!==worldId))fail('identity');
   if(!compact&&(!/^[a-z][a-z0-9-]{0,63}$/.test(worldId)||layout.worldId!==worldId||layout.id!==`${worldId}:1`))fail('identity');
-  if(layout.artTheme!=null&&!['forest','marsh','ruins','city','ember'].includes(layout.artTheme))fail('artTheme');
+  if(layout.artTheme!=null&&!['forest','marsh','ruins','beach','city','ember'].includes(layout.artTheme))fail('artTheme');
   const city=layout.artTheme==='city',ember=layout.artTheme==='ember';
   const array=(value,key,min,max)=>{if(!Array.isArray(value)||value.length<min||value.length>max)fail(key);return value;};
   const number=(value,key,min=-10000,max=10000)=>{if(!Number.isFinite(value)||value<min||value>max)fail(key);};

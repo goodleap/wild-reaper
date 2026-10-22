@@ -73,6 +73,7 @@ export function validateWorlds(sections){
     const p='world '+text(w.id,'world.id');for(const key of ['name','shortName'])text(w[key],p+'.'+key);
     if(w.id==='marsh'&&w.authored?.artTheme!=='marsh')fail(p+'.authored');
     if(w.id==='ruins'&&w.authored?.artTheme!=='ruins')fail(p+'.authored');
+    if(w.id==='beach'&&w.authored?.artTheme!=='beach')fail(p+'.authored');
     if(w.seed!=null)integer(w.seed,p+'.seed',0,2147483647);
     if(w.naturalIsland){
       if(w.layout!=null||w.authored!=null||!Number.isInteger(w.seed))fail(p+'.naturalIsland layout');
