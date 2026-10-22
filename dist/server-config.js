@@ -2,7 +2,7 @@ import { CONTENT_SCHEMA_VERSION,validateContentPack } from './content-schema.js'
 import { fetchResourceBytes } from './loading-resource.js';
 import { createConfigCache } from './config-cache.js';
 
-const MAX_BYTES=2*1024*1024;
+const MAX_BYTES=4*1024*1024;
 const revision=value=>{
   if(typeof value!=='string'||!/^v0\.0\.[1-9]\d*$/.test(value))throw new Error('Invalid client version');
   const n=Number(value.slice(5));if(!Number.isSafeInteger(n))throw new Error('Invalid client version');return n;

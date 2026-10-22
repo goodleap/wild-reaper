@@ -39,7 +39,7 @@ const badCases=[
   ['milestone-progress',()=>{const pack=changed();pack.sections.codex.milestones[0].progressKey='execute';return response(pack);}],
   ['milestone-target',()=>{const pack=changed();pack.sections.codex.milestones[0].target=0;return response(pack);}],
   ['milestone-duplicate',()=>{const pack=changed();pack.sections.codex.milestones[1].id=pack.sections.codex.milestones[0].id;return response(pack);}],
-  ['large-response',()=>({ok:true,headers:{get:name=>name==='content-length'?String(3*1024*1024):null},text:async()=>{throw Error('body must not be read');}})],
+  ['large-response',()=>({ok:true,headers:{get:name=>name==='content-length'?String(4*1024*1024+1):null},text:async()=>{throw Error('body must not be read');}})],
   ['prototype-key',()=>({ok:true,text:async()=>JSON.stringify(changed()).replace('"schemaVersion":2','"__proto__":{},"schemaVersion":2')})]
 ];
 for(const [label,fetchImpl] of badCases){
@@ -48,6 +48,7 @@ for(const [label,fetchImpl] of badCases){
   assert.deepEqual(loaded.sections,bundledConfig.sections,`${label}: entire known-good snapshot replaces rejected candidate`);
   assert.equal(api.getConfigLoadStatus().source,'bundled');assert.equal(api.getConfigLoadStatus().fallback,true,label);
   assert(api.getConfigLoadStatus().reason);
+  if(label==='large-response')assert.match(api.getConfigLoadStatus().reason,/exceeds supported size/,'oversized response is rejected before its body is read');
 }
 {
   const api=await fresh();let signal;

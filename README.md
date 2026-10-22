@@ -23,6 +23,8 @@ npm test
 
 迷雾沼泽使用 `python scripts/build-marsh-map.py --write` 重建；可用 `--preview-dir /tmp/marsh-preview` 输出同源几何预览。离线依赖为 Shapely 2.x，随后执行 `npm run build:config`、`node qa-marsh-map.mjs` 和相关地图集成检查。生成器只更新 `marsh`，运行时复用现有地形、浅水和探索系统。
 
+失落遗迹使用 `python scripts/build-ruins-map.py --write` 重建，只更新 `worlds.json` 中的 `ruins`；可用 `--preview-dir /tmp/ruins-preview` 输出同源几何预览。离线依赖 Shapely 2.x，重建后执行 `npm run build:config` 和 `npm run test:ruins`；地面、地图预览与移动碰撞共用生成的区域和边界数据。
+
 破浪甲板的离线源为 `scripts/build-ship-map.py`，用 Python 标准库重建 `dist/config/stages.json` 的 `ship.scenes`；随后构建配置并运行 `npm run test:ship`。各层只载入当前场景，往返保留战斗和拾取状态；地图绘制与移动碰撞读取同一场景轮廓。
 
 寂静月面使用 `python scripts/build-moon-map.py` 重建 `dist/config/stages.json` 中的 `moon`，随后构建配置并运行 `npm run test:moon`。地形绘制、碰撞和地图预览共用 `landform` 数据，战斗关口使用 `gateSpan` 对应的隘口范围。

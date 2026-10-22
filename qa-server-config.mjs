@@ -27,6 +27,14 @@ const options={origin,clientVersion,fetchImpl:transport,cache:memory()};
 let serial=0;
 const fresh=()=>import(`./dist/content-config.js?server-qa=${++serial}`);
 
+{
+  const padded=text+' '.repeat(4*1024*1024-Buffer.byteLength(text));
+  const boundary={...manifest,bytes:Buffer.byteLength(padded),sha256:createHash('sha256').update(padded).digest('hex')};
+  const loaded=await loadServerConfig({...options,cache:memory(),fetchImpl:endpoint(url=>new Response(url.pathname==='/api/config/manifest'?JSON.stringify(boundary):padded))});
+  assert.equal(loaded.status.source,'server','a complete valid configuration at the 4 MiB boundary loads remotely');
+  assert.equal(loaded.pack.contentVersion,pack.contentVersion);
+}
+
 assert.equal(getServerConfigOptions({enabled:false,location:null}),null);
 for(const hostname of ['example.com','www.example.com','wild.example.com','tower.example.com','wild.example.com.cn']){
   assert.deepEqual(getServerConfigOptions({enabled:true,location:{hostname},clientVersion}),{origin:`https://api.${hostname}`,clientVersion});
@@ -72,6 +80,7 @@ assert.throws(()=>getServerConfigOptions({enabled:true,originOverride:'https://a
 for(const [label,invalid] of [
   ['checksum',{...manifest,sha256:'0'.repeat(64)}],
   ['size',{...manifest,bytes:manifest.bytes-1}],
+  ['size limit',{...manifest,bytes:4*1024*1024+1}],
   ['compatibility',{...manifest,clientMinVersion:'v0.0.134',clientMaxVersion:'v0.0.135'}],
   ['schema',{...manifest,schemaVersion:999}],
   ['external URL',{...manifest,url:'https://untrusted.invalid/config'}],

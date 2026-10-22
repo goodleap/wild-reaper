@@ -36,6 +36,7 @@
     "test:activity-log": "node qa-activity-log.mjs && node qa-activity-performance.mjs && node qa-activity-scene.mjs && node qa-boot-activity-log.mjs && node qa-activity-integration.mjs",
     "test:quests": "node qa-quest-store.mjs && node qa-quests-integration.mjs",
     "test:ship": "node qa-ship-scenes.mjs && node qa-ship-art.mjs && node qa-expeditions.mjs && node qa-expedition-layout.mjs && node qa-scene-transition.mjs",
-    "test:moon": "node qa-moon-map.mjs && node qa-moon-art.mjs && node qa-expeditions.mjs && node qa-expedition-layout.mjs"
+    "test:moon": "node qa-moon-map.mjs && node qa-moon-art.mjs && node qa-expeditions.mjs && node qa-expedition-layout.mjs",
+    "test:ruins": "node qa-ruins-map.mjs && node qa-ruins-art.mjs && node qa-world-selection.mjs"
   }
 }

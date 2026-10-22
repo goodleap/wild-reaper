@@ -37,7 +37,7 @@ export function loadContentConfig({onProgress=()=>{},onDownloadProgress=()=>{},e
       const request=(async()=>{
         const response=await fetchImpl(endpoint,{signal:controller.signal,credentials:'same-origin',cache:'default'});
         if(!response.ok)throw new Error(`Configuration response ${response.status}`);
-        const bytes=await readResponseBytes(response,{expectedBytes,signal:controller.signal,maxBytes:2*1024*1024,
+        const bytes=await readResponseBytes(response,{expectedBytes,signal:controller.signal,maxBytes:4*1024*1024,
           onProgress:event=>{if(!finished&&!controller.signal.aborted)onDownloadProgress(event);}});
         if(controller.signal.aborted)throw controller.signal.reason;
         const text=new TextDecoder().decode(bytes);
