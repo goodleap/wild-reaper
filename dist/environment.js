@@ -72,9 +72,10 @@ export class Environment {
   _hash(x,y=0){const offset=this.rules.hashOffset;return hash(x+this.seed*131+offset,y+this.seed*197+offset);}
   _foot(entity=this.game.player,isPlayer=entity===this.game.player){return {x:entity.x,y:entity.y+groundOffset(entity,isPlayer||humanoid(entity))};}
   _visible(x,y,margin=0){const g=this.game;return Math.abs(x-g.player.x)<=g.viewWidth*.5+margin&&Math.abs(y-g.player.y)<=g.viewHeight*.5+margin;}
-  _terrainClear(x,y,r){const terrain=this.game.terrain;return Math.hypot(x-this._safeAnchor.x,y-this._safeAnchor.y)>=ENVIRONMENT_BALANCE.safeRadius+r&&(!terrain.island||terrain.island.naturalCircleFree(x,y,r))&&terrain.isFree(x,y,r);}
+  _terrainClear(x,y,r){const terrain=this.game.terrain;return this.game.worldTravel?.safety?.allowsSpawn(x,y,r)!==false&&Math.hypot(x-this._safeAnchor.x,y-this._safeAnchor.y)>=ENVIRONMENT_BALANCE.safeRadius+r&&(!terrain.island||terrain.island.naturalCircleFree(x,y,r))&&terrain.isFree(x,y,r);}
   _objectiveClear(x,y,r){
     const adventure=this.game.adventure;
+    if(this.game.worldTravel?.safety?.allowsSpawn(x,y,r)===false)return false;
     if(this.game.settlements?.isSafePoint(x,y,r)===false)return false;
     if(this.game.relicSites?.isSafePoint(x,y,r)===false)return false;
     if(this.game.regions?.isSafePoint?.(x,y,r)===false)return false;

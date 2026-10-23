@@ -50,6 +50,7 @@ export class RelicSites {
   }
   _valid(site) {
     const g=this.game,profile=relicSiteProfile(site),clearance=profile.clearance;
+    if(g.worldTravel?.safety.allowsSpawn(site.x,site.y,clearance)===false)return false;
     // A dry center is insufficient: include the stone rim and the front door.
     if(!placementAllowed(g,'structure',{x:site.x,y:site.y,r:Math.max(clearance,site.r+30)}))return false;
     if(!placementAllowed(g,'structure',{x:site.door.x,y:site.door.y,r:30}))return false;

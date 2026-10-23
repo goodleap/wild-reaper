@@ -21,7 +21,7 @@ export class MonsterTerritories {
   }
   _safe(x,y,r=22) {
     const g=this.game;
-    return g.terrain.isFree(x,y,r+4)&&g.terrain.island?.isDry(x,y,r+12)!==false&&
+    return g.worldTravel?.safety?.allowsSpawn(x,y,r)!==false&&g.terrain.isFree(x,y,r+4)&&g.terrain.island?.isDry(x,y,r+12)!==false&&
       g.environment?.isHazardFree?.(x,y,r+8)!==false&&
       g.settlements?.isSafePoint?.(x,y,r+25)!==false&&
       g.relicSites?.isSafePoint?.(x,y,r+25)!==false;
@@ -133,27 +133,27 @@ export class MonsterTerritories {
       enemy.territoryState=owner.territoryState;enemy.guardActive=owner.guardActive;enemy._territoryAway=0;
       group.members.push(enemy);group.memberIds.push(enemy.id);
     }
-    const p=this._playerFoot();
+    const p=this._playerFoot(),protectedPlayer=g.worldTravel?.safety?.protects(g.player)===true;
     for(const group of this.groups) {
       if(group.cleared)continue;
       const alive=group.members.filter(enemy=>enemy.hp>0);
       if(!alive.length){group.cleared=true;g._emit('territoryCleared',{territoryId:group.id});continue;}
       const playerDistance=distance(p,group);
       // Discovery is local: no event from another group enters this decision.
-      if(g.regionGrace<=0&&playerDistance<=group.radius) {
+      if(!protectedPlayer&&g.regionGrace<=0&&playerDistance<=group.radius) {
         const nearest=alive.filter(enemy=>enemy.territoryState==='idle').sort((a,b)=>distance(foot(a),p)-distance(foot(b),p))[0];
         if(nearest&&distance(foot(nearest),p)<=TERRITORY_RULES.notice&&(!group.authoredRift||!g.terrain.firstBlocker(foot(nearest).x,foot(nearest).y,p.x,p.y,0,'sight'))){this._activate(nearest,group);this._rally(group,nearest);}
       }
       for(const enemy of alive) {
         if(enemy.territoryState==='alert'&&g._clock>=enemy._territoryAlertAt) {
-          if(playerDistance<=TERRITORY_RULES.leash)this._activate(enemy,group);
+          if(!protectedPlayer&&playerDistance<=TERRITORY_RULES.leash)this._activate(enemy,group);
           else {enemy.territoryState='idle';enemy.guardActive=false;}
         }
         if(enemy.territoryState!=='chasing')continue;
         const provoked=(enemy._territoryProvokedUntil||0)>g._clock;
         const outside=playerDistance>TERRITORY_RULES.leash||distance(foot(enemy),group)>TERRITORY_RULES.enemyLeash;
         enemy._territoryAway=outside&&!provoked?(enemy._territoryAway||0)+dt:0;
-        if(enemy._territoryAway>=TERRITORY_RULES.disengageDelay) {
+        if(protectedPlayer||enemy._territoryAway>=TERRITORY_RULES.disengageDelay) {
           enemy.territoryState='returning';enemy.guardActive=false;enemy.guardReturnTarget=enemy.territoryHome;
           enemy._navTimer=0;enemy._coastTarget=null;this._stop(enemy);
         }

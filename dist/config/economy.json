@@ -150,5 +150,72 @@
     "playerLeash": 580,
     "guardLeash": 450,
     "returnRange": 480
+  },
+  "worldShops": {
+    "inventoryLimit": 99,
+    "weaponPrices": {
+      "sword": 30,
+      "arrow": 36,
+      "orbit": 42
+    },
+    "skillPrices": {
+      "barrier": 30,
+      "pulse": 36,
+      "lightning": 42,
+      "fireball": 36,
+      "frostbolt": 36
+    },
+    "skillSupply": {
+      "forest": [
+        "barrier",
+        "pulse",
+        "fireball"
+      ],
+      "rift-forest": [
+        "barrier",
+        "pulse",
+        "fireball"
+      ],
+      "marsh": [
+        "barrier",
+        "pulse",
+        "frostbolt"
+      ],
+      "ruins": [
+        "barrier",
+        "lightning",
+        "fireball"
+      ],
+      "beach": [
+        "barrier",
+        "lightning",
+        "frostbolt"
+      ],
+      "clockshadow-city": [
+        "barrier",
+        "fireball",
+        "frostbolt"
+      ],
+      "mountain": [
+        "barrier",
+        "pulse",
+        "lightning"
+      ],
+      "snow": [
+        "barrier",
+        "frostbolt",
+        "pulse"
+      ],
+      "ember-realm-large": [
+        "barrier",
+        "fireball",
+        "lightning"
+      ],
+      "verdant-rift": [
+        "barrier",
+        "pulse",
+        "frostbolt"
+      ]
+    }
   }
 }

@@ -4,8 +4,8 @@ import { Terrain, groundOffset } from './dist/terrain.js';
 import { SCENE_TRANSITION_RULES } from './dist/scene-transition.js';
 import { portalDoor } from './dist/portal-geometry.js';
 
-const fresh=()=>{
-  const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
+const fresh=(options={})=>{
+  const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false,...options});
   g.enemies=[];g.gems=[];g.coins=[];g.effects=[];g.events=[];
   g._spawn=Infinity;g._shot=Infinity;g.nextBossAt=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;
   g.time=31;g.runTime=39;g._clock=39;g.player.hp=73;g.player.skillCooldown=6.2;
@@ -109,8 +109,13 @@ assert(rejected.requestInteraction(badDoor.id));
 rejected.settlements.sites=[];finish(rejected);
 assert.equal(rejected.dungeon.active,null);assert.equal(rejected.sceneTransition.commitSucceeded,false);assert.equal(rejected.status,'playing');
 
-const shop=fresh(),merchant=site(shop,'merchant');place(shop,merchant.door);
+const shop=fresh({mode:'dungeon'}),merchant=site(shop,'merchant');place(shop,merchant.door);
 assert(shop.requestInteraction(merchant.id));assert.equal(shop.status,'shop');assert.equal(shop.sceneTransition.active,false);assert.equal(shop.gold,17,'opening a shop remains immediate and never buys an item');
+const town=fresh(),supplies=site(town,'supply');Object.assign(supplies,{worldFacility:'supplies',region:town.worldId});place(town,supplies.door);
+assert.equal(town.getInteraction().type,'worldShop');assert(town.requestInteraction(supplies.id));
+assert.equal(town.status,'shop');assert.equal(town.sceneTransition.active,false);assert.equal(town.dungeon.active,null,'a shop building is not a hut entrance');
+assert.ok(town.buyShopItem('heal'));assert.equal(town.worldShops.inventory.heal,1);assert.equal(town.player.hp,73,'supply purchases are carried, not consumed at the doorway');
+assert.equal(town.status,'shop');assert.equal(town.sceneTransition.opacity,0);
 const chest=fresh(),hut=site(chest,'supply');place(chest,hut.door);assert(chest.interact(hut.id),'low-level setup API remains immediate outside transitions');
 const box=chest.dungeon.active.chests[0];place(chest,box);chest.dungeon.update(0);
 assert(chest.requestInteraction(chest.getInteraction().id));assert.equal(box.state,'claimed');assert.equal(chest.sceneTransition.active,false,'claiming a chest does not fade the world');

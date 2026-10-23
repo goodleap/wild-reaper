@@ -72,6 +72,7 @@ export class Adventure {
     return reachable;
   }
   _environmentFree(x,y,r=0){
+    if(this.game.worldTravel?.safety.allowsSpawn(x,y,r)===false)return false;
     if(this.game.terrain.island?.isReserved(x,y,r))return false;
     if(this.game.regions?.isSafePoint(x,y,r)===false)return false;
     if(this.game.relicSites?.isSafePoint(x,y,r)===false)return false;

@@ -13,7 +13,7 @@ for(const change of [s=>s.dialogue.rules.maxVisible=3,s=>s.dialogue.rules.combat
 }
 const visible={isVisible:s=>!s.source.hidden};
 function game(name='王子'){
-  return {hero:{id:'traveler',dialogueName:name},status:'playing',mapId:'world:forest',terrain:{},player:{heroId:'traveler',x:0,y:-19.8},enemies:[],companions:{members:[],camps:[]},settlements:{sites:[]},relicSites:{sites:[]}};
+  return {mode:'dungeon',hero:{id:'traveler',dialogueName:name},status:'playing',mapId:'world:forest',terrain:{},player:{heroId:'traveler',x:0,y:-19.8},enemies:[],companions:{members:[],camps:[]},settlements:{sites:[]},relicSites:{sites:[]}};
 }
 const site=(type,x=150,id=type)=>({id,type,x,y:0,state:'ready',guardRadius:190});
 const enemy=(type,id=1,x=150,extra={})=>({id,type,x,y:0,r:type==='boss'?49:18,hp:100,maxHp:100,guardActive:false,...extra});
@@ -38,6 +38,9 @@ for(const delta of [-1,1,-1,1]){merchant.player.x=DIALOGUE_RULES.merchantFar-DIA
 assert.equal(greet.items(visible).length,0,'Crossing the inner boundary cannot retrigger without leaving its outer hysteresis.');
 merchant.player.x=800;tick(greet,merchant,30);merchant.player.x=0;tick(greet,merchant);
 assert(contents(greet).includes('行装'),'A real departure plus cooldown permits the next stable variant.');
+const town=game(),townVoices=new SceneDialogue();town.mode='world';town.settlements.sites=[{...site('supply'),worldFacility:'weapons',name:'武器铺'}];tick(townVoices,town);
+assert.equal(dialogueSpeakers(town).filter(entry=>entry.kind==='site').length,0,'a shop building without an actor cannot masquerade as a speaking merchant');
+assert.equal(townVoices.items(visible).length,0);
 
 const hidden=game(),silence=new SceneDialogue();hidden.settlements.sites=[{...site('angel'),hidden:true}];tick(silence,hidden);
 assert.equal(silence.items(visible).length,0);hidden.settlements.sites[0].hidden=false;tick(silence,hidden);

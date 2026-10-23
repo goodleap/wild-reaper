@@ -25,6 +25,7 @@ export class WorldHazards {
     const r=WORLD_HAZARD_RULES[type].radius;
     for(let i=0;i<5;i++){
       const x=tx*CELL+90+env._hash(tx+2089+i*29,ty+2111)*340,y=ty*CELL+90+env._hash(tx+2129,ty+2131+i*31)*340;
+      if(this.game.worldTravel?.safety?.allowsSpawn(x,y,r)===false)continue;
       if(Math.hypot(x-safe.x,y-safe.y)<WORLD_HAZARD_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+20))continue;
       if(!placementAllowed(this.game,'hazard',{x,y,r:r+14},{environment:env,checkTerrain:false,checkReserved:true}))continue;
       return {id:`${type}:${tx},${ty}`,type,x,y,r,seed,state:'idle',remaining:2+seed*3,maxRemaining:2+seed*3,warning:0};
@@ -33,6 +34,7 @@ export class WorldHazards {
   }
   _clear(prop){
     const g=this.game,r=prop.patch?Math.max(prop.patch.rx,prop.patch.ry):prop.r;
+    if(g.worldTravel?.safety?.allowsSpawn(prop.x,prop.y,r)===false)return false;
     return this.environment._objectiveClear(prop.x,prop.y,r+20)&&!g.companions?.camps?.some(c=>distance(c,prop)<r+135)&&(!g.portal||distance(g.portal,prop)>r+85);
   }
   _refresh(initial=false){

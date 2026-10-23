@@ -125,7 +125,7 @@ export class AbilityRuntime {
   eligible(effect,target){
     const g=this.game;if(!alive(target))return false;
     if(effect.profile==='ground'&&!isGrounded(target))return false;
-    if(effect.hostile)return isFriendlyActive(g,target)&&(!effect.caster.dungeonId||g.dungeon?.canDamage?.(effect.caster,target)!==false);
+    if(effect.hostile)return !g.worldTravel?.safety?.protects(target)&&isFriendlyActive(g,target)&&(!effect.caster.dungeonId||g.dungeon?.canDamage?.(effect.caster,target)!==false);
     return g.combat?.canTarget?g.combat.canTarget(target,effect.caster,{requireView:true,source:effect.abilityId}):g._inView?.(target)!==false;
   }
   hit(effect,target){
@@ -142,6 +142,7 @@ export class AbilityRuntime {
     return true;
   }
   applyStatus(target,p,effect){
+    if(effect.hostile&&this.game.worldTravel?.safety?.protects(target))return;
     if(!alive(target)||!(p.burnDamage>0||p.slowDuration>0||p.freezeChance>0))return;
     const s=this.statusFor(target);if(!s)return;
     if(p.burnDamage>0){

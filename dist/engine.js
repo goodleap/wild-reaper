@@ -37,6 +37,8 @@ import { ExpeditionRun } from './expedition-run.js';
 import { MonsterTerritories } from './monster-territories.js';
 import { RiftExploration } from './rift-exploration.js';
 import { WorldQuests } from './quest-runtime.js';
+import { WorldTravel } from './world-travel.js';
+import { WorldShops } from './world-shops.js';
 import { StoryRun, STORY_DEFINITIONS } from './story-run.js';
 import { SceneContent } from './scene-content.js';
 import { RealmProgression } from './realm-progression.js';
@@ -59,6 +61,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const sq = (v) => v * v;
 const dist2 = (a, b) => sq(a.x - b.x) + sq(a.y - b.y);
 const decorativeEffects=new Set(['hit','damage','defeat','arrowRicochet']);
+const worldCheckpointEvents=new Set(['resources','level','weaponAcquired','skillAcquired','branchChosen','superChosen','relicChosen','dungeonEnter','dungeonExit','dungeonCleared','dungeonBossKill','riftShortcutOpened','companionJoined','companionLeft','companionRecovered','companionPaid','questAccepted','questCompleted','regionEnter']);
 const protectedEffect=e=>e.type==='rescueWarning'||(e.type==='defeat'&&e.boss);
 // Visual variation must never consume the combat/loot random stream.
 const feedbackSeed = (x,y,time,id=0) => (Math.imul(Math.round(x*16),73856093)^Math.imul(Math.round(y*16),19349663)^Math.imul(Math.round(time*1000),83492791)^Math.imul(id|0,2654435761))>>>0;
@@ -148,6 +151,8 @@ export class Game {
     this.encounters=encounters?new Encounters(this,{generation:ambientContent&&!this.stage}):null;
     this.combat=new CombatResolution(this);this.attacks=new CombatAttacks(this);
     this.combatStatus=new CombatStatus(this);
+    this.worldTravel=new WorldTravel(this);this.worldTravel.initialize();
+    this.worldShops=new WorldShops(this);
     // Reserve the nearby debug entrance before environmental hazards choose
     // their positions. The ordinary world keeps its original generation order.
     if(this.debugOptions.testFacilities&&settlements&&!this.stage)this.settlements=new Settlements(this);
@@ -174,10 +179,15 @@ export class Game {
     this.story=this.mode==='story'?new StoryRun(this,{id:storyId}):null;
     this.story?.initialize();
     this.quests=new WorldQuests(this,{storage:questStorage});
+    if(this.worldTravel.enabled){
+      const landing=this.worldTravel.arrivalPoint({arrivalKind:'waypoint',targetWaypointId:this.worldTravel.waypoint.id},this.player.r);
+      if(landing){this.player.x=landing.x;this.player.y=landing.y-groundOffset(this.player,true);resetLocomotion(this.player);}
+      this.worldTravel.update();
+    }
   }
 
   onEnemyDefeated(enemy){this.story?.onEnemyDefeated?.(enemy);this.realms?.onEnemyDefeated(enemy);this.onArchiveDefeat?.(enemy);}
-  dispose(reason='exit') {this.quests?.flush();this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();this.expedition?.dispose();}
+  dispose(reason='exit') {this._disposed=true;this.quests?.flush();this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();this.expedition?.dispose();}
 
   _createStoryExplorationContent() {
     const desired={x:this.player.x,y:this.player.y},spawn=this.terrain.island?.layout?.spawn;
@@ -203,7 +213,22 @@ export class Game {
     this.bullets=[];this.enemyBullets=[];this.effects=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];
   }
 
-  _emit(type,extra={}) { if (this.events.length < 100) this.events.push({type,...extra}); }
+  _emit(type,extra={}) {
+    if(this.events.length<100)this.events.push({type,...extra});
+    if(worldCheckpointEvents.has(type))this._scheduleWorldSave(type);
+  }
+  _scheduleWorldSave(reason='progress') {
+    if(!this.worldSave||this._disposed)return;
+    this._worldSaveReason=reason;
+    if(this._worldSaveQueued)return;
+    this._worldSaveQueued=true;
+    // Commit after a purchase/reward/scene action has finished, once even if
+    // it emits several events. Quest flags and granted assets share the write.
+    queueMicrotask(()=>{
+      this._worldSaveQueued=false;
+      if(!this._disposed)this.worldSave?.capture(this,{reason:this._worldSaveReason,respawn:this.status==='dead'});
+    });
+  }
   _effect(x,y,type,life,r,color,text,extra={}) {
     // A screen clear can defeat hundreds of enemies at once. Keep the newest
     // ordinary bursts while allowing a boss's longer farewell to finish.
@@ -275,6 +300,7 @@ export class Game {
         if(this._inView({x,y,r},36)||!this.terrain.isFree(x,footY,r+4)||this.terrain.island?.isDry(x,footY,r+4)===false)continue;
         if(this.environment?.muds.some(m=>waterIntersectsCircle(m,x,footY,r+5)))continue;
         if(this.environment?.isHazardFree?.(x,footY,r+4)===false)continue;
+        if(this.worldTravel?.safety.allowsSpawn(x,footY,r+4)===false)continue;
         return {x,y};
       }
     }
@@ -339,16 +365,20 @@ export class Game {
     return found;
   }
   _moveEntity(entity,dx,dy,isPlayer=false,movementQueries=null) {
+    const safety=!isPlayer&&!entity.isCompanion&&!entity.heroId&&this.worldTravel?.safety.active?this.worldTravel.safety:null;
+    if(safety)({dx,dy}=safety.limitMovement(entity,dx,dy));
     if(isFrostcrownBody(entity)){
       const moved=moveFrostcrownGround(this.terrain,entity,dx,dy,movementProfile(entity));
       if(Number.isFinite(entity._walkStartX))entity._walkStartX+=moved.correctionX||0;
       if(Number.isFinite(entity._walkStartY))entity._walkStartY+=moved.correctionY||0;
-      entity.x=moved.x;entity.y=moved.y;return {...moved,y:moved.y+groundOffset(entity)};
+      entity.x=moved.x;entity.y=moved.y;safety?.resolveEnemyPosition(entity);return {...moved,x:entity.x,y:entity.y+groundOffset(entity)};
     }
     let queryCache;
     if(movementQueries){queryCache=movementQueries.get(entity);if(!queryCache){queryCache={};movementQueries.set(entity,queryCache);}}
     const offset=groundOffset(entity,isPlayer||entity.isCompanion),moved=this.terrain.moveCircle(entity.x,entity.y+offset,dx,dy,entity.r,movementProfile(entity),queryCache);
-    entity.x=moved.x;entity.y=moved.y-offset;return moved;
+    entity.x=moved.x;entity.y=moved.y-offset;
+    if(safety?.resolveEnemyPosition(entity)){moved.x=entity.x;moved.y=entity.y+offset;}
+    return moved;
   }
   _moveEnemy(e,dt,target=null) {
     dt=Math.max(0,dt-(e._weaponPushTime||0));
@@ -420,11 +450,13 @@ export class Game {
   _updateSpore(e,dt) {return updateSpore(this,e,dt);}
   _resolveEnemyAttacks(dt) {
     const p=this.player,px=p.x,py=p.y+groundOffset(p,true),targets=friendlyTargets(this);
+    const safety=this.worldTravel?.safety.active?this.worldTravel.safety:null;
     const context={targets,px,py,maxEnemyBullets:BALANCE.maxEnemyBullets};
     for(const e of this.enemies)if(e.hp>0&&e.guardActive!==false&&!this.abilities.isFrozen(e))resolveEnemyBehavior(this,e,context);
     for(const b of this.enemyBullets) {
       if(b.life<=0)continue;
       const elapsed=Math.min(dt,b.life),dx=b.vx*elapsed,dy=b.vy*elapsed;
+      if(safety?.blocksSegment(b.x,b.y,b.x+dx,b.y+dy,b.r)){b.life=0;continue;}
       let terrainHit=Infinity;
       for(const o of this.terrain.query(Math.min(b.x,b.x+dx)-b.r,Math.min(b.y,b.y+dy)-b.r,Math.max(b.x,b.x+dx)+b.r,Math.max(b.y,b.y+dy)+b.r))
         if(blocksObstacle(o,'projectile'))terrainHit=Math.min(terrainHit,obstacleImpact(o,b.x,b.y,dx,dy,b.r));
@@ -449,6 +481,7 @@ export class Game {
     if(!this.sceneContent.allows('worldContent'))return null;
     if(this.dungeon.active)return this.dungeon.getInteraction();
     const candidates=[];
+    const waypoint=this.worldTravel?.getInteraction();if(waypoint)candidates.push(waypoint);
     const expedition=this.expedition?.getInteraction?.();if(expedition)candidates.push(expedition);
     const settlement=this.settlements.getInteraction();if(settlement)candidates.push(settlement);
     const portal=this.regions.getInteraction();if(portal)candidates.push(portal);
@@ -463,6 +496,7 @@ export class Game {
     const interaction=this.getInteraction();
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
+    if(interaction.category==='worldTravel')return this.worldTravel.interact(interaction.id);
     if(interaction.type==='expeditionPassage')return !!this.expedition?.interact(interaction.id);
     if(interaction.category==='quest')return !!this.quests?.interact(interaction.id);
     if(interaction.category==='rift')return !!this.riftExploration?.interact(interaction.id);
@@ -493,12 +527,12 @@ export class Game {
     if(pending.source==='region')this.regions.completeReward();
     else this.dungeon.completeReward();
     if(this.status==='super')this.status='playing';
-    this._trySkillUpgrade();return true;
+    this._trySkillUpgrade();this._scheduleWorldSave('super-choice');return true;
   }
   getShopItems(){return this.settlements.getShopItems();}
   buyShopItem(id){
     if(this.status!=='shop'||!this.settlements.buy(id))return false;
-    this._trySkillUpgrade();return true;
+    this._trySkillUpgrade();this._scheduleWorldSave('shop-purchase');return true;
   }
   closeShop(){
     if(this.status!=='shop')return false;
@@ -507,7 +541,7 @@ export class Game {
   getRelicChoices() { return this.relics.getChoices(); }
   chooseRelic(id) {
     if(this.status!=='relic'||!this.relics.choose(id))return false;
-    this.status='playing';this._trySkillUpgrade();return true;
+    this.status='playing';this._trySkillUpgrade();this._scheduleWorldSave('relic-choice');return true;
   }
   _switchRegion(portal=this.portal) {
     if(!this.sceneContent.allows('worldContent')||this.stage)return false;
@@ -538,6 +572,7 @@ export class Game {
       this.dungeon.resetRegion();
       const worldSpawn=this.terrain.island?.layout?.spawn;
       if(worldSpawn){p.x=worldSpawn.x;p.y=worldSpawn.y-groundOffset(p,true);}
+      this.worldTravel.prepareRegion();
       this._moveEntity(p,0,0,true);
       if(this._features.environment)this.environment=new Environment(this,{generation:ambient});
       if(this._features.adventure)this.adventure=new Adventure(this,{generation:ambient});
@@ -547,10 +582,15 @@ export class Game {
       this.riftExploration=new RiftExploration(this);
       this.relicSites=new RelicSites(this,{generation:!!(residents&&this._features.adventure&&(this._features.encounters||this._features.companions))});
       this.territories=new MonsterTerritories(this);
+      this.worldSave?.restoreRegion(this);
     }
+    this.worldTravel.prepareRegion();
     if(this.adventure){this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;}
-    const arrival=this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>candidate.nextRegionIndex===fromIndex);
-    if(arrival) {
+    const fastTravel=portal.arrivalKind==='waypoint',arrival=fastTravel?null:this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>candidate.nextRegionIndex===fromIndex);
+    if(fastTravel){
+      const point=this.worldTravel.arrivalPoint(portal,p.r);
+      if(point){p.x=point.x;p.y=point.y-groundOffset(p,true);}
+    }else if(arrival) {
       // Land just in front of the paired gate, never at a different region's
       // coordinates. The interaction latch prevents an immediate bounce back.
       const point=this.regions.arrivalPoint(arrival,p.r);
@@ -567,16 +607,18 @@ export class Game {
     this.companions.onSceneChange?.(arrival?{doorway:portalDoor(arrival),direction:arrival.arrivalDirection||{x:0,y:1}}:null);
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
     this.quests?.enterWorld();
+    this.worldTravel.onRegionEntered();
     this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex,mapId:this.mapId});return true;
   }
 
   update(dt,input={}) {
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
-    if(this.status==='dead'){this.story?.cleanup('death');this.realms?.cancel('death');return;}
+    if(this.status==='dead'){this.story?.cleanup('death');this.realms?.cancel('death');if(!this._deathSaved){this._deathSaved=true;this._scheduleWorldSave('death');}return;}
     if(this.sceneTransition.active){this.sceneTransition.update(dt);return;}
     if(this.story?.dialogueBlocking){this.story.update(dt);return;}
     this.regions.flushReward();
     if(this.status!=='playing') return;
+    if(this.worldSave){this._worldSaveElapsed=(this._worldSaveElapsed||0)+dt;if(this._worldSaveElapsed>=20){this._worldSaveElapsed=0;this._scheduleWorldSave('autosave');}}
     const interact=!!input.interact,pressed=interact&&!this._interactHeld;this._interactHeld=interact;
     if(pressed&&this.requestInteraction())return;
     const p=this.player;
@@ -606,6 +648,7 @@ export class Game {
     updateLocomotion(p,oldX,oldY,dt);
     if(p.moving)p.moveFacing=Math.atan2(p.y-oldY,p.x-oldX);
     this.story?.updateActors?.(dt);
+    this.worldTravel.update();
     this.quests?.update();
     if(this.sceneContent.allows('worldContent')&&this.touchInteractions.update())return;
     if(this.sceneContent.allows('worldContent'))this.adventure?.update(dt);
@@ -639,6 +682,7 @@ export class Game {
       if(!e.trainingDummy&&usesEnemyLocomotion(e)){e._walkStartX=e.x;e._walkStartY=e.y;}
       if(e.trainingDummy||this.abilities.isFrozen(e))continue;
       if(this.story?.active&&this.story.beforeEnemy(e,dt))continue;
+      if(!inDungeon&&this.worldTravel.safety.updateEnemy(e,dt))continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.territories?.updateEnemy(e,dt))continue;
@@ -837,5 +881,5 @@ export class Game {
   }
   _trySkillUpgrade() {return this.story?.suppressChoices||this.realms?.active?false:this.progression.tryUpgrade();}
   getUpgradeChoices() {return this.progression.getChoices();}
-  chooseUpgrade(id) {return this.progression.choose(id);}
+  chooseUpgrade(id) {const changed=this.progression.choose(id);if(changed)this._scheduleWorldSave('upgrade-choice');return changed;}
 }

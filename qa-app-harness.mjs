@@ -103,7 +103,7 @@ export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=
   globalThis.document=document;
   const window={location:{search},devicePixelRatio:2,addEventListener:(type,handler)=>listen(`window:${type}`,handler)};
   const navigator={userAgent:'QA frame integration'};
-  const sandbox={...modules,...moduleOverrides,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},matchMedia:query=>({matches:query==='(pointer: coarse)'&&coarse}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value))},requestAnimationFrame:requestFrame,cancelAnimationFrame:id=>frames.delete(id),setTimeout:setTimer,clearTimeout:id=>timers.delete(id),console:consoleImpl};
+  const sandbox={...modules,...moduleOverrides,document,window,navigator,performance:{now:()=>{clockReads++;return performance.now();}},URLSearchParams,ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},matchMedia:query=>({matches:query==='(pointer: coarse)'&&coarse}),localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value)),removeItem:key=>storage.delete(key)},requestAnimationFrame:requestFrame,cancelAnimationFrame:id=>frames.delete(id),setTimeout:setTimer,clearTimeout:id=>timers.delete(id),console:consoleImpl};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
   // The harness loads the app after configuration directly. Mirror the boot
   // module's successful control release before simulating user interaction.

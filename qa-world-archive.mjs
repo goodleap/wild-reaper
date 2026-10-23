@@ -12,7 +12,7 @@ assert.deepEqual(WORLD_ARCHIVE_WORLDS.map(({id,name})=>({id,name})),REGIONS.map(
 const byId=new Map(WORLD_ARCHIVE_LOCATIONS.map(item=>[item.id,item]));
 assert.equal(byId.size,WORLD_ARCHIVE_LOCATIONS.length,'stable unique location IDs');
 for(const id of ['castle','hunt','rescue','owlroost','golemaltar','rune','stonevault','occupied','supply','merchant','angel','dogcamp','shipwreck','belltower','mine','icealtar','furnace'])assert.ok(byId.has(id),`${id} documented`);
-assert.equal(WORLD_ARCHIVE_WORLDS.length,12);
+assert.equal(WORLD_ARCHIVE_WORLDS.length,REGIONS.length);
 for(const world of WORLD_ARCHIVE_WORLDS)for(const key of ['theme','risk','tip'])assert.ok(world[key]?.length>0,`${world.id} has actual gameplay reference`);
 assert.ok(byId.get('rune').feature.includes(`${REGIONAL_MECHANISM_RULES.runeDuration} 秒`));
 assert.ok(byId.get('dogcamp').trigger.includes(`${ARMY_SITE_RULES.dogCost} 金币`));
@@ -43,11 +43,11 @@ assert.equal(allArtKeys.size,WORLD_ARCHIVE_WORLDS.length+WORLD_ARCHIVE_LOCATIONS
 assert.equal(worldArchiveSelection({category:'unknown',selectedId:'stonevault'}).selected.id,'forest');
 assert.equal(worldArchiveSelection({category:'relics',selectedId:'forest'}).selected.id,'castle');
 assert.match(archivePanelHTML({}, {tab:'world',worldCategory:'relics',worldSelectedId:'stonevault'}),/进入宝库获得/);
-assert.match(worldArchiveHTML({selectedId:'marsh'}),/自由探索：[\s\S]*无需击败驻门首领[\s\S]*往返/,'the remade marsh describes natural travel and persistent exploration');
-assert.match(worldArchiveHTML({selectedId:'rift-forest'}),/自然山口和长桥[\s\S]*无需击败驻门首领/,'the original authored map describes natural travel');
-assert.match(worldArchiveHTML({selectedId:'verdant-rift'}),/世界选择[\s\S]*独立地图[\s\S]*没有跨世界出口/,'the new authored map describes its actual independent entry');
+assert.match(worldArchiveHTML({selectedId:'marsh'}),/世界探索：[\s\S]*郊外道路[\s\S]*往返/,'the remade marsh describes natural travel and persistent exploration');
+assert.match(worldArchiveHTML({selectedId:'rift-forest'}),/郊外道路相连[\s\S]*传送点/,'the original authored map describes natural travel');
+assert.match(worldArchiveHTML({selectedId:'verdant-rift'}),/世界探索：[\s\S]*传送点[\s\S]*自动保存/,'the authored region describes the shared persistent world');
 assert(!worldArchiveHTML({selectedId:'verdant-rift'}).match(/archive-small-note[^>]*>[^<]*击败驻门首领/),'the new world does not promise guardian-locked exits');
-assert.match(worldArchiveHTML(),/具体位置留待每局冒险中探索/);
+assert.match(worldArchiveHTML(),/具体位置随探索记录/);
 
 // Exercise every portrait through the real gameplay painters. The canvas fake
 // checks finite geometry/state and cache lifetime, without claiming browser QA.
@@ -91,4 +91,4 @@ for(const {stack} of contexts)assert.equal(stack.length,0,'all painter transform
 const css=fs.readFileSync(new URL('./dist/archive.css',import.meta.url),'utf8');
 assert.match(css,/world-archive-grid\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
 assert.match(css,/world-archive-detail:focus-visible/);
-console.log('World codex checked: 12 worlds/17 locations, natural/standalone travel descriptions, nonempty authored portrait, isolated guide selection, bounded warm cache and finite geometry.');
+console.log('World codex checked: current regions/locations, unified travel descriptions, nonempty authored portrait, isolated guide selection, bounded warm cache and finite geometry.');

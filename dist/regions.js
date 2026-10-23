@@ -23,6 +23,11 @@ export class Regions {
   get defeatedConnectionsCount(){return this.unlockedConnections.size;}
   get endlessUnlocked(){return !this.game._worldExploration&&!this.game.stage&&!this.game.expedition&&this.unlockedConnections.size>=GUARDIAN_RULES.endlessConnections;}
   _endpoint(target,{origin=null,back=false}={}) {
+    if(this.game.worldTravel?.enabled){
+      const endpoint=this.game.worldTravel.portalTo(target,{back});
+      if(endpoint)this.unlockedConnections.add(endpoint.connectionId);
+      return endpoint;
+    }
     if(!Number.isInteger(target)||!worldNeighbors(this.game.regionIndex).includes(target))return null;
     const g=this.game,index=normalizeWorldIndex(g.regionIndex),plan=g.terrain.island?.plan?.[`portal:${target}`];
     const natural=g.terrain.island?.layout?.kind==='rift-forest';
@@ -84,10 +89,10 @@ export class Regions {
     // Small isolated mechanics fixtures keep the legacy timed-boss trigger.
     // Once entered they still use the same finite world graph.
     if(!this.guarded&&!fromPortal)return;
-    if(fromPortal)this.unlockedConnections.add(worldConnectionId(index,fromRegionIndex));
-    const targets=worldNeighbors(index);
+    if(fromPortal&&fromPortal.arrivalKind!=='waypoint')this.unlockedConnections.add(fromPortal.connectionId||worldConnectionId(index,fromRegionIndex));
+    const targets=g.worldTravel?.enabled?g.worldTravel.neighborIndices():worldNeighbors(index);
     for(const target of targets){const endpoint=this._endpoint(target,{back:fromPortal&&target===fromRegionIndex});if(endpoint)this.portals.push(endpoint);}
-    if(fromPortal)fromPortal.targetPortalId=`portal:${index}:${normalizeWorldIndex(fromRegionIndex)}`;
+    if(fromPortal&&fromPortal.arrivalKind!=='waypoint')fromPortal.targetPortalId=`portal:${index}:${normalizeWorldIndex(fromRegionIndex)}`;
     g.portal=this.portals.find(portal=>portal.state==='locked')||this.portals[0]||null;
     this._setStructures();
     if(this.guarded)for(const portal of this.portals)if(portal.state==='locked'&&!portal.natural)this._spawnGuardian(portal);
@@ -196,7 +201,7 @@ export class Regions {
     const g=this.game,portal=this._portal(portalOrId);
     return !!(portal&&portal.state==='active'&&g.status==='playing'&&!g.superSkills.pending&&!this._rewardQueue.length&&!g.dungeon?.active&&
       !this.rewardPortal&&(!g.stage||portal.kind==='victory'&&g.stage.bossDefeated&&this.portals.includes(portal))&&
-      (g.stage||!g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false))&&portalEntranceContains(portal,feet(g)));
+      (g.stage||portal.worldConnection||!g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false))&&portalEntranceContains(portal,feet(g)));
   }
   getInteraction() {
     const portal=this.nearest(),g=this.game;if(!portal||g.status!=='playing'||g.dungeon?.active)return null;

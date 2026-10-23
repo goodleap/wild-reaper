@@ -167,6 +167,7 @@ export class CombatResolution {
 
   damagePlayer(amount,origin=null) {
     const g=this.game;
+    if(g.worldTravel?.safety?.protects(g.player))return false;
     const p=g.player;if(p.invuln>0||g.status!=='playing'||!Number.isFinite(amount)||amount<=0)return false;
     g.companions?.alert?.(origin);
     amount*=1-resolveCharacterStats(g).damageReduction;

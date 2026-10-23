@@ -11,6 +11,7 @@ import { enemyGroupProvoked } from './combat-tactics.js';
 import { settlementInteraction, activateSettlement, getShopItems, buyShopItem } from './sites/settlement-content.js';
 export { SETTLEMENT_RULES, ANGEL_RULES } from './site-definitions.js';
 import { worldSettlementDefinition, WORLD_HUT_NAMES } from './world-sites.js';
+import { worldFacilitySites } from './world-shops.js';
 const economy=getConfigSection('economy'),guardRules=getConfigSection('sites').settlementGuards;
 
 const TAU=Math.PI*2;
@@ -93,12 +94,13 @@ export class Settlements {
   resetRegion() {
     this.activeShop=null;this.sites=[];this.game.terrain.setStructures?.([],'settlements');
     if(!this.generation)return;
+    this.sites.push(...worldFacilitySites(this.game));this._setStructures();
     // Only a debug run's initial region gives its existing castle first
     // placement; ordinary regions keep the usual site ordering.
     const castleIndex=SITE_DEFS.findIndex(def=>def.type==='castle');
     const nearbyCastle=this.game.debugOptions?.testFacilities&&['forest','rift-forest'].includes(this.game.region?.id)?this._createSite(SITE_DEFS[castleIndex],castleIndex,{nearSpawn:true}):null;
     if(nearbyCastle){this.sites.push(nearbyCastle);this._setStructures();}
-    SITE_DEFS.forEach((def,index)=>{if(nearbyCastle&&def.type==='castle')return;const site=this._createSite(def,index);if(site){this.sites.push(site);this._setStructures();}});
+    SITE_DEFS.forEach((def,index)=>{if(nearbyCastle&&def.type==='castle'||this.game.mode==='world'&&def.type==='merchant')return;const site=this._createSite(def,index);if(site){this.sites.push(site);this._setStructures();}});
     this.ensureAngels();
     // Starter monster angles are random and must not change site identities.
     // Resolve the rare overlap after placing the deterministic foundations.
@@ -151,7 +153,8 @@ export class Settlements {
       const d=distance(p,site.door);if(d>site.interactRadius||d>=best)continue;
       if(site.state==='spent'&&site.type==='merchant')continue;
       const {label,description,enabled}=settlementInteraction(site);
-      nearest={id:site.id,siteId:site.id,type:site.type,label,description,x:site.door.x,y:site.door.y,enabled};best=d;
+      const type=site.worldFacility?(site.worldFacility==='rest'?'worldRest':'worldShop'):site.type;
+      nearest={id:site.id,siteId:site.id,type,label,description,x:site.door.x,y:site.door.y,enabled,...(site.worldFacility?{touchRadius:32}:{})};best=d;
     }
     return nearest;
   }

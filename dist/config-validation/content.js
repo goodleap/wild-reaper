@@ -62,6 +62,24 @@ export function validateContent(sections){
   const shop=object(economy.shop,'economy.shop');number(shop.relicPrice,'shop.relicPrice');object(shop.stock,'shop.stock');const itemIds=unique(shop.items,'shop.items');requiredIds(itemIds,['heal','magnet','fury','shield'],'shop.items');
   for(const def of shop.items){oneOf(def.id,['heal','magnet','fury','shield'],'shop behavior');names(def,`shop.${def.id}`,['name','description','icon','color','reason']);number(def.price,`shop.${def.id}.price`);integer(shop.stock[def.id],`shop.stock.${def.id}`);if(def.id==='heal')number(def.healing,'shop.heal.healing',1);if(['magnet','fury'].includes(def.id))number(def.duration,`shop.${def.id}.duration`,.1,60);for(const match of def.description.matchAll(/\{([^}]+)\}/g))if(!['healing','duration','ward'].includes(match[1]))fail(`shop.${def.id}.description placeholder`);}
   integer(shop.stock.relic,'shop.stock.relic');
+  const worldShops=object(economy.worldShops,'economy.worldShops');
+  integer(worldShops.inventoryLimit,'economy.worldShops.inventoryLimit',1,999);
+  for(const [key,category,catalog] of [['weaponPrices','weapon',sections.combat?.weapons],['skillPrices','skill',sections.combat?.skills]]){
+    const prices=object(worldShops[key],`economy.worldShops.${key}`);
+    if(!Object.keys(prices).length)fail(`economy.worldShops.${key}`);
+    for(const [id,price] of Object.entries(prices)){
+      const def=catalog?.[id],upgrade=sections.combat?.upgrades?.find(entry=>entry.id===id);
+      if(!def||def.category!==category||def.tier!=='regular'||!upgrade||upgrade.upgradeKind!=='rank'||upgrade.ownerId!==id||upgrade.requires.length)fail(`economy.worldShops.${key}.${id} base ability`);
+      integer(price,`economy.worldShops.${key}.${id}`,1,10000);
+    }
+  }
+  const supply=object(worldShops.skillSupply,'economy.worldShops.skillSupply');
+  for(const id of worldIds){
+    const entries=array(supply[id],`economy.worldShops.skillSupply.${id}`);
+    if(new Set(entries).size!==entries.length)fail(`economy.worldShops.skillSupply.${id} duplicates`);
+    for(const skill of entries)if(!Object.hasOwn(worldShops.skillPrices,skill))fail(`economy.worldShops.skillSupply.${id}.${skill}`);
+  }
+  for(const id of Object.keys(supply))if(!worldIds.has(id))fail(`economy.worldShops.skillSupply.${id} world`);
   numeric(economy.pickups,'economy.pickups',['buffDuration','minBuffDuration','maxBuffDuration','herbHealing','furyDamage','furyFireRate','magnetRange','magnetAttractRange','life','supplyHp','supplyChance']);number(economy.pickups.supplyChance,'supplyChance',0,1);for(const type of array(economy.pickups.types,'pickup types'))oneOf(type,['herb','magnet','fury'],'pickup behavior');if(economy.pickups.minBuffDuration>economy.pickups.maxBuffDuration)fail('pickup duration range');
   numeric(economy.treasure,'economy.treasure',['firstAt','spawnInterval','life','unlockedLife','despawnDelay','openDelay','engageRange','playerLeash','guardLeash','returnRange']);numeric(economy.treasure.reward,'treasure reward',['gold','crystals']);numeric(economy.treasure.guardian,'treasure guardian',['radius','hp','damage','speed','xp']);
 

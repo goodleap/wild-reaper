@@ -64,7 +64,7 @@ function collectChain(g){
 // these interactions; the underground traversal below uses actual body movement.
 const storage=memory(),city=fresh('clockshadow-city',storage),staleCity=fresh('clockshadow-city',storage);
 assert.equal(entry(city,'clock-bridge').status,'available');assert(bridgeBlocked(city));
-const supply=city.settlements.sites.find(site=>site.type==='supply');assert(supply);approach(city,supply);request(city,supply.id);
+const supply=city.settlements.sites.find(site=>site.type==='supply'&&!site.worldFacility);assert(supply);approach(city,supply);request(city,supply.id);
 claimChest(city,city.dungeon.active.chests[0],{guarded:false});leave(city);
 assert.equal(entry(city,'clock-bridge').status,'available','unrelated supplies do not accept or advance a quest');
 assert(entry(city,'clock-bridge').objectives.every(item=>!item.done));

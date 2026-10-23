@@ -40,6 +40,7 @@
     "test:ruins": "node qa-ruins-map.mjs && node qa-ruins-art.mjs && node qa-world-selection.mjs",
     "test:beach": "node qa-beach-map.mjs && node qa-beach-art.mjs && node qa-world-selection.mjs",
     "test:mountain": "node qa-mountain-map.mjs && node qa-mountain-art.mjs && node qa-world-selection.mjs",
-    "test:snow": "node qa-snow-map.mjs && node qa-snow-art.mjs && node qa-world-selection.mjs"
+    "test:snow": "node qa-snow-map.mjs && node qa-snow-art.mjs && node qa-world-selection.mjs",
+    "test:world-campaign": "node qa-world-travel.mjs && node qa-world-shops.mjs && node qa-world-save.mjs && node qa-world-campaign.mjs && node qa-world-travel-config.mjs && node qa-world-travel-geometry.mjs && node qa-world-connections.mjs && node qa-world-selection.mjs"
   }
 }

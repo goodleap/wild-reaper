@@ -17,7 +17,11 @@ npm run check
 npm test
 ```
 
-世界探索准备页可选择「裂谷林海」「苍翠断脊」「迷雾沼泽」「失落遗迹」「潮汐海岸」「群峰山地」「霜雪荒原」「钟影旧都」或「熔火之境」，选择会随冒险准备记录保存。地图以稳定世界 ID 区分布局、洞穴、捷径、宝箱和清理状态；原八个世界的数字身份与跨世界连接保持不变。
+世界探索使用一个连续存档，从裂谷林海开始，在游戏内通过自然通路或已点亮的传送点前往其他区域。`world-save.js` 将角色、背包、任务和已访问场景状态一起写入当前浏览器；调试、剧情及极限挑战不读写这份存档。准备页提供继续探索和明确确认后的重新开始。
+
+区域连接、营地设施及传送点配置位于 `config/worlds.json` 的 `travel`；商店价格和区域供货位于 `config/economy.json` 的 `worldShops`。修改后构建配置，运行 `npm run test:world-campaign`，覆盖真实门口通行、跨区、交易、存档及界面。配置与运行时仍以稳定世界 ID 关联。
+
+旅行接路使用 `python scripts/build-world-travel.py --write` 重建，离线依赖 Shapely 2.x；不带 `--write` 只检查。单独重建某张地表地图后，再运行此脚本恢复该区域的旅行接路，然后执行 `npm run build:config`。脚本保留已有区域和内部道路，几何处理依赖不进入游戏运行包。
 
 裂谷林海的暗河洞穴及林间旧堡使用 `python scripts/build-interior-samples.py --write` 重建（离线依赖 Shapely 2.x），只更新 `config/geography.json` 的 `interiors.authoredLayouts`。构建配置后运行 `node qa-config-interiors.mjs`、`node qa-authored-interiors.mjs` 及相关室内／任务检查；小屋家具配置仍位于 `interiors.hutLayouts`。
 

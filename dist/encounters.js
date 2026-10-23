@@ -34,7 +34,7 @@ export class Encounters {
     const g=this.game,p=this._foot(),chest=g.adventure?.treasure,hunt=type==='hunt',clearance=hunt?PLACEMENT.huntClearance:PLACEMENT.treasureClearance;
     // A stone arena belongs on clear ground, not under an existing solid tree.
     // Search a few nearby rings without removing terrain or moving its props.
-    const free=(candidate)=>g.terrain.isFree(candidate.x,candidate.y,clearance)&&(allowReserved||!g.terrain.island?.isReserved(candidate.x,candidate.y,clearance))&&(allowReserved||objectivePointSafe(g,candidate,hunt?PLACEMENT.huntObjectiveRadius:PLACEMENT.treasureObjectiveRadius))&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?PLACEMENT.huntSiteRadius:PLACEMENT.treasureSiteRadius)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,PLACEMENT.hazardClearance)!==false&&
+    const free=(candidate)=>g.worldTravel?.safety.allowsSpawn(candidate.x,candidate.y,clearance)!==false&&g.terrain.isFree(candidate.x,candidate.y,clearance)&&(allowReserved||!g.terrain.island?.isReserved(candidate.x,candidate.y,clearance))&&(allowReserved||objectivePointSafe(g,candidate,hunt?PLACEMENT.huntObjectiveRadius:PLACEMENT.treasureObjectiveRadius))&&g.settlements?.isSafePoint(candidate.x,candidate.y,hunt?PLACEMENT.huntSiteRadius:PLACEMENT.treasureSiteRadius)!==false&&g.environment?.isHazardFree?.(candidate.x,candidate.y,PLACEMENT.hazardClearance)!==false&&
       !g.adventure?.props.some(o=>distance(o,candidate)<(hunt?PLACEMENT.huntClearance+(o.r||18):PLACEMENT.propClearance))&&
       (!chest||distance(chest,candidate)>(hunt?PLACEMENT.huntChestClearance:PLACEMENT.treasureChestClearance));
     if(Number.isFinite(x)&&Number.isFinite(y))return free({x,y})?{x,y}:null;
@@ -79,6 +79,7 @@ export class Encounters {
   }
   _arenaPointSafe(point,type,active,ignoreWarning=null) {
     const g=this.game,r=guardRadius(type),p=this._foot();
+    if(g.worldTravel?.safety.allowsSpawn(point.x,point.y,r+6)===false)return false;
     if(distance(point,p)<ARENA_ACTIVATION_RULES.spawnDistance||!placementAllowed(g,'loot',{x:point.x,y:point.y,r:r+5}))return false;
     if(g.environment?.isHazardFree?.(point.x,point.y,r+6)===false||g.settlements?.isSafePoint(point.x,point.y,r+6)===false)return false;
     if(g.environment?.props.some(o=>o.state!=='spent'&&distance(point,o)<(o.blastRadius||82)+r+8))return false;

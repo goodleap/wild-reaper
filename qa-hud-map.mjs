@@ -51,12 +51,13 @@ run(`const capturedNotices=[];notify=(...args)=>capturedNotices.push(args);notif
 assert.equal(run('capturedNotices.length'),0,'unseen Boss spawn/cast does not produce a toast');
 // A royal chest's raised open lid crosses the north wall's floor silhouette.
 // Its ground anchor still controls discovery, while world depth controls which
-// wall can cover the sprite. Exercise the real castle, visibility and draw list.
+// wall can cover the sprite. Pin the procedural fixture to its original region
+// seed; a new campaign starting region must not change this room topology.
 const chestRendering=JSON.parse(run(`JSON.stringify((()=>{
   const previous=game,originalTerrain=drawTerrain,originalProp=drawAdventureProp,save=ctx.save,restore=ctx.restore;
   let vision,originalClip;
   try{
-    game=new Game({terrain:new previous.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
+    game=new Game({worldId:'forest',terrain:new previous.terrain.constructor({obstacles:[]}),adventure:false,encounters:false,environment:false,settlements:false,companions:false});
     game.enemies=[];game.viewWidth=1100;game.viewHeight=700;
     if(!game.dungeon.enter({id:'qa-raised-chest',type:'castle',x:0,y:groundOffset(game.player,true)}))throw new Error('castle fixture failed');
     const state=game.dungeon.active,chest=state.treasure,room=state.bossRoom;

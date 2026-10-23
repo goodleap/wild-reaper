@@ -19,9 +19,9 @@ export function minimapBounds(width,height,insets={}){
   const compact=width<600||height<430,size=compact?104:128,margin=compact?10:16;
   return {x:width-size-margin-(insets.right||0),y:margin+(insets.top||0),width:size,height:size,margin};
 }
-export const LANDMARK_NAMES=Object.freeze({supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',dogcamp:'旅犬营地',stonevault:'封石宝库',portal:'传送门',exit:'荒野出口',cave:'洞穴入口',shortcut:'捷径旧门',chest:'宝箱',boss:'首领',territory:'怪物领域',expedition:'副本目标'});
+export const LANDMARK_NAMES=Object.freeze({weapons:'武器铺',skills:'术法馆',supplies:'补给铺',rest:'休憩处',waypoint:'传送石',supply:'补给小屋',occupied:'废弃小屋',castle:'城堡',angel:'守护天使',hunt:'狩猎擂台',rescue:'囚牢',rune:'符文祭坛',dogcamp:'旅犬营地',stonevault:'封石宝库',portal:'传送门',exit:'荒野出口',cave:'洞穴入口',shortcut:'捷径旧门',chest:'宝箱',boss:'首领',territory:'怪物领域',expedition:'副本目标'});
 export function landmarkLabel(marker){return marker.name||LANDMARK_NAMES[marker.type]||'遗迹';}
-export function landmarkState(marker){if(marker.type==='quest')return marker.label||'任务目标';if(marker.type==='story')return marker.label||'当前剧情目标';if(marker.type==='exit'&&marker.natural)return `前往${marker.destination||'相邻区域'} · 可往返`;if(marker.type==='cave')return '进入地下通道';if(marker.type==='shortcut')return marker.gateOpen?'捷径已打通':marker.description||'从钟楼一侧开启';if(marker.type==='territory')return marker.completed?'已清理':'进入后会惊动怪群';if(marker.type==='expedition')return marker.completed?'已通关':marker.label||'副本目标';if(marker.kind==='victory')return '从正面进入，完成本局';if(marker.type==='stonevault')return marker.completed?'已领取':marker.gateOpen?'通路已开启 · 宝藏待领取':'封石阻挡 · 需要岩灵';if(marker.type==='dogcamp')return marker.completed?'已招募':'可招募寻宝小狗';if(marker.type==='rescue'&&marker.appearance==='golemaltar')return marker.completed?'岩灵已唤醒':'唤醒岩灵试炼';if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
+export function landmarkState(marker){if(marker.type==='weapons')return '购买基础武器';if(marker.type==='skills')return '学习区域术法';if(marker.type==='supplies')return '购买随身补给';if(marker.type==='rest')return '恢复全队生命';if(marker.type==='waypoint')return marker.active?'已激活 · 在此选择传送地点':'靠近以激活';if(marker.type==='quest')return marker.label||'任务目标';if(marker.type==='story')return marker.label||'当前剧情目标';if(marker.type==='exit'&&marker.natural)return `前往${marker.destination||'相邻区域'} · 可往返`;if(marker.type==='cave')return '进入地下通道';if(marker.type==='shortcut')return marker.gateOpen?'捷径已打通':marker.description||'从钟楼一侧开启';if(marker.type==='territory')return marker.completed?'已清理':'进入后会惊动怪群';if(marker.type==='expedition')return marker.completed?'已通关':marker.label||'副本目标';if(marker.kind==='victory')return '从正面进入，完成本局';if(marker.type==='stonevault')return marker.completed?'已领取':marker.gateOpen?'通路已开启 · 宝藏待领取':'封石阻挡 · 需要岩灵';if(marker.type==='dogcamp')return marker.completed?'已招募':'可招募寻宝小狗';if(marker.type==='rescue'&&marker.appearance==='golemaltar')return marker.completed?'岩灵已唤醒':'唤醒岩灵试炼';if(marker.type==='exit')return '走入出口返回荒野';if(marker.type==='boss')return marker.completed?'已击败':'已发现';if(marker.type==='chest')return marker.completed?'已领取':marker.state==='locked'?'守卫封印中':'待领取';return marker.type==='portal'?(marker.active?`已激活 · 可往返${marker.angelGuard?' · 天使守护':''}`:'封印中 · 首领驻守'):marker.completed?'已完成':marker.type==='angel'?'治疗与雷电守护':'可探索';}
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
 
 // Discovery lives on each region-owned landmark. A map instance never keeps a
@@ -33,7 +33,8 @@ function landmarks(game) {
     if(!site||!Number.isFinite(site.x)||!Number.isFinite(site.y)||seen.has(site.id??site))return;
     seen.add(site.id??site);result.push({site,type});
   };
-  for(const site of game.settlements?.sites||[])if(BUILDINGS.has(site.type))add(site,site.type);
+  for(const site of game.settlements?.sites||[])if(site.worldFacility||BUILDINGS.has(site.type))add(site,site.worldFacility||site.type);
+  const waypoint=game.worldTravel?.waypoint;if(waypoint)add({...waypoint,discovered:waypoint.activated},'waypoint');
   for(const site of game.relicSites?.sites||[])if(RELICS.has(site.type))add(site,site.type);
   for(const portal of game.regions?.portals||[])add(portal,portal.natural?'exit':'portal');
   for(const enemy of game.enemies||[])if(enemy.stageBoss&&enemy.hp>0)add(enemy,'boss');
@@ -97,7 +98,7 @@ export class WorldMap {
       if(!site.discovered&&game.debug!==true&&!stageTarget)continue;
       const dx=site.x-p.x,dy=site.y-p.y,distance=Math.hypot(dx,dy);
       if(distance>range)continue;
-      const active=type==='portal'?site.state==='active':type==='expedition'&&site.active===true;
+      const active=type==='waypoint'?site.activated===true:type==='portal'?site.state==='active':type==='expedition'&&site.active===true;
       const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored||(type==='territory'||site.kind==='boss')&&site.cleared||type==='expedition'&&site.completed===true);
       const name=site.kind==='victory'?'通关大门':type==='boss'&&site.stageBoss?'关卡首领':type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||'';
       result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,gateOpen:!!(site.gateOpen||site.open),appearance:site.appearance,kind:site.kind,name,label:site.label,color:site.color,natural:site.natural===true,destination:site.nextRegion?.name||'',description:site.description||''});
@@ -246,7 +247,15 @@ export class WorldMap {
     ctx.save();ctx.translate(x,y);ctx.lineWidth=1.25;
     const color=marker.kind==='victory'?'#f4dc91':marker.completed?'#6d8271':marker.type==='territory'?'#d59c86':marker.color|| (marker.type==='portal'?(marker.active?'#a7e3cd':'#c08b78'):marker.type==='angel'?'#eee4b7':'#cbb888');
     ctx.strokeStyle=color;ctx.fillStyle='#172b25';
-    if(marker.type==='territory') {
+    if(marker.type==='waypoint') {
+      diamond(ctx,0,0,5.5);ctx.fillStyle=marker.active?'#9dd7bb':'#526b61';ctx.fill();ctx.stroke();ctx.fillStyle='#173a2b';diamond(ctx,0,0,2);ctx.fill();
+    } else if(['weapons','skills','supplies','rest'].includes(marker.type)) {
+      rounded(ctx,-5,-5,10,10,2);ctx.fill();ctx.stroke();ctx.strokeStyle='#e2dfbc';
+      if(marker.type==='weapons'){segment(ctx,-2,3,3,-3);segment(ctx,-3,0,0,3);}
+      else if(marker.type==='skills'){segment(ctx,0,-3,0,3);segment(ctx,-3,-3,-3,2);segment(ctx,3,-3,3,2);segment(ctx,-3,2,0,3);segment(ctx,3,2,0,3);}
+      else if(marker.type==='rest'){segment(ctx,-3,0,3,0);segment(ctx,0,-3,0,3);}
+      else{ctx.strokeRect(-2,-1,4,4);segment(ctx,-1,-3,1,-3);segment(ctx,0,-3,0,-1);}
+    } else if(marker.type==='territory') {
       ctx.beginPath();ctx.arc(0,0,5,0,TAU);ctx.fill();ctx.stroke();ctx.fillStyle=color;ctx.fillRect(-1.2,-1.2,2.4,2.4);
     } else if(marker.type==='expedition'&&['stairs','door'].includes(marker.kind)) {
       for(let step=0;step<3;step++)segment(ctx,-4+step*3,4-step*3,-1+step*3,4-step*3);

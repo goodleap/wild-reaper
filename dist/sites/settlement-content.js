@@ -6,7 +6,8 @@ const WARD=SETTLEMENT_RULES.ward;
 
 export function settlementInteraction(site){
       let label='',description='',enabled=true;
-      if(site.type==='merchant'){label='与商人交易';description='购买一件补给或遗物后，游商将离开';}
+      if(site.worldFacility){label=site.worldFacility==='rest'?'安歇恢复':`进入${site.name}`;description=site.worldFacility==='rest'?'恢复全队生命 · 设为返回据点':site.worldFacility==='supplies'?'购买补给，随身携带并按需使用':'购买尚未掌握的基础能力';}
+      else if(site.type==='merchant'){label='与商人交易';description='购买一件补给或遗物后，游商将离开';}
       else if(site.type==='supply'||site.type==='occupied'||site.type==='castle') {
         const visited=site.explored||site.state==='spent';
         if(site.type==='castle'){label=site.featureId||site.region==='ember-realm-large'?`${visited?'重返':'进入'}${site.name}`:visited?'重返已探索古堡':'进入古堡迷宫';description=visited?'宝藏已领取，不会重复刷新':'有限迷宫 · 击败最终首领获取超级技能';}
@@ -18,6 +19,7 @@ export function settlementInteraction(site){
 
 export function getShopItems(settlements) {
     const g=settlements.game,site=settlements.activeShop;if(!site||g.status!=='shop')return [];
+    if(site.worldFacility)return g.worldShops.getItems(site);
     const relic=RELICS.find(r=>r.id===site.relicId),ward=g.relics?.wardAmount??g.relics?.wardValue??0;
     const items=shop.items.map(def=>{
       const usable=def.id==='heal'?g.player.hp<g.player.maxHp:def.id==='magnet'?!!g.adventure&&g.adventure.magnetTime<def.duration:def.id==='fury'?!!g.adventure&&g.adventure.furyTime<def.duration:!!g.relics&&ward<WARD;
@@ -29,7 +31,9 @@ export function getShopItems(settlements) {
   }
 
 export function buyShopItem(settlements,id) {
-    const g=settlements.game,site=settlements.activeShop,item=getShopItems(settlements).find(i=>i.id===id);
+    const g=settlements.game,site=settlements.activeShop;
+    if(site?.worldFacility)return g.worldShops.buy(site,id);
+    const item=getShopItems(settlements).find(i=>i.id===id);
     if(!site||!item?.available||!Number.isFinite(g.gold)||g.gold<item.price)return false;
     if(id==='heal'){
       const healed=Math.min(item.healing,g.player.maxHp-g.player.hp);if(!(healed>0))return false;
@@ -49,4 +53,10 @@ const SETTLEMENT_ACTIONS=Object.freeze({
   interior:(settlements,site)=>!!settlements.game.dungeon?.enter(site),
   shop:(settlements,site)=>{const g=settlements.game;settlements.activeShop=site;g.status='shop';g._emit('shopOpen',{name:site.name});return true;}
 });
-export function activateSettlement(settlements,site){return SETTLEMENT_ACTIONS[settlementType(site)?.interaction]?.(settlements,site)||false;}
+export function activateSettlement(settlements,site){
+  if(site?.worldFacility){
+    if(settlements.game.mode!=='world')return false;
+    return site.worldFacility==='rest'?settlements.game.worldShops.rest(site):SETTLEMENT_ACTIONS.shop(settlements,site);
+  }
+  return SETTLEMENT_ACTIONS[settlementType(site)?.interaction]?.(settlements,site)||false;
+}

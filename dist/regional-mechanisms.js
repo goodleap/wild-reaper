@@ -46,6 +46,7 @@ export class RegionalMechanisms {
     // A removed chest therefore cannot relocate a previously seen mechanism.
     for(let i=0;i<6;i++){
       const x=tx*CELL+95+env._hash(tx+1481+i*31,ty+1483)*330,y=ty*CELL+95+env._hash(tx+1487,ty+1489+i*23)*330;
+      if(this.game.worldTravel?.safety?.allowsSpawn(x,y,r)===false)continue;
       if(Math.hypot(x-safe.x,y-safe.y)<REGIONAL_MECHANISM_RULES.safeRadius+r||!this.game.terrain.isFree(x,y,r+18)||(this.game.terrain.island&&!this.game.terrain.island.naturalCircleFree(x,y,r+18)))continue;
       if(!placementAllowed(this.game,type==='gas'?'wetlandHazard':'hazard',{x,y,r:r+8},{environment:env,checkTerrain:false}))continue;
       return {id:`${type}:${tx},${ty}`,type,x,y,r,seed,sortY:y,aimY:y,hp:type==='vine'?1:undefined,state:'idle',remaining:2+seed*2,maxRemaining:2+seed*2,warning:0,charge:0};
@@ -54,6 +55,7 @@ export class RegionalMechanisms {
   }
   _objectiveClear(prop){
     const g=this.game,r=prop.r;
+    if(g.worldTravel?.safety?.allowsSpawn(prop.x,prop.y,r)===false)return false;
     if(g.relicSites?.isSafePoint(prop.x,prop.y,r)===false)return false;
     if(g.regions?.isSafePoint?.(prop.x,prop.y,r)===false)return false;
     if(g.settlements?.isSafePoint(prop.x,prop.y,r)===false)return false;

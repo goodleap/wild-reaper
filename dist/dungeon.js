@@ -73,6 +73,7 @@ export class Dungeon {
     if(caveEntry){const d=caveEntry.direction;this._placePlayer({x:caveEntry.x+d.x*90,y:caveEntry.y+d.y*90},{doorway:caveEntry,direction:d});}
     else this._placePlayer(state.landing||state.entrance,{doorway:state.entrance,direction:{x:0,y:-1}});
     if(!state.populated){state.populated=true;interiorSceneFor(state).populate(this,state);if(state.kind==='cave'&&!state.authoredLayout){const boss=g.enemies.find(e=>e.id===state.bossId);if(boss)boss.name='暗河守卫';}}
+    g.worldSave?.restoreDungeon(g,state);
     this._clearScene();g._refreshStats();g._refreshWeapons();this.update(0);
     g.quests?.onDungeonEnter(state,site);
     g._emit('dungeonEnter',{name:state.name,revisit:state.visited.size>1});return true;

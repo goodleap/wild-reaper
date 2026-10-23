@@ -4,6 +4,7 @@ import { validateRiftLayout } from './rift-layout.js';
 import { validateExpeditionScenes } from './expedition-scenes.js';
 import { validateMoonLandform } from './moon-landform.js';
 import { validateInteriorLayouts, validateCaveLayouts } from './interior-layouts.js';
+import { validateWorldTravel } from './world-travel.js';
 import { WATER_SHAPES } from '../water-geometry.js';
 
 const coreWorldIds=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large'];
@@ -102,6 +103,7 @@ export function validateWorlds(sections){
     for(const key of ['waterMovement','waterImmersion']){object(e[key],p+'.'+key);for(const state of ['idle','active'])number(e[key][state],p+'.'+key+'.'+state,0,3);}
     object(w.art,p+'.art');for(const palette of Object.values(w.art))for(const value of Object.values(object(palette,p+'.palette'))){if(typeof value==='number')number(value,p+'.palette',0,10);else text(value,p+'.palette');}
   }
+  validateWorldTravel(worlds);
   const stageIds=new Set(),mapIds=new Set();
   for(const s of list(stages.definitions,'stages.definitions',1)){
     const p='stage '+text(s.id,'stage.id');if(stageIds.has(s.id))fail(p+'.duplicate');stageIds.add(s.id);ref(s.worldMapId,worldIds,p+'.worldMapId');

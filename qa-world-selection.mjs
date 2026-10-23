@@ -1,136 +1,68 @@
 import assert from 'node:assert/strict';
-import { harness as createHarness } from './qa-app-harness.mjs';
-import { WORLD_IDS, worldNeighbors } from './dist/world-definitions.js';
-import { createRiftLayout } from './dist/worlds/rift-layout.js';
-import { groundOffset } from './dist/terrain.js';
+import { harness,html } from './qa-app-harness.mjs';
+import { getConfigSection } from './dist/content-config.js';
+import { WORLD_SAVE_KEY } from './dist/world-save.js';
+import { landmarkState } from './dist/world-map.js';
 
-// Exercise the normal preparation handlers and their real Game instances.
-// Canvas is mocked here; browser layout and performance need browser checks.
-// Image fetching is mocked with the other rendering dependencies; decode and
-// failure/retry behavior have their own asset QA and real Chromium capture.
-const harness=(search='',options={})=>createHarness(search,{...options,moduleOverrides:{cityDetailArt:{preload:async()=>{},drawProp:()=>false,ready:false},cityArtLibrary:{preload:async()=>{},draw:()=>true,coversPlayer:()=>true}}});
-const worlds=[
-  {id:'rift-forest',radio:'world-rift-forest',preview:'world-preview',name:'裂谷林海',width:7200,height:5400},
-  {id:'verdant-rift',radio:'world-verdant-rift',preview:'world-preview-verdant-rift',name:'苍翠断脊',width:14400,height:10800},
-  {id:'marsh',radio:'world-marsh',preview:'world-preview-marsh',name:'迷雾沼泽',width:14400,height:10800},
-  {id:'ruins',radio:'world-ruins',preview:'world-preview-ruins',name:'失落遗迹',width:14400,height:10800},
-  {id:'beach',radio:'world-beach',preview:'world-preview-beach',name:'潮汐海岸',width:14400,height:10800},
-  {id:'mountain',radio:'world-mountain',preview:'world-preview-mountain',name:'群峰山地',width:14400,height:10800},
-  {id:'snow',radio:'world-snow',preview:'world-preview-snow',name:'霜雪荒原',width:14400,height:10800},
-  {id:'clockshadow-city',radio:'world-clockshadow-city',preview:'world-preview-clockshadow-city',name:'钟影旧都',width:14400,height:10800},
-  {id:'ember-realm-large',radio:'world-ember-realm-large',preview:'world-preview-ember-realm-large',name:'熔火之境',width:14400,height:10800}
-];
-const node=(h,id)=>h.document.getElementById(id);
-const click=(h,id)=>h.fire(node(h,id),'click');
-const choose=(h,ids,id)=>{
-  for(const key of ids)node(h,key).checked=key===id;
-  h.fire(node(h,id),'change');
-};
-const selectWorld=(h,id)=>choose(h,worlds.map(world=>world.radio),worlds.find(world=>world.id===id).radio);
-const selectMode=(h,id)=>choose(h,['mode-world','mode-dungeon'],`mode-${id}`);
-const saved=h=>JSON.parse(h.storage.get('wild-echoes-setup'));
-const quiet=h=>h.run('game.enemies=[];game._spawn=Infinity;game._shot=Infinity;game.nextBossAt=Infinity;game.regionGrace=Infinity;game.crystalsNext=Infinity;game.player.xpNext=Infinity;game.player.invuln=Infinity;');
-const assertDestination=(h,world)=>{
-  const game=h.run('game'),layout=createRiftLayout(world.id);
-  assert.equal(game.debug,false,'normal world choice never enables debug');
-  assert.equal(game.mode,'world');assert.equal(game.startWorldId,world.id);assert.equal(game.worldId,world.id);assert.equal(game.region.id,world.id);
-  assert.equal(game.terrain.region,world.id);
-  assert.equal(game.terrain.island.layout,layout,'selected world owns the actual collision/render layout');
-  assert.equal(layout.bounds.maxX-layout.bounds.minX,world.width);assert.equal(layout.bounds.maxY-layout.bounds.minY,world.height);
-  assert.equal(game.player.x,layout.spawn.x);assert.equal(game.player.y+groundOffset(game.player,true),layout.spawn.y);
-  if(world.id==='ember-realm-large'){
-    assert.equal(game.mapId,7,'the complete ember world owns the volcanic world slot');
-    assert.equal(layout.artTheme,'ember');
-    assert.deepEqual(game.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),[...worldNeighbors(7)].sort((a,b)=>a-b),'the complete ember world connects to the snowfield and ruins');
-    assert.equal(game.regions.states.size,0,'launching the ember world cannot initialize a different world');
-    assert.equal(layout.emberScene.sample,false);assert.equal(layout.areas.length,17);
-    assert.equal(layout.encounters.filter(encounter=>encounter.kind==='boss').length,2,'both authored open Boss encounters launch with the complete map');
-    assert.equal(game.territories.groups.length,layout.encounters.length,'the ember world creates its actual baked encounter reservations');
-    assert.equal(game.enemies.filter(enemy=>enemy.worldBoss).length,2,'the selected complete map creates both existing-system open bosses');
-    assert.equal(game.riftExploration.sites.filter(site=>site.kind==='chest').length,10);assert.equal(game.riftExploration.sites.filter(site=>site.kind==='cave').length,3);
-    assert.equal(game.settlements.sites.filter(site=>site.type!=='angel').length,4);assert.equal(game.relicSites.sites.length,8);
-    assert(game.riftExploration.sites.every(site=>site.id.startsWith('rift:ember-realm-large:')),'ember objectives use their own saved identities');
-  }
-  assert.equal(node(h,'terrain-name').textContent,world.name);
-  assert(node(h,'story-objective').classList.contains('hidden'),'ordinary exploration never displays an empty story objective');
-  assert.equal(h.run('viewWidth'),540,'normal world selection retains standard camera width');
-};
+// Real shipped UI handlers, WorldSave and Game; browser geometry is checked separately.
+const node=(h,id)=>h.document.getElementById(id),click=(h,id)=>h.fire(node(h,id),'click');
+const choose=(h,id)=>{const input=node(h,id);input.checked=true;h.fire(input,'change');};
+const visible=(h,id)=>!node(h,id).classList.contains('hidden');
+const storage=new Map(),h=harness('',{storage,coarse:true});
+assert.equal(getConfigSection('worlds').travel.regions.length,9);
+assert.doesNotMatch(html,/id="world-(rift-forest|verdant-rift|marsh|snow)"/,'there is one world entry instead of separate region launches');
+click(h,'start-button');
+assert.match(node(h,'world-entry-title').textContent,/裂谷林海/);
+assert.equal(visible(h,'world-options'),false);assert.equal(visible(h,'world-new-button'),false);
+choose(h,'hero-princess-v2');choose(h,'weapon-arrow');click(h,'prepare-start-button');await h.flush();
+assert.equal(h.run('game.worldId'),'rift-forest');assert.equal(h.run('game.hero.id'),'princess');assert.equal(h.run('game.initialWeaponId'),'arrow');
+assert(h.run('game.worldSave===worldSave'));assert(storage.has(WORLD_SAVE_KEY));
 
-assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest'],'only the commemorative forest and nine polished worlds remain registered');
-for(const retiredId of ['city','volcano'])assert(!WORLD_IDS.includes(retiredId),'retired worlds have no selectable identity or alias');
-assert.notEqual(createRiftLayout('rift-forest'),createRiftLayout('verdant-rift'),'authored map caches do not alias');
-assert.notEqual(createRiftLayout('ember-realm-large'),createRiftLayout('clockshadow-city'),'the ember world does not reuse a previous map cache');
+// The ordinary atlas is informational; only the waypoint interaction offers travel.
+h.run('openMap();');click(h,'map-view-world');
+assert.equal(node(h,'world-atlas-content').querySelectorAll('[data-world-target]').length,9);
+assert.equal(h.run('game.status'),'playing','map visibility pauses UI scheduling, not the runtime travel status');
+const regionButton=node(h,'world-atlas-content').querySelector('[data-world-target="rift-forest"]');
+h.fire(node(h,'world-atlas-content'),'click',{target:regionButton});
+assert.equal(h.run('game.worldId'),'rift-forest');assert.equal(h.run('game.sceneTransition.active'),false);
+h.run('closeMap();openMap(undefined,{travel:true});');
+for(const button of node(h,'world-atlas-content').querySelectorAll('[data-world-target]'))assert(button.disabled,'undiscovered destinations and current region cannot be selected for travel');
+h.run('closeMap();');
 
-for(const world of worlds){
-  const h=harness('',{coarse:true}),rail=node(h,'world-options');click(h,'start-button');
-  assert.equal(rail.children.length,worlds.length,'normal preparation exposes every authored world destination');
-  assert.equal(node(h,'world-count').textContent,`${worlds.length} 张地图`);
-  for(const destination of worlds){
-    const portrait=node(h,destination.preview);
-    assert.equal(portrait.getAttribute('role'),'img');assert.match(portrait.getAttribute('aria-label'),new RegExp(destination.name));
-    assert.equal(portrait.width/portrait.height,4/3);assert.equal(node(h,destination.radio).value,destination.id);
-    assert.equal(node(h,destination.radio).parentElement.textContent,destination.name,'world cards contain only their overview and title');
-  }
-  selectWorld(h,world.id);
-  assert.equal(h.run('game'),null);assert.equal(h.run('archive.data.totals.runs'),0,'previewing a destination never starts an adventure');
-  assert.match(node(h,'prepare-summary').textContent,new RegExp(world.name));
-  assert.equal(node(h,'world-mode-note').getAttribute('aria-describedby'),'world-description');
-  assert.match(node(h,'world-description').textContent,world.id==='rift-forest'?/南岸营地/:world.id==='marsh'?/干地堤岸.*苇荡.*根林/:world.id==='ruins'?/遗迹|庭院|圣殿/:world.id==='beach'?/海岸|海湾|潮汐|沙洲/:world.id==='mountain'?/山地|山脊|峡谷|谷地/:world.id==='snow'?/雪|冰|松林/:world.id==='clockshadow-city'?/南郊驿站.*旧城堡庭院/:world.id==='ember-realm-large'?/17.*三.*桥.*矿洞/:/西南营地.*跨河桥/);
-  assert.equal(saved(h).worldId,world.id);
-  selectMode(h,'dungeon');selectMode(h,'world');assert(node(h,world.radio).checked,'mode switching retains world choice');
-  click(h,'prepare-back-button');click(h,'start-button');assert(node(h,world.radio).checked);
-  click(h,'prepare-start-button');await h.flush();assertDestination(h,world);
-  click(h,'map-button');assert.match(node(h,'map-legend').textContent,world.id==='marsh'?/根林与深水不可步行.*干地堤岸、缺口和木桥/:world.id==='ruins'?/残墙|石墙|坍塌|遗迹/:world.id==='beach'?/深水|沙洲|海岸|礁石/:world.id==='mountain'?/山脊|岩壁|断崖|山口/:world.id==='snow'?/雪|冰|松林/:world.id==='clockshadow-city'?/城墙、建筑与深水.*城门、街巷和石桥/:world.id==='ember-realm-large'?/密林、岩脊与熔岩.*山径、缺口和岩桥/:/深绿密林、山壁与深水/);click(h,'close-map');
-  const previousGame=h.run('game');quiet(h);h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();
-  assertDestination(h,world);assert.notEqual(h.run('game'),previousGame);assert.equal(saved(h).worldId,world.id);
-  h.run('home();');click(h,'start-button');assert(node(h,world.radio).checked);
-  const images=h.drawImages();click(h,'prepare-back-button');click(h,'start-button');assert.equal(h.drawImages(),images,'reopening reuses all static world previews');
-  const restored=harness('',{storage:h.storage,coarse:true});click(restored,'start-button');assert(node(restored,world.radio).checked);assert.match(node(restored,'prepare-summary').textContent,new RegExp(world.name));
-}
+// Fixed purchases stay in the same shop and put consumables in inventory.
+h.run(`const shopSite=game.settlements.sites.find(site=>site.worldFacility==='supplies');game.player.x=shopSite.door.x;game.player.y=shopSite.door.y-groundOffset(game.player,true);game.gold=1000;game.settlements.interact(shopSite.id);openShop();`);
+assert.equal(h.run('game.status'),'shop');
+for(let i=0;i<2;i++){const button=node(h,'shop-items').querySelector('button');h.fire(button,'click');assert.equal(h.run('game.status'),'shop');assert(visible(h,'shop-overlay'));}
+assert.equal(h.run('game.worldShops.inventory.heal'),2);assert.doesNotMatch(node(h,'shop-items').textContent,/剩余 1 份/);
+click(h,'shop-close');h.run("game.player.hp-=10;openCharacter('supplies');");
+const use=node(h,'character-content').querySelector('[data-use-supply="heal"]');h.fire(node(h,'character-content'),'click',{target:use});
+assert.equal(h.run('game.worldShops.inventory.heal'),1);assert.equal(h.run('game.player.hp===game.player.maxHp'),true);
+h.run('closeCharacter();game.gold=321;home();');
+const stored=JSON.parse(storage.get(WORLD_SAVE_KEY));assert(stored);
 
-// A destination preference is independent of a saved dungeon, hero and weapon.
-// Both non-forest expeditions must initialize and restart with their actual
-// world identity without replacing the independent world-selection preference.
-for(const [dungeonId,themeId] of [['ship','beach'],['moon','mountain']]){
-  const storage=new Map([['wild-echoes-setup',JSON.stringify({mode:'dungeon',worldId:'verdant-rift',dungeonId,heroId:'princess',appearanceId:'princess-v2',weaponId:'arrow'})]]);
-  const h=harness('',{storage,coarse:true});click(h,'start-button');
-  const assertDungeon=()=>{
-    const game=h.run('game');
-    assert.equal(game.mode,'dungeon');assert.equal(game.expedition.id,dungeonId);
-    assert.equal(game.mapId,dungeonId==='ship'?'expedition:ship:aft-deck':`expedition:${dungeonId}`);
-    if(dungeonId==='ship')assert.equal(game.expedition.currentSceneId,'aft-deck','start and restart enter the first ship deck');
-    assert.equal(game.region.id,themeId);assert.equal(game.terrain.region,themeId);
-    assert.equal(game.worldId,themeId,'the running expedition reports its own world');
-    assert.equal(game.startWorldId,themeId,'the expedition start identity matches its actual scene');
-    assert.equal(saved(h).worldId,'verdant-rift','dungeon identity never overwrites the next exploration choice');
-  };
-  assert(node(h,'mode-dungeon').checked);assert(node(h,`dungeon-${dungeonId}`).checked);assert(node(h,'world-verdant-rift').checked);
-  assert(node(h,'hero-princess-v2').checked);assert(node(h,'weapon-arrow').checked);
-  click(h,'prepare-start-button');await h.flush();assertDungeon();
-  const previousGame=h.run('game');quiet(h);h.run('game.status="dead";');h.tick();click(h,'restart-button');await h.flush();
-  assertDungeon();assert.notEqual(h.run('game'),previousGame,'restart creates a fresh instance of the same dungeon');
-  h.run('home();');click(h,'start-button');selectMode(h,'world');assert.match(node(h,'prepare-summary').textContent,/苍翠断脊.*公主.*翠羽飞矢/);
-  click(h,'prepare-start-button');await h.flush();assertDestination(h,worlds[1]);assert.equal(h.run('game.hero.id'),'princess');assert.equal(h.run('game.initialWeaponId'),'arrow');
-}
+// A fresh page continues the saved loadout and assets, with a real reset confirmation.
+const restored=harness('',{storage,coarse:true});click(restored,'start-button');
+assert.equal(node(restored,'prepare-start-label').textContent,'继续探索');assert(visible(restored,'world-new-button'));
+assert(node(restored,'hero-princess-v2').disabled);assert(node(restored,'weapon-arrow').disabled);
+click(restored,'prepare-start-button');await restored.flush();
+assert.equal(restored.run('game.hero.id'),'princess');assert.equal(restored.run('game.initialWeaponId'),'arrow');assert.equal(restored.run('game.gold'),321);assert.equal(restored.run('game.worldShops.inventory.heal'),1);
+restored.run('home();');click(restored,'start-button');
+const before=storage.get(WORLD_SAVE_KEY);click(restored,'world-new-button');assert(visible(restored,'world-reset-confirm'));assert.equal(storage.get(WORLD_SAVE_KEY),before);
+click(restored,'world-reset-cancel');assert.equal(storage.get(WORLD_SAVE_KEY),before);
+choose(restored,'mode-dungeon');assert.equal(node(restored,'hero-princess-v2').disabled,false,'challenge still permits its own loadout');
+choose(restored,'mode-world');click(restored,'world-new-button');click(restored,'world-reset-confirm-button');
+assert(!storage.has(WORLD_SAVE_KEY));assert.equal(node(restored,'prepare-start-label').textContent,'开始探索');assert.equal(node(restored,'hero-princess-v2').disabled,false);
 
-// Invalid or unavailable destinations retain independent loadout preferences.
-// Valid selections always store the current canonical world identity.
-for(const worldId of [undefined,null,'city','volcano','missing','__proto__',['verdant-rift'],{}]){
-  const storage=new Map([['wild-echoes-setup',JSON.stringify({mode:'world',worldId,heroId:'elder',appearanceId:'elder-v2',weaponId:'orbit'})]]);
-  const h=harness('',{storage,coarse:true});click(h,'start-button');assert(node(h,'world-rift-forest').checked);assert(node(h,'hero-elder-v2').checked);assert(node(h,'weapon-orbit').checked);
-  click(h,'prepare-start-button');await h.flush();assertDestination(h,worlds[0]);assert.equal(h.run('game.initialWeaponId'),'orbit');assert.equal(saved(h).worldId,'rift-forest');
-}
+// The debug launch has the same services but never reads or overwrites official progress.
+const official=new Map([[WORLD_SAVE_KEY,JSON.stringify(stored)]]),debug=harness('?debug',{storage:official});
+click(debug,'start-button');assert.equal(node(debug,'prepare-start-label').textContent,'开始探索');click(debug,'prepare-start-button');await debug.flush();
+assert(debug.run('game.worldTravel.enabled'));assert.equal(debug.run('game.hero.id'),'traveler');debug.run('game.gold=9999;home();');assert.equal(official.get(WORLD_SAVE_KEY),JSON.stringify(stored));
 
-// Browsing and keyboard focus reveal a card without selecting it. Resizing
-// preparation preserves state; only a radio change selects the other world.
-{
-  const h=harness(),rail=node(h,'world-options');rail.clientWidth=168;rail.scrollWidth=346;
-  rail.children.forEach((card,index)=>{card.offsetLeft=index*178;card.offsetWidth=168;});
-  click(h,'start-button');node(h,'world-verdant-rift').focus();assert.equal(h.run('selectedWorldId'),'rift-forest');assert(rail.scrollLeft>0);
-  selectWorld(h,'verdant-rift');
-  for(const [width,height] of [[320,568],[393,717],[844,390],[1440,900]]){
-    h.resize(width,height);assert.equal(h.run('selectedWorldId'),'verdant-rift');assert(node(h,'world-verdant-rift').checked);assert.equal(node(h,'prepare-start-button').disabled,false);
-  }
-  assert(!h.fire(rail,'touchstart').defaultPrevented);assert(!h.fire(rail,'touchmove').defaultPrevented);
-}
-console.log('World selection: nine authored destinations including the remade snowfield, full-map previews, launch/restart identity, distinct layouts and spawns, complete ember encounter and fixed-site ownership, 540 camera, remembered independent preferences, invalid-selection fallback, non-selecting focus and resize state passed (VM DOM / mocked Canvas).');
+// Failed disk writes must retain the playable instance and its unsaved progress.
+const failure=harness();click(failure,'start-button');click(failure,'prepare-start-button');await failure.flush();
+const live=failure.run('game');failure.run('game.gold=789;');
+failure.storage.set=()=>{throw new Error('QuotaExceededError');};
+failure.run('home();');assert.equal(failure.run('game'),live);assert.equal(live.gold,789);assert.notEqual(live._disposed,true);
+await failure.run('restartGame();');assert.equal(failure.run('game'),live,'failed persistence must not replace the active journey');assert.equal(failure.run('startLoading'),false);
+assert.equal(landmarkState({type:'supplies'}),'购买随身补给');assert.equal(landmarkState({type:'rest'}),'恢复全队生命');
+console.log('Unified world UI: single start, save/continue/reset confirmation, failed-save retention, isolated debug saves, atlas vs waypoint travel, persistent shop and inventory actions passed.');
