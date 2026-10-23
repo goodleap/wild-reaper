@@ -53,16 +53,11 @@ function worldPortrait(c,id,art){
     art('regional').drawRuinsStone(c,{x:203,y:128,r:17,rockForm:1});
   }else if(id==='beach'){
     water(c,id,art,'water',205,127,92,49);tree(63,128,'world-palm',.93);rock(180,73,'world-reef',16);
-  }else if(id==='city'){
-    art('world').drawProp(c,{type:'log',x:93,y:113,variant:'world-building',halfLength:24,r:21,treeForm:0});
-    art('world').drawProp(c,{type:'log',x:205,y:66,variant:'world-city-wall',halfLength:34,r:9,angle:0,seed:.1,region:id});
   }else if(id==='mountain'){
     art('world').drawProp(c,{type:'log',x:167,y:77,variant:'world-ridge',halfLength:38,r:15,angle:0,seed:.2,region:id});
     tree(57,131,'world-pine',.76);rock(178,124,'world-reef',19);
   }else if(id==='snow'){
     water(c,id,art,'ice',161,107,60,28);tree(54,131,'world-snowpine',.79);rock(207,62,'world-ice',15);
-  }else if(id==='volcano'){
-    water(c,id,art,'lava',180,110,76,30);tree(44,131,'world-charred',.75);rock(102,75,'world-basalt',21);
   }
 }
 function actor(c,kind,art,x=0,y=-20,state='trapped'){
@@ -98,13 +93,13 @@ function relicPortrait(c,entry,art){
   c.restore();return true;
 }
 function locationPortrait(c,entry,art){
-  const region={shipwreck:'beach',belltower:'city',mine:'mountain',icealtar:'snow',furnace:'volcano',rune:'ruins'}[entry.id]||'forest';
+  const feature=WORLD_SITE_FEATURES[entry.id],region=feature?.world||(entry.id==='rune'?'ruins':'forest');
   terrain(c,region,art);
   if(relicPortrait(c,entry,art))return;
   if(entry.id==='merchant'||entry.id==='angel'){
     c.save();c.translate(120,106);c.scale(1.38,1.38);actor(c,entry.id,art,0,0,'ready');c.restore();return;
   }
-  const feature=WORLD_SITE_FEATURES[entry.id],definition=feature||SETTLEMENT_DEFINITIONS.find(item=>item.type===entry.id);
+  const definition=feature||SETTLEMENT_DEFINITIONS.find(item=>item.type===entry.id);
   if(!definition)return;
   const site={...definition,id:`archive:${entry.id}`,type:definition.type,featureId:feature?.id,x:0,y:0,region,state:'ready',name:''};
   c.save();c.translate(120,entry.id==='castle'||entry.id==='belltower'||entry.id==='furnace'?132:entry.id==='mine'?120:126);

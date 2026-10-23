@@ -3,11 +3,25 @@ import { Island } from './dist/islands.js';
 import { Terrain } from './dist/terrain.js';
 import { RiftNavigation } from './dist/rift-navigation.js';
 import { createCityScenery } from './dist/worlds/city-scenery.js';
+import { Regions } from './dist/regions.js';
+import { worldNeighbors, WORLD_IDS } from './dist/world-definitions.js';
 
 const island=new Island({region:'clockshadow-city',seed:8});
 const terrain=new Terrain({region:'clockshadow-city',seed:8,island});
 const layout=island.layout;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const neighbors=worldNeighbors(WORLD_IDS.indexOf('clockshadow-city'));
+assert.deepEqual(neighbors.map(index=>WORLD_IDS[index]).sort(),['beach','mountain','ruins']);
+assert.equal(layout.passages.filter(p=>p.kind==='exit').length,neighbors.length);
+for(const target of neighbors){
+  const portal={...layout.plan[`portal:${target}`],natural:true};
+  for(const radius of [15,24,49]){
+    const arrival=Regions.prototype.arrivalPoint.call({game:{terrain}},portal,radius);
+    assert(arrival&&distance(arrival,portal)>=80,'travel arrival clears the natural portal contact zone');
+    assert(terrain.isFree(arrival.x,arrival.y,radius),'arrival body remains outside city foundations');
+    assert(!terrain.firstBlocker(arrival.x,arrival.y,portal.x,portal.y,radius),'the same exit is open in both directions');
+  }
+}
 assert.equal(layout?.worldId,'clockshadow-city');
 assert.equal(layout.artTheme,'city');
 assert.equal(layout.bounds.maxX-layout.bounds.minX,14400);

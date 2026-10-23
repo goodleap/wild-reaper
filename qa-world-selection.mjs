@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { harness as createHarness } from './qa-app-harness.mjs';
-import { WORLD_IDS } from './dist/world-definitions.js';
+import { WORLD_IDS, worldNeighbors } from './dist/world-definitions.js';
 import { createRiftLayout } from './dist/worlds/rift-layout.js';
 import { groundOffset } from './dist/terrain.js';
 
@@ -39,9 +39,9 @@ const assertDestination=(h,world)=>{
   assert.equal(layout.bounds.maxX-layout.bounds.minX,world.width);assert.equal(layout.bounds.maxY-layout.bounds.minY,world.height);
   assert.equal(game.player.x,layout.spawn.x);assert.equal(game.player.y+groundOffset(game.player,true),layout.spawn.y);
   if(world.id==='ember-realm-large'){
-    assert.equal(game.mapId,10,'the ember world appends after the ten existing world identities');
+    assert.equal(game.mapId,7,'the complete ember world owns the volcanic world slot');
     assert.equal(layout.artTheme,'ember');
-    assert.equal(game.regions.portals.length,0,'the ember world cannot invent travel into an existing world');
+    assert.deepEqual(game.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),[...worldNeighbors(7)].sort((a,b)=>a-b),'the complete ember world connects to the snowfield and ruins');
     assert.equal(game.regions.states.size,0,'launching the ember world cannot initialize a different world');
     assert.equal(layout.emberScene.sample,false);assert.equal(layout.areas.length,17);
     assert.equal(layout.encounters.filter(encounter=>encounter.kind==='boss').length,2,'both authored open Boss encounters launch with the complete map');
@@ -56,8 +56,8 @@ const assertDestination=(h,world)=>{
   assert.equal(h.run('viewWidth'),540,'normal world selection retains standard camera width');
 };
 
-assert.deepEqual(WORLD_IDS.slice(0,8),['forest','marsh','ruins','beach','city','mountain','snow','volcano'],'existing world identities remain stable');
-assert.equal(WORLD_IDS[8],'verdant-rift');assert.equal(WORLD_IDS[9],'clockshadow-city');assert.equal(WORLD_IDS[10],'ember-realm-large');assert.equal(WORLD_IDS[11],'rift-forest');assert.equal(WORLD_IDS.length,12);
+assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest'],'only the commemorative forest and nine polished worlds remain registered');
+for(const retiredId of ['city','volcano'])assert(!WORLD_IDS.includes(retiredId),'retired worlds have no selectable identity or alias');
 assert.notEqual(createRiftLayout('rift-forest'),createRiftLayout('verdant-rift'),'authored map caches do not alias');
 assert.notEqual(createRiftLayout('ember-realm-large'),createRiftLayout('clockshadow-city'),'the ember world does not reuse a previous map cache');
 
@@ -115,7 +115,7 @@ for(const [dungeonId,themeId] of [['ship','beach'],['moon','mountain']]){
 
 // Invalid or unavailable destinations retain independent loadout preferences.
 // Valid selections always store the current canonical world identity.
-for(const worldId of [undefined,null,'volcano','missing','__proto__',['verdant-rift'],{}]){
+for(const worldId of [undefined,null,'city','volcano','missing','__proto__',['verdant-rift'],{}]){
   const storage=new Map([['wild-echoes-setup',JSON.stringify({mode:'world',worldId,heroId:'elder',appearanceId:'elder-v2',weaponId:'orbit'})]]);
   const h=harness('',{storage,coarse:true});click(h,'start-button');assert(node(h,'world-rift-forest').checked);assert(node(h,'hero-elder-v2').checked);assert(node(h,'weapon-orbit').checked);
   click(h,'prepare-start-button');await h.flush();assertDestination(h,worlds[0]);assert.equal(h.run('game.initialWeaponId'),'orbit');assert.equal(saved(h).worldId,'rift-forest');

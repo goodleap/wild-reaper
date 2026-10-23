@@ -5,9 +5,10 @@ import { Terrain, groundOffset } from './dist/terrain.js';
 import { Regions, worldConnectionId } from './dist/regions.js';
 import { REGIONS, WORLD_IDS, WORLD_CONNECTIONS, worldNeighbors } from './dist/world-definitions.js';
 import { portalDoor } from './dist/portal-geometry.js';
+import { terrainNavigation } from './dist/terrain-navigation.js';
 
-const legacyIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(WORLD_IDS,[...legacyIds,'verdant-rift','clockshadow-city','ember-realm-large','rift-forest']);
+assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest']);
+for(const retiredId of ['city','volcano'])assert(!WORLD_IDS.includes(retiredId),'retired worlds are not registered as aliases');
 const existingRegions=REGIONS,riftIndex=WORLD_IDS.indexOf('rift-forest');
 assert.deepEqual(WORLD_CONNECTIONS,[[riftIndex,1],[1,2],[riftIndex,2],[riftIndex,3],[3,4],[4,5],[5,6],[6,7],[7,2],[4,2]],'all ten routes retain their endpoints after separating the rift identity');
 assert.equal(new Set(WORLD_CONNECTIONS.map(([a,b])=>worldConnectionId(a,b))).size,WORLD_CONNECTIONS.length);
@@ -19,8 +20,8 @@ for(const index of queue)for(const target of worldNeighbors(index)){
 assert.deepEqual([...reachable].sort((a,b)=>a-b),[1,2,3,4,5,6,7,riftIndex],'the original connected component follows the rift map');
 assert.deepEqual(worldNeighbors(0),[],'the commemorative challenge does not acquire world-travel exits');
 assert.deepEqual(worldNeighbors(8),[],'the independent new map is entered through world selection');
-assert.deepEqual(worldNeighbors(9),[],'the independent city retains its selection identity');
-assert.deepEqual(worldNeighbors(10),[],'the ember world cannot create a hidden world connection');
+assert.deepEqual(new Set(worldNeighbors(4)),new Set([3,5,2]),'the complete city connects to the coast, mountains and ruins');
+assert.deepEqual(new Set(worldNeighbors(7)),new Set([6,2]),'the complete ember world connects to the snowfield and ruins');
 const outlines=new Set();
 // Run the unchanged connection and route requirements on every full world,
 // including all fixed ember slots and all three bridge passages.
@@ -76,6 +77,7 @@ assert(Math.max(...guardianHp)/Math.min(...guardianHp)<1.11,'early volcano trave
 
 let randomSeed=913071;Math.random=()=>((randomSeed=(Math.imul(1664525,randomSeed)+1013904223)>>>0)/4294967296);
 const game=new Game();game.player.xpNext=Infinity;game.crystalsNext=Infinity;game._spawn=Infinity;game._shot=Infinity;
+const traveled=new Set();
 assert.equal(game.regions.states.size,0,'worlds are generated on arrival, not all at startup');
 const feet=point=>{game.player.x=point.x;game.player.y=point.y-groundOffset(game.player,true);};
 const verify=()=>{
@@ -101,7 +103,7 @@ function travel(target){
     assert(game.regions.claimedConnections.has(worldConnectionId(from,target)));
   }
   const before={kills:game.kills,gold:game.gold,crystals:game.crystals,claimed:game.regions.claimedConnections.size};
-  feet(portalDoor(portal));assert(game.enterPortal(portal.id));assert.equal(game.regionIndex,target);verify();
+  feet(portalDoor(portal));assert(game.enterPortal(portal.id));assert.equal(game.regionIndex,target);verify();traveled.add(`${from}:${target}`);
   assert.equal(game.regions.portals.find(candidate=>candidate.nextRegionIndex===from).state,'active');
   assert.deepEqual({kills:game.kills,gold:game.gold,crystals:game.crystals,claimed:game.regions.claimedConnections.size},before,'arrival never grants another guardian reward');
   assert(game.regions.states.size<REGIONS.length);assert.equal(game.regions.endlessUnlocked,false,'world exploration never enables the survival wave rules');
@@ -110,10 +112,48 @@ for(const target of [1,2,riftIndex,3,4,5,6,7,2,4])travel(target);
 assert.equal(game.regions.defeatedConnectionsCount,WORLD_CONNECTIONS.length);
 const naturalConnections=WORLD_CONNECTIONS.filter(([a,b])=>REGIONS[a].authored||REGIONS[b].authored).length;
 assert.equal(game.regions.claimedConnections.size,WORLD_CONNECTIONS.length-naturalConnections,'only defeated guardian routes grant guardian rewards');
-assert.equal(game.regions.states.size,legacyIds.length-1,'unconnected maps are not generated during travel');
+assert.equal(game.regions.states.size,reachable.size-1,'unconnected maps are not generated during travel');
 const rewards={kills:game.kills,gold:game.gold,crystals:game.crystals};
 for(const target of [3,riftIndex,2,7,6,5,4,2,1,riftIndex])travel(target);
 assert.deepEqual({kills:game.kills,gold:game.gold,crystals:game.crystals},rewards,'return routes cannot farm completed gates');
+for(const [a,b] of [[3,4],[4,5],[4,2],[6,7],[7,2]])for(const [from,to] of [[a,b],[b,a]])assert(traveled.has(`${from}:${to}`),'every replacement connection is actually traveled in both directions');
+
+// New exits must be reachable by normal full-body movement from each world's
+// starting point, with all static scenery and building colliders still active.
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+let walkedExitCount=0,walkingSteps=0;
+for(const id of ['clockshadow-city','ember-realm-large']){
+  const walkGame=new Game({mode:'world',worldId:id}),layout=walkGame.terrain.island.layout;
+  walkGame.enemies=[];walkGame.player.xpNext=walkGame.crystalsNext=Infinity;
+  const foot=()=>({x:walkGame.player.x,y:walkGame.player.y+groundOffset(walkGame.player,true)});
+  const navigation=terrainNavigation(walkGame.terrain);
+  for(const portal of walkGame.regions.portals){
+    const target=portalDoor(portal),label=`${id} → ${WORLD_IDS[portal.nextRegionIndex]}`;
+    walkGame.player.x=layout.spawn.x;walkGame.player.y=layout.spawn.y-groundOffset(walkGame.player,true);
+    const reservation=walkGame.terrain.island.plan[`portal:${portal.nextRegionIndex}`];
+    for(const [key,site] of Object.entries(walkGame.terrain.island.plan))if(!key.startsWith('portal:'))assert(distance(reservation,site)>reservation.r+site.r,`${label}: exit reservation does not overlap ${key}`);
+    assert(walkGame.terrain.isFree(target.x,target.y,walkGame.player.r),`${label}: the actual entrance has full-body standing space`);
+    for(let leg=0;distance(foot(),target)>.04&&leg<300;leg++){
+      const path=navigation.find(foot(),target,walkGame.player.r,'ground');
+      assert(path?.length,`${label}: normal navigation finds a route from spawn`);
+      const beforeLeg=foot();
+      for(const waypoint of path){
+        assert(!walkGame.terrain.firstBlocker(foot().x,foot().y,waypoint.x,waypoint.y,walkGame.player.r),`${label}: each path segment passes a complete body sweep`);
+        for(let step=0;distance(foot(),waypoint)>.025&&step<5000;step++){
+          const before=foot(),remaining=distance(before,waypoint),travel=Math.min(walkGame.player.speed/30,remaining);
+          walkGame._moveEntity(walkGame.player,(waypoint.x-before.x)/remaining*travel,(waypoint.y-before.y)/remaining*travel,true);
+          const after=foot(),advance=distance(before,after);
+          assert(advance>.0001&&advance<=travel+.01,`${label}: ordinary movement advances within its speed budget`);
+          assert(walkGame.terrain.isFree(after.x,after.y,walkGame.player.r),`${label}: walking never enters terrain or scenery`);walkingSteps++;
+        }
+        assert(distance(foot(),waypoint)<.04,`${label}: local walking completes`);
+      }
+      assert(distance(beforeLeg,foot())>.01,`${label}: the route advances`);
+    }
+    assert(distance(foot(),target)<.04,`${label}: spawn-to-exit walking reaches the destination`);walkedExitCount++;
+  }
+}
+assert.equal(walkedExitCount,5,'all new city and ember entrances are reachable');
 const standalone=new Game({mode:'world',worldId:'verdant-rift'});
 assert.equal(standalone.regionIndex,8);assert.equal(standalone.worldId,'verdant-rift');assert.equal(standalone.startWorldId,'verdant-rift');
 assert.equal(standalone.regions.portals.length,0);assert.equal(standalone.portal,null);assert.equal(standalone.regions.states.size,0);
@@ -124,4 +164,4 @@ chest.state='claimed';const mapId=standalone.mapId;standalone.regions.saveWorld(
 assert(standalone.regions.restoreWorld(mapId));assert.equal(standalone.riftExploration,exploration);assert.equal(chest.state,'claimed','map snapshots preserve claimed rewards');
 assert(standalone.riftExploration.sites.every(site=>site.id.includes('verdant-rift')),'authored interactions are namespaced independently');
 assert.equal(standalone.regions.endlessUnlocked,false);
-console.log('World connections: unchanged 8-world/10-route component, natural exits, guardian rewards, persistent travel, independent ninth-world selection and isolated claimed-objective state passed.');
+console.log(`World connections: ten current worlds, ten routes, all five replaced links traveled in both directions, five new exits reached with ${walkingSteps} ordinary movement steps, persistent rewards and separate forest/verdant maps passed.`);

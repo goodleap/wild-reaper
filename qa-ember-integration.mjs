@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { Game } from './dist/engine.js';
 import { groundOffset } from './dist/terrain.js';
 import { WORLD_IDS, worldForId, worldNeighbors } from './dist/world-definitions.js';
@@ -11,23 +9,21 @@ import { WORLD_HAZARD_RULES } from './dist/world-hazards.js';
 import { defenseDamageMultiplier } from './dist/combat-stats.js';
 
 const id='ember-realm-large',layout=createRiftLayout(id),report={world:id};
-const definitions=JSON.parse(readFileSync(new URL('./dist/config/worlds.json',import.meta.url))).definitions;
-assert.equal(createHash('sha256').update(JSON.stringify(definitions.slice(0,10))).digest('hex'),'c1d617ff5f2783b37bb2867754917d5671b7ca1e37012a56648886d8102df628','all ten existing world definitions remain exact');
-assert.equal(WORLD_IDS.indexOf(id),10);assert.deepEqual(worldNeighbors(10),[]);
+assert.equal(WORLD_IDS.indexOf(id),7);assert.deepEqual(worldNeighbors(7),[2,6]);
 assert.equal(layout.emberScene.sample,false);assert.equal(layout.emberScene.revision,2);assert.equal(worldForId(id).name,'熔火之境');
-assert.equal(layout.areas.length,17);assert.equal(layout.passages.length,23);assert.equal(layout.passages.filter(p=>p.kind==='bridge').length,3);
+assert.equal(layout.areas.length,17);assert.equal(layout.passages.length,25);assert.equal(layout.passages.filter(p=>p.kind==='bridge').length,3);
 assert.equal(layout.interactions.chests.length,10);assert.equal(layout.interactions.caves.length,3);
 assert.equal(new Set(layout.interactions.caves.map(c=>c.caveId)).size,3,'the three caves are independent challenges, not invented surface shortcuts');
 const old=new Game({mode:'world'}),city=new Game({mode:'world',worldId:'clockshadow-city'}),game=new Game({mode:'world',worldId:id});
-assert.equal(game.debug,false);assert.equal(game.mapId,10);assert.equal(game.startWorldId,id);assert.equal(game.worldId,id);
+assert.equal(game.debug,false);assert.equal(game.mapId,7);assert.equal(game.startWorldId,id);assert.equal(game.worldId,id);
 assert.equal(game.player.speed,old.player.speed,'map choice never changes movement speed');
-assert.equal(game.region.danger,worldForId('volcano').danger);assert.deepEqual(game.region.enemyWeights,worldForId('volcano').enemyWeights);
+assert.equal(game.region.danger,1.1);assert.deepEqual(game.region.enemyWeights,{"slime": 0.8, "beetle": 1.35, "bat": 1.3, "brute": 1.4, "boar": 0.85, "spore": 0.55, "rootbinder": 0, "boglurker": 0, "prismguard": 0, "tidepriest": 0, "shieldguard": 0, "stoneape": 0.65, "windhunter": 0, "frostmage": 0, "flamelizard": 1});
 assert.equal(game.terrain.island.layout,layout);assert.notEqual(game.terrain,old.terrain);assert.notEqual(game.terrain,city.terrain);
 for(const other of [old,city]){
   assert.notEqual(game.terrain.island.layout,other.terrain.island.layout);assert.notEqual(game.terrain._cache,other.terrain._cache);
   assert.notEqual(game.riftExploration.sites,other.riftExploration.sites);assert.notEqual(game.dungeon.states,other.dungeon.states);
 }
-assert.equal(game.regions.portals.length,0);assert.equal(game.regions.states.size,0);assert.equal(game.portal,null);
+assert.equal(game.regions.portals.length,2);assert.equal(game.regions.states.size,0);assert(game.regions.portals.includes(game.portal),'the active travel hint belongs to an authored exit');
 for(const system of ['environment','adventure','encounters','companions'])assert.equal(game[system].generation,false,`${system}: no unconstrained ambient placement on the fixed world`);
 assert.equal(game.settlements.generation,true);assert.equal(game.relicSites.generation,true,'fixed real sites remain active independently of ambient timers');
 assert.equal(game.territories.groups.length,layout.encounters.length);assert.equal(game.enemies.filter(enemy=>enemy.worldBoss).length,2);
@@ -44,14 +40,14 @@ const put=point=>{game.player.x=point.x;game.player.y=point.y-groundOffset(game.
 const finish=()=>{for(let i=0;i<30&&game.sceneTransition.active;i++)game.sceneTransition.update(.05);assert.equal(game.sceneTransition.active,false);assert.equal(game.sceneTransition.commitSucceeded,true);};
 const request=key=>{assert(game.requestInteraction(key),`the real interaction accepts ${key}`);finish();};
 const physicalSites=[...game.settlements.sites.filter(site=>site.type!=='angel'),...game.relicSites.sites];
-assert.equal(physicalSites.length,12);assert.equal(Object.keys(layout.plan).length,12);
-for(const [key,point] of Object.entries(layout.plan)){
+assert.equal(physicalSites.length,12);assert.equal(Object.keys(layout.plan).length,14);
+for(const [key,point] of Object.entries(layout.plan).filter(([key])=>!key.startsWith('portal:'))){
   const site=physicalSites.find(site=>site.key===key||site.type===key);assert(site,`${key}: fixed plan creates its actual site`);
   assert.equal(site.x,point.x,`${key}: no fallback placement changes the approved slot`);assert.equal(site.y,point.y);
   assert(game.terrain.isFree(site.door.x,site.door.y,22),`${key}: the full player/follower body fits the real door approach`);
   if(['supply','occupied','castle'].includes(site.type)){put(site.door);const choice=game.settlements.getInteraction();assert.equal(choice?.id,site.id);assert(choice.label.includes(site.name),`${key}: the real interaction names this map's building`);}
 }
-assert(game.settlements.sites.some(site=>site.type==='angel'&&site.anchorId==='spawn:10'),'the selected map has its own starting sanctuary');
+assert(game.settlements.sites.some(site=>site.type==='angel'&&site.anchorId==='spawn:7'),'the selected map has its own starting sanctuary');
 assert.equal(game.relicSites.sites.filter(site=>site.type==='rescue').length,4);
 for(const site of game.relicSites.sites){
   const profile=relicSiteProfile(site);put(profile.anchor==='center'?site:site.door);
@@ -132,8 +128,8 @@ for(const cave of game.riftExploration.sites.filter(site=>site.kind==='cave')){
   put(cave);request(cave.id);assert.equal(game.dungeon.active,state);assert.equal(enemy.hp,hp,'leaving and entering retains actual combat damage');
   put(exit);game.dungeon.update(0);request(exit.id);caveStates.push(state);
 }
-const snapshot=game.regions.saveWorld();assert.equal(game.regions.states.get(10),snapshot);
-assert.equal(game.regions.restoreWorld(0),false);assert.equal(game.regions.restoreWorld(9),false);assert(game.regions.restoreWorld(10));
+const snapshot=game.regions.saveWorld();assert.equal(game.regions.states.get(7),snapshot);
+assert.equal(game.regions.restoreWorld(0),false);assert.equal(game.regions.restoreWorld(9),false);assert(game.regions.restoreWorld(7));
 assert(chests.every(chest=>chest.state==='claimed'));assert.equal(game.riftExploration,surfaceExploration);
 for(const state of caveStates)assert.equal(game.dungeon.states.get(state.id),state);
 assert.equal(old.dungeon.states.size,0);assert.equal(city.dungeon.states.size,0);assert.equal(game.regions.endlessUnlocked,false);

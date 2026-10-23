@@ -83,7 +83,7 @@ PLAN={
  'rune':at(0,-1750,r=185),'rescue-warden':at(-2200,-4300,r=240),
  'dogcamp':at(-5550,3800,r=115),'owlroost':at(100,1600,r=240),
  'golemaltar':at(-5000,-2050,r=270),'stonevault':at(3300,1150,r=240),
- 'portal:11':at(-6700,3950,r=90,arrivalDirection=point(1,0)),
+ 'portal:9':at(-6700,3950,r=90,arrivalDirection=point(1,0)),
  'portal:4':at(6500,2300,r=90,arrivalDirection=point(-1,0)),
 }
 CAVES=[

@@ -438,6 +438,12 @@ plan.update(merchant={**plan['merchant'],'x':-5900,'y':4000},
  stonevault={**plan['stonevault'],'x':4500,'y':3650})
 PLAN_AREAS=dict(zip(plan,['01','03','04','08','06','13','08','15','01','02','05','16']))
 for key,v in plan.items():v['area']=PLAN_AREAS[key]
+# Travel exits extend existing outer quarters. They are carved after local
+# scenery so opening one road never reshuffles unrelated building variants.
+EXITS=[
+ (3,'01',(-6700,4200),(1,0),[CENTERS['01'],(-5700,4400),(-6250,4400),(-6450,4200),(-6770,4200)]),
+ (5,'11',(-350,-4850),(0,1),[CENTERS['11'],(-350,-3700),(-350,-4920)]),
+ (2,'16',(6650,3050),(-1,0),[CENTERS['16'],(5800,3050),(6720,3050)])]
 encounters=[dict(v) for v in BLUEPRINT['encounters']]
 for v in encounters:
     v['area']=v['id'].split(':')[-1].split('-')[0]
@@ -678,6 +684,7 @@ for area,cx,cy,rx,ry in ROOMS:
         green_islands.append(shape);placed+=1
         if placed>=4:break
 walk=walk.difference(unary_union(green_islands))
+ground_before_foundations=walk
 walk=walk.difference(unary_union(foundations)).buffer(0)
 # Include objective approach space explicitly, connected by the authored legs.
 # Outlying encounters receive reserved pockets, not inaccessible spawn points.
@@ -688,6 +695,24 @@ for v in objects:
         link=LineString([nearest,xy(v.get('approach',v)),xy(v)]).buffer(55)
         assert not unary_union(foundations).intersects(link.buffer(-3)),f'objective foundation conflict {v}'
         walk=walk.union(pocket).union(link)
+# Extend only the three shared-world connections; preserve all other lots,
+# their exact styles, original local routes and objective pockets.
+exit_shapes=[]
+for target,area,point,direction,waypoints in EXITS:
+    plan[f'portal:{target}']={**p(*point),'r':90,'area':area,'arrivalDirection':p(*direction)}
+    objects.append(plan[f'portal:{target}'])
+    add_route(f'exit:{target}',area,None,waypoints,220,'exit')
+    exit_shapes.extend([corridors[-1],Point(point).buffer(145)])
+exit_ground=unary_union(exit_shapes)
+kept=[];removed=[]
+for s in structures:
+    body=box(s['x']-s['width']/2,s['y']-s['depth']/2,s['x']+s['width']/2,s['y']+s['depth']/2)
+    if body.intersects(exit_ground.buffer(8)):
+        if s['solid']:removed.append(body)
+    else:kept.append(s)
+structures=kept
+foundations=[box(s['x']-s['width']/2,s['y']-s['depth']/2,s['x']+s['width']/2,s['y']+s['depth']/2) for s in structures if s['solid']]
+walk=walk.union(ground_before_foundations.intersection(unary_union(removed))).union(exit_ground)
 # Water never becomes a walkable shortcut from an objective expansion.
 walk=walk.difference(water).union(unary_union(bridge_shapes)).difference(unary_union(foundations)).simplify(.6,preserve_topology=True)
 assert walk.geom_type=='Polygon' and walk.is_valid,'all quarters form one connected surface'
@@ -699,6 +724,7 @@ for v in objects:
 # Large buildings are high barriers; canal is low and traversable by flyers.
 high=walk.union(water).difference(unary_union(foundations)).simplify(.6,preserve_topology=True)
 landmarks={'spawn':spawn}
+for target,_,_,_,_ in EXITS:landmarks[f'portal-{target}']={**plan[f'portal:{target}'],'kind':'exit','target':target}
 for v in interactions['caves']:landmarks[v['id']]={**p(v['x'],v['y']),'area':v['area'],'kind':'cave'}
 for v in interactions['chests']:landmarks[v['id']]={**p(v['x'],v['y']),'area':v['area'],'kind':'treasure'}
 for v in encounters:

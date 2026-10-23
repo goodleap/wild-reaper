@@ -5,6 +5,7 @@ import { paintCityGround, paintCityHouse, paintCityWall } from './city-scenery-a
 // Theme artwork is generated once in bounded, world-independent sprite tiles.
 // Raised artwork uses the same foot anchors and silhouettes as Terrain.
 const TAU=Math.PI*2,TILE=256,PIXEL_LIMIT=3*1024*1024;
+const artThemeFor=region=>worldForId(region).authored?.artTheme??region;
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const rng=seed=>{let n=(seed*2654435761)>>>0;return()=>{n^=n<<13;n^=n>>>17;n^=n<<5;return(n>>>0)/4294967296;};};
 const poly=(c,points,fill,edge=null,width=1)=>{c.beginPath();points.forEach(([x,y],i)=>c[i?'lineTo':'moveTo'](x,y));c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(edge){c.strokeStyle=edge;c.lineWidth=width;c.stroke();}};
@@ -21,7 +22,7 @@ export class WorldArt{
   get cacheStats(){return{entries:this.cache.size,pixels:this.pixels,bytes:this.pixels*4,limitBytes:PIXEL_LIMIT*4,builds:this.builds};}
   _image(key,w,h,dpr,paint){let value=this.cache.get(key);if(value){this.cache.delete(key);this.cache.set(key,value);return value;}const canvas=this.makeCanvas();canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.lineCap='round';c.lineJoin='round';paint(c);value={canvas,w,h,pixels:canvas.width*canvas.height};while(this.pixels+value.pixels>PIXEL_LIMIT&&this.cache.size){const first=this.cache.keys().next().value;this.pixels-=this.cache.get(first).pixels;this.cache.delete(first);}this.cache.set(key,value);this.pixels+=value.pixels;this.builds++;return value;}
   _tile(region,v,zone=0,road=false){return this._image(`ground:${region}:${v}:${zone}:${road}`,TILE,TILE,1,c=>{
-    if(region==='city'){paintCityGround(c,{variant:v,zone,size:TILE,road});return;}
+    if(artThemeFor(region)==='city'){paintCityGround(c,{variant:v,zone,size:TILE,road});return;}
     const p=WORLD_ART_PALETTES[region],r=rng(801+v*71+zone*313+Object.keys(WORLD_ART_PALETTES).indexOf(region)*191);
     c.fillStyle=p.floor;c.fillRect(0,0,TILE,TILE);
     if(region==='beach'){
@@ -41,12 +42,11 @@ export class WorldArt{
     for(let i=0;i<630;i++){const x=r()*256,y=r()*256;c.fillStyle=i%3?p.light+'17':p.dark+'2c';c.fillRect(x,y,.5+r()*1.5,.4+r()*.7);}
   });}
   drawGround(c,region,camX,camY,w,h,{seed=0}={}){
-    if(worldForId(region).authored?.artTheme==='city')region='city';
     if(!WORLD_ART_PALETTES[region])return false;
     c.fillStyle=WORLD_ART_PALETTES[region].floor;c.fillRect(0,0,w,h);
     const ox=w*.5-camX,oy=h*.5-camY,minX=Math.floor(-ox/TILE),maxX=Math.ceil((w-ox)/TILE),minY=Math.floor(-oy/TILE),maxY=Math.ceil((h-oy)/TILE);
     for(let y=minY;y<maxY;y++)for(let x=minX;x<maxX;x++){const zone=biomeZone(region,(x+.5)*TILE,(y+.5)*TILE,seed).index||0,image=this._tile(region,Math.floor(hash(x+41,y+97)*3),zone);c.drawImage(image.canvas,x*TILE+ox,y*TILE+oy);}
-    if(region==='city'){
+    if(artThemeFor(region)==='city'){
       // Street edges are shared with Terrain, so the painted lanes are always clear.
       c.save();c.beginPath();for(let x=Math.floor((-ox-CITY_STREET_HALF_WIDTH)/CITY_BLOCK);x<=Math.ceil((w-ox+CITY_STREET_HALF_WIDTH)/CITY_BLOCK);x++)c.rect(x*CITY_BLOCK+ox-CITY_STREET_HALF_WIDTH,0,CITY_STREET_HALF_WIDTH*2,h);for(let y=Math.floor((-oy-CITY_STREET_HALF_WIDTH)/CITY_BLOCK);y<=Math.ceil((h-oy+CITY_STREET_HALF_WIDTH)/CITY_BLOCK);y++)c.rect(0,y*CITY_BLOCK+oy-CITY_STREET_HALF_WIDTH,w,CITY_STREET_HALF_WIDTH*2);c.clip();for(let y=minY;y<maxY;y++)for(let x=minX;x<maxX;x++){const image=this._tile(region,Math.floor(hash(x+41,y+97)*3),0,true);c.drawImage(image.canvas,x*TILE+ox,y*TILE+oy);}c.restore();
     }
@@ -87,13 +87,13 @@ export class WorldArt{
   });}
   _building(v){return this._image(`building:${v}`,218,190,2,c=>paintCityHouse(c,v));}
   _linear(kind,v,angle,halfLength,radius,region){
-    const ridge=kind==='world-ridge',volcanic=region==='volcano',wall=kind==='world-city-wall',drift=kind==='world-driftwood',a=angle,l=halfLength,rr=radius;
+    const ridge=kind==='world-ridge',volcanic=artThemeFor(region)==='ember',wall=kind==='world-city-wall',drift=kind==='world-driftwood',a=angle,l=halfLength,rr=radius;
     const dx=Math.cos(a)*l,dy=Math.sin(a)*l,height=drift?rr*.8:ridge?58:46,halfW=Math.abs(dx)+rr+8,above=Math.abs(dy)+rr+height+8,below=Math.abs(dy)+rr+8;
     return{angle:a,l,rr,anchor:{x:halfW,y:above},image:this._image(`linear:${kind}:${region}:${v}:${a.toFixed(4)}:${l.toFixed(3)}:${rr.toFixed(3)}`,Math.ceil(halfW*2),Math.ceil(above+below),2,c=>{
       c.translate(halfW,above);const random=rng(681+v*73),nx=-Math.sin(a)*rr,ny=Math.cos(a)*rr;
       if(drift){c.save();c.rotate(a);wood(c,[[-l-rr*.8,-rr*.5],[-l+10,-rr],[l,-rr*.8],[l+rr*.5,0],[l,rr*.7],[-l,rr*.6]],'#b8a27a',random);for(let y=-rr*.65;y<rr*.5;y+=rr*.3)stroke(c,[[-l+5,y],[-l*.25,y+2],[l-7,y-1]],'#675f4780',1);oval(c,-l,0,rr*.45,rr*.8,'#d4c297');for(let i=1;i<3;i++){c.beginPath();c.ellipse(-l,0,rr*.11*i,rr*.22*i,0,0,TAU);c.strokeStyle='#96825c';c.lineWidth=.7;c.stroke();}c.restore();return;}
       const outline=ridge?Array.from({length:10},(_,i)=>{const t=i*TAU/10,side=Math.cos(t)<0?-1:1;const along=side*l+Math.cos(t)*rr,across=Math.sin(t)*rr;return[along*Math.cos(a)-across*Math.sin(a),along*Math.sin(a)+across*Math.cos(a)];}):[[-dx-nx,-dy-ny],[-dx+nx,-dy+ny],[dx+nx,dy+ny],[dx-nx,dy-ny]],upper=outline.map(([x,y],i)=>[x,y-height*(ridge?.81+hash(i+v,37)*.18:1)]);
-      if(wall&&(region==='city'||worldForId(region).authored?.artTheme==='city')){paintCityWall(c,{outline,upper,height,variant:v});return;}
+      if(wall&&artThemeFor(region)==='city'){paintCityWall(c,{outline,upper,height,variant:v});return;}
       poly(c,outline,ridge?(volcanic?'#333337':'#47554f'):'#5e6758','#3f4b41',1.2);
       // Draw visible front faces in ground depth order; the height stays vertical.
       for(let i=0;i<outline.length;i++){const j=(i+1)%outline.length;if((outline[i][1]+outline[j][1])*.5<-.001)continue;const pts=[upper[i],upper[j],outline[j],outline[i]];poly(c,pts,ridge?(volcanic?['#51494a','#61544d','#474449'][i%3]:['#6b7971','#7d8d7f','#607367'][i%3]):'#94947c','#404e43',1);texturedFace(c,pts,random,180,'#c8cbb045','#2d3d3557');for(let y=12;y<height;y+=14)stroke(c,[[upper[i][0],upper[i][1]+y],[upper[j][0],upper[j][1]+y]],ridge?'#364a412b':'#4c5c4780',.85);}

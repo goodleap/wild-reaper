@@ -125,6 +125,11 @@ for id,source,target,width,kind,middle in LINKS:
     # Trails are worn paths subordinate to terrain, not bold map connectors.
     road_points=raw if kind=='bridge' else linepoints
     roads.append({'id':'trail:'+id,'width':74 if kind=='secret' else 92,'material':'ash' if source in ['06','07','10','12'] else 'ochre','points':[p(*q) for q in road_points]})
+# Natural exits are applied after local scenery so their clear approaches
+# cannot change the seeded placement of unrelated plants and camp props.
+EXITS=[
+ (6,'08',(-5150,-4750),(0,1),[CENTERS['08'],(-5150,-3700),(-5150,-4820)]),
+ (2,'01',(-6500,4230),(0,-1),[CENTERS['01'],(-6100,3720),(-6500,3920),(-6500,4300)])]
 bridges.sort(key=lambda b:['c12','c11','c21'].index(b['connection']))
 walk=unary_union([*room_polys,*corridor_polys])
 # Real lava channels are low terrain: only the bridge deck admits walkers,
@@ -276,7 +281,30 @@ assert any(q['emberKind']=='shelter' for q in props)
 
 # Avoid hazards under props. Sparse scenery only adds true body colliders.
 props=[q for q in props if math.hypot(q['x']-surface['x'],q['y']-surface['y'])>260]
+# The two short exterior roads are the only changed surface. Existing prop
+# identities and random variants survive unless their footprint crosses one.
+exit_shapes=[]
+for target,area,point,direction,raw in EXITS:
+    linepoints,shape=route(raw,220)
+    plan[f'portal:{target}']={**p(*point),'r':90,'area':area,'arrivalDirection':p(*direction)}
+    passages.append({'id':f'exit:{target}','from':area,'to':None,'width':220,'kind':'exit','points':coords(shape.exterior),'waypoints':[p(*q) for q in linepoints]})
+    roads.append({'id':f'trail:exit:{target}','width':92,'material':'ochre','points':[p(*q) for q in linepoints]})
+    exit_shapes.extend([shape,Point(point).buffer(145)])
+exit_ground=unary_union(exit_shapes)
+def crosses_exit(q):
+    body=LineString([(q['x']-q['halfLength'],q['y']),(q['x']+q['halfLength'],q['y'])]).buffer(q['r']) if q['halfLength'] else Point(pair(q)).buffer(q['r'])
+    return body.intersects(exit_ground.buffer(8))
+props=[q for q in props if not crosses_exit(q)]
+walk=walk.union(exit_ground)
+assert walk.geom_type=='Polygon' and walk.is_valid
+for passage in passages:
+    line=LineString([pair(q) for q in passage['waypoints']])
+    assert walk.buffer(.1).covers(line.buffer(70)),f'body-wide passage remains open: {passage["id"]}'
+for target,_,point,direction,_ in EXITS:
+    assert walk.covers(Point(point).buffer(60)),f'portal {target} standing space'
+    assert walk.covers(LineString([point,(point[0]+direction[0]*170,point[1]+direction[1]*170)]).buffer(60)),f'portal {target} arrival approach'
 landmarks={'spawn':spawn}
+for target,_,_,_,_ in EXITS:landmarks[f'portal-{target}']={**plan[f'portal:{target}'],'kind':'exit','target':target}
 for i,v in enumerate(interactions['caves']):landmarks[f'cave:{i}']={**p(v['x'],v['y']),'area':v['area'],'kind':'cave'}
 for i,v in enumerate(interactions['chests']):landmarks[f'treasure:{i}']={**p(v['x'],v['y']),'area':v['area'],'kind':'treasure'}
 for v in encounters:

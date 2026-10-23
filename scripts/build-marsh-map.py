@@ -86,7 +86,7 @@ PLAN = {
  'rune':at(200,-600,r=185), 'rescue-warden':at(2700,1400,r=240),
  'dogcamp':at(-6150,3700,r=115), 'owlroost':at(-1580,-4500,r=240),
  'golemaltar':at(-3100,700,r=270), 'stonevault':at(5200,3420,r=240),
- 'portal:11':at(-6500,4770,r=90,arrivalDirection={'x':0,'y':-1}),
+ 'portal:9':at(-6500,4770,r=90,arrivalDirection={'x':0,'y':-1}),
  'portal:2':at(6500,-3700,r=90,arrivalDirection={'x':-1,'y':0}),
 }
 SPAWN=at(-5940,4260,area='01')
@@ -161,7 +161,7 @@ def build():
     chests=[at(x,y,id=id,name=name,area=area,approach=point(x,y+80)) for id,name,area,x,y in CHESTS]
     landmarks={'spawn':SPAWN,
         'exitRuins':at(6500,-3700,area='10',kind='exit',target=2),
-        'exitRift':at(-6500,4770,area='01',kind='exit',target=11)}
+        'exitRift':at(-6500,4770,area='01',kind='exit',target=9)}
     for cave in CAVES:landmarks['cave-'+cave['id']]={k:v for k,v in cave.items() if k in ('x','y','area')}|{'kind':'cave'}
     for e in encounters:
         if e['kind']=='boss':landmarks['boss'+e['area']]={k:e[k] for k in ('x','y','area')}|{'kind':'boss'}

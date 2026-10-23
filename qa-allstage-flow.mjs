@@ -9,9 +9,10 @@ import { DEBUG_MONSTER_RULES } from './dist/debug-wave.js';
 
 let randomSeed=819381;
 Math.random=()=>((randomSeed=(Math.imul(randomSeed,1664525)+1013904223)>>>0)/4294967296);
-const releasedStageThemes=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'every released stage retains its authored theme and order');
-assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageThemes.map(id=>`${id}-trial`),'all eight released stage identities remain playable');
+const releasedStageIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'].map(id=>`${id}-trial`);
+const releasedStageThemes=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large'];
+assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'all eight trials use current world themes');
+assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageIds,'all eight released trial identities remain playable');
 assert(WORLD_IDS.includes('verdant-rift'));assert(!STAGES.some(stage=>stage.themeId==='verdant-rift'),'an independent exploration world does not acquire an unauthored stage');
 const archive=new AdventureArchive({storage:null});
 const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};

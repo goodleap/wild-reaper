@@ -19,7 +19,8 @@ export function layoutWet(layout,ax,ay,bx,by,r=0){return layout?.lakes.some(m=>w
 // permanent geometry; loading cells in a different order cannot move a road.
 export function createWorldLayout(island,plan){
   if(island.role==='boss')return null;
-  const recipe=getConfigSection('worlds').definitions.find(w=>w.id===island.region)?.layout;if(!recipe)return null;
+  const world=getConfigSection('worlds').definitions.find(w=>w.id===island.region),recipe=world?.layout;if(!recipe)return null;
+  const theme=world.authored?.artTheme??island.region;
   const sx=island.profile.x/4000,sy=island.profile.y/4000,scale=Math.min(sx,sy),seed=island.seed,region=island.region;
   const point=([x,y])=>({x:x*sx,y:y*sy});
   const routes=[],nodes=[],clearings=[],lakes=[],patches=[],obstacles=[];
@@ -65,7 +66,7 @@ export function createWorldLayout(island,plan){
     const [xx,yy,rx,ry,angle,shape]=spec,origin=point([xx,yy]);let chosen=null;
     for(const shrink of [1,.85,.7]){for(let attempt=0;attempt<49;attempt++){
       const a=attempt*2.3999632297+hash(seed+i)*TAU,d=attempt?120*Math.sqrt(attempt):0;
-      const m={id:`layout-lake:${region}:${i}`,type:'mud',kind:region==='volcano'?'lava':'water',x:origin.x+Math.cos(a)*d,y:origin.y+Math.sin(a)*d,rx:rx*sx*shrink,ry:ry*sy*shrink,angle,shape,seed:hash(seed*17+i+291),scale:rx*sx*shrink/80,deep:true,layout:true};
+      const m={id:`layout-lake:${region}:${i}`,type:'mud',kind:theme==='ember'?'lava':'water',x:origin.x+Math.cos(a)*d,y:origin.y+Math.sin(a)*d,rx:rx*sx*shrink,ry:ry*sy*shrink,angle,shape,seed:hash(seed*17+i+291),scale:rx*sx*shrink/80,deep:true,layout:true};
       const ring=getWaterContours(m).outer;
       if(!ring.every(p=>island.isDry(p.x,p.y,70))||waterIntersectsCircle(m,0,0,340)||Object.values(plan).some(p=>waterIntersectsCircle(m,p.x,p.y,p.r+50))||clearings.some(p=>waterIntersectsCircle(m,p.x,p.y,p.r+30))||!routeClear(m)||lakes.some(p=>Math.hypot(m.x-p.x,m.y-p.y)<Math.max(m.rx,m.ry)+Math.max(p.rx,p.ry)+90))continue;
       chosen=m;break;
@@ -82,11 +83,11 @@ export function createWorldLayout(island,plan){
   for(const [index,line]of recipe.ridges.entries()){
     const values=Array.isArray(line[0])?line.flat():line,a=point(values.slice(0,2)),b=point(values.slice(2)),length=Math.hypot(b.x-a.x,b.y-a.y),steps=Math.ceil(length/135),angle=Math.atan2(b.y-a.y,b.x-a.x);
     for(let i=0;i<steps;i++){
-      const t=(i+.5)/steps,o={id:`layout-ridge:${region}:${index}:${i}`,type:'log',variant:['city','ruins'].includes(region)?'world-city-wall':'world-ridge',region,x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,halfLength:length/steps*.52,r:region==='ruins'?25:36,angle,scale:1,seed:hash(index*17+i+seed)};
+      const t=(i+.5)/steps,o={id:`layout-ridge:${region}:${index}:${i}`,type:'log',variant:['city','ruins'].includes(theme)?'world-city-wall':'world-ridge',region,x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,halfLength:length/steps*.52,r:theme==='ruins'?25:36,angle,scale:1,seed:hash(index*17+i+seed)};
       if(clearObstacle(o))obstacles.push(o);
     }
   }
-  if(region==='city')for(const [pi,p]of patches.entries())if(p.kind==='city')for(let row=-1;row<=1;row++)for(let col=-1;col<=1;col++){
+  if(theme==='city')for(const [pi,p]of patches.entries())if(p.kind==='city')for(let row=-1;row<=1;row++)for(let col=-1;col<=1;col++){
     const o={id:`layout-block:${pi}:${row}:${col}`,type:'log',variant:'world-building',region,x:p.x+col*160,y:p.y+row*180,halfLength:68,r:42,angle:0,scale:1,seed:hash(pi*19+row*3+col+seed)};if(clearObstacle(o))obstacles.push(o);
   }
   return freeze(layout);
@@ -97,13 +98,14 @@ export function createWorldLayout(island,plan){
 // existing canopy fading, depth and projectile rules intact.
 export function layoutTerrainCell({layout,tx,ty,cell,region,seed,add}){
   if(!layout)return;
+  const theme=getConfigSection('worlds').definitions.find(w=>w.id===region)?.authored?.artTheme??region;
   const forests=layout.patches.filter(p=>p.kind==='forest'),step=70,rowStep=step*Math.sqrt(3)/2;
   const minX=tx*cell,maxX=minX+cell,minY=ty*cell,maxY=minY+cell;
   for(let gy=Math.floor(minY/rowStep);gy<=Math.floor(maxY/rowStep);gy++)for(let gx=Math.floor((minX-35)/step);gx<=Math.floor((maxX+35)/step);gx++){
     const x=gx*step+(Math.abs(gy)%2)*35,y=gy*rowStep;if(x<minX||x>=maxX||y<minY||y>=maxY)continue;
     const p=forests.find(p=>patchContains(p,x,y));if(!p)continue;
     const n=hash(gx*13+gy*31+seed*17);if(p.density<1&&(n>p.density*.32||gx%2||gy%2))continue;
-    const dense=p.density>=1,variant=region==='marsh'?'dead-tree':region==='beach'?'world-palm':region==='snow'?'world-snowpine':region==='volcano'?'world-charred':region==='mountain'||region==='city'?'world-pine':undefined;
+    const dense=p.density>=1,variant=theme==='marsh'?'dead-tree':theme==='beach'?'world-palm':theme==='snow'?'world-snowpine':theme==='ember'?'world-charred':theme==='mountain'||theme==='city'?'world-pine':undefined;
     add({id:`wood:${region}:${gx}:${gy}`,region,zone:p.id,type:'tree',variant,x,y,r:dense?28.5:20,scale:dense?1.22+n*.12:.9+n*.2,seed:n,treeForm:Math.floor(n*5),crownWidth:1.03,crownHeight:1,angle:0,halfLength:0,layoutPatch:p.id});
   }
 }

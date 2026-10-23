@@ -1,7 +1,9 @@
 import { traceWaterPath } from '../water-geometry.js';
 import { RiftArt, drawRiftOverview } from './rift-art.js';
+import { worldForId } from '../world-definitions.js';
 
 const TAU=Math.PI*2,TILE=256,BLEED=2,PIXEL_LIMIT=6*1024*1024;
+const artThemeFor=region=>worldForId(region).authored?.artTheme??region;
 const PALETTES=Object.freeze({
   forest:{bed:'#203b2c',edge:'#557146',leaf:'#799153',path:'#8e805b',pathEdge:'#172e2355',grass:['#526f42','#6e8951','#91a262'],mapForest:'#203f2c',mapBrush:'#597447',mapPath:'#a29b70'},
   marsh:{bed:'#263d35',edge:'#596d48',leaf:'#8b9a69',path:'#8a8463',pathEdge:'#1d383355',grass:['#526d4d','#798760','#9fa16b'],mapForest:'#283e35',mapBrush:'#68794d',mapPath:'#a1a080'},
@@ -10,7 +12,7 @@ const PALETTES=Object.freeze({
   city:{bed:'#60685b',edge:'#838a70',leaf:'#b0b18d',path:'#a6a58d',pathEdge:'#414c4855',grass:['#617951','#87966b','#a6ac7b'],mapForest:'#435f49',mapBrush:'#7a8c5e',mapPath:'#b6b59b'},
   mountain:{bed:'#5b6d5b',edge:'#809178',leaf:'#b0b69a',path:'#afa48b',pathEdge:'#3e51443d',grass:['#657e56','#879568','#a6ad7e'],mapForest:'#3f6048',mapBrush:'#768b5e',mapPath:'#c0b59a'},
   snow:{bed:'#92afb0',edge:'#b8ceca',leaf:'#e8ecda',path:'#a4b9b6',pathEdge:'#6b939126',grass:['#718f87','#a5bbb0','#dae2cd'],mapForest:'#6a9185',mapBrush:'#adc3af',mapPath:'#dce2cb'},
-  volcano:{bed:'#292e30',edge:'#524d49',leaf:'#9c8666',path:'#84735f',pathEdge:'#20252b70',grass:['#665e47','#8b7952','#ab9063'],mapForest:'#454b3f',mapBrush:'#635d46',mapPath:'#a18c70'}
+  ember:{bed:'#292e30',edge:'#524d49',leaf:'#9c8666',path:'#84735f',pathEdge:'#20252b70',grass:['#665e47','#8b7952','#ab9063'],mapForest:'#454b3f',mapBrush:'#635d46',mapPath:'#a18c70'}
 });
 const hash=(x,y=0)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 const overlaps=(a,b)=>a.maxX>=b.minX&&a.minX<=b.maxX&&a.maxY>=b.minY&&a.minY<=b.maxY;
@@ -60,7 +62,8 @@ export class WorldLayoutArt {
   _layout(island){
     const layout=island.layout;if(!layout)return null;
     let prepared=this.layouts.get(layout);if(prepared)return prepared;
-    prepared={id:++this.nextLayout,layout,palette:PALETTES[island.region]||PALETTES.forest,region:island.region,
+    const theme=artThemeFor(island.region);
+    prepared={id:++this.nextLayout,layout,palette:PALETTES[theme]||PALETTES.forest,region:island.region,theme,
       patches:(layout.patches||[]).map(p=>({value:p,bounds:patchBounds(p)})),routes:(layout.routes||[]).map(p=>({value:p,bounds:routeBounds(p)}))};
     this.layouts.set(layout,prepared);return prepared;
   }
@@ -118,7 +121,7 @@ export class WorldLayoutArt {
     for(let i=0;i<steps;i++){
       const t=(i+.5)/steps,x=route.ax+dx*t,y=route.ay+dy*t;if(x<view.minX-40||x>view.maxX+40||y<view.minY-40||y>view.maxY+40)continue;
       const n=hash(i+route.ax,route.by),side=(n-.5)*width*.9,xx=x+nx*side,yy=y+ny*side;
-      if(prepared.region==='city'||prepared.region==='ruins'){c.beginPath();c.moveTo(xx-nx*5,yy-ny*5);c.lineTo(xx+nx*7,yy+ny*7);c.stroke();}
+      if(prepared.theme==='city'||prepared.theme==='ruins'){c.beginPath();c.moveTo(xx-nx*5,yy-ny*5);c.lineTo(xx+nx*7,yy+ny*7);c.stroke();}
       else{c.beginPath();c.ellipse(xx,yy,1.2+n*2,.5+n,0,0,TAU);c.fillStyle=p.leaf;c.fill();}
     }
     }c.restore();
@@ -140,7 +143,7 @@ export class WorldLayoutArt {
     const region=prop.region||'forest',variant=(prop.treeForm||0)%3,key=`root:${region}:${variant}`;let image=this.cache.get(key);
     if(image){this.cache.delete(key);this.cache.set(key,image);}else{
       const canvas=this.makeCanvas();canvas.width=168;canvas.height=128;const target=canvas.getContext('2d');target.setTransform(2,0,0,2,84,84);target.lineCap='round';
-      const p=PALETTES[region]||PALETTES.forest,snow=region==='snow';
+      const p=PALETTES[artThemeFor(region)]||PALETTES.forest,snow=region==='snow';
       target.beginPath();target.ellipse(0,3,28,17,0,0,TAU);target.fillStyle=snow?'#809e9b80':p.bed+'cc';target.fill();
       for(let i=0;i<9;i++){
         const a=i*TAU/9,n=hash(i+variant*31,47),x=Math.cos(a)*(18+n*5),y=3+Math.sin(a)*11;
@@ -157,7 +160,7 @@ export class WorldLayoutArt {
 // It only reads permanent layout data: no terrain generation, active-water
 // cache, landmark discovery or simulation state is touched while drawing.
 export function drawWorldLayoutMap(c,island,{viewBounds,scale=1,labels=false}={}){
-  const layout=island?.layout;if(!layout)return false;const p=PALETTES[island.region]||PALETTES.forest;
+  const layout=island?.layout;if(!layout)return false;const p=PALETTES[artThemeFor(island.region)]||PALETTES.forest;
   if(layout.kind==='rift-forest')return drawRiftOverview(c,layout,{viewBounds,scale,labels});
   c.save();c.lineCap='round';c.lineJoin='round';
   for(const patch of layout.patches||[]){

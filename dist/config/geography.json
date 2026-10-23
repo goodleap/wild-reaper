@@ -93,7 +93,7 @@
     },
     "belltower": {
       "id": "belltower",
-      "world": "city",
+      "world": "clockshadow-city",
       "type": "castle",
       "name": "暮钟塔",
       "width": 136,
@@ -139,7 +139,7 @@
     },
     "furnace": {
       "id": "furnace",
-      "world": "volcano",
+      "world": "ember-realm-large",
       "type": "castle",
       "name": "熔炉神殿",
       "width": 212,
@@ -164,10 +164,10 @@
     "marsh": "沼泽高脚屋",
     "ruins": "遗迹石屋",
     "beach": "海岸渔舍",
-    "city": "街角民居",
+    "clockshadow-city": "街角民居",
     "mountain": "山间石屋",
     "snow": "雪原木屋",
-    "volcano": "黑岩驿站"
+    "ember-realm-large": "黑岩驿站"
   },
   "hazardRules": {
     "maxProps": 6,

@@ -12,7 +12,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const island=new Island({region:'ruins',seed:1}),layout=island.layout;
 assert.equal(layout.id,'ruins:1');assert.equal(layout.worldId,'ruins');assert.equal(layout.artTheme,'ruins');
 const worldIndex=WORLD_IDS.indexOf('ruins'),neighbors=worldNeighbors(worldIndex);
-assert.equal(worldIndex,2);assert.deepEqual(new Set(neighbors),new Set([1,4,7,11]));
+assert.equal(worldIndex,2);assert.deepEqual(new Set(neighbors),new Set([1,4,7,9]));
 assert.deepEqual(layout.bounds,{minX:-7200,minY:-5400,maxX:7200,maxY:5400});
 assert.equal(new Island({region:'ruins',seed:91}).layout,layout,'fixed terrain and content do not reroll with a new run seed');
 assert(layout.areas.length>=14&&layout.areas.length<=18);

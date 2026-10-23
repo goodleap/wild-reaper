@@ -8,18 +8,14 @@ import { Game } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
 
-// Fixed fingerprints preserve authored content and deterministic terrain.
-// New macro layouts are checked through schema and navigation tests below;
-// the existing enemy values and standalone terrain recipes retain their hash.
-// The catalogue fingerprint includes the approved ruins/coast/mountain/snow art
-// and color updates; their enemy, hazard and terrain recipes are unchanged.
-// Stage cards derive their accent from those same world palettes.
+// Baselines come from v0.0.148. The approved changes are current world IDs,
+// corresponding portal indices/site labels, and reuse of the volcanic trial's
+// terrain/environment recipe. Full forest content and all other unchanged
+// layouts remain covered; the two extended layouts have separate geometry QA.
 const expected={
   "exports": {
     "environment": "5a2e7540eee34a6d3ef9ea0b5029222765e9f6bd5b0b869552f15993a5f164c3",
-    "world-definitions": "1fdc3291d7b181ef29c3decf384123a07334a7cf427a2c95058651c36e21fcf7",
-    "stage-definitions": "8da9337e7b89c8aa725d81df70b6d147ca57cb9df6f913c9581f142e5794ba9a",
-    "world-sites": "31546e1f1db7a911f55177cd5395ee8bc3d508b7f6c6254f978018f2b9bb0a3a",
+    "world-sites": "4d59c5bd769e63982ac0e6859b979d9b68264ea1fa2d158c21ceafd8af25d707",
     "world-hazards": "1bda6969e34de2b9e50c502f2c9359998fb901561f39acf1daab0b4a2cfcc222",
     "regional-mechanisms": "b538127784763cf62edb39e73602c627e4238224678f7e1a1323ee64fd169aad",
     "interior-profiles": "f36d970a301265b72f4231dc1144c46dea2ffebe56339cdc0e10708b852e55d1",
@@ -30,34 +26,41 @@ const expected={
     "marsh": "a02415996344468a28ed0aeb4424b9410f9ba35c2d2afb00d6b53764a35921ff",
     "ruins": "43e9a1e21d1b317eb0b81c2f333a2d47b8671131d6b4a09812a68a52d58b8985",
     "beach": "b294379a2b1e07902a56c2d7cf4bc37b3a670a89e98de71ebfb6009003cc2c90",
-    "city": "94ecfacdf19e847371e0867dd4327e32fdbc459d735a23bd94077e75ec745b5c",
+    "clockshadow-city": "94ecfacdf19e847371e0867dd4327e32fdbc459d735a23bd94077e75ec745b5c",
     "mountain": "6ae7839f4a491e7e824fd7c4e5fd853ccfee8bfcc2599dfa11ca8ca78f0be2f5",
     "snow": "1393d1d571bca29f82af4b0066131007fd81289c1fa3e843e6923d5126d276a2",
-    "volcano": "420cabb482f2a3afefe2c783e2b60d20d81b550aedeac76a445378eca304cdf3"
-  }
+    "ember-realm-large": "420cabb482f2a3afefe2c783e2b60d20d81b550aedeac76a445378eca304cdf3"
+  },
+  "worlds": {
+    "rift-forest": "c66f3366d4e12800c4c2a36f5fd0006c3afead1ad76c054c84a7e698ab643a34",
+    "marsh": "83420920136e8d2145054b2dc01ad7fd2b6eca5f9499f451873efa5bd35d3570",
+    "ruins": "34b5ca5d0a61b074af068b66c11d0c63c7f83f14e312270c20f057aa10e4351a",
+    "beach": "f46f99e9f2649ba3fe9e8ef59f15ca2b753913ea910d566ca7bffb1c8e6b923c",
+    "mountain": "a9843bd8d23600e9ec4a44d5f1c71a2b5a4b2abe8de4871cc1302e5a2bfe02ad",
+    "snow": "a1bc6ffc0ec754281f2eb348203049325a48726e320984bee1aee3f4e21918d8",
+    "verdant-rift": "4ebd51012306f3ca984579768a6fff7caf31194f63542c7cd8818ff609d33485",
+    "clockshadow-city": "74adbb691cfddc89ddc010025a7b3e8391ca1300608aecc1114d21ac7a676e9d",
+    "ember-realm-large": "c1bc6b361a861aa8adebe385ec5a28e96d4e9792dd6a356074089392fab6f8dc",
+    "forest": "2eaa67a9d83874cfd6c7be230adff6b8f887649bd95f9886b2a1faa4ead53c66"
+  },
+  "stages": "014ba7027ee750caaf967f40dfb3b690a82e6e33fa373d2e67582fb44d88d337"
 };
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
-const legacyWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-const existingWorldIds=[...legacyWorldIds,'verdant-rift','clockshadow-city'];
-assert.deepEqual(WORLD_IDS,[...existingWorldIds,'ember-realm-large','rift-forest'],'append the separated rift world without renumbering the existing worlds');
+const currentWorldIds=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest'];
+assert.deepEqual(WORLD_IDS,currentWorldIds,'only the current maps retain registered world identities');
 for(const [id,hash]of Object.entries(expected.exports)){
   const module=await import(`./dist/${id}.js`),data=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(module).filter(([,value])=>typeof value!=='function'))));
-  if(data.WORLD_IDS)data.WORLD_IDS=data.WORLD_IDS.slice(0,8);
-  if(data.WORLD_CONNECTIONS)data.WORLD_CONNECTIONS=data.WORLD_CONNECTIONS.map(edge=>edge.map(index=>index===WORLD_IDS.indexOf('rift-forest')?0:index));
-  if(data.REGIONS)data.REGIONS=data.REGIONS.slice(0,8);
   if(data.DUNGEON_RULES){
     const rules=JSON.parse(readFileSync(new URL('./dist/config/geography.json',import.meta.url))).interiors;
     for(const [key,profile] of [['DUNGEON_RULES','dungeon'],['HUT_RULES','hut']]){
       assert.equal(data[key].maxStates,REGIONS.length*rules[profile].maxStatesPerWorld,'interior caches account for the complete world catalogue');
-      data[key].maxStates=legacyWorldIds.length*rules[profile].maxStatesPerWorld;
+      data[key].maxStates=8*rules[profile].maxStatesPerWorld;
     }
   }
-  if(data.REGIONS)for(const w of data.REGIONS){delete w.terrain.generatorId;delete w.terrain.placements;delete w.terrain.layoutId;delete w.layout;delete w.authored;delete w.seed;delete w.naturalIsland;}
-  if(data.REGIONS){assert.equal(data.REGIONS[0].name,'低语之森');assert.equal(data.REGIONS[0].shortName,'低语');data.REGIONS[0].name='裂谷林海';data.REGIONS[0].shortName='裂谷';assert.equal(digest(data.REGIONS.slice(1)),'f24c2cacde9d626f4a43669c3d2e9618d2faaa2e9f18a44381bacac5cce1c860','legacy world catalogues retain the reviewed ruins/coast/mountain/snow appearance updates and existing gameplay values');}
   assert.equal(digest(data),hash,`${id}: authored values preserved`);
 }
-for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
+for(const world of REGIONS.filter(world=>Object.hasOwn(expected.traces,world.id))){
   const out=[];
   for(const zoneId of ['default',...world.biomeZones])for(let seed=0;seed<80;seed++){
     const hash=(a,b)=>{const n=Math.sin(a*127.1+b*311.7+seed*19.19)*43758.5453123;return n-Math.floor(n);},roll=n=>hash(n,seed+7),calls=[];
@@ -67,9 +70,20 @@ for(const world of REGIONS.filter(world=>legacyWorldIds.includes(world.id))){
   assert.equal(digest(out),expected.traces[world.id],`${world.id}: exact deterministic terrain placements`);
   assert(Object.isFrozen(world)&&Object.isFrozen(world.terrain));
 }
-assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,12);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
+assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,10);assert.equal(WORLD_CONNECTIONS.length,10);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
+assert.deepEqual(new Set(sections.worlds.definitions.map(world=>world.id)),new Set(currentWorldIds));
+for(const retiredId of ['city','volcano']){
+  assert(!sections.worlds.definitions.some(world=>world.id===retiredId),'retired IDs have no world definition');
+  assert(!sections.worlds.connections.some(edge=>edge.includes(retiredId)),'retired IDs have no travel route');
+}
+for(const world of sections.worlds.definitions){
+  const data=structuredClone(world);
+  if(['clockshadow-city','ember-realm-large'].includes(world.id))delete data.authored;
+  assert.equal(digest(data),expected.worlds[world.id],`${world.id}: existing content outside the approved exits/theme data remains unchanged`);
+}
+assert.equal(digest(sections.stages),expected.stages,'eight existing trials keep their scenes, encounters and rewards with current theme IDs');
 assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['rift-forest','marsh','ruins','beach','mountain','snow','verdant-rift','clockshadow-city','ember-realm-large'],'all remade and existing fixed maps retain separate identities');
 const rift=sections.worlds.definitions.find(world=>world.id==='rift-forest');
 assert.equal(rift.authored.areas.length,18);
@@ -82,15 +96,23 @@ assert(!sections.worlds.connections.some(edge=>edge.includes(verdant.id)),'the n
 const ember=sections.worlds.definitions.find(world=>world.id==='ember-realm-large');
 assert.equal(ember.authored.worldId,ember.id);assert.equal(ember.authored.id,'ember-realm-large:1');assert.equal(ember.authored.artTheme,'ember');
 assert.equal(ember.authored.emberScene?.sample,false,'the full ember world replaces the partial preview');
-assert.equal(ember.authored.emberScene.revision,2);assert.equal(ember.authored.areas.length,17);assert.equal(ember.authored.passages.length,23);
+assert.equal(ember.authored.emberScene.revision,2);assert.equal(ember.authored.areas.length,17);assert.equal(ember.authored.passages.length,25);
 assert.equal(ember.authored.passages.filter(p=>p.kind==='bridge').length,3);assert.equal(ember.authored.interactions.caves.length,3);assert.equal(ember.authored.interactions.chests.length,10);
-assert.equal(ember.authored.encounters.filter(e=>e.kind==='boss').length,2);assert.equal(Object.keys(ember.authored.plan).length,12);
+assert.equal(ember.authored.encounters.filter(e=>e.kind==='boss').length,2);assert.equal(Object.keys(ember.authored.plan).length,14);
 assert.equal(ember.authored.bounds.maxX-ember.authored.bounds.minX,14400);assert.equal(ember.authored.bounds.maxY-ember.authored.bounds.minY,10800);
-assert(!sections.worlds.connections.some(edge=>edge.includes(ember.id)),'the ember world does not add travel routes to an existing world');
+assert.deepEqual(new Set(sections.worlds.connections.filter(edge=>edge.includes(ember.id)).map(edge=>edge.find(id=>id!==ember.id))),new Set(['snow','ruins']),'the complete ember map owns both existing volcanic connections');
+for(const [id,neighbors] of [['clockshadow-city',['beach','mountain','ruins']],['ember-realm-large',['snow','ruins']]]){
+  const world=sections.worlds.definitions.find(world=>world.id===id);
+  assert.deepEqual(new Set(Object.keys(world.authored.plan).filter(key=>key.startsWith('portal:'))),new Set(neighbors.map(neighbor=>`portal:${WORLD_IDS.indexOf(neighbor)}`)),'each new world exit has a corresponding authored reservation');
+}
 const reject=(edit,label)=>{const bad=structuredClone(sections);edit(bad);assert.throws(()=>validateWorlds(bad),undefined,label);};
 reject(s=>s.worlds.definitions[0].terrain.generatorId='remote-code','unregistered behavior');
 reject(s=>s.worlds.order.reverse(),'persistent numeric world identities');
 reject(s=>s.worlds.connections.push(['forest','unknown']),'unknown world route');
+for(const id of ['city','volcano']){
+  reject(s=>s.worlds.connections.push(['forest',id]),'retired world routes cannot pass validation');
+  reject(s=>s.stages.definitions[0].themeId=id,'retired world IDs cannot return as trial themes');
+}
 reject(s=>s.worlds.definitions[0].enemyWeights.unknown=1,'unknown monster');
 reject(s=>s.stages.definitions[0].core.boss.kind='unknown','unknown boss');
 reject(s=>s.stages.definitions[0].outer.boss.hp=-1,'invalid encounter HP');
@@ -117,4 +139,4 @@ for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
   assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
 }
-console.log('World configuration checked: 12 world identities with all eleven existing indices preserved, 8 unchanged stage encounter definitions, 10 legacy routes with their rift endpoint migrated, separate authored maps/ember world, reviewed catalogue art and unchanged gameplay/terrain traces; invalid cross-references rejected.');
+console.log('World configuration: ten current worlds, eight preserved trial encounters/scenes, ten valid routes, retired IDs rejected, complete commemorative forest unchanged, reviewed exit-only layout updates and deterministic terrain recipes passed.');

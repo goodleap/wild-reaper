@@ -7,14 +7,12 @@ import { WORLD_IDS, worldNeighbors } from './dist/world-definitions.js';
 import { createRiftLayout } from './dist/worlds/rift-layout.js';
 import { validateWorlds } from './dist/config-validation/worlds.js';
 
-const originalIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(WORLD_IDS.slice(0,8),originalIds,'the saved numeric identities of the original worlds remain stable');
-assert.equal(WORLD_IDS[8],'verdant-rift');
-assert.equal(WORLD_IDS[9],'clockshadow-city');assert.equal(WORLD_IDS[10],'ember-realm-large');assert.equal(WORLD_IDS.length,11);
-assert.deepEqual(worldNeighbors(8),[],'the new selection does not create cross-world travel');
-assert.deepEqual(worldNeighbors(9),[],'the city retains its independent selection identity');
-assert.deepEqual(worldNeighbors(10),[],'the ember world does not create cross-world travel');
-assert.deepEqual(worldNeighbors(0),[1,2,3],'the first map retains its three existing exits');
+assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest']);
+assert.deepEqual(worldNeighbors(8),[],'verdant rift retains independent selection');
+assert.deepEqual(worldNeighbors(4),[2,3,5]);
+assert.deepEqual(worldNeighbors(7),[2,6]);
+assert.deepEqual(worldNeighbors(0),[],'the memorial layout is preserved for its challenge');
+assert.deepEqual(worldNeighbors(9),[1,2,3],'rift forest retains three exits');
 const forest=createRiftLayout(),large=createRiftLayout('verdant-rift');
 assert.equal(createRiftLayout(),forest);assert.equal(createRiftLayout('verdant-rift'),large);
 assert.notEqual(forest,large,'authored layout caches are keyed by map identity');
@@ -43,11 +41,11 @@ const paired=large.interactions.caves.filter(c=>large.interactions.caves.filter(
 assert.equal(paired.length,2,'the cave shortcut has two mouths');
 reject(map=>{const cave=map.interactions.caves.find(c=>c.id===paired[0].id);cave.seed++;},'both mouths refer to the same seeded underground instance');
 
-const old=new Game({mode:'world',environment:false}),game=new Game({mode:'world',worldId:'verdant-rift',environment:false});
+const old=new Game({mode:'world',worldId:'rift-forest',environment:false}),game=new Game({mode:'world',worldId:'verdant-rift',environment:false});
 assert.equal(game.worldId,'verdant-rift');assert.equal(game.startWorldId,'verdant-rift');assert.equal(game.mapId,8);assert.equal(game.debug,false);
 assert.equal(game.debugOptions.fastMovement,false);assert.equal(game.player.speed,old.player.speed,'ordinary world selection does not alter movement or enable debug bonuses');
 assert.equal(game.region.danger,old.region.danger,'the new world reuses the existing combat difficulty');
-assert.equal(new Game({mode:'world',worldId:'unknown',environment:false}).worldId,'forest','unknown saved selections fall back to the existing world');
+assert.equal(new Game({mode:'world',worldId:'unknown',environment:false}).worldId,'forest','unknown world IDs use the existing generic fallback');
 assert.equal(new Game({mode:'world',worldId:'verdant-rift',debug:true,environment:false}).worldId,'verdant-rift','debug controls without an explicit world override retain the selected world');
 assert.equal(game.terrain.island.layout,large);assert.equal(old.terrain.island.layout,forest);assert.notEqual(game.terrain,old.terrain);
 assert.equal(game.regions.portals.length,0);assert.equal(game.regions._endpoint(0),null,'a standalone map cannot invent an exit back to the original map');
@@ -104,4 +102,4 @@ const first=cave.riftExits.find(exit=>exit.key===a.key);put(first);game.dungeon.
 assert.equal(game.dungeon.states.size,2);assert.equal(old.dungeon.states.size,0);
 const snapshot=game.regions.saveWorld();assert.equal(game.regions.states.get(8),snapshot);assert.equal(game.regions.restoreWorld(0),false,'a forest identity cannot restore the new map state');
 assert.equal(game.regions.restoreWorld(8),true);assert.equal(game.riftExploration.sites.find(s=>s.id===chest.id).state,'claimed');assert(game.terrain.riftGateOpen(gate.gateId));assert.equal(game.dungeon.states.get(cave.id),cave);
-console.log('Authored worlds: independent normal selection, stable old IDs and exits, per-map immutable caches, schema rejection, full encounter creation, one-sided gates, finite rewards, challenge/paired caves and isolated retained state passed.');
+console.log('Authored worlds: independent normal selection, current catalog and bidirectional exits, per-map immutable caches, schema rejection, full encounter creation, one-sided gates, finite rewards, challenge/paired caves and isolated retained state passed.');

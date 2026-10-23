@@ -223,7 +223,7 @@
     },
     {
       "id": "city-trial",
-      "themeId": "city",
+      "themeId": "clockshadow-city",
       "name": "古城试炼",
       "shortName": "古城",
       "difficultyLabel": "进阶",
@@ -406,7 +406,7 @@
     },
     {
       "id": "volcano-trial",
-      "themeId": "volcano",
+      "themeId": "ember-realm-large",
       "name": "火山试炼",
       "shortName": "火山",
       "difficultyLabel": "高危",

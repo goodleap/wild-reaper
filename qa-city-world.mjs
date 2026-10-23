@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { Game } from './dist/engine.js';
 import { groundOffset } from './dist/terrain.js';
 import { WORLD_IDS, worldForId, worldNeighbors } from './dist/world-definitions.js';
@@ -9,13 +8,10 @@ import { validateWorlds } from './dist/config-validation/worlds.js';
 import { worldArchiveHTML } from './dist/world-archive.js';
 
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
-const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city','ember-realm-large']);
-assert.equal(digest(sections.worlds.definitions.slice(0,9)),'ee9da7fa416564219527b75690d9606ff786479d1307aedba72aafefb4edd2ad','all nine existing complete world definitions remain unchanged');
+assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest']);
 assert.equal(layoutStyle(), 'clockshadow-renewed', 'only the authored city opts into its renewed art');
 function layoutStyle(){return sections.worlds.definitions.find(w=>w.id==='clockshadow-city').authored.artStyle;}
-assert.equal(digest(sections.worlds.connections),'d552ca4f4ec835d24603a2cf5a2578ebe6d737a7ce5426177655e08712f89980','existing connections remain byte-for-value unchanged');
-assert.deepEqual(worldNeighbors(9),[],'the new city has an independent world selection');
+assert.deepEqual(worldNeighbors(4),[2,3,5],'the polished city connects ruins, coast and mountain');
 assert(validateWorlds(sections));
 const layout=createRiftLayout('clockshadow-city');
 assert.equal(layout.id,'clockshadow-city:1');assert.equal(layout.artTheme,'city');
@@ -24,9 +20,9 @@ assert.equal(createRiftLayout('clockshadow-city'),layout);assert.notEqual(layout
 assert(layout.cityStructures.length>100,'the city is built from populated street blocks and complete structural modules');
 for(const kind of ['house','keep','wall','tower','gate','cathedral'])assert(layout.cityStructures.some(s=>s.cityKind===kind),`the city includes authored ${kind} modules`);
 assert.equal(layout.encounters.filter(e=>e.kind==='boss').length,2,'two existing open bosses occupy their own city areas');
-assert.match(worldArchiveHTML({selectedId:'clockshadow-city'}),/世界选择[\s\S]*街巷、城门、石桥[\s\S]*没有跨世界出口/);
+assert.match(worldArchiveHTML({selectedId:'clockshadow-city'}),/自由探索[\s\S]*相邻世界[\s\S]*往返保留/);
 const reject=(edit,label)=>{const bad=structuredClone(sections),map=bad.worlds.definitions.find(w=>w.id==='clockshadow-city').authored;edit(map);assert.throws(()=>validateWorlds(bad),undefined,label);};
-reject(map=>map.worldId='city','the new city cannot share the saved identity of the existing city');
+reject(map=>map.worldId='city','authored identity must match its registered world');
 reject(map=>map.artTheme='unknown','unregistered painting themes are rejected');
 reject(map=>delete map.cityStructures,'a city layout requires its authored building modules');
 reject(map=>map.cityStructures[0].cityKind='unknown','unknown building modules are rejected');
@@ -39,11 +35,11 @@ reject(map=>map.cityStructures.push({...map.cityStructures[0]}),'building IDs re
 reject(map=>map.cityStructures[0].x=map.bounds.maxX,'the complete building footprint stays inside the world');
 
 const old=new Game({mode:'world',environment:false}),game=new Game({mode:'world',worldId:'clockshadow-city',environment:false});
-assert.equal(game.mapId,9);assert.equal(game.worldId,'clockshadow-city');assert.equal(game.startWorldId,'clockshadow-city');
+assert.equal(game.mapId,4);assert.equal(game.worldId,'clockshadow-city');assert.equal(game.startWorldId,'clockshadow-city');
 assert.equal(game.debug,false);assert.equal(game.debugOptions.fastMovement,false);assert.equal(game.player.speed,old.player.speed);
-assert.equal(game.region.danger,worldForId('city').danger,'the authored city reuses city combat settings');
-assert.deepEqual(game.region.enemyWeights,worldForId('city').enemyWeights,'enemy weights reuse the existing city values');
-assert.equal(game.terrain.island.layout,layout);assert.equal(game.regions.portals.length,0);assert.equal(game.regions.states.size,0);
+assert.equal(game.region.danger,1.06,'the authored city reuses city combat settings');
+assert.deepEqual(game.region.enemyWeights,{"slime": 0.7, "beetle": 1.15, "bat": 1.15, "brute": 1.35, "boar": 1, "spore": 0.65, "rootbinder": 0, "boglurker": 0, "prismguard": 0.8, "tidepriest": 0, "shieldguard": 1, "stoneape": 0, "windhunter": 0, "frostmage": 0, "flamelizard": 0},'enemy weights reuse the existing city values');
+assert.equal(game.terrain.island.layout,layout);assert.equal(game.regions.portals.length,3);assert.equal(game.regions.states.size,0);
 assert.equal(game.territories.groups.length,layout.encounters.length,'every authored encounter creates a finite population');
 assert.equal(game.enemies.filter(e=>e.worldBoss).length,2);
 const tower=game.settlements.sites.find(s=>s.featureId==='belltower');assert(tower,'the new map reuses the existing city bell-tower interaction');
@@ -81,6 +77,6 @@ for(const member of game.companions.members)assert(Math.hypot(member.x-game.play
 assert.equal(game.touchInteractions.update(),false,'returning does not immediately re-enter the city sewer');
 put(b);request(b.id);assert.equal(game.dungeon.active,cave);assert.equal(enemy.hp,retainedHp);
 const entrance=cave.riftExits.find(exit=>exit.key===a.key);put(entrance);game.dungeon.update(0);request(entrance.id);
-const snapshot=game.regions.saveWorld();assert.equal(game.regions.states.get(9),snapshot);assert.equal(game.regions.restoreWorld(4),false,'old city identity cannot restore the new city');
-assert(game.regions.restoreWorld(9));assert.equal(game.riftExploration.sites.find(s=>s.id===chest.id).state,'claimed');assert.equal(game.dungeon.states.get(cave.id),cave);assert.equal(old.dungeon.states.size,0);
-console.log('City world: all nine old worlds and connections preserved, independent normal selection, module schema, finite encounters/rewards, themed paired/challenge dungeons and retained isolated state passed.');
+const snapshot=game.regions.saveWorld();assert.equal(game.regions.states.get(4),snapshot);assert.equal(game.regions.restoreWorld(9),false,'another world cannot restore city state');
+assert(game.regions.restoreWorld(4));assert.equal(game.riftExploration.sites.find(s=>s.id===chest.id).state,'claimed');assert.equal(game.dungeon.states.get(cave.id),cave);assert.equal(old.dungeon.states.size,0);
+console.log('City world: current catalog and three connections, normal selection, module schema, finite encounters/rewards, themed paired/challenge dungeons and retained isolated state passed.');

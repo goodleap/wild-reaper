@@ -73,7 +73,7 @@ export class Settlements {
   }
   _createSite(def,index,{nearSpawn=false}={}) {
     const region=this.game.region?.id||'forest',seed=this._hash(index+83,17),rotation=mapSeed(this.game)===0?0:this._hash(71,23)*TAU;
-    def=worldSettlementDefinition(region,def);
+    def=worldSettlementDefinition(region,def,this.game.terrain.island?.layout);
     const spawn=nearSpawn?this._foot():null,plan=!nearSpawn&&this.game.terrain.island?.plan?.[def.type];
     for(let i=0;i<(plan?33:nearSpawn?128:192);i++) {
       const ring=Math.floor(i/32),angle=(nearSpawn?-Math.PI/2:def.angle+rotation)+(i%32)*TAU/32,radius=nearSpawn?190+ring*40:def.radius+ring*100;
@@ -81,7 +81,7 @@ export class Settlements {
       const x=plan?Math.round(plan.x+Math.cos(localAngle)*offset):Math.round((spawn?.x||0)+Math.cos(angle)*radius),y=plan?Math.round(plan.y+Math.sin(localAngle)*offset):Math.round((spawn?.y||0)+Math.sin(angle)*radius-(nearSpawn?30:0));
       const site={...def,id:`site:${mapIdentity(this.game)}:${def.type}`,x,y,sortY:y,door:{x,y:y+(settlementType(def)?.doorOffset??30)},interactRadius:SETTLEMENT_RULES.interactRadius,state:'ready',region,seed,guardIds:[],remainingGuards:0};
       if(!this._validSite(site,{nearSpawn}))continue;
-      if(site.type==='supply')site.name=WORLD_HUT_NAMES[region]||WORLD_HUT_NAMES[this.game.terrain.island?.layout?.artTheme]||(this.game.terrain.island?.layout?.artTheme==='ember'?def.name:WORLD_HUT_NAMES.forest);
+      if(site.type==='supply')site.name=this.game.terrain.island?.layout?.artTheme==='ember'?def.name:WORLD_HUT_NAMES[region]||WORLD_HUT_NAMES[this.game.terrain.island?.layout?.artTheme]||WORLD_HUT_NAMES.forest;
       if(site.type==='merchant') {
         site.relicId=RELICS[Math.floor(this._hash(index+199,63)*RELICS.length)].id;
         site.stock={...economy.shop.stock};

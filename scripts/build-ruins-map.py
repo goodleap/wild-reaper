@@ -86,7 +86,7 @@ PLAN={
  'dogcamp':at(-2800,3900,r=115), 'owlroost':at(4800,900,r=240),
  'golemaltar':at(-3650,300,r=270), 'stonevault':at(-200,-4270,r=240),
  'portal:1':at(-6660,1000,r=90,arrivalDirection=point(1,0)),
- 'portal:11':at(-1800,5000,r=90,arrivalDirection=point(0,-1)),
+ 'portal:9':at(-1800,5000,r=90,arrivalDirection=point(0,-1)),
  'portal:7':at(6450,-2600,r=90,arrivalDirection=point(-1,0)),
  'portal:4':at(6500,3300,r=90,arrivalDirection=point(-1,0)),
 }

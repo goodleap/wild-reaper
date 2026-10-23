@@ -3,7 +3,7 @@ import { defineWorld } from './worlds/define-world.js';
 import { terrainGenerator } from './worlds/terrain-generators.js';
 
 const config=getConfigSection('worlds'),definitions=new Map(config.definitions.map(world=>[world.id,world]));
-// Explicit registration order preserves numeric world identities and seed mapping.
+// The current catalog defines runtime indices; explicit world seeds remain independent.
 export const REGIONS=Object.freeze(config.order.map(id=>{
   const source=definitions.get(id);
   return defineWorld({...source,terrain:{...source.terrain,generate:terrainGenerator(source.terrain.generatorId)}});

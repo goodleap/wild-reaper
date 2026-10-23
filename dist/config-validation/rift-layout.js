@@ -93,10 +93,11 @@ export function validateRiftLayout(layout,path,bossIds,reservations,neighbors,wo
   if(ember){
     const scene=layout.emberScene,full=scene?.revision===2&&scene?.sample===false;
     if(worldId!=='ember-realm-large'||!scene||!full&&(scene.revision!==1||scene.sample!==true))fail('emberScene.identity');
-    if(neighbors.length)fail('emberScene.world connections');
+    if(!full&&neighbors.length)fail('emberScene.world connections');
     if(full){
-      if(layout.name!=='熔火之境'||layout.areas.length!==17||layout.passages.length!==23||layout.interactions.caves.length!==3||layout.interactions.chests.length!==10||layout.interactions.gates.length)fail('emberScene.full scope');
-      if(Object.keys(layout.plan??{}).length!==reservations.length||Object.keys(layout.plan??{}).some(key=>!reservations.includes(key)))fail('emberScene.full reservations');
+      if(layout.name!=='熔火之境'||layout.areas.length!==17||layout.passages.length!==23+neighbors.length||layout.passages.filter(p=>p.kind==='exit').length!==neighbors.length||layout.interactions.caves.length!==3||layout.interactions.chests.length!==10||layout.interactions.gates.length)fail('emberScene.full scope');
+      const expectedPlan=[...reservations,...neighbors.map(index=>`portal:${index}`)];
+      if(Object.keys(layout.plan??{}).length!==expectedPlan.length||Object.keys(layout.plan??{}).some(key=>!expectedPlan.includes(key)))fail('emberScene.full reservations');
       if(new Set(layout.interactions.caves.map(c=>c.caveId)).size!==3)fail('emberScene.independent caves');
       if(layout.encounters.filter(e=>e.kind==='boss').length!==2||layout.encounters.length<12)fail('emberScene.full encounters');
     } else {

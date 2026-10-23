@@ -532,8 +532,9 @@ export class Game {
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;
     if(!this.regions.restoreWorld(this.mapId)) {
-      const seed=nextIsland?.seed??this.region.seed??this.regionIndex,generate=!this.stage?.isBossIsland,emberScene=this.region.authored?.emberScene,ambient=generate&&!emberScene,residents=generate&&!emberScene?.sample;
+      const seed=nextIsland?.seed??this.region.seed??this.regionIndex,generate=!this.stage?.isBossIsland;
       this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:nextIsland})});this.enemies=[];this.gems=[];this.coins=[];
+      const emberScene=this.terrain.island?.layout?.emberScene,ambient=generate&&!emberScene,residents=generate&&!emberScene?.sample;
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.riftExploration=null;this.discoveredMap=new Set();
       this.companions.camps=[];this.companions.generation=ambient&&this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();

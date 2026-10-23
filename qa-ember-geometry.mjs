@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { Island } from './dist/islands.js';
 import { Terrain } from './dist/terrain.js';
 import { RiftCollision } from './dist/rift-collision.js';
@@ -9,18 +8,21 @@ import { createEmberScenery } from './dist/worlds/ember-scenery.js';
 import { terrainNavigation } from './dist/terrain-navigation.js';
 import { validateWorlds } from './dist/config-validation/worlds.js';
 import { getWaterContours, waterIntersectsCircle, waterIntersectsCapsule } from './dist/water-geometry.js';
+import { Regions } from './dist/regions.js';
+import { worldNeighbors, WORLD_IDS } from './dist/world-definitions.js';
 
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
-const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-assert.equal(digest(sections.worlds.definitions.slice(0,10)),'c1d617ff5f2783b37bb2867754917d5671b7ca1e37012a56648886d8102df628','the complete definitions of all ten existing maps are retained');
 assert(validateWorlds(sections));
-const world=sections.worlds.definitions.at(-1),layout=createRiftLayout('ember-realm-large'),scene=layout.emberScene;
+const world=sections.worlds.definitions.find(w=>w.id==='ember-realm-large'),layout=createRiftLayout('ember-realm-large'),scene=layout.emberScene;
+const neighbors=worldNeighbors(WORLD_IDS.indexOf(world.id));
 assert.equal(world.id,'ember-realm-large');assert.equal(world.name,'熔火之境');
 assert.deepEqual(layout.bounds,{minX:-7200,minY:-5400,maxX:7200,maxY:5400});
-assert.equal(scene.revision,2);assert.equal(scene.sample,false);assert.equal(layout.areas.length,17);assert.equal(layout.passages.length,23);
+assert.equal(scene.revision,2);assert.equal(scene.sample,false);assert.equal(layout.areas.length,17);assert.equal(layout.passages.length,23+neighbors.length);
+assert.deepEqual(neighbors.map(index=>WORLD_IDS[index]).sort(),['ruins','snow']);
+assert.equal(layout.passages.filter(p=>p.kind==='exit').length,neighbors.length);
 assert.deepEqual(scene.groundRings,layout.boundaries);assert.deepEqual(scene.highOpenRings,layout.solidBoundaries);
 assert.deepEqual(scene.bridge,scene.bridges[0]);assert.deepEqual(scene.bridges.map(b=>b.width),[160,220,240]);
-assert.deepEqual(world.terrain.placements,{default:[]});assert.equal(world.environment.hazard,null);
+assert(world.terrain.placements.default.length>0,'the volcano trial keeps its shared theme scenery recipe');
 assert.equal(layout.interactions.caves.length,3);assert.equal(new Set(layout.interactions.caves.map(c=>c.caveId)).size,3);
 assert.equal(layout.interactions.chests.length,10);assert.equal(layout.encounters.filter(e=>e.kind==='boss').length,2);assert(layout.encounters.filter(e=>e.kind==='guard').length>=3);
 for(const mutate of [
@@ -32,19 +34,32 @@ for(const mutate of [
   w=>{w.authored.interactions.caves[0].approach.y+=200;},
   w=>{w.authored.interactions.caves[1].caveId=w.authored.interactions.caves[0].caveId;},
   w=>{delete w.authored.plan.castle;},
+  w=>{delete w.authored.plan[`portal:${neighbors[0]}`];},
+  w=>{w.authored.plan['portal:999']={...w.authored.plan[`portal:${neighbors[0]}`]};},
   w=>{w.authored.emberScene.zones[0].paletteKind='incompatible';},
   w=>{w.authored.encounters.find(e=>e.kind==='boss').bossKind='invented';},
   w=>{w.authored.emberScene.surfaces[0].x=w.authored.spawn.x;w.authored.emberScene.surfaces[0].y=w.authored.spawn.y;},
   w=>{w.authored.emberScene.surfaces[0].shape='invented';},
   w=>{w.authored.emberScene.surfaces[0].rx=500;}
 ]){
- const altered=structuredClone(sections);mutate(altered.worlds.definitions.at(-1));
+ const altered=structuredClone(sections);mutate(altered.worlds.definitions.find(w=>w.id===world.id));
  assert.throws(()=>validateWorlds(altered),/Invalid world configuration/,'invalid shared geometry, lifecycle, identity and finite content must be rejected');
 }
 const island=new Island({region:'ember-realm-large'}),terrain=new Terrain({island,region:'ember-realm-large'}),outline=new RiftCollision(layout);
 const props=createEmberScenery(layout);assert.equal(createEmberScenery(layout),props,'authored scenery is cached');
+const placed=terrain.query(layout.bounds.minX,layout.bounds.minY,layout.bounds.maxX,layout.bounds.maxY);
+assert.deepEqual(placed.map(p=>p.id).sort(),props.map(p=>p.id).sort(),'the world uses only its authored props, without adding trial scenery');
 assert(props.length>=55);for(const p of props)if(p.type==='log')assert(p.halfLength>0,'a circular carrier must not invoke the default legacy log span');for(const p of props)if(p.collision&&p.halfLength>0)assert.equal(p.type,'log','every solid authored capsule must use the physical capsule carrier');assert(props.some(p=>p.emberKind==='shelter'),'the accepted mining cluster remains real scenery');
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+for(const target of neighbors){
+ const portal={...layout.plan[`portal:${target}`],natural:true};
+ for(const radius of [15,28,49]){
+  const arrival=Regions.prototype.arrivalPoint.call({game:{terrain}},portal,radius);
+  assert(arrival&&distance(arrival,portal)>=80,'return travel places the complete body beyond the portal contact zone');
+  assert(terrain.isFree(arrival.x,arrival.y,radius),'arrival body is clear');
+  assert(!terrain.firstBlocker(arrival.x,arrival.y,portal.x,portal.y,radius),'return travel can walk back through the same exit');
+ }
+}
 const capsuleDistance=(p,o)=>Math.hypot(p.x-Math.max(o.x-o.halfLength,Math.min(o.x+o.halfLength,p.x)),p.y-o.y);
 let samples=0,legs=0,slides=0;
 // Cross-check the complete map against its only two physical sources: the

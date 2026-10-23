@@ -5,9 +5,10 @@ import { StageRun } from './dist/stage-run.js';
 import { WORLD_IDS, regionFor } from './dist/world-definitions.js';
 import { initBoss, bossKindFor } from './dist/bosses.js';
 
-const releasedStageThemes=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'all eight released stage themes retain their identities and order');
-assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageThemes.map(id=>`${id}-trial`),'adding exploration worlds never renames the released stages');
+const releasedStageIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'].map(id=>`${id}-trial`);
+const releasedStageThemes=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large'];
+assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'all eight trials use current world themes');
+assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageIds,'retiring world maps does not rename the released trials');
 assert(WORLD_IDS.includes('verdant-rift'),'the independent exploration world remains registered');
 assert.equal(getStageDefinition('verdant-rift-trial'),null,'an exploration world does not implicitly create an unauthored stage');
 assert.equal(getStageDefinition('removed-stage'),null);
@@ -21,6 +22,8 @@ for(const stage of STAGES){
   assert(Object.isFrozen(stage)&&Object.isFrozen(stage.coreReward));
   assert.equal(stage.islands.length,2);
   const [outer,core]=stage.islands;
+  const scenePrefix=stage.id.slice(0,-6);
+  assert.equal(outer.id,`${scenePrefix}-outer`);assert.equal(core.id,`${scenePrefix}-heart`,'trial scene identities remain independent of their current world theme');
   assert.equal(stage.startMapId,outer.id);assert.equal(stage.coreMapId,core.id);
   assert.equal(outer.role,'outer');assert.equal(outer.boss.role,'optional');
   assert.equal(core.role,'boss');assert.equal(core.boss.role,'core');

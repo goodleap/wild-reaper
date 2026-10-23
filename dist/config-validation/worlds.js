@@ -5,7 +5,7 @@ import { validateExpeditionScenes } from './expedition-scenes.js';
 import { validateMoonLandform } from './moon-landform.js';
 import { WATER_SHAPES } from '../water-geometry.js';
 
-const persistentWorldIds=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
+const coreWorldIds=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large'];
 const fail=path=>{throw new TypeError(`Invalid world configuration: ${path}`);};
 const object=(value,path)=>{if(!value||typeof value!=='object'||Array.isArray(value))fail(path);return value;};
 const list=(value,path,min=0,max=256)=>{if(!Array.isArray(value)||value.length<min||value.length>max)fail(path);return value;};
@@ -62,7 +62,7 @@ export function validateWorlds(sections){
   const worlds=object(sections.worlds,'worlds'),stages=object(sections.stages,'stages'),geo=object(sections.geography,'geography');
   const worldDefs=list(worlds.definitions,'worlds.definitions',1),order=list(worlds.order,'worlds.order',1),worldIds=new Set(worldDefs.map(w=>w.id));
   if(worldIds.size!==worldDefs.length||new Set(order).size!==order.length||order.length!==worldDefs.length)fail('world identity/order');
-  for(const[id,index]of persistentWorldIds.map((id,index)=>[id,index]))if(order[index]!==id)fail('persistent world order');
+  for(const[id,index]of coreWorldIds.map((id,index)=>[id,index]))if(order[index]!==id)fail('core world order');
   for(const id of order)ref(id,worldIds,'worlds.order');
   const enemyIds=new Set(Object.keys(object(sections.enemies?.definitions,'enemies.definitions'))),bossIds=new Set(Object.keys(object(sections.enemies?.bosses,'enemies.bosses')));
   const edges=new Set();for(const edge of list(worlds.connections,'worlds.connections',1,512)){
