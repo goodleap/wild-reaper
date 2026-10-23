@@ -3,7 +3,7 @@ import { validateWorldLayout } from './world-layout.js';
 import { validateRiftLayout } from './rift-layout.js';
 import { validateExpeditionScenes } from './expedition-scenes.js';
 import { validateMoonLandform } from './moon-landform.js';
-import { validateInteriorLayouts } from './interior-layouts.js';
+import { validateInteriorLayouts, validateCaveLayouts } from './interior-layouts.js';
 import { WATER_SHAPES } from '../water-geometry.js';
 
 const coreWorldIds=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large'];
@@ -213,6 +213,7 @@ export function validateWorlds(sections){
   }
   ref(interior.castleProfile?.terrain,worldIds,'castle profile terrain');
   validateInteriorLayouts(interior.authoredLayouts,'interiors.authoredLayouts',{worldIds,enemyIds});
+  validateCaveLayouts(interior.caveLayouts,'interiors.caveLayouts',{worldDefs,layouts:interior.authoredLayouts});
   numericRecord(geo.coastRules,'coastRules');for(const key of ['shallowWidth','beachWidth','waterSetback'])number(geo.coastRules[key],'coastRules.'+key);
   for(const p of Object.values(object(geo.placementPolicies,'placementPolicies'))){object(p,'placementPolicy');if(!['inland','dry','coastal'].includes(p.surface)||!['allow','avoid'].includes(p.water))fail('placement policy');number(p.coastSetback,'placement coastSetback');number(p.waterGap,'placement waterGap');}
   requiredNumbers(geo.portalRules,['engageRadius','leashRadius','interactRadius'],'portalRules');requiredNumbers(geo.portalGuardian,['timeProgressCap','timeProgressPeriod','hpGrowth','damageGrowth','xpGrowth','endlessConnections'],'portalGuardian');positive(geo.portalGuardian.timeProgressPeriod,'portalGuardian.timeProgressPeriod');integer(geo.portalGuardian.endlessConnections,'portalGuardian.endlessConnections',1,512);

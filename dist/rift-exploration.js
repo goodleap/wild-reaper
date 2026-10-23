@@ -1,6 +1,7 @@
 import { groundOffset } from './terrain.js';
 import { INTERIOR_REWARDS } from './interior-profiles.js';
 import { createAuthoredInterior } from './sites/authored-interior.js';
+import { getConfigSection } from './content-config.js';
 
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const foot=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
@@ -72,15 +73,11 @@ export class RiftExploration {
     return false;
   }
   createCaveState(dungeon,site){
-    const sample=this.game.worldId==='rift-forest'&&site.caveId==='underground-passage';
-    const state=sample?createAuthoredInterior(dungeon,site,'darkriver'):dungeon._makeState(site),mouths=this.sites.filter(s=>s.kind==='cave'&&s.caveId===site.caveId);
-    state.kind='cave';if(site.artTheme)state.artTheme=site.artTheme;state.name=site.name;state.treasureName=site.artTheme==='city'?'旧都遗藏':this.namespace?'洞穴遗藏':'暗河遗藏';
-    // A paired mouth occupies a distant explored room of the existing seeded
-    // maze. A challenge cave keeps only its original surface return opening.
-    const occupied=new Set([state.entranceId,state.bossRoom.id,...state.chests.map(c=>c.cellId)]);
-    const candidates=state.cells.filter(c=>c.row===0&&!occupied.has(c.id)).sort((a,b)=>state.distances.get(b.id)-state.distances.get(a.id));
-    const end=candidates[0]||state.cells.filter(c=>!occupied.has(c.id)).sort((a,b)=>state.distances.get(b.id)-state.distances.get(a.id))[0];
-    state.riftExits=mouths.map((mouth,index)=>({id:`${state.id}:exit:${mouth.key}`,key:mouth.key,...(sample?state.authoredLayout.exits[index]:index?{x:end.x,y:end.y-90}:state.entrance),name:mouth.exitName,direction:sample?state.authoredLayout.exits[index].direction:{x:0,y:index?1:-1}}));
+    const key=getConfigSection('geography').interiors.caveLayouts[this.game.worldId]?.[site.caveId];
+    const state=createAuthoredInterior(dungeon,site,key),mouths=this.sites.filter(s=>s.kind==='cave'&&s.caveId===site.caveId);
+    state.kind='cave';state.artTheme=state.authoredLayout.artTheme??site.artTheme;
+    state.treasureName=state.artTheme==='city'?'旧都遗藏':this.namespace?'洞穴遗藏':'暗河遗藏';
+    state.riftExits=mouths.map((mouth,index)=>({id:`${state.id}:exit:${mouth.key}`,key:mouth.key,...state.authoredLayout.exits[index],name:mouth.exitName}));
     state.surfaceExits=Object.fromEntries(mouths.map(mouth=>[mouth.key,{x:mouth.x,y:mouth.y}]));
     return state;
   }

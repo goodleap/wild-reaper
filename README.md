@@ -21,6 +21,8 @@ npm test
 
 裂谷林海的暗河洞穴及林间旧堡使用 `python scripts/build-interior-samples.py --write` 重建（离线依赖 Shapely 2.x），只更新 `config/geography.json` 的 `interiors.authoredLayouts`。构建配置后运行 `node qa-config-interiors.mjs`、`node qa-authored-interiors.mjs` 及相关室内／任务检查；小屋家具配置仍位于 `interiors.hutLayouts`。
 
+其余世界洞穴使用 `python scripts/build-underground-maps.py --write` 重建（同样离线依赖 Shapely 2.x）。主题源文件位于 `scripts/interiors/`，仅更新 `geography.json` 的地下布局及 `interiors.caveLayouts` 绑定，不修改地表洞口或任务 ID。执行 `npm run build:config` 后，用 `node qa-themed-interiors.mjs` 检查实际移动、机关、进出和探索状态；配置校验同时核对洞口数量与布局出口。离线几何依赖不随游戏发布。
+
 熔火之境的固定地形与景物数据可用 `scripts/build-ember-map.py` 重建（离线 Python 环境需要 Shapely 2.x），随后执行 `npm run build:config` 和 `npm run test:ember`。生成器仅更新该世界的配置；几何处理依赖不进入游戏运行包。
 
 迷雾沼泽使用 `python scripts/build-marsh-map.py --write` 重建；可用 `--preview-dir /tmp/marsh-preview` 输出同源几何预览。离线依赖为 Shapely 2.x，随后执行 `npm run build:config`、`node qa-marsh-map.mjs` 和相关地图集成检查。生成器只更新 `marsh`，运行时复用现有地形、浅水和探索系统。

@@ -8,12 +8,12 @@ import { interiorPropFootprint } from '../interior-prop-geometry.js';
 import { seedFor, randomFor } from './interior-seed.js';
 
 const combatRules=getConfigSection('sites').castleCombat;
-const FURNITURE=new Set(['barrel','cargo','table','shelf','rug']);
+const FURNITURE=new Set(['barrel','cargo','table','shelf','rug','minecart']);
 
 function capsule(site,layout,id,ax,ay,bx,by,extra={}){
   const dx=bx-ax,dy=by-ay,y=(ay+by)*.5;
   return {id,type:'log',variant:'castle-wall',structureType:'castle-wall',structureId:site.id,
-    authoredStyle:layout.style,x:(ax+bx)*.5,y,r:layout.wallRadius,halfLength:Math.hypot(dx,dy)*.5,
+    authoredStyle:layout.style,artTheme:layout.artTheme,x:(ax+bx)*.5,y,r:layout.wallRadius,halfLength:Math.hypot(dx,dy)*.5,
     angle:Math.atan2(dy,dx),sortY:y,...extra};
 }
 
@@ -33,9 +33,9 @@ export function createAuthoredInterior(dungeon,site,key){
     bossRoom:cells[layout.boss.cellId]};
   state.treasure={id:`${site.id}:treasury`,...layout.treasure,r:27,state:'locked'};
   state.chests=layout.chests.map(chest=>({...chest,id:`${site.id}:chest:${chest.id}`,r:21,state:'closed'}));
-  state.mechanisms=layout.mechanisms.map(mechanism=>({...mechanism,id:`${site.id}:${mechanism.id}`,
+  state.mechanisms=layout.mechanisms.map(mechanism=>({...mechanism,artTheme:layout.artTheme,id:`${site.id}:${mechanism.id}`,
     gateId:`${site.id}:${mechanism.gateId}`,closedLink:[...mechanism.closedLink],opened:false}));
-  state.props=layout.props.map(prop=>({...prop,id:`${site.id}:prop:${prop.id}`,seed:random(),sortY:prop.y,isHutFurniture:FURNITURE.has(prop.type)}));
+  state.props=layout.props.map(prop=>({...prop,artTheme:layout.artTheme,id:`${site.id}:prop:${prop.id}`,seed:random(),sortY:prop.y,isHutFurniture:FURNITURE.has(prop.type)}));
   const walls=[];
   for(const polygon of layout.floorPolygons)for(const ring of [polygon.outer,...polygon.holes])for(let i=0;i<ring.length;i++){
     const a=ring[i],b=ring[(i+1)%ring.length],length=Math.hypot(b[0]-a[0],b[1]-a[1]);

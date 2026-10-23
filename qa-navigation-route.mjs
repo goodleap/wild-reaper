@@ -113,7 +113,7 @@ for(let frame=0;frame<120;frame++){
 assert(unreachableMoving.plans<=3,'minor target motion inside an unreachable area does not bypass failed-search throttling');
 assert(unreachableMoving.update({x:250,y:0},{x:280,y:0},{radius:19,bodyRadius:15,time:2}).complete,'a materially changed reachable destination is not held by the failure delay');
 
-const game=new Game({mode:'world',debug:true,debugWorld:'forest'}),layout=game.terrain.island.layout;
+const game=new Game({mode:'world',debug:true,worldId:'rift-forest'}),layout=game.terrain.island.layout;
 const forest=walk(game.terrain,layout.areas.find(a=>a.id==='01').center,layout.areas.find(a=>a.id==='03').center);
 assert(forest.length>2200,'full route spans multiple real world areas and passages');
 const ribbon=storyRouteMarks({routePath:forest.route.path,lengths:forest.route.lengths,progress:0,kind:'travel'});

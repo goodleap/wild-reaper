@@ -247,13 +247,25 @@ export class WorldQuests {
     const p=foot(this.game),selected=targets.sort((a,b)=>distance(p,a)-distance(p,b))[0];this._targetId=selected?.objectiveId??null;return selected;
   }
   _dungeonRoute(state,from,to){
-    const dungeon=this.game.dungeon,start=dungeon._cellAt(from.x,from.y,state),end=dungeon._cellAt(to.x,to.y,state);
+    const dungeon=this.game.dungeon,bodyRadius=this.game.player.r;
+    const original=dungeon._cellAt(from.x,from.y,state);
+    const attach=point=>{
+      const cell=dungeon._cellAt(point.x,point.y,state);
+      if(!state.authoredLayout)return cell;
+      const reachable=candidate=>!state.terrain.firstBlocker(point.x,point.y,candidate.x,candidate.y,bodyRadius,'ground');
+      // Room bounds can overlap a doorway or span both sides of its gate.
+      // Attach to an anchor on the same physical side, never through a closed
+      // shutter. This bounded scan runs only when a complete route is planned.
+      if(cell&&reachable(cell))return cell;
+      return [...state.cells].sort((a,b)=>distance(point,a)-distance(point,b)||a.id-b.id).find(reachable)||null;
+    };
+    const start=attach(from),end=attach(to);
     if(!start||!end)return null;
     const queue=[start],parents=new Map([[start.id,null]]);
     for(let i=0;i<queue.length&&!parents.has(end.id);i++)for(const next of dungeon._neighbors(queue[i],state))if(!parents.has(next.id)){parents.set(next.id,queue[i]);queue.push(next);}
     if(!parents.has(end.id))return null;
     const cells=[];for(let cell=end;cell;cell=parents.get(cell.id))cells.push(cell);cells.reverse();
-    const route=[];for(let i=1;i<cells.length;i++){const a=cells[i-1],b=cells[i];route.push({x:(a.x+b.x)/2,y:(a.y+b.y)/2},{x:b.x,y:b.y});}
+    const route=start!==original?[{x:start.x,y:start.y}]:[];for(let i=1;i<cells.length;i++){const a=cells[i-1],b=cells[i];route.push({x:(a.x+b.x)/2,y:(a.y+b.y)/2},{x:b.x,y:b.y});}
     route.push({x:to.x,y:to.y});return route;
   }
 }

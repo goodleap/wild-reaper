@@ -44,19 +44,21 @@ function box(value,path,parent){
   for(const axis of ['X','Y'])for(const prefix of ['min','max'])number(value[prefix+axis],path+'.'+prefix+axis,parent?.['min'+axis]??-10000,parent?.['max'+axis]??10000);
   if(value.maxX<=value.minX||value.maxY<=value.minY)fail(path+'.size');return value;
 }
-const props=new Set(['cavernRock','caveMushroom','castlePillar','wallTorch','barrel','cargo','table','shelf','rug']);
+const props=new Set(['cavernRock','caveMushroom','castlePillar','wallTorch','barrel','cargo','table','shelf','rug','rootCluster','iceSpire','oreCluster','shellPile','brokenColumn','minecart']);
+const artThemes=new Set(['forest','marsh','ruins','beach','mountain','snow','city','ember']);
 
 // Baked floor rings are shared by drawing and collision. The graph describes
 // rooms and progression only; it cannot override an invalid physical contour.
 export function validateInteriorLayouts(value,path,{worldIds,enemyIds}){
   object(value,path);
   for(const key of ['darkriver','forestCastle'])if(!Object.hasOwn(value,key))fail(path+'.'+key);
-  const entries=Object.entries(value);if(entries.length>16)fail(path+'.count');
+  const entries=Object.entries(value);if(entries.length>32)fail(path+'.count');
   const layoutIds=new Set();
   for(const [key,layout]of entries){
     const p=path+'.'+key;object(layout,p);id(layout.id,p+'.id');if(layoutIds.has(layout.id))fail(p+'.duplicate id');layoutIds.add(layout.id);
     text(layout.name,p+'.name');if(!['cave','castle'].includes(layout.style))fail(p+'.style');
     if(key==='darkriver'&&layout.style!=='cave'||key==='forestCastle'&&layout.style!=='castle')fail(p+'.style');
+    if(layout.artTheme!=null&&!artThemes.has(layout.artTheme))fail(p+'.artTheme');
     if(!worldIds.has(layout.terrain))fail(p+'.terrain');number(layout.wallRadius,p+'.wallRadius',1,48);
     const bounds=box(layout.bounds,p+'.bounds');
     for(const length of [bounds.maxX-bounds.minX,bounds.maxY-bounds.minY])number(length,p+'.bounds.size',300,10000);
@@ -130,6 +132,7 @@ export function validateInteriorLayouts(value,path,{worldIds,enemyIds}){
     if(enemies>256)fail(p+'.enemy count');
     for(const [i,prop]of list(layout.props,p+'.props',0,128).entries()){
       const q=`${p}.props.${i}`;point(prop,q,bounds);identity(prop.id,q+'.id','props');if(!props.has(prop.type))fail(q+'.type');number(prop.r,q+'.r',1,200);
+      if(Object.hasOwn(prop,'artTheme'))fail(q+'.artTheme belongs to layout');
       if(prop.halfLength!=null)number(prop.halfLength,q+'.halfLength',1,400);
       if(prop.angle!=null)number(prop.angle,q+'.angle',-Math.PI*2,Math.PI*2);
       if(prop.collision!=null)bool(prop.collision,q+'.collision');if(prop.heightBand!=null&&!['high','low'].includes(prop.heightBand))fail(q+'.heightBand');
@@ -139,8 +142,42 @@ export function validateInteriorLayouts(value,path,{worldIds,enemyIds}){
       }
     }
     for(const [i,detail]of list(layout.groundDetails,p+'.groundDetails',0,128).entries()){
-      const q=`${p}.groundDetails.${i}`;point(detail,q,bounds);if(!['water','moss','rubble','rug','tiles'].includes(detail.type))fail(q+'.type');
+      const q=`${p}.groundDetails.${i}`;point(detail,q,bounds);if(!['water','moss','rubble','rug','tiles','roots','ice','ore','shells','ash','mosaic'].includes(detail.type))fail(q+'.type');
+      if(Object.hasOwn(detail,'artTheme'))fail(q+'.artTheme belongs to layout');
       number(detail.rx,q+'.rx',1,800);number(detail.ry,q+'.ry',1,800);if(detail.angle!=null)number(detail.angle,q+'.angle',-Math.PI*2,Math.PI*2);
+    }
+  }
+  return true;
+}
+
+// Every surface cave explicitly selects its interior. Match both the complete
+// cave catalogue and its mouth count, so a missing assignment cannot silently
+// enter a generic scene or lose one of its return exits.
+export function validateCaveLayouts(value,path,{worldDefs,layouts}){
+  object(value,path);const expected=new Map();
+  for(const world of worldDefs){
+    const counts=new Map();
+    for(const cave of world.authored?.interactions?.caves||[])counts.set(cave.caveId,(counts.get(cave.caveId)||0)+1);
+    if(world.id==='rift-forest'){
+      const marks=world.authored?.landmarks;
+      if(!marks?.cave05||!marks?.cave15)fail(path+'.rift-forest surface entrances');
+      if(counts.size)fail(path+'.rift-forest duplicate cave catalogue');
+      counts.set('underground-passage',2);
+    }
+    if(counts.size)expected.set(world.id,counts);
+  }
+  for(const [worldId,assignments]of Object.entries(value)){
+    if(!expected.has(worldId))fail(path+'.'+worldId+'.unknown world');
+    object(assignments,path+'.'+worldId);
+    for(const caveId of Object.keys(assignments))if(!expected.get(worldId).has(caveId))fail(path+'.'+worldId+'.'+caveId+'.unknown cave');
+  }
+  for(const [worldId,caves]of expected){
+    const assignments=object(value[worldId],path+'.'+worldId);
+    for(const [caveId,mouths]of caves){
+      const p=path+'.'+worldId+'.'+caveId,key=assignments[caveId];id(key,p+'.layout');
+      if(!Object.hasOwn(layouts,key))fail(p+'.unknown layout');
+      if(worldId==='rift-forest'&&key!=='darkriver')fail(p+'.darkriver layout');
+      if(layouts[key].exits.length!==mouths)fail(p+'.exit count');
     }
   }
   return true;
