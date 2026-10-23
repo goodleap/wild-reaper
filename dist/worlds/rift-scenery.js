@@ -4,6 +4,7 @@ import { createEmberScenery } from './ember-scenery.js';
 import { createRuinsScenery } from './ruins-scenery.js';
 import { createBeachScenery } from './beach-scenery.js';
 import { createMountainScenery } from './mountain-scenery.js';
+import { createSnowScenery } from './snow-scenery.js';
 
 const TAU=Math.PI*2;
 const hash=n=>{const value=Math.sin(n*127.1+41.7)*43758.5453;return value-Math.floor(value);};
@@ -33,6 +34,7 @@ export function createRiftScenery(layout,collision,island){
   if(layout.artTheme==='ruins')return createRuinsScenery(layout,collision,island);
   if(layout.artTheme==='beach')return createBeachScenery(layout,collision,island);
   if(layout.artTheme==='mountain')return createMountainScenery(layout,collision,island);
+  if(layout.artTheme==='snow')return createSnowScenery(layout,collision,island);
   if(sceneryCache.has(layout))return sceneryCache.get(layout);
   const marsh=layout.artTheme==='marsh',props=[],solid=[];
   const themed=prop=>{

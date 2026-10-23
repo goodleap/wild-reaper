@@ -75,6 +75,7 @@ export function validateWorlds(sections){
     if(w.id==='ruins'&&w.authored?.artTheme!=='ruins')fail(p+'.authored');
     if(w.id==='beach'&&w.authored?.artTheme!=='beach')fail(p+'.authored');
     if(w.id==='mountain'&&w.authored?.artTheme!=='mountain')fail(p+'.authored');
+    if(w.id==='snow'&&w.authored?.artTheme!=='snow')fail(p+'.authored');
     if(w.seed!=null)integer(w.seed,p+'.seed',0,2147483647);
     if(w.naturalIsland){
       if(w.layout!=null||w.authored!=null||!Number.isInteger(w.seed))fail(p+'.naturalIsland layout');

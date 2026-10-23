@@ -17,7 +17,7 @@ npm run check
 npm test
 ```
 
-世界探索准备页可选择「裂谷林海」「苍翠断脊」「迷雾沼泽」「失落遗迹」「潮汐海岸」「群峰山地」「钟影旧都」或「熔火之境」，选择会随冒险准备记录保存。地图以稳定世界 ID 区分布局、洞穴、捷径、宝箱和清理状态；原八个世界的数字身份与跨世界连接保持不变。
+世界探索准备页可选择「裂谷林海」「苍翠断脊」「迷雾沼泽」「失落遗迹」「潮汐海岸」「群峰山地」「霜雪荒原」「钟影旧都」或「熔火之境」，选择会随冒险准备记录保存。地图以稳定世界 ID 区分布局、洞穴、捷径、宝箱和清理状态；原八个世界的数字身份与跨世界连接保持不变。
 
 熔火之境的固定地形与景物数据可用 `scripts/build-ember-map.py` 重建（离线 Python 环境需要 Shapely 2.x），随后执行 `npm run build:config` 和 `npm run test:ember`。生成器仅更新该世界的配置；几何处理依赖不进入游戏运行包。
 
@@ -28,6 +28,8 @@ npm test
 潮汐海岸使用 `python scripts/build-beach-map.py --write` 重建，只更新 `worlds.json` 中的 `beach`；离线依赖 Shapely 2.x，`--preview-dir /tmp/beach-preview` 输出同源几何预览。随后执行 `npm run build:config` 和 `npm run test:beach`，检查海岸边界、栈桥和探索通路。
 
 群峰山地使用 `python scripts/build-mountain-map.py --write` 重建，只更新 `worlds.json` 中的 `mountain`；离线依赖 Shapely 2.x，`--preview-dir /tmp/mountain-preview` 输出同源几何预览。随后执行 `npm run build:config` 和 `npm run test:mountain`，检查山口、溪桥、完整身体通行与地图状态。
+
+霜雪荒原使用 `python scripts/build-snow-map.py --write` 重建，只更新 `worlds.json` 中的 `snow`；离线依赖 Shapely 2.x，`--preview-dir /tmp/snow-preview` 输出同源几何预览。随后执行 `npm run build:config` 和 `npm run test:snow`，检查雪谷、桥梁、完整身体通行及探索状态。
 
 破浪甲板的离线源为 `scripts/build-ship-map.py`，用 Python 标准库重建 `dist/config/stages.json` 的 `ship.scenes`；随后构建配置并运行 `npm run test:ship`。各层只载入当前场景，往返保留战斗和拾取状态；地图绘制与移动碰撞读取同一场景轮廓。
 
