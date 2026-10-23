@@ -103,18 +103,22 @@ export function validateWorlds(sections){
   }
   const stageIds=new Set(),mapIds=new Set();
   for(const s of list(stages.definitions,'stages.definitions',1)){
-    const p='stage '+text(s.id,'stage.id');if(stageIds.has(s.id))fail(p+'.duplicate');stageIds.add(s.id);ref(s.themeId,worldIds,p+'.themeId');
+    const p='stage '+text(s.id,'stage.id');if(stageIds.has(s.id))fail(p+'.duplicate');stageIds.add(s.id);ref(s.worldMapId,worldIds,p+'.worldMapId');
+    const fields=['id','name','shortName','summary','difficultyLabel','worldMapId','arena','exit','boss','reward'];
+    if(Object.keys(s).some(key=>!fields.includes(key)))fail(p+'.field');
     for(const key of ['name','shortName','summary','difficultyLabel'])text(s[key],p+'.'+key);
-    const prefix=s.id.endsWith('-trial')?s.id.slice(0,-6):s.id;
-    for(const [key,suffix]of [['outer','outer'],['core','heart']]){
-      const island=object(s[key],p+'.'+key),id=island.id??`${prefix}-${suffix}`;text(id,p+'.mapId');if(mapIds.has(id))fail(p+'.duplicate map');mapIds.add(id);
-      text(island.name,p+'.island.name');integer(island.seed,p+'.seed',-2147483648,2147483647);
-      const boss=object(island.boss,p+'.boss');ref(boss.kind,bossIds,p+'.boss.kind');
-      for(const k of ['hp','easyHp','damage','speed','xp'])positive(boss[k],p+'.boss.'+k);integer(boss.index,p+'.boss.index',1,1e6);if(boss.easyHp>boss.hp)fail(p+'.boss.easyHp');
-      if(island.profile){const world=worldDefs.find(w=>w.id===s.themeId);profile({...world.profile,...island.profile},p+'.profile');}
-      if(island.layout)for(const point of Object.values(object(island.layout,p+'.layout'))){object(point,p+'.layout point');number(point.x,p+'.layout.x',-1e6,1e6);number(point.y,p+'.layout.y',-1e6,1e6);positive(point.r,p+'.layout.r');}
+    const mapId=`${s.id}:challenge`;if(mapIds.has(mapId))fail(p+'.duplicate map');mapIds.add(mapId);
+    const world=worldDefs.find(w=>w.id===s.worldMapId),layout=world.authored;
+    if(layout?.kind!=='rift-forest')fail(p+'.worldMapId authored layout');
+    for(const key of ['arena','exit']){
+      const point=object(s[key],p+'.'+key),bounds=layout.bounds;
+      number(point.x,p+'.'+key+'.x',bounds.minX,bounds.maxX);number(point.y,p+'.'+key+'.y',bounds.minY,bounds.maxY);
     }
-    if(s.core.boss.hp<=s.outer.boss.hp)fail(p+'.core boss strength');reward(s.coreReward,p+'.reward');
+    if(!layout.areas.some(area=>area.id===s.arena.areaId))fail(p+'.arena.areaId');
+    if(Math.hypot(s.arena.x-s.exit.x,s.arena.y-s.exit.y)<150)fail(p+'.exit overlaps arena');
+    const boss=object(s.boss,p+'.boss');ref(boss.kind,bossIds,p+'.boss.kind');
+    for(const k of ['hp','easyHp','damage','speed','xp'])positive(boss[k],p+'.boss.'+k);integer(boss.index,p+'.boss.index',1,1e6);if(boss.easyHp>boss.hp)fail(p+'.boss.easyHp');
+    reward(s.reward,p+'.reward');
   }
   const expeditionIds=new Set();
   for(const d of list(stages.expeditions||[],'stages.expeditions',0,32)){

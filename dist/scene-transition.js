@@ -47,7 +47,7 @@ export class SceneTransition {
       catch(error){this._observe('error',error);throw error;}
       finally{this.committing=false;this._commit=null;}
       this._observe('commit-end');
-      if(!this._scripted)this.name=this.game.dungeon.active?.name||this.game.expedition?.sceneName||this.game.stage?.currentIsland?.name||this.game.region.name;
+      if(!this._scripted)this.name=this.game.dungeon.active?.name||this.game.expedition?.sceneName||this.game.stage?.sceneName||this.game.region.name;
       this.game.regionTransition=null;this.phase='in';this.elapsed=0;return;
     }
     this.opacity=1-smooth(this.elapsed/SCENE_TRANSITION_RULES.inDuration);

@@ -44,9 +44,8 @@ export function combatNotifications(events,{game,boss,armyFull=false}={}){
   if(game.realms?.enabled&&has('tribulationFailed')&&game.player.hp>0)add('渡劫未成 · 境界与经验保留',3,'tribulation-failed');
   if(game.realms?.enabled&&has('realmBottleneck'))add('已达瓶颈 · 可准备渡劫',2,'realm-ready','✦');
   if(has('expeditionExitOpened'))add('出口已开放 · 前往出口',3,'exit-open','↗');
-  if(has('stageCoreDefeated'))add('核心首领已击败 · 进入通关门',3,'core-defeated','✦');
+  if(has('stageBossDefeated'))add('关卡首领已击败 · 进入通关门',3,'stage-boss-defeated','✦');
   else if(has('dungeonBossKill'))add('最终首领已击败 · 领取技能宝藏',3,'dungeon-boss-defeated','✦');
-  else if(has('stageOptionalDefeated'))add('外岛首领已击败 · 奖励可领取',2,'optional-defeated','✦');
   else if(has('bossKill'))add(game._worldExploration?'领主已击败 · 领取技能奖励':'首领已击败',3,'boss-defeated','✦');
   else if(boss&&has('boss'))add(`${boss.name||'荒野领主'}现身`,3,`boss-arrival:${boss.id}`,'!');
   // Subsecond attack warnings belong to live ground/cast indicators, not a

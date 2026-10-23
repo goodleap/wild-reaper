@@ -341,7 +341,7 @@ for(const expedition of EXPEDITIONS){
   radio.addEventListener('focus',()=>{if(prepareOpen)revealStage(radio.parentElement);});
 }
 for(const stage of STAGES){
-  const {label,radio}=preparationChoice({id:stage.id,name:stage.shortName,group:'stage',color:stage.color,art:`world:${stage.themeId}`});
+  const {label,radio}=preparationChoice({id:stage.id,name:stage.shortName,group:'stage',color:stage.color,art:`world:${stage.worldMapId}`});
   radio.name='destination';radio.setAttribute('aria-label',stage.name);
   $('stage-options').append(label);stageRadios.set(stage.id,radio);
   radio.addEventListener('change',()=>{if(radio.checked){selectedDungeonId=null;selectedStageId=stage.id;saveSetup();refreshStageSetup();revealSelectedStage();}});
@@ -427,8 +427,8 @@ function refreshStageSetup(){
   for(const [id,radio] of stageRadios)radio.checked=!expedition&&id===selectedStageId;
   for(const [id,radio] of dungeonRadios)radio.checked=id===selectedDungeonId;
   $('stage-title').textContent=(expedition||stage).name;
-  $('stage-kind').textContent=expedition?.scenes?'船上分层突破':expedition?{arena:'怪潮生存',x:'横向推进',y:'纵向推进'}[expedition.axis]:'岛屿试炼';
-  $('stage-description').textContent=[(expedition||stage).summary,`目标 · ${expedition?.objective||'击败核心首领，抵达出口'}`,`奖励 · ${expedition?.rewardLabel||'灵晶、领主秘藏与通关记录'}`].join('\n');
+  $('stage-kind').textContent=expedition?.scenes?'船上分层突破':expedition?{arena:'怪潮生存',x:'横向推进',y:'纵向推进'}[expedition.axis]:'地图试炼';
+  $('stage-description').textContent=[(expedition||stage).summary,`目标 · ${expedition?.objective||'击败关卡首领，抵达出口'}`,`奖励 · ${expedition?.rewardLabel||'灵晶、领主秘藏与通关记录'}`].join('\n');
   $('stage-picker').style.setProperty('--stage-color',(expedition||stage).color||'#b9d99b');refreshPreparationSummary();
 }
 function updateStageScroll(){
@@ -623,7 +623,7 @@ function renderExpandedMap(){
   const target=$('expanded-map-canvas'),mapCtx=target.getContext('2d'),side=420;
   target.width=side;target.height=side;const list=$('map-landmarks');list.replaceChildren();
   const add=(name,detail,index)=>{const row=document.createElement('li'),title=document.createElement('strong'),note=document.createElement('span');title.textContent=(index?`${index}. `:'')+name;note.textContent=detail;row.append(title);row.append(note);list.append(row);};
-  $('map-title').textContent=game.dungeon?.active?.name||game.expedition?.sceneName||game.stage?.currentIsland.name||game.region.name;
+  $('map-title').textContent=game.dungeon?.active?.name||game.expedition?.sceneName||game.stage?.sceneName||game.region.name;
   const indoor=!!game.dungeon?.active,result=worldMap.draw(mapCtx,game,{width:side,height:side,expanded:true});
   if(game.sceneContent?.allows('worldContent')===false){
     $('map-note').textContent=`时间已暂停 · 剧情地图 · 已探索 ${result.explored??0}%`;
@@ -631,6 +631,14 @@ function renderExpandedMap(){
     result.markers.forEach((marker,index)=>add(landmarkLabel(marker),landmarkState(marker),index+1));
     if(!result.markers.length)add('暂无移动目标',game.story?.objective||'留意剧情中的对话与变化。');
     $('map-legend').textContent='箭头：你与朝向　菱形：当前剧情目标。深绿密林、山壁与深水不可步行；沿道路、缺口和桥梁前进。';
+    return;
+  }
+  if(game.stage&&!indoor){
+    $('map-note').textContent=`时间已暂停 · 试炼地图 · 已探索 ${result.explored??0}%`;
+    target.setAttribute('aria-label','试炼地图：显示已探索地形与关卡目标');
+    result.markers.forEach((marker,index)=>add(landmarkLabel(marker),`${landmarkState(marker)} · 距离 ${Math.round(marker.distance)}`,index+1));
+    if(!result.markers.length)add('试炼目标',game.stage.objectiveLabel);
+    $('map-legend').textContent='箭头：你与朝向　菱形：关卡首领　拱门：通关出口。目标位置可提前查看，地形随探索展开；沿地面引导带前进。';
     return;
   }
   $('map-note').textContent=indoor?'时间已暂停 · 周围 900 范围 · 粗线为已探索墙体':game.terrain?.island?`时间已暂停 · 全岛地图 · 已探索 ${result.explored}%`:'时间已暂停 · 周围 900 范围 · 仅显示已发现的建筑';
@@ -804,7 +812,7 @@ function combatPhaseLabel(){
   if(wave.phase==='warning')return `${wave.directionLabel}来袭 · ${wave.seconds}s`;
   if(wave.phase==='siege')return `${wave.name} · 剩余 ${wave.remaining}`;
   if(wave.phase==='relief')return `收集战利品 · ${wave.seconds}s`;
-  return game.expedition?game.expedition.sceneName:game.stage?game.stage.currentIsland.name:game._worldExploration?'世界探索 · 怪物领域':game.regions.endlessUnlocked?'无尽怪潮':`岛屿探索 · 已开 ${game.regions.defeatedConnectionsCount??0} 条通路`;
+  return game.expedition?game.expedition.sceneName:game.stage?game.stage.sceneName:game._worldExploration?'世界探索 · 怪物领域':game.regions.endlessUnlocked?'无尽怪潮':`岛屿探索 · 已开 ${game.regions.defeatedConnectionsCount??0} 条通路`;
 }
 function waveProgressLabel(){
   if(game.story?.active)return game.story.objective;
@@ -987,7 +995,7 @@ function updateHUD(){if(!game)return;
     return;
   }
   const measureHud=debugMode,hudBegan=measureHud?cpuNow():0;
-  try{renderSchedule.invalidate();$('run-summary').classList.toggle('story-progress',!!game.story?.active);arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();updateStoryRealmHUD();updateQuestHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.expedition?.sceneName||game.stage?.currentIsland.name||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;const realmState=game.realms?.getState?.();$('level-label').textContent=`Lv.${p.level}${game.mode==='world'&&realmState?.enabled?` · ${realmState.realmName}`:''}`;$('xp-caption').textContent=`${hudNumber(p.xp)} / ${hudNumber(p.xpNext)}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`${hudNumber(game.crystals||0)} / ${hudNumber(game.crystalsNext||0)}`;$('gold-label').textContent=hudNumber(game.gold||0);$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=game.story?.active||game.stage||game.expedition||game._worldExploration||width>=600?waveProgressLabel():`第 ${game.wave} 波`;$('kills').textContent=game.kills;const stormAllowed=game.canUseSkill?.('storm')??game.story?.allowsSkill?.('storm')!==false;show('game-bottom',!runEnded&&(stormAllowed||!$('context-action').classList.contains('hidden')));if(!stormAllowed)skillRequested=false;stormControl.update({visible:!runEnded&&stormAllowed,enabled:stormAllowed&&p.skillCooldown<=0,text:p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪',mobileText:p.skillCooldown>0?'冷却中':'天雷',icon:p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ',description:`超级技能 Lv.${game.build.getSkill('storm')?.level||0} · 冷却 ${p.skillCooldownMax} 秒`,ariaLabel:p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击',progress:p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1,cooldown:p.skillCooldown>0,id:'storm'});const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',enemyVisual(boss)?.barClass==='bloom-boss');if(boss){$('boss-name').textContent=boss.storyLeader?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 追兵领队`:boss.debugBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 调试 · 10 万生命`:boss.dungeonBoss?`${boss.name||'王城守望者'} · 最终首领`:boss.stageBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · ${boss.stageBossRole==='core'?'核心首领':'可选挑战'}`:boss.worldBoss&&boss.name?boss.name:`${bossDefinition(boss.bossKind||'ancient').name} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}finally{if(measureHud)frameHudMs+=cpuNow()-hudBegan;}
+  try{renderSchedule.invalidate();$('run-summary').classList.toggle('story-progress',!!game.story?.active);arena.classList.toggle('in-dungeon',!!game.dungeon?.active);updateBuffHUD();updateEncounterHUD();updateCompanionHUD();updatePortalHUD();updateRelicHUD();updateSuperHUD();updateStoryRealmHUD();updateQuestHUD();$('terrain-code').textContent=`${String(game.regionIndex+1).padStart(2,'0')} / ${game.region.id.toUpperCase()}`;$('terrain-name').textContent=game.dungeon?.active?.name||game.expedition?.sceneName||game.stage?.sceneName||game.region.name;const p=game.player;$('hp-label').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('health-fill').style.width=`${100*p.hp/p.maxHp}%`;$('health-fill').style.background=p.hp/p.maxHp<.3?'#e59578':'#c4e69c';$('xp-fill').style.width=`${Math.min(100,100*p.xp/p.xpNext)}%`;const realmState=game.realms?.getState?.();$('level-label').textContent=`Lv.${p.level}${game.mode==='world'&&realmState?.enabled?` · ${realmState.realmName}`:''}`;$('xp-caption').textContent=`${hudNumber(p.xp)} / ${hudNumber(p.xpNext)}`;$('crystal-fill').style.width=`${Math.min(100,100*(game.crystals||0)/(game.crystalsNext||1))}%`;$('crystal-label').textContent=`${hudNumber(game.crystals||0)} / ${hudNumber(game.crystalsNext||0)}`;$('gold-label').textContent=hudNumber(game.gold||0);$('timer').textContent=timeLabel(game.runTime??game.time);$('phase-label').textContent=combatPhaseLabel();$('wave-label').textContent=game.story?.active||game.stage||game.expedition||game._worldExploration||width>=600?waveProgressLabel():`第 ${game.wave} 波`;$('kills').textContent=game.kills;const stormAllowed=game.canUseSkill?.('storm')??game.story?.allowsSkill?.('storm')!==false;show('game-bottom',!runEnded&&(stormAllowed||!$('context-action').classList.contains('hidden')));if(!stormAllowed)skillRequested=false;stormControl.update({visible:!runEnded&&stormAllowed,enabled:stormAllowed&&p.skillCooldown<=0,text:p.skillCooldown>0?`天雷 ${p.skillCooldown.toFixed(1)}s`:'天雷轰击 · 就绪',mobileText:p.skillCooldown>0?'冷却中':'天雷',icon:p.skillCooldown>0?`${Math.ceil(p.skillCooldown)}s`:'ϟ',description:`超级技能 Lv.${game.build.getSkill('storm')?.level||0} · 冷却 ${p.skillCooldownMax} 秒`,ariaLabel:p.skillCooldown>0?`天雷轰击，冷却 ${Math.ceil(p.skillCooldown)} 秒`:'释放天雷轰击',progress:p.skillCooldownMax>0?1-p.skillCooldown/p.skillCooldownMax:1,cooldown:p.skillCooldown>0,id:'storm'});const boss=game.enemies.find(e=>e.type==='boss'&&e.hp>0&&sceneVisible(e)&&e.guardActive!==false);show('boss-bar',!!boss);$('boss-bar').classList.toggle('bloom-boss',enemyVisual(boss)?.barClass==='bloom-boss');if(boss){$('boss-name').textContent=boss.storyLeader?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 追兵领队`:boss.debugBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 调试 · 10 万生命`:boss.dungeonBoss?`${boss.name||'王城守望者'} · 最终首领`:boss.stageBoss?`${boss.name||bossDefinition(boss.bossKind||'ancient').name} · 关卡首领`:boss.worldBoss&&boss.name?boss.name:`${bossDefinition(boss.bossKind||'ancient').name} · 第 ${game.bossCount} 位`;$('boss-fill').style.width=`${100*boss.hp/boss.maxHp}%`;$('boss-hp').textContent=`${Math.ceil(100*boss.hp/boss.maxHp)}%`;}updateWeaponHUD();}finally{if(measureHud)frameHudMs+=cpuNow()-hudBegan;}
 }
 
 function debugArmyAction(recruit){
@@ -1046,7 +1054,7 @@ function cancelDiagnosticCapture(reason='采样取消',complete=false){
   diagnosticSequence=null;refreshDiagnosticIndicator();
 }
 function activitySceneName(target=game){
-  return target?.dungeon?.active?.name||target?.expedition?.sceneName||target?.stage?.currentIsland?.name||target?.region?.name||'首页';
+  return target?.dungeon?.active?.name||target?.expedition?.sceneName||target?.stage?.sceneName||target?.region?.name||'首页';
 }
 function activityCounts(){
   return {enemies:game?.enemies.length||0,companions:game?.companions?.members.length||0,
@@ -1068,7 +1076,7 @@ function activityContext(target=game){
     loadout:target?{weapons:buildItems(target.build?.weapons),skills:buildItems(target.build?.skills)}:undefined};
 }
 function diagnosticMetadata(){
-  return {...activityContext(),version:$('game-version').textContent,contentVersion:game.configVersion,viewport:`${width} × ${height}`,buffer:`${canvas.width} × ${canvas.height}`,nativeDpr,renderDpr:dpr,browser:globalThis.navigator?.userAgent||'unknown',scene:game.dungeon?.active?.name||game.expedition?.sceneName||game.stage?.currentIsland.name||game.region.name,position:`${Math.round(game.player.x)}, ${Math.round(game.player.y)}`,enemies:game.enemies.length};
+  return {...activityContext(),version:$('game-version').textContent,contentVersion:game.configVersion,viewport:`${width} × ${height}`,buffer:`${canvas.width} × ${canvas.height}`,nativeDpr,renderDpr:dpr,browser:globalThis.navigator?.userAgent||'unknown',scene:game.dungeon?.active?.name||game.expedition?.sceneName||game.stage?.sceneName||game.region.name,position:`${Math.round(game.player.x)}, ${Math.round(game.player.y)}`,enemies:game.enemies.length};
 }
 function beginDiagnosticStage(){
   const sequence=diagnosticSequence;
@@ -2012,7 +2020,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.pixelRatio=dp
     ctx.restore();vision.drawFog(ctx,offsetX,offsetY,viewWidth,viewHeight);
   }
   ctx.save();if(vision)vision.clipVisible(ctx,offsetX,offsetY);
-  ctx.save();ctx.translate(offsetX,offsetY);drawEncounterGround();drawRelicGround();drawMudGround();drawDungeonGround();drawStoryRealmGround();drawStoryGuideGround(ctx,game.story?.active?game.story.getGuide?.():game.quests?.getGuide(),{zoom:worldZoom,bounds:combatOptions.viewBounds});ctx.restore();
+  ctx.save();ctx.translate(offsetX,offsetY);drawEncounterGround();drawRelicGround();drawMudGround();drawDungeonGround();drawStoryRealmGround();drawStoryGuideGround(ctx,game.story?.active?game.story.getGuide?.():game.stage?game.stage.getGuide():game.quests?.getGuide(),{zoom:worldZoom,bounds:combatOptions.viewBounds});ctx.restore();
   const lightingBegan=debugMode?cpuNow():0;drawActorShadows(actors,offsetX,offsetY,terrain,adventureProps,game.dungeon?.active||game.expedition?null:(target,view)=>drawMapLights(view.camX,view.camY,target,view.width,view.height));if(debugMode)frameLightingMs+=cpuNow()-lightingBegan;ctx.save();ctx.translate(offsetX,offsetY);
   for(const gem of game.gems){if(!sceneVisible(gem))continue;if(Math.abs(gem.x-p.x)>viewWidth/2+20||Math.abs(gem.y-p.y)>viewHeight/2+20)continue;ellipse(gem.x,gem.y+5,gem.r,2,'#152b1b66');diamond(gem.x,gem.y,gem.r,'#a5d78b');diamond(gem.x-1,gem.y-1,gem.r*.45,'#def3b4');}
   drawCoins();drawSuperFields();drawAbilityGround(ctx,game,{...combatOptions,visible:sceneVisible});

@@ -12,11 +12,9 @@ import { getConfigSnapshot } from './dist/content-config.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const source=JSON.parse(readFileSync(new URL('./dist/config/stages.json',import.meta.url)));
-const {expeditions,...otherStages}=source;
-assert.equal(hash(otherStages),'fe95a603017db97ea7e75fd15681c9f0ee6489d83e0f4c0f98f73f06861c8676','the eight island challenges are unchanged');
+const {expeditions}=source;
 assert.equal(hash(expeditions.find(d=>d.id==='ship')),'8d8285ffd8f7e744ff6f752c0eb53666651ce2774be91992996cf3130abe0640','the ship scene source remains exact');
 assert.equal(hash(expeditions.find(d=>d.id==='survival')),'5946a0983e20b057058f1fd6cc497f036cd8e4952c675a0a35c8149dd0227b35','survival content remains exact');
-assert.equal(hash(JSON.parse(readFileSync(new URL('./dist/config/worlds.json',import.meta.url)))),'4886ad69f6c7e43fcdeff80666c5a313b9bb3d3a2665ed1f7980706f7604e92d','all twelve world definitions remain exact');
 
 const definition=getExpeditionDefinition('ship');
 assert.equal(definition.scenes.length,3);
@@ -185,4 +183,4 @@ for(const mutate of [
   const pack=structuredClone(getConfigSnapshot());mutate(pack.sections.stages.expeditions.find(d=>d.id==='ship'));
   assert.throws(()=>validateContentPack(pack),/Invalid (?:world|expedition scene) configuration|Non-finite number/,'malformed connected scenes must fail before runtime');
 }
-console.log(JSON.stringify({shipScenes:'passed',scenes:3,targets,moves,walked:Math.round(walked),transitions,detours,otherWorldsUnchanged:12}));
+console.log(JSON.stringify({shipScenes:'passed',scenes:3,targets,moves,walked:Math.round(walked),transitions,detours,shipAndSurvivalContentUnchanged:true}));

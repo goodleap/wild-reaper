@@ -43,7 +43,8 @@ const expected={
     "ember-realm-large": "c1bc6b361a861aa8adebe385ec5a28e96d4e9792dd6a356074089392fab6f8dc",
     "forest": "2eaa67a9d83874cfd6c7be230adff6b8f887649bd95f9886b2a1faa4ead53c66"
   },
-  "stages": "014ba7027ee750caaf967f40dfb3b690a82e6e33fa373d2e67582fb44d88d337"
+  "stageEncounters": "36cc5d1ec28691de62c9a554a1c58108624764bb60fcd11535b3889eb8a302e2",
+  "expeditions": "84fd465b93627e6fcadc7e0870720d9e139a9d4583d6e2120619a2ded2eecabe"
 };
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
@@ -83,7 +84,8 @@ for(const world of sections.worlds.definitions){
   if(['clockshadow-city','ember-realm-large'].includes(world.id))delete data.authored;
   assert.equal(digest(data),expected.worlds[world.id],`${world.id}: existing content outside the approved exits/theme data remains unchanged`);
 }
-assert.equal(digest(sections.stages),expected.stages,'eight existing trials keep their scenes, encounters and rewards with current theme IDs');
+assert.equal(digest(sections.stages.definitions.map(stage=>({id:stage.id,boss:stage.boss,reward:stage.reward}))),expected.stageEncounters,'eight single-scene trials retain their reviewed core Boss values and rewards');
+assert.equal(digest(sections.stages.expeditions),expected.expeditions,'commemorative survival, ship and moon content remains unchanged');
 assert.deepEqual(sections.worlds.definitions.filter(world=>world.authored).map(world=>world.id),['rift-forest','marsh','ruins','beach','mountain','snow','verdant-rift','clockshadow-city','ember-realm-large'],'all remade and existing fixed maps retain separate identities');
 const rift=sections.worlds.definitions.find(world=>world.id==='rift-forest');
 assert.equal(rift.authored.areas.length,18);
@@ -111,12 +113,12 @@ reject(s=>s.worlds.order.reverse(),'persistent numeric world identities');
 reject(s=>s.worlds.connections.push(['forest','unknown']),'unknown world route');
 for(const id of ['city','volcano']){
   reject(s=>s.worlds.connections.push(['forest',id]),'retired world routes cannot pass validation');
-  reject(s=>s.stages.definitions[0].themeId=id,'retired world IDs cannot return as trial themes');
+  reject(s=>s.stages.definitions[0].worldMapId=id,'retired world IDs cannot return as trial terrain');
 }
 reject(s=>s.worlds.definitions[0].enemyWeights.unknown=1,'unknown monster');
-reject(s=>s.stages.definitions[0].core.boss.kind='unknown','unknown boss');
-reject(s=>s.stages.definitions[0].outer.boss.hp=-1,'invalid encounter HP');
-reject(s=>s.stages.definitions[1].core.id='forest-heart','duplicate map identity');
+reject(s=>s.stages.definitions[0].boss.kind='unknown','unknown boss');
+reject(s=>s.stages.definitions[0].boss.hp=-1,'invalid encounter HP');
+reject(s=>s.stages.definitions[1].id=s.stages.definitions[0].id,'duplicate challenge identity');
 reject(s=>s.geography.siteFeatures.shipwreck.guardPackId='unknown','unknown guard pack');
 reject(s=>s.worlds.definitions[3].terrain.placements.default[0].properties.scale={base:1,gain:1,roll:'code'},'numeric recipes cannot execute code');
 reject(s=>delete s.geography.environmentRules.mushroom.growthTimePeriod,'missing environmental formula input');
@@ -139,4 +141,4 @@ for(const [time,damage]of [[0,90],[600,135],[1200,135]]){
   assert.equal(enemy.hp,1000-damage,'environment damage retains capped growth and is independent of hero damage modifiers');
   assert.equal(g.player.hp,hp-12,'mushroom friendly damage remains unchanged');
 }
-console.log('World configuration: ten current worlds, eight preserved trial encounters/scenes, ten valid routes, retired IDs rejected, complete commemorative forest unchanged, reviewed exit-only layout updates and deterministic terrain recipes passed.');
+console.log('World configuration: ten unchanged world maps/routes, eight single-scene trial Boss/reward definitions, three preserved special challenges, retired IDs rejected, complete commemorative forest and deterministic terrain recipes passed.');

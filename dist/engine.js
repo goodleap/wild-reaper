@@ -89,18 +89,19 @@ export class Game {
     this.stage=stageId&&!dungeonId?new StageRun(this,stageId):null;
     this.expedition=dungeonId?new ExpeditionRun(this,dungeonId):null;
     const selectedWorld=this.debug&&debugWorld?debugWorld:worldId;
-    this.regionIndex=this.stage?.currentIsland.themeIndex??(['world','story'].includes(this.mode)?Math.max(0,REGIONS.findIndex(region=>region.id===selectedWorld)):0);
+    this.regionIndex=this.stage?.definition.worldIndex??(['world','story'].includes(this.mode)?Math.max(0,REGIONS.findIndex(region=>region.id===selectedWorld)):0);
     this.mapId=this.stage?.currentMapId??this.regionIndex;
     this.region=regionFor(this.regionIndex);
     this.worldId=this.region.id;this.startWorldId=this.worldId;
-    const seed=this.stage?.currentIsland.seed??this.region.seed??this.regionIndex;
-    this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:this.stage?.currentIsland})});
+    const seed=this.stage?.seed??this.region.seed??this.regionIndex;
+    this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed})});
+    this.stage?.prepareTerrain();
     this.sceneContent=new SceneContent(this,{story:this.mode==='story'});
     const worldContent=this.sceneContent.allows('worldContent');
     // Fixed Ember locations own their population; existing worlds retain
     // their original ambient generation and residents.
     const emberScene=this.terrain.island?.layout?.emberScene;
-    const ambientContent=worldContent&&!emberScene,residentContent=worldContent&&!emberScene?.sample;
+    const ambientContent=worldContent&&!emberScene,residentContent=worldContent&&!this.stage&&!emberScene?.sample;
     this._islandWorlds=!!this.terrain.island;
     this.portal=null;this.regionGrace=0;this.regionTransition=null;
     this._features={adventure:!!adventure,encounters:!!encounters,environment:!!environment,elites:!!elites,settlements:!!settlements,companions:!!companions};this._interactHeld=false;
@@ -144,17 +145,17 @@ export class Game {
     this._moveEntity(this.player,0,0,true);
     if(worldContent&&!this._worldExploration&&!this.expedition)for(let i=0;i<EXPLORATION_SPAWN.initialCount;i++)this._spawnEnemy(EXPLORATION_SPAWN.initialType,adventure?undefined:EXPLORATION_SPAWN.testStartRadius+i*EXPLORATION_SPAWN.testRadiusStep);
     this.adventure=null;
-    this.encounters=encounters?new Encounters(this,{generation:ambientContent}):null;
+    this.encounters=encounters?new Encounters(this,{generation:ambientContent&&!this.stage}):null;
     this.combat=new CombatResolution(this);this.attacks=new CombatAttacks(this);
     this.combatStatus=new CombatStatus(this);
     // Reserve the nearby debug entrance before environmental hazards choose
     // their positions. The ordinary world keeps its original generation order.
-    if(this.debugOptions.testFacilities&&settlements)this.settlements=new Settlements(this);
+    if(this.debugOptions.testFacilities&&settlements&&!this.stage)this.settlements=new Settlements(this);
     this.environment=environment?new Environment(this,{generation:ambientContent}):null;
     // Natural water is fixed before smaller supplies choose their habitat.
-    this.adventure=adventure?new Adventure(this,{generation:ambientContent}):null;
+    this.adventure=adventure?new Adventure(this,{generation:ambientContent||!!this.stage}):null;
     this.relics=new Relics(this);this.barrier=new GuardianBarrier(this);this.regions=new Regions(this);this.elites=new Elites(this,{generation:worldContent&&elites});
-    this.companions=new Companions(this,{generation:ambientContent&&companions});
+    this.companions=new Companions(this,{generation:ambientContent&&companions&&!this.stage});
     this.superSkills=new SuperSkills(this);this.progression=new CombatProgression(this,{costForTier:crystalCost});this.dungeon=new Dungeon(this);this.sceneTransition=new SceneTransition(this);this.touchInteractions=new TouchInteractions(this);
     this.abilities=new AbilityRuntime(this);this._abilityCooldowns={fireball:.4,frostbolt:.7};
     this.settlements??=new Settlements(this,{generation:residentContent&&settlements});
@@ -509,12 +510,10 @@ export class Game {
     this.status='playing';this._trySkillUpgrade();return true;
   }
   _switchRegion(portal=this.portal) {
-    if(!this.sceneContent.allows('worldContent'))return false;
+    if(!this.sceneContent.allows('worldContent')||this.stage)return false;
     if(!portal||!Number.isInteger(portal.nextRegionIndex)||this.dungeon.active)return false;
     this.realms?.cancel('scene-change');
-    const nextIsland=this.stage?this.stage.island(portal.nextMapId):null;
-    if(this.stage&&!nextIsland)return false;
-    const from=this.region.id,fromIndex=this.regionIndex,fromMapId=this.mapId,p=this.player;
+    const from=this.region.id,fromIndex=this.regionIndex,p=this.player;
     const furyTime=this.adventure?.furyTime||0,magnetTime=this.adventure?.magnetTime||0;
     // Clear only transient attacks. Persistent sites and surviving objective
     // guards remain in a suspended per-region snapshot for return journeys.
@@ -522,19 +521,18 @@ export class Game {
     this.territories?.suspend();
     this.superSkills.clearScene();this.barrier.clearScene();this.abilities.clearScene();this.regions.saveWorld();
     this.regionIndex=portal.nextRegionIndex;this.region=regionFor(this.regionIndex);this.worldId=this.region.id;this.portal=null;this.regions.portals=[];
-    if(this.stage)this.stage.currentMapId=nextIsland.id;
-    this.mapId=nextIsland?.id??this.regionIndex;
+    this.mapId=this.regionIndex;
     this.status='playing';this.regionGrace=2;this.sceneKind='world';
-    this.regionTransition={life:.7,maxLife:.7,name:nextIsland?.name??this.region.name,from,to:this.region.id};
+    this.regionTransition={life:.7,maxLife:.7,name:this.region.name,from,to:this.region.id};
     this.attacks.clearTrails();
     this.bullets=[];this.enemyBullets=[];this.effects=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];this._grid.clear();this._choices=null;
     this.events=this.events.filter(e=>e.type==='relicChosen'||e.type==='relicSupply'||e.type==='superChosen');
     this._spawn=2;this._shot=BALANCE.arrowInterval/(1+this.levels.rapid*.15);this._pulse=2.6;this._lightning=2.8;
     p.x=0;p.y=0;p.invuln=Math.max(p.invuln,2);p.hurtFlash=0;
     if(!this.regions.restoreWorld(this.mapId)) {
-      const seed=nextIsland?.seed??this.region.seed??this.regionIndex,generate=!this.stage?.isBossIsland;
-      this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed,map:nextIsland})});this.enemies=[];this.gems=[];this.coins=[];
-      const emberScene=this.terrain.island?.layout?.emberScene,ambient=generate&&!emberScene,residents=generate&&!emberScene?.sample;
+      const seed=this.region.seed??this.regionIndex;
+      this.terrain=new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed})});this.enemies=[];this.gems=[];this.coins=[];
+      const emberScene=this.terrain.island?.layout?.emberScene,ambient=!emberScene,residents=!emberScene?.sample;
       this.environment=null;this.adventure=null;this.encounters=null;this.settlements=null;this.relicSites=null;this.riftExploration=null;this.discoveredMap=new Set();
       this.companions.camps=[];this.companions.generation=ambient&&this._features.companions;this.companions.nextAt=this.time+35;
       this.dungeon.resetRegion();
@@ -543,7 +541,7 @@ export class Game {
       this._moveEntity(p,0,0,true);
       if(this._features.environment)this.environment=new Environment(this,{generation:ambient});
       if(this._features.adventure)this.adventure=new Adventure(this,{generation:ambient});
-      if(generate&&this._features.encounters)this.encounters=new Encounters(this,{generation:ambient});
+      if(this._features.encounters)this.encounters=new Encounters(this,{generation:ambient});
       this.settlements=new Settlements(this,{generation:residents&&this._features.settlements});
       this.regions.initialize(portal,fromIndex);
       this.riftExploration=new RiftExploration(this);
@@ -551,7 +549,7 @@ export class Game {
       this.territories=new MonsterTerritories(this);
     }
     if(this.adventure){this.adventure.furyTime=furyTime;this.adventure.magnetTime=magnetTime;}
-    const arrival=this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>this.stage?candidate.nextMapId===fromMapId:candidate.nextRegionIndex===fromIndex);
+    const arrival=this.regions.portals.find(candidate=>candidate.id===portal.targetPortalId)||this.regions.portals.find(candidate=>candidate.nextRegionIndex===fromIndex);
     if(arrival) {
       // Land just in front of the paired gate, never at a different region's
       // coordinates. The interaction latch prevents an immediate bounce back.
@@ -569,7 +567,7 @@ export class Game {
     this.companions.onSceneChange?.(arrival?{doorway:portalDoor(arrival),direction:arrival.arrivalDirection||{x:0,y:1}}:null);
     this.waveDirector.reset();this.settlements.ensureAngels?.();this._refreshStats();this._refreshWeapons();
     this.quests?.enterWorld();
-    this._emit('regionEnter',{regionId:this.region.id,name:nextIsland?.name??this.region.name,regionIndex:this.regionIndex,mapId:this.mapId});return true;
+    this._emit('regionEnter',{regionId:this.region.id,name:this.region.name,regionIndex:this.regionIndex,mapId:this.mapId});return true;
   }
 
   update(dt,input={}) {
@@ -617,7 +615,7 @@ export class Game {
     const regen=resolveCharacterStats(this).regen;if(regen)p.hp=Math.min(p.maxHp,p.hp+regen*dt);
     if(!inDungeon)this._spawn-=dt;
     updateDebugMonsterStream(this,dt);
-    if(this.sceneContent.allows('worldContent')&&!this._worldExploration&&(!this.expedition||this.expedition.allowAmbient)&&!this.debugOptions.allMonsters&&!inDungeon&&!this.stage?.isBossIsland&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
+    if(this.sceneContent.allows('worldContent')&&!this._worldExploration&&(!this.expedition||this.expedition.allowAmbient)&&!this.debugOptions.allMonsters&&!inDungeon&&!this.stage?.bossEngaged&&!this.stage?.bossDefeated&&this._spawn<=0&&this.regionGrace<=0&&this.pressurePhase==='steady') {
       // The authored cohort owns assault pressure. Exploration is lighter,
       // and a Boss gets space for its own readable attacks.
       const bossActive=this.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false);

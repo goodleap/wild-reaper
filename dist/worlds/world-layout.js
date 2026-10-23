@@ -18,7 +18,6 @@ export function layoutWet(layout,ax,ay,bx,by,r=0){return layout?.lakes.some(m=>w
 // Layout creation runs once per island. Every consumer receives the same
 // permanent geometry; loading cells in a different order cannot move a road.
 export function createWorldLayout(island,plan){
-  if(island.role==='boss')return null;
   const world=getConfigSection('worlds').definitions.find(w=>w.id===island.region),recipe=world?.layout;if(!recipe)return null;
   const theme=world.authored?.artTheme??island.region;
   const sx=island.profile.x/4000,sy=island.profile.y/4000,scale=Math.min(sx,sy),seed=island.seed,region=island.region;

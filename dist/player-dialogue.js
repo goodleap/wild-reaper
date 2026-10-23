@@ -14,7 +14,7 @@ const heroId=game=>game.hero?.heroId||String(game.hero?.id||game.hero?.appearanc
 export function playerBlockedDialogue(choice,game){
   if(!choice||choice.enabled!==false)return null;
   if(choice.type==='portal')return /击败驻门|解锁双向/.test(choice.description||'')?'驻门首领还在。击败它才能打开通路。':null;
-  if(choice.type==='stageExit')return game.stage&&!game.stage.coreDefeated?'核心首领还没倒下，通关门尚未开放。':null;
+  if(choice.type==='stageExit')return game.stage&&!game.stage.bossDefeated?'关卡首领还没倒下，通关门尚未开放。':null;
   if(choice.type==='riftShortcut')return '这边锁住了，得从北侧钟楼绕过去。';
   if(choice.type==='dungeonChest')return '房间守卫还在。先解决它们，再开宝箱。';
   if(choice.category==='relic'||choice.type==='relic'){

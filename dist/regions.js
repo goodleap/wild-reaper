@@ -195,7 +195,7 @@ export class Regions {
   canEnter(portalOrId) {
     const g=this.game,portal=this._portal(portalOrId);
     return !!(portal&&portal.state==='active'&&g.status==='playing'&&!g.superSkills.pending&&!this._rewardQueue.length&&!g.dungeon?.active&&
-      !this.rewardPortal&&(!g.stage||portal.kind!=='victory'||g.stage.coreDefeated)&&
+      !this.rewardPortal&&(!g.stage||portal.kind==='victory'&&g.stage.bossDefeated&&this.portals.includes(portal))&&
       (g.stage||!g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false))&&portalEntranceContains(portal,feet(g)));
   }
   getInteraction() {

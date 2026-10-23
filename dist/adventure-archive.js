@@ -196,7 +196,7 @@ export class AdventureArchive {
     if(!run.ended){
       this.checkpoint(game,{force:true});
       run.final={...run.counted};run.ended=true;run.reason=typeof reason==='string'?reason.slice(0,32):'death';
-      const completedStage=game.stage?.id===run.stageId&&game.stage.completed===true&&game.stage.coreDefeated===true;
+      const completedStage=game.stage?.id===run.stageId&&game.stage.completed===true&&game.stage.bossDefeated===true;
       const completedExpedition=game.expedition?.id===run.stageId&&game.expedition.completed===true;
       if(reason==='victory'&&game.status==='victory'&&run.stageId&&(completedStage||completedExpedition)){
         const records=this.data.stages[run.stageId]??={normal:emptyStageRecord(),casual:emptyStageRecord()};

@@ -93,12 +93,13 @@ export class WorldMap {
     for(const {site,type} of landmarks(game)) {
       // Debug exposes existing map landmarks without discovering their ground
       // or unlocking archive entries. Generation and world visibility are unchanged.
-      if(!site.discovered&&game.debug!==true)continue;
+      const stageTarget=!!game.stage&&(site.stageBoss||site.kind==='victory');
+      if(!site.discovered&&game.debug!==true&&!stageTarget)continue;
       const dx=site.x-p.x,dy=site.y-p.y,distance=Math.hypot(dx,dy);
       if(distance>range)continue;
       const active=type==='portal'?site.state==='active':type==='expedition'&&site.active===true;
       const completed=type!=='portal'&&(COMPLETED.has(site.state)||!!site.explored||(type==='territory'||site.kind==='boss')&&site.cleared||type==='expedition'&&site.completed===true);
-      const name=site.kind==='victory'?'通关大门':type==='boss'&&site.stageBossRole?(site.stageBossRole==='core'?'关卡首领':'外岛首领 · 可选'):type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||'';
+      const name=site.kind==='victory'?'通关大门':type==='boss'&&site.stageBoss?'关卡首领':type==='portal'&&site.nextRegion?.name?`通往${site.nextRegion.name}`:site.name||'';
       result.push({id:site.id,type,anchorId:site.anchorId,x:site.x,y:site.y,dx,dy,distance,state:site.state,active,completed,gateOpen:!!(site.gateOpen||site.open),appearance:site.appearance,kind:site.kind,name,label:site.label,color:site.color,natural:site.natural===true,destination:site.nextRegion?.name||'',description:site.description||''});
     }
     // Bright active gates remain readable when a sanctuary is nearby.

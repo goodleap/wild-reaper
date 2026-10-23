@@ -17,19 +17,18 @@ function segmentDistanceSq(ax,ay,bx,by,cx,cy,dx,dy){
   return Math.min(distanceSq(ax,ay,cx,cy,dx,dy),distanceSq(bx,by,cx,cy,dx,dy),distanceSq(cx,cy,ax,ay,bx,by),distanceSq(dx,dy,ax,ay,bx,by));
 }
 export class Island {
-  constructor({region='forest',seed=0,map=null,mapSpec=null}={}){
-    const definition=map??mapSpec,theme=definition?.themeId??region;
-    this.region=WORLD_IDS.includes(theme)?theme:'forest';this.seed=Number.isFinite(definition?.seed)?Math.trunc(definition.seed):Number.isFinite(seed)?Math.trunc(seed):0;
-    this.mapId=definition?.id??this.region;this.role=definition?.role??'world';
+  constructor({region='forest',seed=0}={}){
+    this.region=WORLD_IDS.includes(region)?region:'forest';this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
+    this.mapId=this.region;
     this.worldId=WORLD_IDS.indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.beachWidth=regionFor(this.worldId).coast.beachWidth??COAST_RULES.beachWidth;this.routeRadius=80;
-    if(!definition&&regionFor(this.worldId).authored?.kind==='rift-forest'&&this.role==='world'){
+    if(regionFor(this.worldId).authored?.kind==='rift-forest'){
       this.layout=createRiftLayout(this.region);this.bounds=this.layout.bounds;this.spawn=this.layout.spawn;this.plan=this.layout.plan;this.routes=this.layout.routes;
       this.profile=Object.freeze({x:(this.bounds.maxX-this.bounds.minX)/2,y:(this.bounds.maxY-this.bounds.minY)/2,phase:0,bays:0});this.shallowWidth=0;this.beachWidth=0;
       const b=this.bounds;this.points=Object.freeze([{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}].map(Object.freeze));
       this._edges=this.points.map((a,i)=>{const b=this.points[(i+1)%4],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);return {a,b,nx:-dy/len,ny:dx/len};});
       this._innerRadius=Math.max(0,Math.min(-b.minX,b.maxX,-b.minY,b.maxY));this._contours=new Map([[0,this.points]]);return;
     }
-    const profile={...regionFor(this.worldId).profile,...(this.role==='boss'?{x:1080,y:1080,bays:.025}:{}),...definition?.profile};
+    const profile={...regionFor(this.worldId).profile};
     if(![profile.x,profile.y,profile.phase,profile.bays].every(Number.isFinite)||profile.x<=0||profile.y<=0)throw new Error(`Invalid island profile: ${this.mapId}`);
     this.profile=Object.freeze(profile);
     const phase=profile.phase+(hash(this.seed+11)-.5)*.36;
@@ -42,7 +41,7 @@ export class Island {
     this._edges=this.points.map((a,i)=>{const b=this.points[(i+1)%COUNT],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);return {a,b,nx:-dy/len,ny:dx/len};});
     this._innerRadius=Math.sqrt(Math.min(...this._edges.map(e=>distanceSq(0,0,e.a.x,e.a.y,e.b.x,e.b.y))));
     this._contours=new Map([[0,this.points]]);
-    const natural=!definition&&regionFor(this.worldId).naturalIsland;
+    const natural=regionFor(this.worldId).naturalIsland;
     if(natural){
       // Fixed reservations use the shared coastline, terrain and collision rules.
       this.plan=natural.plan;this.layout=null;
@@ -50,13 +49,8 @@ export class Island {
       return;
     }
     const rotate=this.worldId*.52+(hash(this.seed+19)-.5)*.16;
-    const specs=this.role==='boss'?[]:ISLAND_SITE_RESERVATIONS;
+    const specs=ISLAND_SITE_RESERVATIONS;
     const plan={};for(const [key,angle,radius,r] of specs){const a=angle+rotate;let d=radius;while(d>500&&!this.isDry(Math.cos(a)*d,Math.sin(a)*d,r+100))d-=40;plan[key]=Object.freeze({x:Math.cos(a)*d,y:Math.sin(a)*d,r});}
-    if(definition){
-      this._stageReservations(plan,definition,rotate);
-      this.plan=Object.freeze(plan);this.layout=null;this.routes=Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
-      return;
-    }
     // Reserve every graph endpoint before natural objects and sites generate.
     // Even the four-way world gets distinct dry approaches, rather than having
     // later portals compete for a single pair of authored slots.
@@ -76,41 +70,6 @@ export class Island {
       plan[`portal:${target}`]=point;
     }
     this.plan=Object.freeze(plan);this.layout=createWorldLayout(this,this.plan);this.routes=this.layout?.routes??Object.freeze(Object.values(plan).map(p=>Object.freeze({ax:0,ay:0,bx:p.x,by:p.y+96,r:this.routeRadius})));
-  }
-  _stageReservations(plan,definition,rotate){
-    const bossIsland=this.role==='boss',layout=definition.layout??{},scale=Math.min(this.profile.x,this.profile.y);
-    const add=(key,preferred)=>{
-      const authored=layout[key],point=authored?{...preferred,...authored}:preferred;
-      if(!point||![point.x,point.y,point.r].every(Number.isFinite)||point.r<=0||!this.isDry(point.x,point.y,point.r+25)||Object.values(plan).some(other=>Math.hypot(point.x-other.x,point.y-other.y)<point.r+other.r+30))throw new Error(`No clear island reservation: ${this.mapId}:${key}`);
-      plan[key]=Object.freeze({x:point.x,y:point.y,r:point.r});
-    };
-    if(bossIsland){
-      add('stageBoss',{x:0,y:0,r:360});
-      add('stageExit',{x:0,y:-590,r:150});
-    }else{
-      add('stageBoss',layout.stageBoss??this._findStagePoint(plan,-Math.PI/2+rotate,scale*.74,300));
-    }
-    const destinations=definition.connections??[];
-    for(const [index,connection] of destinations.entries()){
-      const target=typeof connection==='object'?connection.targetMapId:connection,key=`portal:${target}`;
-      if(target===undefined||target===null||target==='')throw new Error(`Invalid island connection: ${this.mapId}`);
-      const angle=Number.isFinite(connection?.angle)?connection.angle:(bossIsland?Math.PI/2:1.73+rotate)+index*TAU/Math.max(1,destinations.length);
-      const configuredRadius=connection?.radius;
-      const radius=Number.isFinite(configuredRadius)&&configuredRadius>0?(configuredRadius<=1?configuredRadius*scale:configuredRadius):(bossIsland?590:scale*.77);
-      const point=layout[key]??this._findStagePoint(plan,angle,radius,bossIsland?150:220);
-      add(key,point);
-    }
-  }
-  _findStagePoint(plan,angle,radius,r){
-    const scale=Math.min(this.profile.x,this.profile.y);
-    for(const distance of [radius,radius+scale*.06,radius-scale*.06,radius+scale*.12,radius-scale*.12]){
-      if(distance<=r)continue;
-      for(let step=0;step<96;step++){
-        const offset=step===0?0:Math.ceil(step/2)*(step%2?1:-1)*TAU/96,a=angle+offset,x=Math.cos(a)*distance,y=Math.sin(a)*distance;
-        if(this.isDry(x,y,r+25)&&!Object.values(plan).some(other=>Math.hypot(x-other.x,y-other.y)<r+other.r+30))return {x,y,r};
-      }
-    }
-    return null;
   }
   _inside(x,y){
     if(this.layout?.kind==='rift-forest'){const b=this.bounds;return x>=b.minX&&x<=b.maxX&&y>=b.minY&&y<=b.maxY;}

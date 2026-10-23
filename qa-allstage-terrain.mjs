@@ -1,63 +1,69 @@
 import assert from 'node:assert/strict';
-import { STAGES } from './dist/stage-definitions.js';
-import { WORLD_IDS, worldForId } from './dist/world-definitions.js';
-import { Island } from './dist/islands.js';
-import { Terrain } from './dist/terrain.js';
-import { Environment } from './dist/environment.js';
-import { groundFootprint, surfaceAllows } from './dist/placement-rules.js';
-import { waterIntersectsCircle, waterIntersectsCapsule } from './dist/water-geometry.js';
+import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 
-const releasedStageThemes=['forest','marsh','ruins','beach','city','mountain','snow','volcano'];
-assert.deepEqual(STAGES.map(stage=>stage.themeId),releasedStageThemes,'all eight released stage themes retain their authored terrain');
-assert.deepEqual(STAGES.map(stage=>stage.id),releasedStageThemes.map(id=>`${id}-trial`),'terrain checks cover each released stage identity');
-assert(WORLD_IDS.includes('verdant-rift'));assert(!STAGES.some(stage=>stage.themeId==='verdant-rift'),'the independent exploration world does not inherit a fabricated stage layout');
-let reservations=0,scenery=0,waterChecks=0,arrivalChecks=0;
-const reports=[];
-for(const stage of STAGES){
-  const outlines=[];
-  for(const map of stage.islands){
-    const island=new Island({map}),terrain=new Terrain({region:map.themeId,seed:map.seed,island,cacheLimit:32});
-    const game={terrain,region:worldForId(map.themeId),regionIndex:map.themeIndex,stage:{currentIsland:map},player:{x:0,y:-19.8,r:15},viewWidth:960,viewHeight:720};
-    const environment=new Environment(game,{generation:false});game.environment=environment;
-    // Exercise stable terrain before it reaches the live screen cache. Core
-    // islands currently disable random water; checking its layout too ensures
-    // these reservations remain safe if that generation is later enabled.
-    environment.generation=true;
-    outlines.push(island.points);
-    assert.equal(island.mapId,map.id);assert.equal(island.region,stage.themeId);
-    if(map.role==='outer')for(const key of ['castle','rescue','rescue-warden','hunt','rune','golemaltar','stonevault'])assert(island.plan[key],`${map.id}: retained ${key}`);
-    else assert.deepEqual(Object.keys(island.plan).sort(),[`portal:${stage.startMapId}`,'stageBoss','stageExit'].sort(),`${map.id}: core arena has only its three objectives`);
-    for(const [key,point] of Object.entries(island.plan)){
-      assert(island.isDry(point.x,point.y,point.r),`${map.id}: ${key} reserve is fully dry`);reservations++;
-      if(key.startsWith('stage')||key.startsWith('portal:'))for(const [otherKey,other] of Object.entries(island.plan))if(key!==otherKey)assert(Math.hypot(point.x-other.x,point.y-other.y)>=point.r+other.r+29.9,`${map.id}: ${key} overlaps ${otherKey}`);
-      const box={minX:point.x-point.r,minY:point.y-point.r,maxX:point.x+point.r,maxY:point.y+point.r};
-      for(const water of environment.watersInBounds(box)){
-        waterChecks++;assert(!waterIntersectsCircle(water,point.x,point.y,point.r),`${map.id}: ${water.kind} crosses ${key}`);
-      }
-    }
-    for(const route of island.routes){
-      assert(island.containsCapsule(route.ax,route.ay,route.bx,route.by,route.r,island.shallowWidth),`${map.id}: the approach crosses the sea`);
-      for(const water of environment.watersInBounds({minX:Math.min(route.ax,route.bx)-route.r,minY:Math.min(route.ay,route.by)-route.r,maxX:Math.max(route.ax,route.bx)+route.r,maxY:Math.max(route.ay,route.by)+route.r})){
-        waterChecks++;assert(!waterIntersectsCapsule(water,route.ax,route.ay,route.bx,route.by,route.r),`${map.id}: ${water.kind} blocks a route`);
-      }
-    }
-    const b=island.bounds,props=terrain.query(b.minX,b.minY,b.maxX,b.maxY);
-    for(const prop of props){
-      const footprint=groundFootprint(prop),kind=prop.type==='tree'?'vegetation':prop.type==='log'?'debris':'stone';
-      assert(surfaceAllows(island,kind,footprint),`${map.id}: ${prop.variant??prop.type} has an invalid shoreline footprint`);
-      assert(!island.isReservedCapsule(footprint.ax,footprint.ay,footprint.bx,footprint.by,footprint.r),`${map.id}: natural scenery blocks a reserved area`);scenery++;
-    }
-    assert(props.length>0,`${map.id}: theme scenery remains outside the encounter reserves`);
-    const arrivals=[{x:0,y:0},...Object.entries(island.plan).filter(([key])=>key.startsWith('portal:')||key==='stageExit').flatMap(([,point])=>[-55,0,55].flatMap(dx=>[70,110].map(dy=>({x:point.x+dx,y:point.y+dy}))))];
-    for(const point of arrivals){
-      assert(terrain.isDry(point.x,point.y,24)&&terrain.isFree(point.x,point.y,24),`${map.id}: blocked arrival`);
-      environment.mechanisms.generation=true;environment.worldHazards.generation=true;
-      assert(environment.mechanisms.isHazardFree(point.x,point.y,24),`${map.id}: vine or gas at arrival`);
-      assert(environment.worldHazards.isHazardFree(point.x,point.y,24),`${map.id}: damaging terrain at arrival`);arrivalChecks++;
-    }
-    assert(terrain.cacheSize<=32,'the larger stage catalog does not enlarge terrain caches');
-    reports.push({map:map.id,scenery:props.length,reservations:Object.keys(island.plan).length});
+// Full-map navigation allocates terrain caches. Isolate the eight fixtures so
+// the QA process releases each map's geometry before loading the next one.
+const stageId=process.argv[2];
+if(!stageId){
+  const definitions=JSON.parse(readFileSync(new URL('./dist/config/stages.json',import.meta.url))).definitions;
+  for(const definition of definitions)await new Promise((resolve,reject)=>{
+    const child=spawn(process.execPath,[import.meta.filename,definition.id],{stdio:'inherit'});
+    child.once('error',reject);child.once('exit',(code,signal)=>code===0?resolve():reject(new Error(`${definition.id}: terrain QA exited ${code??signal}`)));
+  });
+}else{
+const [{Game},{STAGES},{createRiftLayout},{worldForId,worldNeighbors},{groundOffset},{terrainNavigation},{WorldMap}]=await Promise.all([
+  import('./dist/engine.js'),import('./dist/stage-definitions.js'),import('./dist/worlds/rift-layout.js'),import('./dist/world-definitions.js'),import('./dist/terrain.js'),import('./dist/terrain-navigation.js'),import('./dist/world-map.js')
+]);
+const selected=STAGES.filter(stage=>stage.id===stageId);assert.equal(selected.length,1,'the requested trial exists');
+
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+let steps=0,goals=0;
+for(const stage of selected){
+  const world=new Game({mode:'world',worldId:stage.worldMapId}),game=new Game({stageId:stage.id});
+  const layout=createRiftLayout(stage.worldMapId),source=worldForId(stage.worldMapId).authored,foot=()=>({x:game.player.x,y:game.player.y+groundOffset(game.player,true)});
+  assert(game.terrain.island.layout===layout,'trial uses the shared authored map');assert(world.terrain.island.layout===layout,'exploration uses the same authored map');
+  assert(Object.isFrozen(layout));assert.deepEqual(layout.bounds,source.bounds);assert.deepEqual(game.terrain.bounds,world.terrain.bounds,'trials retain the complete current map extent');
+  assert(game.terrain!==world.terrain,'each run owns its terrain');assert(game.terrain.island!==world.terrain.island,'each run owns its island state');
+  assert.equal(game.terrain.island.seed,world.terrain.island.seed,'shared scenery uses the same deterministic seed');
+  assert.equal(game.mapId,stage.mapId);assert.equal(world.mapId,stage.worldIndex);assert.equal(game.terrain.island.region,stage.worldMapId);
+  assert.equal(game.stage.currentMapId,stage.mapId);assert.equal(game._worldExploration,false);
+  assert.deepEqual(foot(),{x:layout.spawn.x,y:layout.spawn.y});
+  for(const passage of layout.passages.filter(p=>p.gateId)){
+    assert.equal(game.terrain._riftGates.get(passage.gateId),true,'trial-only shortcut opening cannot depend on absent world quests');
+    assert.equal(world.terrain._riftGates.get(passage.gateId),false,'opening a trial shortcut never changes exploration collision');
   }
-  assert.notDeepEqual(outlines[0],outlines[1],`${stage.id}: outer and core use independent shapes`);
+  for(const sites of [game.settlements.sites,game.relicSites.sites,game.companions.camps,game.companions.members,game.territories.groups])assert.equal(sites.length,0,'world-specific actors and objectives stay out of the trial');
+  assert.equal(game.riftExploration.sites.length,0);assert.equal(game.encounters.generation,false);assert.equal(game.regions.portals.length,0);
+  assert.equal(game.environment.generation,layout.artTheme!=='ember','the source map retains its environment generation policy');assert.equal(game.adventure.generation,true,'combat pickups remain enabled independently of world events');
+  assert(!game.enemies.some(enemy=>enemy.worldBoss||enemy.territoryId||enemy.settlementId||enemy.relicSiteId));
+  assert.deepEqual(new Set(world.regions.portals.map(portal=>portal.nextRegionIndex)),new Set(worldNeighbors(stage.worldIndex)),'normal exploration still has its actual travel connections');
+  assert(world.settlements.sites.length>0&&world.riftExploration.sites.length>0&&world.territories.groups.length>0,'normal world contents remain available');
+  const worldGate=world.regions.portals[0];if(worldGate)assert.equal(game.enterPortal(worldGate.id),false,'a world route cannot be entered from a challenge');
+  const map=new WorldMap();map.discover(game);assert(game.terrain.island.explored?.size>0);assert.equal(world.terrain.island.explored,undefined,'fog belongs to this run');
+  assert(game.terrain.isFree(stage.arena.x,stage.arena.y,game.stage.boss.r),'the actual Boss fits its authored arena');
+  assert(game.terrain.isFree(stage.exit.x,stage.exit.y,90),'the victory entrance has full portal clearance');
+  const nav=terrainNavigation(game.terrain);
+  for(const target of [stage.arena,{x:stage.exit.x,y:stage.exit.y+80}]){
+    for(let leg=0;distance(foot(),target)>.04&&leg<300;leg++){
+      const path=nav.find(foot(),target,game.player.r,'ground');assert(path?.length,`${stage.id}: normal navigation reaches the next objective`);
+      const beforeLeg=foot();
+      for(const point of path){
+        assert(!game.terrain.firstBlocker(foot().x,foot().y,point.x,point.y,game.player.r),`${stage.id}: complete body sweep clears the route`);
+        for(let n=0;distance(foot(),point)>.025&&n<5000;n++){
+          const before=foot(),remaining=distance(before,point),travel=Math.min(game.player.speed/30,remaining);
+          game._moveEntity(game.player,(point.x-before.x)/remaining*travel,(point.y-before.y)/remaining*travel,true);
+          assert(distance(before,foot())>.0001&&distance(before,foot())<=travel+.01,'normal movement advances within its speed budget');
+          assert(game.terrain.isFree(foot().x,foot().y,game.player.r),'walking keeps the entire body outside scenery');steps++;
+        }
+        assert(distance(foot(),point)<.04,'the current walking leg completes');
+      }
+      assert(distance(beforeLeg,foot())>.01,'navigation makes progress');
+    }
+    assert(distance(foot(),target)<.04,`${stage.id}: the complete source-map route reaches the objective`);goals++;
+  }
+  assert(world.terrain.island.layout===layout,'world source terrain remains shared');assert(!world.stage,'world exploration does not acquire a trial');assert.equal(world.regions.states.size,0);
 }
-console.log(JSON.stringify({allStageTerrain:'passed',stages:STAGES.length,reservations,scenery,waterChecks,arrivalChecks,maps:reports}));
+assert.equal(goals,2);
+console.log(`${stageId}: exact shared terrain and independent run state, safe Boss/exit positions, ${steps} movement steps across both objective routes passed.`);
+}

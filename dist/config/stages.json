@@ -2,465 +2,240 @@
   "definitions": [
     {
       "id": "forest-trial",
-      "themeId": "forest",
       "name": "森林试炼",
       "shortName": "森林",
       "difficultyLabel": "标准",
-      "summary": "探索林间遗迹、积累实力，再挑战森林核心首领。",
-      "outer": {
-        "name": "林间外岛",
-        "seed": 0,
-        "boss": {
-          "kind": "ancient",
-          "index": 1,
-          "hp": 2300,
-          "easyHp": 1700,
-          "damage": 22,
-          "speed": 1,
-          "xp": 180
-        }
+      "summary": "穿过裂谷林海，在旧城内堡挑战织巢蛛后。",
+      "worldMapId": "rift-forest",
+      "arena": {
+        "areaId": "17",
+        "x": 3005.14,
+        "y": -2080
       },
-      "core": {
-        "name": "森林核心岛",
-        "seed": 913,
-        "boss": {
-          "kind": "broodmother",
-          "index": 2,
-          "hp": 5200,
-          "easyHp": 3800,
-          "damage": 30,
-          "speed": 1.08,
-          "xp": 300
-        }
+      "exit": {
+        "x": 3005.14,
+        "y": -2310
       },
-      "coreReward": {
+      "boss": {
+        "kind": "broodmother",
+        "index": 2,
+        "hp": 5200,
+        "easyHp": 3800,
+        "damage": 30,
+        "speed": 1.08,
+        "xp": 300
+      },
+      "reward": {
         "gold": 30,
         "crystals": 45
       }
     },
     {
       "id": "marsh-trial",
-      "themeId": "marsh",
       "name": "沼泽试炼",
       "shortName": "沼泽",
       "difficultyLabel": "进阶",
-      "summary": "穿过湿地与毒雾，在沼泽外岛积累挑战首领的实力。",
-      "outer": {
-        "name": "雾泽外岛",
-        "seed": 1,
-        "boss": {
-          "kind": "ancient",
-          "index": 1,
-          "hp": 2500,
-          "easyHp": 1850,
-          "damage": 23,
-          "speed": 1,
-          "xp": 195
-        }
+      "summary": "穿过湿地与毒雾，在溺钟遗台挑战孢冠领主。",
+      "worldMapId": "marsh",
+      "arena": {
+        "areaId": "10",
+        "x": 4750,
+        "y": -3440
       },
-      "core": {
-        "name": "沼泽核心岛",
-        "seed": 1050,
-        "profile": {
-          "x": 1160,
-          "y": 1160,
-          "phase": 1.6,
-          "bays": 0.04
-        },
-        "layout": {
-          "stageBoss": {
-            "x": 0,
-            "y": 0,
-            "r": 360
-          },
-          "stageExit": {
-            "x": 0,
-            "y": -620,
-            "r": 150
-          },
-          "portal:marsh-outer": {
-            "x": 0,
-            "y": 620,
-            "r": 150
-          }
-        },
-        "boss": {
-          "kind": "bloom",
-          "index": 2,
-          "hp": 5600,
-          "easyHp": 4100,
-          "damage": 31,
-          "speed": 1.08,
-          "xp": 320
-        }
+      "exit": {
+        "x": 4750,
+        "y": -3670
       },
-      "coreReward": {
+      "boss": {
+        "kind": "bloom",
+        "index": 2,
+        "hp": 5600,
+        "easyHp": 4100,
+        "damage": 31,
+        "speed": 1.08,
+        "xp": 320
+      },
+      "reward": {
         "gold": 34,
         "crystals": 51
       }
     },
     {
       "id": "ruins-trial",
-      "themeId": "ruins",
       "name": "遗迹试炼",
       "shortName": "遗迹",
       "difficultyLabel": "挑战",
-      "summary": "绕行石柱与残墙，搜寻遗迹宝藏后挑战核心首领。",
-      "outer": {
-        "name": "残垣外岛",
-        "seed": 2,
-        "boss": {
-          "kind": "bloom",
-          "index": 1,
-          "hp": 2900,
-          "easyHp": 2100,
-          "damage": 25,
-          "speed": 1,
-          "xp": 220
-        }
+      "summary": "穿行失落遗迹，在苍根禁苑挑战荒野领主。",
+      "worldMapId": "ruins",
+      "arena": {
+        "areaId": "14",
+        "x": -5550,
+        "y": -3550
       },
-      "core": {
-        "name": "遗迹核心岛",
-        "seed": 1187,
-        "profile": {
-          "x": 1140,
-          "y": 1180,
-          "phase": 3.5,
-          "bays": 0.02
-        },
-        "layout": {
-          "stageBoss": {
-            "x": 0,
-            "y": 0,
-            "r": 360
-          },
-          "stageExit": {
-            "x": 0,
-            "y": -620,
-            "r": 150
-          },
-          "portal:ruins-outer": {
-            "x": 0,
-            "y": 620,
-            "r": 150
-          }
-        },
-        "boss": {
-          "kind": "ancient",
-          "index": 2,
-          "hp": 6400,
-          "easyHp": 4650,
-          "damage": 34,
-          "speed": 1.08,
-          "xp": 360
-        }
+      "exit": {
+        "x": -5550,
+        "y": -3780
       },
-      "coreReward": {
+      "boss": {
+        "kind": "ancient",
+        "index": 2,
+        "hp": 6400,
+        "easyHp": 4650,
+        "damage": 34,
+        "speed": 1.08,
+        "xp": 360
+      },
+      "reward": {
         "gold": 42,
         "crystals": 63
       }
     },
     {
       "id": "beach-trial",
-      "themeId": "beach",
       "name": "海岸试炼",
       "shortName": "海岸",
       "difficultyLabel": "标准",
-      "summary": "沿沙滩、椰林与礁石探索，再前往潮汐核心岛。",
-      "outer": {
-        "name": "潮汐外岛",
-        "seed": 3,
-        "boss": {
-          "kind": "bloom",
-          "index": 1,
-          "hp": 2400,
-          "easyHp": 1750,
-          "damage": 22,
-          "speed": 1,
-          "xp": 185
-        }
+      "summary": "沿沙滩与礁湾前进，挑战碧潮礁湾的深潮巨章。",
+      "worldMapId": "beach",
+      "arena": {
+        "areaId": "06",
+        "x": 3100,
+        "y": 550
       },
-      "core": {
-        "name": "海岸核心岛",
-        "seed": 1324,
-        "profile": {
-          "x": 1260,
-          "y": 1080,
-          "phase": 0.85,
-          "bays": 0.035
-        },
-        "layout": {
-          "stageBoss": {
-            "x": 0,
-            "y": 0,
-            "r": 360
-          },
-          "stageExit": {
-            "x": 0,
-            "y": -620,
-            "r": 150
-          },
-          "portal:beach-outer": {
-            "x": 0,
-            "y": 620,
-            "r": 150
-          }
-        },
-        "boss": {
-          "kind": "deepcaller",
-          "index": 2,
-          "hp": 5400,
-          "easyHp": 3950,
-          "damage": 30,
-          "speed": 1.08,
-          "xp": 310
-        }
+      "exit": {
+        "x": 3100,
+        "y": 320
       },
-      "coreReward": {
+      "boss": {
+        "kind": "deepcaller",
+        "index": 2,
+        "hp": 5400,
+        "easyHp": 3950,
+        "damage": 30,
+        "speed": 1.08,
+        "xp": 310
+      },
+      "reward": {
         "gold": 32,
         "crystals": 48
       }
     },
     {
       "id": "city-trial",
-      "themeId": "clockshadow-city",
       "name": "古城试炼",
       "shortName": "古城",
       "difficultyLabel": "进阶",
-      "summary": "穿行街区与庭院，利用建筑间隙战斗并完成整备。",
-      "outer": {
-        "name": "暮钟外岛",
-        "seed": 4,
-        "boss": {
-          "kind": "ancient",
-          "index": 1,
-          "hp": 2700,
-          "easyHp": 2000,
-          "damage": 24,
-          "speed": 1,
-          "xp": 210
-        }
+      "summary": "穿行钟影旧都的街区，在内苑花园挑战孢冠领主。",
+      "worldMapId": "clockshadow-city",
+      "arena": {
+        "areaId": "13",
+        "x": 4000,
+        "y": -2350
       },
-      "core": {
-        "name": "古城核心岛",
-        "seed": 1461,
-        "profile": {
-          "x": 1200,
-          "y": 1140,
-          "phase": 2.65,
-          "bays": 0.015
-        },
-        "layout": {
-          "stageBoss": {
-            "x": 0,
-            "y": 0,
-            "r": 360
-          },
-          "stageExit": {
-            "x": 0,
-            "y": -620,
-            "r": 150
-          },
-          "portal:city-outer": {
-            "x": 0,
-            "y": 620,
-            "r": 150
-          }
-        },
-        "boss": {
-          "kind": "bloom",
-          "index": 2,
-          "hp": 6000,
-          "easyHp": 4400,
-          "damage": 32,
-          "speed": 1.08,
-          "xp": 340
-        }
+      "exit": {
+        "x": 4000,
+        "y": -2580
       },
-      "coreReward": {
+      "boss": {
+        "kind": "bloom",
+        "index": 2,
+        "hp": 6000,
+        "easyHp": 4400,
+        "damage": 32,
+        "speed": 1.08,
+        "xp": 340
+      },
+      "reward": {
         "gold": 38,
         "crystals": 57
       }
     },
     {
       "id": "mountain-trial",
-      "themeId": "mountain",
       "name": "山地试炼",
       "shortName": "山地",
       "difficultyLabel": "挑战",
-      "summary": "穿越山口与碎岩，留意落石、积蓄实力再战首领。",
-      "outer": {
-        "name": "群峰外岛",
-        "seed": 5,
-        "boss": {
-          "kind": "bloom",
-          "index": 1,
-          "hp": 2800,
-          "easyHp": 2050,
-          "damage": 24,
-          "speed": 1,
-          "xp": 215
-        }
+      "summary": "穿越群峰山口，在朝日峰顶挑战荒野领主。",
+      "worldMapId": "mountain",
+      "arena": {
+        "areaId": "15",
+        "x": 5650,
+        "y": -4300
       },
-      "core": {
-        "name": "山地核心岛",
-        "seed": 1598,
-        "profile": {
-          "x": 1100,
-          "y": 1300,
-          "phase": 4.2,
-          "bays": 0.025
-        },
-        "layout": {
-          "stageBoss": {
-            "x": 0,
-            "y": 0,
-            "r": 360
-          },
-          "stageExit": {
-            "x": 0,
-            "y": -620,
-            "r": 150
-          },
-          "portal:mountain-outer": {
-            "x": 0,
-            "y": 620,
-            "r": 150
-          }
-        },
-        "boss": {
-          "kind": "ancient",
-          "index": 2,
-          "hp": 6200,
-          "easyHp": 4500,
-          "damage": 33,
-          "speed": 1.08,
-          "xp": 350
-        }
+      "exit": {
+        "x": 5650,
+        "y": -4530
       },
-      "coreReward": {
+      "boss": {
+        "kind": "ancient",
+        "index": 2,
+        "hp": 6200,
+        "easyHp": 4500,
+        "damage": 33,
+        "speed": 1.08,
+        "xp": 350
+      },
+      "reward": {
         "gold": 40,
         "crystals": 60
       }
     },
     {
       "id": "snow-trial",
-      "themeId": "snow",
       "name": "雪原试炼",
       "shortName": "雪原",
       "difficultyLabel": "进阶",
-      "summary": "穿过雪松、积雪与冰面，在霜雪中整备并挑战首领。",
-      "outer": {
-        "name": "霜雪外岛",
-        "seed": 6,
-        "boss": {
-          "kind": "bloom",
-          "index": 1,
-          "hp": 2600,
-          "easyHp": 1900,
-          "damage": 23,
-          "speed": 1,
-          "xp": 200
-        }
+      "summary": "穿过雪谷与冰原，在冰冠遗台挑战霜冠巨鹿。",
+      "worldMapId": "snow",
+      "arena": {
+        "areaId": "08",
+        "x": 5820,
+        "y": -1500
       },
-      "core": {
-        "name": "雪原核心岛",
-        "seed": 1735,
-        "profile": {
-          "x": 1220,
-          "y": 1160,
-          "phase": 5.35,
-          "bays": 0.03
-        },
-        "layout": {
-          "stageBoss": {
-            "x": 0,
-            "y": 0,
-            "r": 360
-          },
-          "stageExit": {
-            "x": 0,
-            "y": -620,
-            "r": 150
-          },
-          "portal:snow-outer": {
-            "x": 0,
-            "y": 620,
-            "r": 150
-          }
-        },
-        "boss": {
-          "kind": "frostcrown",
-          "index": 2,
-          "hp": 5800,
-          "easyHp": 4200,
-          "damage": 32,
-          "speed": 1.08,
-          "xp": 330
-        }
+      "exit": {
+        "x": 5820,
+        "y": -1730
       },
-      "coreReward": {
+      "boss": {
+        "kind": "frostcrown",
+        "index": 2,
+        "hp": 5800,
+        "easyHp": 4200,
+        "damage": 32,
+        "speed": 1.08,
+        "xp": 330
+      },
+      "reward": {
         "gold": 36,
         "crystals": 54
       }
     },
     {
       "id": "volcano-trial",
-      "themeId": "ember-realm-large",
       "name": "火山试炼",
       "shortName": "火山",
       "difficultyLabel": "高危",
-      "summary": "避开熔岩与喷口，备足实力再挑战更强的核心首领。",
-      "outer": {
-        "name": "熔火外岛",
-        "seed": 7,
-        "boss": {
-          "kind": "bloom",
-          "index": 1,
-          "hp": 3100,
-          "easyHp": 2250,
-          "damage": 26,
-          "speed": 1,
-          "xp": 230
-        }
+      "summary": "穿过黑曜峡谷与熔桥，在火山口挑战熔炉巨像。",
+      "worldMapId": "ember-realm-large",
+      "arena": {
+        "areaId": "10",
+        "x": 2444.5,
+        "y": -3729.5
       },
-      "core": {
-        "name": "火山核心岛",
-        "seed": 1872,
-        "profile": {
-          "x": 1180,
-          "y": 1120,
-          "phase": 3.95,
-          "bays": 0.02
-        },
-        "layout": {
-          "stageBoss": {
-            "x": 0,
-            "y": 0,
-            "r": 360
-          },
-          "stageExit": {
-            "x": 0,
-            "y": -620,
-            "r": 150
-          },
-          "portal:volcano-outer": {
-            "x": 0,
-            "y": 620,
-            "r": 150
-          }
-        },
-        "boss": {
-          "kind": "furnace",
-          "index": 2,
-          "hp": 6800,
-          "easyHp": 4900,
-          "damage": 36,
-          "speed": 1.1,
-          "xp": 380
-        }
+      "exit": {
+        "x": 2444.5,
+        "y": -3959.5
       },
-      "coreReward": {
+      "boss": {
+        "kind": "furnace",
+        "index": 2,
+        "hp": 6800,
+        "easyHp": 4900,
+        "damage": 36,
+        "speed": 1.1,
+        "xp": 380
+      },
+      "reward": {
         "gold": 46,
         "crystals": 69
       }
