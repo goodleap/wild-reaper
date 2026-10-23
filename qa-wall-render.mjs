@@ -34,6 +34,18 @@ for(let i=0;i<100;i++)art.plan(back,game.player,vision,time);
 assert.equal(vision.stats.exploredTiles,rememberedBefore,'Wall rendering cannot discover rooms.');
 assert.deepEqual(art.plan(wall('unseen',200,200,100),game.player,vision,time),[],'No discovered segments means no wall sprite.');
 
+// Curved cave outlines are made of short, arbitrarily angled capsules. Their
+// discovered sprite strips must cover the entire sloping face without overlap.
+for(const angle of [.32,1.2,2.7,-1.25]){
+  const prop=wall(`slope:${angle}`,60,80,90,angle),dx=Math.cos(angle),dy=Math.sin(angle),vertical=Math.abs(dy)>.5;
+  const parts=Array.from({length:8},(_,i)=>({id:`${prop.id}:${i}`,ax:60+dx*(-90+i*22.5),ay:80+dy*(-90+i*22.5),bx:60+dx*(-90+(i+1)*22.5),by:80+dy*(-90+(i+1)*22.5),r:14}));
+  const stub={dungeon:{active:{}},knownWallSegments:()=>parts,isVisible:()=>true};
+  const plan=art.plan(prop,{x:-200,y:-200},stub,0).sort((a,b)=>vertical?a.rect.y-b.rect.y:a.rect.x-b.rect.x);
+  for(let i=1;i<plan.length;i++)assert(vertical?plan[i-1].rect.y+plan[i-1].rect.height<=plan[i].rect.y+1e-6:plan[i-1].rect.x+plan[i-1].rect.width<=plan[i].rect.x+1e-6,'sloped strips remain disjoint');
+  const covered=(x,y)=>plan.some(({rect:r})=>x>=r.x&&x<=r.x+r.width&&y>=r.y&&y<=r.y+r.height);
+  for(const t of [-1,-.5,0,.5,1])assert(covered(60+dx*90*t,80+dy*90*t-35),'all raised points of a diagonal wall have a clipping strip');
+}
+
 // Horizontal and vertical strips include their raised tops and lower end cap
 // once. They must remain disjoint for short scaled castle walls and huts.
 for(const variant of ['castle-wall','hut-wall'])for(const angle of [0,Math.PI/2]){

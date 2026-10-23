@@ -80,11 +80,13 @@ function head(c,a,palette,frost){
 }
 
 function staff(c,a,palette,frost){
-  const handX=20.3+a.cast,handY=2-a.cast*4.3;
-  line(c,[[9,-2],[14,3-a.cast*2],[handX,handY]],palette.edge,5.4);
-  line(c,[[9,-2],[14,3-a.cast*2],[handX,handY]],palette.cloth,3.4);
-  // Grip, shaft and ornament share one transform throughout the action.
-  c.save();c.translate(handX,handY);
+  const swing=a.step*(1-a.cast),handX=16.5+a.cast*.3+swing*.25,handY=3.4-a.cast*4.8+swing*.35;
+  const elbow=[12.4+a.cast*1.2,4.8-a.cast*3],lean=.2+a.cast*.055+swing*.025;
+  line(c,[[9,-2],elbow,[handX,handY]],palette.edge,5.4);
+  line(c,[[9,-2],elbow,[handX,handY]],palette.cloth,3.4);
+  // The wrist is the pivot: the resting diagonal leans forward a little
+  // further during a cast, while the shortened shaft stays inside its frame.
+  c.save();c.translate(handX,handY);c.rotate(lean);c.save();c.scale(.92,.88);
   line(c,[[0,10],[0,-24]],palette.edge,3.4);line(c,[[.1,9],[.1,-24]],'#9f926c',1.8);
   if(frost){
     poly(c,[[-4,-25],[-1,-31],[3,-28],[4,-22],[0,-19]],'#cbded7',palette.edge,1.15);
@@ -94,10 +96,11 @@ function staff(c,a,palette,frost){
     c.beginPath();c.moveTo(-4.3,-25);c.quadraticCurveTo(-5,-30,-2.5,-29);c.quadraticCurveTo(-2.5,-23,.2,-23);c.quadraticCurveTo(3.7,-23,3.3,-29);c.quadraticCurveTo(6.2,-28,4.8,-24);c.quadraticCurveTo(4,-20,0,-19);c.quadraticCurveTo(-4,-20,-4.3,-25);c.closePath();fill(c,palette.light,palette.edge,1.2);
     oval(c,.3,-23.5,1.7,2.1,'#8ec0b6');
   }
-  oval(c,-.1,-.1,3.4,3.1,palette.edge);oval(c,.1,-.3,2.6,2.3,palette.skin);
   if(a.windup>.15){
     const r=1+a.windup*1.1;oval(c,frost?1:.4,frost?-25:-23,r,r,frost?'#f0f4df':'#d2e8ca');
   }
+  c.restore();
+  oval(c,-.1,-.1,3.4,3.1,palette.edge);oval(c,.1,-.3,2.6,2.3,palette.skin);
   c.restore();
 }
 

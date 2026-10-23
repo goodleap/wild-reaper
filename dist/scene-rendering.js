@@ -1,5 +1,6 @@
 import { ACTOR_VISUALS } from './actor-visuals.js';
 import { groundOffset } from './terrain.js';
+import { interiorPropFootprint } from './interior-prop-geometry.js';
 
 // Visibility lives on the ground; sprite height never changes discovery or
 // line of sight. Raised sprites are then occluded by the shared depth order.
@@ -43,6 +44,7 @@ export function sceneItemVisible(item,vision){
   // Walls own remembered-segment rendering, not live actor visibility. Their
   // existing fixed structure pieces keep foreground occlusion depth-sorted.
   if(prop.variant==='castle-wall'||prop.variant==='hut-wall')return true;
+  if(prop.isInteriorProp&&prop.collision===true)return terrainVisible(interiorPropFootprint(prop),vision);
   return item.kind==='terrain'?terrainVisible(prop,vision):vision.isVisible(prop.x,prop.y,prop.r||0);
 }
 

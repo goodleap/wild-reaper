@@ -3,6 +3,7 @@ import { validateWorldLayout } from './world-layout.js';
 import { validateRiftLayout } from './rift-layout.js';
 import { validateExpeditionScenes } from './expedition-scenes.js';
 import { validateMoonLandform } from './moon-landform.js';
+import { validateInteriorLayouts } from './interior-layouts.js';
 import { WATER_SHAPES } from '../water-geometry.js';
 
 const coreWorldIds=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large'];
@@ -198,9 +199,20 @@ export function validateWorlds(sections){
   for(const value of Object.values(object(interior.rewards,'interior rewards')))reward(value,'interior reward');
   for(const layout of Object.values(object(interior.hutLayouts,'hut layouts'))){
     object(layout,'hut layout');ref(layout.terrain,worldIds,'hut layout terrain');
-    for(const key of ['rocks','props','guardPoints'])for(const point of list(layout[key],'hut layout.'+key,0,128)){object(point,'hut point');number(point.x,'hut point.x',-1e5,1e5);number(point.y,'hut point.y',-1e5,1e5);if(key==='props'&&!['table','stool','bed','shelf','rug','cargo','barrel','minecart'].includes(point.type))fail('hut prop.type');}
+    for(const key of ['rocks','props','guardPoints'])for(const point of list(layout[key],'hut layout.'+key,0,128)){
+      object(point,'hut point');number(point.x,'hut point.x',-1e5,1e5);number(point.y,'hut point.y',-1e5,1e5);
+      if(key==='props'){
+        if(!['table','stool','bed','shelf','rug','cargo','barrel','minecart'].includes(point.type))fail('hut prop.type');
+        if(point.footprint!=null){
+          object(point.footprint,'hut prop.footprint');
+          for(const key of ['width','depth'])number(point.footprint[key],'hut prop.footprint.'+key,1,512);
+          number(point.footprint.offsetY,'hut prop.footprint.offsetY',-256,256);
+        }
+      }
+    }
   }
   ref(interior.castleProfile?.terrain,worldIds,'castle profile terrain');
+  validateInteriorLayouts(interior.authoredLayouts,'interiors.authoredLayouts',{worldIds,enemyIds});
   numericRecord(geo.coastRules,'coastRules');for(const key of ['shallowWidth','beachWidth','waterSetback'])number(geo.coastRules[key],'coastRules.'+key);
   for(const p of Object.values(object(geo.placementPolicies,'placementPolicies'))){object(p,'placementPolicy');if(!['inland','dry','coastal'].includes(p.surface)||!['allow','avoid'].includes(p.water))fail('placement policy');number(p.coastSetback,'placement coastSetback');number(p.waterGap,'placement waterGap');}
   requiredNumbers(geo.portalRules,['engageRadius','leashRadius','interactRadius'],'portalRules');requiredNumbers(geo.portalGuardian,['timeProgressCap','timeProgressPeriod','hpGrowth','damageGrowth','xpGrowth','endlessConnections'],'portalGuardian');positive(geo.portalGuardian.timeProgressPeriod,'portalGuardian.timeProgressPeriod');integer(geo.portalGuardian.endlessConnections,'portalGuardian.endlessConnections',1,512);

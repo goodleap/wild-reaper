@@ -42,9 +42,11 @@ const rock={id:'rock',type:'rock',x:0,y:-35,r:24};
 const scenery=scene([north,rock]);
 assert.equal(scenery.vision.isVisible(rock.x,rock.y),false);
 assert.equal(sceneItemVisible({kind:'terrain',prop:rock},scenery.vision),true);
+assert.equal(sceneItemVisible({kind:'adventure',prop:{...rock,type:'castlePillar',isInteriorProp:true,collision:true}},scenery.vision),true,'solid interior furniture admits its visible face, not its occluded centre');
 const concealed={...rock,id:'hidden-rock',y:-200};
 const hiddenScenery=scene([north,concealed]);
 assert.equal(sceneItemVisible({kind:'terrain',prop:concealed},hiddenScenery.vision),false);
+assert.equal(sceneItemVisible({kind:'adventure',prop:{...concealed,type:'castlePillar',isInteriorProp:true,collision:true}},hiddenScenery.vision),false,'furniture behind a closed wall remains hidden');
 
 // Exercise the application's actual draw pass. Sprite height is deliberately
 // outside the floor polygon: adding new actor types requires no clip exception.

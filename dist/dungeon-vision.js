@@ -67,15 +67,21 @@ export class DungeonVision {
   }
   _record(state){
     let record=this._states.get(state);
-    if(!record||record.terrain!==state.terrain){
+    if(!record||record.terrain!==state.terrain||record.revision!==state.terrain.structureRevision){
+      // Opening a gate changes occlusion immediately, without forgetting the
+      // explored floor or the remaining walls of this same scene terrain.
+      const previous=record?.terrain===state.terrain?record:null,knownIds=new Set(previous?.pieces.filter(piece=>piece.seen).map(piece=>piece.id));
       const b=state.bounds,cols=Math.ceil((b.maxX-b.minX)/TILE),rows=Math.ceil((b.maxY-b.minY)/TILE);
       const walls=state.terrain.query(b.minX,b.minY,b.maxX,b.maxY).filter(o=>blocksObstacle(o,'sight')).map(capsule);
-      record={terrain:state.terrain,cols,rows,seen:new Uint8Array(cols*rows),walls,junctions:wallJunctions(walls),pieces:[],known:[],knownByWall:new Map(),rects:[],dirty:false,discoverKey:null,count:0};
+      const retain=previous&&previous.cols===cols&&previous.rows===rows;
+      record={terrain:state.terrain,revision:state.terrain.structureRevision,cols,rows,seen:retain?previous.seen:new Uint8Array(cols*rows),walls,junctions:wallJunctions(walls),pieces:[],known:[],knownByWall:new Map(),rects:retain?previous.rects:[],dirty:!!retain,discoverKey:null,count:retain?previous.count:0};
       for(const wall of walls){
         const count=Math.max(1,Math.ceil(wall.length*2/TILE));
         for(let i=0;i<count;i++){
           const a=i/count,z=(i+1)/count;
-          record.pieces.push({wallId:wall.obstacle.id,id:`${wall.obstacle.id}:${i}`,ax:wall.ax+(wall.bx-wall.ax)*a,ay:wall.ay+(wall.by-wall.ay)*a,bx:wall.ax+(wall.bx-wall.ax)*z,by:wall.ay+(wall.by-wall.ay)*z,r:wall.r,seen:false});
+          const piece={wallId:wall.obstacle.id,id:`${wall.obstacle.id}:${i}`,ax:wall.ax+(wall.bx-wall.ax)*a,ay:wall.ay+(wall.by-wall.ay)*a,bx:wall.ax+(wall.bx-wall.ax)*z,by:wall.ay+(wall.by-wall.ay)*z,r:wall.r,seen:false};
+          piece.seen=knownIds.has(piece.id);record.pieces.push(piece);
+          if(piece.seen){record.known.push(piece);if(!record.knownByWall.has(piece.wallId))record.knownByWall.set(piece.wallId,[]);record.knownByWall.get(piece.wallId).push(piece);}
         }
       }
       this._states.set(state,record);
@@ -87,8 +93,8 @@ export class DungeonVision {
     if(!state){this._state=null;this._key='';this.polygon=[];this.view=null;this._visibleQueries.clear();return false;}
     const p=g.player,origin=this.dungeon._playerFoot(),w=Math.max(1,g.viewWidth||800),h=Math.max(1,g.viewHeight||600);
     const key=`${origin.x},${origin.y},${p.x},${p.y},${w},${h}`;
-    if(this._state===state&&this._terrain===state.terrain&&this._key===key)return true;
-    this._state=state;this._terrain=state.terrain;this._key=key;this._origin=origin;this._visibleQueries.clear();
+    if(this._state===state&&this._terrain===state.terrain&&this._revision===state.terrain.structureRevision&&this._key===key)return true;
+    this._state=state;this._terrain=state.terrain;this._revision=state.terrain.structureRevision;this._key=key;this._origin=origin;this._visibleQueries.clear();
     this.view={minX:p.x-w*.5,minY:p.y-h*.5,maxX:p.x+w*.5,maxY:p.y+h*.5};
     const bounds=state.bounds,view=this.view,b={minX:Math.max(bounds.minX,view.minX),minY:Math.max(bounds.minY,view.minY),maxX:Math.min(bounds.maxX,view.maxX),maxY:Math.min(bounds.maxY,view.maxY)};
     if(!within(origin.x,origin.y,b)){this.polygon=[];return true;}

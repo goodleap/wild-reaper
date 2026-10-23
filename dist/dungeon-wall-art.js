@@ -16,15 +16,15 @@ function pixelRect(rect,transform){
 
 function wallGeometry(prop){
   const vertical=Math.abs(Math.sin(prop.angle||0))>.5,half=prop.halfLength||0,r=prop.r||14,hut=prop.variant==='hut-wall';
-  return {vertical,half,r,hut,projection:hut?25:35,pad:r+5};
+  return {vertical,half,r,hut,dx:Math.abs(Math.cos(prop.angle||0))*half,dy:Math.abs(Math.sin(prop.angle||0))*half,projection:hut?25:35,pad:r+5};
 }
 // Spatial fading has no binary threshold when the player crosses a wall's
 // raised face. Full-depth sorting still decides which actor is in front.
 export function wallOcclusionOpacity(prop,player){
   if(!player)return 1;
   const g=wallGeometry(prop),footY=player.y+19.8;
-  const minX=prop.x-(g.vertical?g.r:g.half+g.r),maxX=prop.x+(g.vertical?g.r:g.half+g.r);
-  const minY=prop.y-(g.vertical?g.half:g.r)-g.projection,maxY=prop.y+(g.vertical?g.half:g.r);
+  const minX=prop.x-g.dx-g.r,maxX=prop.x+g.dx+g.r;
+  const minY=prop.y-g.dy-g.r-g.projection,maxY=prop.y+g.dy+g.r;
   const xCoverage=smooth((player.x-(minX-16))/22)*smooth(((maxX+16)-player.x)/22);
   const yCoverage=smooth((footY-(minY-15))/22)*smooth(((maxY+17)-footY)/22);
   return 1-.58*xCoverage*yCoverage;
@@ -42,7 +42,7 @@ export class DungeonWallArt {
     let wall=cache.get(prop.id);
     if(!wall){wall=new Map();cache.set(prop.id,wall);}
     const g=wallGeometry(prop),opacity=wallOcclusionOpacity(prop,player),parts=[];
-    const start=(g.vertical?prop.y:prop.x)-g.half,end=start+g.half*2;
+    const extent=g.vertical?g.dy:g.dx,start=(g.vertical?prop.y:prop.x)-extent,end=start+extent*2;
     const now=Number.isFinite(time)?time:0;
     for(const piece of known){
       const x=(piece.ax+piece.bx)*.5,y=(piece.ay+piece.by)*.5;
@@ -59,11 +59,11 @@ export class DungeonWallArt {
       const first=Math.abs(a-start)<.01,last=Math.abs(b-end)<.01;
       let rect;
       if(g.vertical){
-        const top=a-g.projection-(first?5:0),bottom=last?b+(g.hut?5:g.r+2):b-g.projection;
-        rect={x:prop.x-g.pad,y:top,width:g.pad*2,height:Math.max(0,bottom-top)};
+        const top=a-g.projection-(first?g.pad:0),bottom=last?b+(g.hut?5:g.r+2):b-g.projection;
+        rect={x:prop.x-g.dx-g.pad,y:top,width:(g.dx+g.pad)*2,height:Math.max(0,bottom-top)};
       }else{
         const left=a-(first?g.pad:0),right=b+(last?g.pad:0);
-        rect={x:left,y:prop.y-80,width:right-left,height:100};
+        rect={x:left,y:prop.y-g.dy-80,width:right-left,height:g.dy*2+100};
       }
       parts.push({id:piece.id,rect,alpha:state.alpha*opacity});
     }

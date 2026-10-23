@@ -3,6 +3,7 @@ import { Terrain, groundOffset } from './terrain.js';
 import { HUT_RULES, hutProfileFor, interiorRewardFor } from './interior-profiles.js';
 export { HUT_RULES } from './interior-profiles.js';
 import { featureForSite } from './world-sites.js';
+import { interiorPropFootprint } from './interior-prop-geometry.js';
 
 
 // Huts share the finite scene lifecycle, but retain a deliberately small,
@@ -16,9 +17,15 @@ export function createHutState(game,site,seed){
   add(-offset,halfHeight,length,0);add(offset,halfHeight,length,0);
   const rocks=profile.rocks.map((rock,i)=>({id:`${site.id}:ore:${i}`,type:'rock',variant:'moss-rock',...rock,seed:seed+i}));
   const props=profile.props.map(prop=>({...prop}));
+  // Furniture uses its painted floor footprint, not its taller sprite bounds.
+  // Rounded capsules allow sliding past bed/table corners without snagging.
+  const furniture=props.flatMap((prop,i)=>{
+    const footprint=prop.footprint;if(!footprint)return [];
+    return [{...interiorPropFootprint(prop),id:`${site.id}:furniture:${i}`,heightBand:'low',visual:false}];
+  });
   return {id:site.id,kind:'hut',featureId:feature?.id,name:site.name||'林间小屋',treasureName:feature?.treasureName||'屋内补给',site,seed,cols:1,rows:1,cellSize:size,originX:-half,originY:-halfHeight,
     cells:[cell],visited:new Set([0]),entranceId:0,entrance:{x:0,y:halfHeight-45},landing:{x:0,y:halfHeight-130},bounds:{minX:-half,minY:-halfHeight,maxX:half,maxY:halfHeight},
-    walls,terrain:new Terrain({obstacles:[...walls,...rocks],region:profile.terrain,seed}),props,
+    walls,terrain:new Terrain({obstacles:[...walls,...rocks,...furniture],region:profile.terrain,seed}),props,
     chests:[{id:`${site.id}:supplies`,cellId:0,x:20,y:profile.chestY,r:21,state:'closed',hut:true}],treasure:null,
     bossRoom:null,bossDefeated:false,rewardClaimed:false,rewardPending:false,enemies:[],gems:[],coins:[],adventure:null,
     rooms:new Map(occupied?[[0,{cellId:0,kind:'battle',total:feature?.guardTypes?.length||HUT_RULES.guards,started:false,cleared:false,rewarded:false,heal:false}]]:[]),

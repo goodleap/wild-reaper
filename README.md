@@ -19,6 +19,8 @@ npm test
 
 世界探索准备页可选择「裂谷林海」「苍翠断脊」「迷雾沼泽」「失落遗迹」「潮汐海岸」「群峰山地」「霜雪荒原」「钟影旧都」或「熔火之境」，选择会随冒险准备记录保存。地图以稳定世界 ID 区分布局、洞穴、捷径、宝箱和清理状态；原八个世界的数字身份与跨世界连接保持不变。
 
+裂谷林海的暗河洞穴及林间旧堡使用 `python scripts/build-interior-samples.py --write` 重建（离线依赖 Shapely 2.x），只更新 `config/geography.json` 的 `interiors.authoredLayouts`。构建配置后运行 `node qa-config-interiors.mjs`、`node qa-authored-interiors.mjs` 及相关室内／任务检查；小屋家具配置仍位于 `interiors.hutLayouts`。
+
 熔火之境的固定地形与景物数据可用 `scripts/build-ember-map.py` 重建（离线 Python 环境需要 Shapely 2.x），随后执行 `npm run build:config` 和 `npm run test:ember`。生成器仅更新该世界的配置；几何处理依赖不进入游戏运行包。
 
 迷雾沼泽使用 `python scripts/build-marsh-map.py --write` 重建；可用 `--preview-dir /tmp/marsh-preview` 输出同源几何预览。离线依赖为 Shapely 2.x，随后执行 `npm run build:config`、`node qa-marsh-map.mjs` 和相关地图集成检查。生成器只更新 `marsh`，运行时复用现有地形、浅水和探索系统。

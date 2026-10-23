@@ -22,6 +22,7 @@ import { CompanionArt, COMPANION_VISUALS } from './companion-art.js';
 import { companionDefinition, COMPANION_RULES } from './companion-catalog.js';
 import { armyPanelHTML } from './army-panel.js';
 import { HutArt } from './hut-art.js';
+import { AuthoredInteriorArt } from './authored-interior-art.js';
 import { RegionalArt } from './regional-art.js';
 import { WorldArt } from './world-art.js';
 import { CityStructureArt } from './city-structure-art.js';
@@ -120,6 +121,7 @@ const worldHazardArt=new WorldHazardArt(()=>document.createElement('canvas'));
 const waterArt=new WaterArt(()=>document.createElement('canvas'));
 const islandArt=new IslandArt();
 const hutArt=new HutArt(()=>document.createElement('canvas'));
+const authoredInteriorArt=new AuthoredInteriorArt(()=>document.createElement('canvas'));
 const superArt=new SuperArt(()=>document.createElement('canvas'));
 const propArt=new PropArt(()=>document.createElement('canvas'));
 const encounterArt=new EncounterArt(()=>document.createElement('canvas'));
@@ -1580,7 +1582,11 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
     if(site.type!=='merchant'&&Math.abs(site.x-camX)<viewWidth/2+200&&Math.abs(site.y-camY)<viewHeight/2+(visual?350:230))props.push({...site,isSettlement:true,...(visual?{visual,sortY:visual.sortY}:{})});
   }
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest)&&sceneVisible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
-  if(game.dungeon?.active?.kind==='hut')for(const prop of game.dungeon.active.props||[])if(visible(prop))props.push({...prop,isHutFurniture:true,sortY:prop.y+(prop.type==='rug'?-1000:0)});
+  if(game.dungeon?.active){
+    const dungeon=game.dungeon.active;
+    for(const prop of dungeon.props||[])if(visible(prop))props.push({...prop,isInteriorProp:!!dungeon.authoredLayout,isHutFurniture:['table','stool','bed','shelf','rug','cargo','barrel','minecart'].includes(prop.type),sortY:prop.y+(prop.type==='rug'?-1000:0)});
+    for(const mechanism of dungeon.mechanisms||[])if(visible(mechanism))props.push({...mechanism,type:'interiorWinch',isInteriorProp:true,sortY:mechanism.y});
+  }
   if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[]){const special=site.type==='stonevault'||site.type==='dogcamp'||site.appearance==='golemaltar';props.push(...(special?companionArt.props(site):site.type==='hunt'?encounterArt.props(site):relicArt.props(site)).filter(visible));}
   for(const encounter of activeEncounters())if(encounter.type==='hunt'&&!encounter.siteId)props.push(...encounterArt.props(encounter).filter(visible));
   return props;
@@ -1589,7 +1595,7 @@ function drawAdventureShadowPaths(mask,props){
   for(const prop of props){if(drawQuestShadowPath(mask,prop,SUN)||prop.isHutFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'||prop.type==='companionSitePart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
     mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();}
 }
-function drawAdventureProp(prop){if(drawQuestProp(ctx,prop))return;if(prop.isRiftLandmark&&(drawEmberLandmark(ctx,prop,{player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawNativeCityLandmark(ctx,prop,{library:cityArtLibrary,artStyle:game.terrain.island?.layout?.artStyle,player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawRiftLandmark(ctx,prop)))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
+function drawAdventureProp(prop){if(prop.isInteriorProp&&authoredInteriorArt.drawProp(ctx,prop))return;if(drawQuestProp(ctx,prop))return;if(prop.isRiftLandmark&&(drawEmberLandmark(ctx,prop,{player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawNativeCityLandmark(ctx,prop,{library:cityArtLibrary,artStyle:game.terrain.island?.layout?.artStyle,player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawRiftLandmark(ctx,prop)))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
   if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'){relicArt.drawProp(ctx,prop,combatOptions);return;}
   if(prop.type==='huntMarker'){encounterArt.drawMarker(ctx,prop,combatOptions);return;}
   if(prop.isSettlement){drawSettlement(prop);return;}if(prop.isDungeonTreasure){drawDungeonChest(prop);return;}
@@ -1947,10 +1953,11 @@ function drawSettlement(site){
   if(site.state==='spent'||site.state==='claimed'||site.explored){ctx.font='9px system-ui';ctx.fillStyle='#99ad91';fillSceneLabel('已探索',0,33);}else if(site.type==='occupied'&&site.state==='active'){ctx.font='9px system-ui';ctx.fillStyle='#edc29c';fillSceneLabel('屋内尚有守卫',0,35);}
   ctx.restore();
 }
-function drawDungeonBackground(camX,camY){const {width,height}=sceneViewport();const dungeon=game.dungeon.active;if(dungeon.kind==='cave')drawRiftCaveGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='hut')hutArt.drawGround(ctx,dungeon,camX,camY,width,height);else regionalArt.drawDungeonGround(ctx,dungeon,camX,camY,width,height);}
+function drawDungeonBackground(camX,camY){const {width,height}=sceneViewport();const dungeon=game.dungeon.active;if(dungeon.authoredLayout)authoredInteriorArt.drawGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='cave')drawRiftCaveGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='hut')hutArt.drawGround(ctx,dungeon,camX,camY,width,height);else regionalArt.drawDungeonGround(ctx,dungeon,camX,camY,width,height);}
 function drawDungeonWall(prop,mainPlayer){
   dungeonWallArt.draw(ctx,prop,mainPlayer,game.dungeon.vision,game._clock,(target,wall)=>{
-    if(game.dungeon?.active?.kind==='cave')drawRiftCaveWall(target,game.dungeon.active.artTheme?{...wall,artTheme:game.dungeon.active.artTheme}:wall);
+    if(wall.authoredStyle)authoredInteriorArt.drawWall(target,wall);
+    else if(game.dungeon?.active?.kind==='cave')drawRiftCaveWall(target,game.dungeon.active.artTheme?{...wall,artTheme:game.dungeon.active.artTheme}:wall);
     else if(wall.variant==='hut-wall')hutArt.drawWall(target,wall,false);
     else regionalArt.drawDungeonWall(target,wall,false);
   });
@@ -2016,7 +2023,7 @@ function renderGame(){combatOptions.time=game._clock;combatOptions.pixelRatio=dp
     // Only static scenery is drawn underneath remembered fog. Enemies, loot,
     // shadows, telegraphs and effects are drawn afterwards under the live clip.
     ctx.save();ctx.translate(offsetX,offsetY);
-    if(game.dungeon.active.kind==='hut')for(const prop of game.dungeon.active.props||[])hutArt.drawProp(ctx,prop);
+    for(const prop of adventureProps)if(prop.isHutFurniture||prop.isInteriorProp)drawAdventureProp(prop);
     ctx.restore();vision.drawFog(ctx,offsetX,offsetY,viewWidth,viewHeight);
   }
   ctx.save();if(vision)vision.clipVisible(ctx,offsetX,offsetY);
