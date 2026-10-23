@@ -2,7 +2,9 @@ import {paint as boglurker} from './boglurker.js';
 import {paint as stoneape} from './stoneape.js';
 import {paint as windhunter} from './windhunter.js';
 import {paint as flamelizard} from './flamelizard.js';
-import { TAU, clamp, poly, line, oval, grad, leaf, star } from './drawing.js';
+import { TAU, clamp, poly, line, oval, grad, leaf } from './drawing.js';
+import { paintShieldguard, shieldOverlay } from './shieldguard.js';
+import { paintFrostmage, paintTidepriest } from './robed-casters.js';
 import { BOSS_SPECIALIST_ART } from './specialist-bosses.js';
 
 // Body poses are cached by MonsterArt. Only the directional shield is live:
@@ -61,63 +63,6 @@ function prismguard(c,p,flip=1,pose={}){
   if(charge){oval(c,0,-5,2+charge*3,2+charge*3,'#f7ffef');for(const side of [-1,1])line(c,[[side*13,-5],[side*7,-5]],'#b7f6ed',1.3);}
   poly(c,[[-10,-22],[0,-34],[11,-22],[8,-14],[-7,-14]],'#8da9b7','#39556c',1);poly(c,[[0,-32],[8,-22],[1,-18]],'#c7dce0');line(c,[[-5,-22],[5,-22]],'#ecfff4',2);c.restore();
 }
-function robe(c,a,colors,frost=false){
-  for(const side of [-1,1])foot(c,side*6,18,a.step*side*2,colors[0]);
-  const hem=a.step*1.6;
-  poly(c,[[-10,-8],[9,-8],[15+hem,16],[1+hem*.5,19],[-15+hem,15]],grad(c,-15,19,13,-10,colors),'#345865',1.2);
-  if(frost)poly(c,[[-10,-6],[0,3],[10,-6],[5+hem*.5,10],[hem*.5,15],[-5+hem*.5,10]],'#b8d6df','#648ca6',.8);
-  else for(let i=0;i<3;i++){line(c,[[-10+i,-1+i*5],[-4,2+i*5],[4,1+i*5],[10+i,3+i*4]],i===1?'#e1d7ad':'#a0cac8',1);}
-  line(c,[[-6,-6],[-4+hem*.3,11]],'#ffffff35',1);line(c,[[4,-4],[7+hem*.4,12]],'#34586566',1);
-}
-function tidepriest(c,p,flip=1,pose={}){
-  const a=state(p,pose),lift=a.prepare*5+a.release*5+a.settle*5,push=a.release*3+a.settle*3;
-  c.save();c.scale(flip,1);robe(c,a,['#3a687b','#629aab','#b5d6cc']);
-  oval(c,0,-15,10,11,'#a8c1b1');
-  poly(c,[[-13,-16],[-10,-29],[0,-23],[9,-31],[13,-17],[5,-21],[-4,-20]],'#5f8e9c','#3c616b',1);
-  for(const side of [-1,1])for(let i=0;i<3;i++)line(c,[[side*(3+i*2),-21],[side*(6+i*2),-27+i]],'#c1d8ca',.7);
-  eyes(c,0,-14,4);
-  const handX=19+push,handY=-2-lift,topY=-28-lift*.6;
-  line(c,[[10,0],[14,-4-lift*.5],[handX,handY]],'#8fb4ae',4);
-  line(c,[[handX,12-lift],[handX,topY]],'#52767b',3);line(c,[[handX-1,10-lift],[handX-1,topY]],'#b8d5c8',.8);
-  poly(c,[[handX-5,topY+2],[handX-3,topY-5],[handX,topY-1],[handX+3,topY-5],[handX+5,topY+2],[handX,topY+6]],'#b7e1dc','#528f99',1);
-  if(a.prepare){const r=2+a.prepare*2.4;oval(c,handX,topY,r,r,'#a8e9e1');oval(c,handX-1,topY-1,r*.35,r*.25,'#f1fff1');}
-  if(a.settle)for(let i=0;i<2;i++)oval(c,handX-4+i*7,topY+9+i*5,1.1,1.8,'#9cdddb');c.restore();
-}
-function shieldguard(c,p,flip=1,pose={}){
-  const a=state(p,pose),brace=a.prepare+a.release,lower=a.settle;
-  c.save();c.scale(flip,1);c.translate(brace*.7-a.hit,brace*1.3);
-  for(const side of [-1,1])foot(c,side*8,21,a.step*side*(brace?1:2),'#6c6f6c');
-  poly(c,[[-13,-10],[12,-10],[16,11],[8,16],[-13,12]],grad(c,-14,15,14,-13,['#515f68','#899392','#c3c3af']),'#374852',1.2);
-  for(const y of [-4,3,10])line(c,[[-10,y],[0,y+3],[11,y]],'#b9bfac',1);
-  oval(c,0,-17,10,10,'#aab3af');poly(c,[[-12,-19],[-10,-29],[0,-33],[11,-28],[12,-17],[4,-16],[3,-24],[-4,-24],[-4,-16]],'#879da3','#3f535d',1.1);line(c,[[-4,-19],[4,-19]],'#2b3b40',2);
-  line(c,[[-10,-6],[-17,2+lower*4]],'#9ba69a',5);line(c,[[10,-6],[16,brace?-5:3]],'#87968e',5);
-  line(c,[[-21,-9],[-20,12]],'#849799',3);poly(c,[[-21,-17],[-17,-9],[-20,2],[-24,-9]],'#cfdbd8','#4e646b',.8);c.restore();
-}
-function shieldOverlay(c,e,{reduced=false}={}){
-  const s=e.specialist,phase=s?.phase||'idle',progress=clamp(1-(s?.timer||0)/(s?.maxTime||1),0,1),active=phase==='active';
-  const ready=active?1:phase==='windup'?smooth(progress):phase==='recovery'?1-smooth(progress):0;
-  const angle=Number.isFinite(s?.angle)&&phase!=='idle'?s.angle:Number.isFinite(e.visualFacing)?e.visualFacing:0;
-  const ux=Math.cos(angle),uy=Math.sin(angle),acrossX=-(uy<0?-1:1)*(.48+Math.abs(uy)*.52),acrossY=ux*.22,x=ux*(15+ready*3),y=4+uy*8+(1-ready)*5;
-  const point=(side,height)=>[x+acrossX*side,y+acrossY*side+height];
-  c.save();
-  poly(c,[point(-12,-15),point(0,-18),point(12,-15),point(11,6),point(0,14),point(-11,6)],grad(c,x-12,y+14,x+10,y-18,['#425b69','#798d96','#afc1bf']),active?'#efd69a':'#2f4757',active?1.8:1.2);
-  poly(c,[point(-8,-11),point(0,-13),point(8,-11),point(7,3),point(0,9),point(-7,3)],'#637e8c','#c2c9a9',.9);
-  jewel(c,x,y-2,4,'#d8bc83');
-  if(active){
-    c.strokeStyle=e.hit>0?'#fff6cd':'#dec78e';c.lineWidth=e.hit>0?2.8:1.5;c.globalAlpha=reduced?.65:.85;
-    c.beginPath();c.ellipse(0,20,24,10,0,angle-.7,angle+.7);c.stroke();
-    if(e.hit>0){star(c,x+ux*3,y-3,5,'#fff0c3');}
-  }c.restore();
-}
-function frostmage(c,p,flip=1,pose={}){
-  const a=state(p,pose),lift=a.prepare*6+a.release*6+a.settle*6,push=a.release*2+a.settle*2;
-  c.save();c.scale(flip,1);robe(c,a,['#4d698f','#799ebc','#c0d9dd'],true);
-  oval(c,0,-15,9,10,'#bed6d2');poly(c,[[-15,-19],[-7,-28],[-2,-37],[7,-32],[10,-20],[16,-17],[0,-16]],'#739db9','#3f638b',1.2);poly(c,[[-7,-27],[-2,-36],[0,-24]],'#d1e5e5');eyes(c,0,-14,4);
-  const handX=19+push,topY=-29-lift*.45;
-  line(c,[[11,-1],[15,-4-lift*.5],[handX,-6-lift]],'#9abcc9',4);line(c,[[handX,13-lift],[handX,topY]],'#7395a9',3);line(c,[[handX-1,12-lift],[handX-1,topY]],'#d1e7e1',.8);jewel(c,handX,topY,6,'#d2f7f5');
-  if(a.prepare)for(let i=0;i<3;i++){const angle=(i-1)*.65-Math.PI/2,x=handX+Math.cos(angle)*7,y=topY+Math.sin(angle)*5;jewel(c,x,y,1.5+a.prepare,'#e5fff8');}
-  c.restore();
-}
 function spiderling(c,p,flip=1,pose={}){
   const a=state(p,pose),bodyLift=a.moving?-Math.abs(Math.sin(a.cycle*2))*.8:0;
   c.save();c.scale(flip,1);
@@ -137,11 +82,11 @@ export const SPECIALIST_ART=Object.freeze({
   rootbinder:art(rootbinder),
   boglurker:art(boglurker),
   prismguard:art(prismguard),
-  tidepriest:art(tidepriest),
-  shieldguard:art(shieldguard,{overlay:shieldOverlay}),
+  tidepriest:art(paintTidepriest),
+  shieldguard:art(paintShieldguard,{overlay:shieldOverlay}),
   stoneape:art(stoneape),
   windhunter:art(windhunter,{frequency:13}),
-  frostmage:art(frostmage),
+  frostmage:art(paintFrostmage),
   flamelizard:art(flamelizard),
   spiderling:art(spiderling,{frequency:14}),
   ...BOSS_SPECIALIST_ART
