@@ -1,4 +1,5 @@
 import {FRAME_SAMPLE_CAPACITY} from './frame-diagnostics.js';
+import {normalizeFrameRate} from './render-performance.js';
 
 // Instantiated by debug mode only. Frame sampling has fixed memory usage and
 // never writes storage; only completed/exceptional summaries reach the log.
@@ -55,7 +56,7 @@ export class ActivityPerformance {
 
   _begin(now) {
     const context = copyContext(this.context);
-    this._frameBudget = 1000 / (context.targetFps === 30 ? 30 : 60);
+    this._frameBudget = 1000 / normalizeFrameRate(context.targetFps);
     this._id = this.log.begin('play', '持续游玩', context);
     // This module never sets the current activity; the app arbitrates between
     // play, loading, and manual comparison activities.

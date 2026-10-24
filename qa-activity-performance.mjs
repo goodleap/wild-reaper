@@ -214,4 +214,12 @@ saving.frame(0);let savingReport;for(let i=1;i<=900;i++)savingReport=saving.fram
 assert(Math.abs(savingReport.fps-30)<.01);
 assert.equal(saving.log.records[0].events.length,0,'intentional 30 FPS does not generate sustained-slowness warnings');
 
+const highFrame=fixture({context:()=>({targetFps:120,frameSampling:'rendered'})});
+highFrame.frame(0,{...active,totalMs:4});
+highFrame.advance(5000,1000/120,{...active,totalMs:4});
+assert.equal(highFrame.log.records[0].events.length,0,'normal 120 FPS cadence fits the selected budget');
+highFrame.advance(10020,1000/120,{...active,totalMs:12});
+assert.equal(highFrame.log.records[0].events[0].data.classification,'cpu-only','12 ms CPU exceeds the 120 FPS frame budget');
+assert(Math.abs(highFrame.log.records[0].events[0].data.targetFps-120)<1e-8);
+
 console.log('Activity performance: bounded continuous sampling, 30-second summaries, one-second counts, pause/background isolation, merged throttled warnings, selected FPS budget, and timing hierarchy passed.');

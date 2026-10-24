@@ -3,6 +3,7 @@ import { createBootProgress } from './boot-progress.js';
 import { isDebugEnabled } from './debug-search.js';
 import { activityLog } from './activity-log.js';
 import { createActivityLogView } from './activity-log-view.js';
+import { createBootModules } from './boot-modules.js';
 
 const debug=isDebugEnabled(window.location.search);
 activityLog.setContext({version:document.getElementById('game-version')?.textContent?.trim(),
@@ -32,6 +33,9 @@ loading.start('boot',{stage:'正在加载冒险内容',detail:'加载配置模�
 arena.setAttribute('aria-busy','true');
 const readData=id=>{try{return JSON.parse(document.getElementById(id)?.textContent||'{}');}catch{return {};}};
 const manifest=readData('boot-resources'),imports=readData('release-imports').imports||{};
+const modules=createBootModules({manifest,imports,baseURL:document.baseURI,
+  version:document.getElementById('game-version')?.textContent?.trim()});
+if(modules.previous)activityLog.update(bootId,{details:{moduleRecovery:{attempt:1,previousBootId:modules.previous.bootId}}});
 const progress=createBootProgress({view:loading,manifest,imports,baseURL:document.baseURI});
 const configPath='./content-pack.json';
 const now=()=>performance.now();
@@ -56,7 +60,7 @@ activityLog.stage(bootId,currentStage);
 try{
   // Keep the initial HTML visible while the content loader and its fallback
   // bundle arrive. The app graph cannot initialize against half-loaded data.
-  const {loadContentConfig,getConfigLoadStatus,getConfigSnapshot}=await import('./content-config.js');
+  const {loadContentConfig,getConfigLoadStatus,getConfigSnapshot}=await modules.load('config',()=>import('./content-config.js'));
   progress.modulesReady('config');
   setStage('正在读取内容配置','下载游戏配置');
   await waitForPaint();
@@ -79,7 +83,7 @@ try{
     (configStatus.source==='server-cache'?'已启用缓存配置':'已启用内置配置'):'加载图片模块');
   await waitForPaint();
   setStage('正在准备画面与操作','加载图片模块');
-  const {frostcrownAssets,FROSTCROWN_ASSET}=await import('./enemy-art/frostcrown-assets.js');
+  const {frostcrownAssets,FROSTCROWN_ASSET}=await modules.load('art',()=>import('./enemy-art/frostcrown-assets.js'));
   progress.modulesReady('art');
   const imagePath='./'+FROSTCROWN_ASSET.path.replace(/^\.\.\//,'');
   setStage('正在准备画面与操作','下载角色图片');
@@ -104,7 +108,7 @@ try{
   progress.resolvedDownload(imagePath);progress.completeTask('image');
   setStage('正在准备画面与操作','加载游戏模块');
   await waitForPaint();
-  await import('./app.js');
+  await modules.load('app',()=>import('./app.js'));
   progress.modulesReady('app');progress.completeTask('app');
   setStage('正在准备画面与操作','绘制首页首帧');
   await waitForPaint();
@@ -113,13 +117,24 @@ try{
   arena.setAttribute('aria-busy','false');
   progress.finish();
   loading.finish();
+  modules.clear();
   activityLog.end(bootId,{summary:'首页已就绪',details:{resources:resourceDetails()}});
 }catch(error){
   progress.stop();
   for(const resource of Object.values(resources))if(!resource.downloadComplete)resource.downloadMs=now()-resource.startedAt;
   activityLog.captureError(error,{id:bootId,phase:currentStage});
-  activityLog.end(bootId,{status:'error',summary:`首页加载失败：${currentStage}`,details:{resources:resourceDetails()}});
+  const retry=modules.recover(error,bootId),moduleReport=modules.report();
+  activityLog.end(bootId,{status:'error',summary:`首页加载失败：${currentStage}`,details:{resources:resourceDetails(),
+    ...(moduleReport?{modules:moduleReport}:{}),...(retry?{moduleRecovery:{attempt:1,action:'reload'}}:{})}});
   console.error('Game startup failed',error);
-  loading.fail('暂时无法完成加载，请重试。',{
-    detail:`${currentStage}：${error?.detail||error?.message||'未知错误'}`,onRetry:()=>window.location.reload()});
+  if(retry){
+    loading.start('boot',{stage:'正在重新连接',detail:`重试${currentStage} 1/1`});
+    // Preserve the failed attempt's diagnostic row before replacing the page.
+    // A blocked diagnostics database must never block recovery itself.
+    let flushTimer;
+    try{await Promise.race([activityLog.flush(),new Promise(resolve=>{flushTimer=setTimeout(resolve,500);})]);}catch{}
+    finally{clearTimeout(flushTimer);}
+    window.location.reload();
+  }else loading.fail('暂时无法完成加载，请重试。',{
+    detail:`${currentStage}：${error?.detail||error?.message||'未知错误'}`,onRetry:()=>{modules.clear();window.location.reload();}});
 }finally{activityLog.setCurrent(null);bootPending=false;}

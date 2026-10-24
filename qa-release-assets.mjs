@@ -35,14 +35,14 @@ function release(html,count){
   assert.ok(maps[0].index<entry.index,'import map must precede module loading');
   assert.ok(maps[0].index<manifests[0].index&&manifests[0].index<entry.index,'boot metadata accompanies the import map before module loading');
   const entryURL=entry[1].replaceAll('&amp;','&');
-  assert.equal(entryURL,`./bootstrap.js?v=v0.0.${count}&h=${assetHash('bootstrap.js')}`);
+  assert.equal(entryURL,`./bootstrap.js?h=${assetHash('bootstrap.js')}`);
   assert.equal(html.match(/id="game-version"[^>]*>([^<]+)</)?.[1],`v0.0.${count}`);
   const styles=[...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map(match=>match[1].replaceAll('&amp;','&'));
   assert.ok(styles.length>=3);
   for(const url of [entryURL,...styles,...Object.values(imports)]){
     assert.ok(url.startsWith('./'),'URLs must work below a GitHub Pages repository path');
     const resolved=new URL(url,'https://example.test/wild-reaper/');
-    assert.deepEqual(resolved.searchParams.getAll('v'),[`v0.0.${count}`]);
+    assert.deepEqual(resolved.searchParams.getAll('v'),[],'release numbers do not invalidate unchanged resource caches');
     assert.deepEqual(resolved.searchParams.getAll('h'),[assetHash(decodeURIComponent(resolved.pathname.slice('/wild-reaper/'.length)))]);
   }
   for(const [group,resources] of Object.entries(boot.groups)){
@@ -111,10 +111,10 @@ import './comment-only.js';
   stamp(51);
   const first=readPage();
   const version51=release(first,51);
-  assert.equal(version51.styles.at(-1),`./style.css?theme=forest&v=v0.0.51&h=${assetHash('style.css')}#hud`,'other query values survive stamping');
+  assert.equal(version51.styles.at(-1),`./style.css?theme=forest&h=${assetHash('style.css')}#hud`,'other query values and fragments survive while the old release query is removed');
   for(const file of moduleFiles(resolve(temporary,'dist'))){
     const key='./'+file.split('/').map(encodeURIComponent).join('/');
-    assert.equal(version51.imports[key],`${key}?v=v0.0.51&h=${assetHash(file)}`,`${file} is bound to this release and its exact content`);
+    assert.equal(version51.imports[key],`${key}?h=${assetHash(file)}`,`${file} is bound to its exact content`);
   }
   assert.ok(!first.match(/<script type="importmap"[^>]*>[^]*?safe<edge/),'asset names cannot introduce HTML in an inline map');
   assert.ok(!first.match(/<script type="application\/json" id="boot-resources">[^]*?safe<edge/),'boot metadata also escapes HTML-sensitive paths');
@@ -133,7 +133,10 @@ import './comment-only.js';
     const stats=resolveImport(version51.imports,'./combat-stats.js',engine,documentURL);
     assert.equal(stats,resolveImport(version51.imports,'./combat-stats.js',panel,documentURL),'shared imports use one release identity');
     const catalog=resolveImport(version51.imports,'./combat-catalog.js',stats,documentURL);
-    for(const url of [entry,engine,panel,stats,catalog])assert.equal(new URL(url).searchParams.get('v'),'v0.0.51');
+    for(const url of [entry,engine,panel,stats,catalog]){
+      assert.equal(new URL(url).searchParams.get('v'),null);
+      assert.match(new URL(url).searchParams.get('h'),/^[a-f0-9]{12}$/);
+    }
     const oldCache=new Map();
     for(const file of ['app.js','engine.js','character-panel.js','combat-stats.js','combat-catalog.js']){
       oldCache.set(new URL('./'+file,documentURL).href,'stale unversioned response');
@@ -141,9 +144,9 @@ import './comment-only.js';
     }
     assert.ok(oldCache.has(new URL('./engine.js',entry).href),'versioning only the entry would still reuse the stale dependency');
     for(const url of [entry,engine,panel,stats,catalog])assert.equal(oldCache.has(url),false,'new HTML cannot reuse these previous release cache keys');
-    const child=new URL('./release-fixture/child.js?v=v0.0.51',documentURL).href;
+    const child=new URL(version51.imports['./release-fixture/child.js'],documentURL).href;
     const shared=resolveImport(version51.imports,'../shared edge.js',child,documentURL);
-    assert.equal(shared,new URL(`./shared%20edge.js?v=v0.0.51&h=${assetHash('shared edge.js')}`,documentURL).href,'nested modules normalize to the document import map');
+    assert.equal(shared,new URL(`./shared%20edge.js?h=${assetHash('shared edge.js')}`,documentURL).href,'nested modules normalize to the document import map');
   }
 
   stamp(51);
@@ -157,13 +160,22 @@ import './comment-only.js';
   assert.equal(revised.entry,version51.entry,'unchanged entry keeps its content identity');
   assert.notEqual(revised.styles[2],version51.styles[2],'same-version CSS correction bypasses its previous cache key');
   assert.notEqual(revised.imports['./combat-stats.js'],version51.imports['./combat-stats.js'],'same-version transitive module correction bypasses its previous cache key');
+  assert.equal(revised.imports['./engine.js'],version51.imports['./engine.js'],'a changed child does not invalidate its unchanged parent');
+  for(const documentURL of ['https://game.example/','https://goodleap.github.io/wild-reaper/']){
+    const parent=new URL(revised.imports['./engine.js'],documentURL).href;
+    assert.equal(resolveImport(revised.imports,'./combat-stats.js',parent,documentURL),
+      new URL(revised.imports['./combat-stats.js'],documentURL).href,'a cached parent resolves its changed dependency through the current import map');
+  }
   assert.ok(new Map(revised.boot.groups.app).get('./combat-stats.js')>new Map(version51.boot.groups.app).get('./combat-stats.js'),'same-version changes refresh boot byte sizes');
   const revisedHTML=readPage();
   stamp(51);
   assert.equal(readPage(),revisedHTML,'corrected release is also idempotent');
   stamp(52);
-  release(readPage(),52);
-  assert.ok(!readPage().includes('?v=v0.0.51'),'advancing the release removes previous asset bindings');
+  const version52=release(readPage(),52);
+  assert.equal(version52.entry,revised.entry,'an unchanged entry is cached across releases');
+  assert.deepEqual(version52.styles,revised.styles,'unchanged CSS is cached across releases');
+  assert.deepEqual(version52.imports,revised.imports,'all unchanged static and dynamic modules are cached across releases');
+  assert.deepEqual(version52.boot,revised.boot,'advancing the display version does not change resource sizes');
   const valid=readPage();
   stamp(0,/positive safe integer/);
   assert.equal(readPage(),valid,'invalid counts cannot partially change the page');

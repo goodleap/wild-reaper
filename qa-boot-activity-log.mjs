@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createBootModules } from './dist/boot-modules.js';
 
 // Execute the shipped boot flow with controlled transports. The assertions
 // cover failures that ordinary successful resource loading cannot exercise.
 const source=fs.readFileSync(new URL('./dist/bootstrap.js',import.meta.url),'utf8')
   .replace(/^import .* from '[^']+';\s*$/gm,'')
-  .replace(/await import\('([^']+)'\)/g,"await importModule('$1')");
+  .replace(/import\('([^']+)'\)/g,"importModule('$1')");
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-async function boot({fallback=false,retry=false,failure}={}){
+async function boot({fallback=false,retry=false,failure,moduleStorage=new Map()}={}){
   const records=[],events=new Map(),nodes=new Map(),order=[];let current=null,clock=0,flushes=0;
+  let reloads=0;
   const node=id=>{if(!nodes.has(id))nodes.set(id,{textContent:id==='game-version'?'v-test':'{}',disabled:true,setAttribute(){}});return nodes.get(id);};
   const document={getElementById:node,baseURI:'https://game.example/',hidden:false,
     addEventListener:(name,callback)=>events.set(name,callback)};
-  const window={location:{search:'?debug=1',reload(){}},navigator:{userAgent:'Boot QA'},innerWidth:390,innerHeight:844,devicePixelRatio:2,
+  const window={location:{search:'?debug=1',reload(){reloads++;}},navigator:{userAgent:'Boot QA'},innerWidth:390,innerHeight:844,devicePixelRatio:2,
     addEventListener:(name,callback)=>events.set(name,callback)};
   const find=id=>records.find(record=>record.id===id);
   const activityLog={setContext(context){this.context={...this.context,...context};},begin(kind,title){const id=records.length+1;records.push({id,kind,title,details:{},events:[],stages:[]});return id;},
@@ -26,6 +28,7 @@ async function boot({fallback=false,retry=false,failure}={}){
   const progress={setStage(){},modulesReady(){},download(){},resolvedDownload(){},completeTask(){},finish(){},stop(){}};
   const importModule=async path=>{
     order.push(path);
+    if(failure==='module')throw new TypeError('Importing a module script failed.');
     if(path==='./content-config.js')return {
       getConfigLoadStatus:()=>fallback?{source:'bundled',fallback:true,reason:'Configuration response 503'}:{source:'site',fallback:false},
       getConfigSnapshot:()=>({contentVersion:'content-test'}),
@@ -42,9 +45,10 @@ async function boot({fallback=false,retry=false,failure}={}){
     return {};
   };
   const input={document,window,activityLog,createLoadingView:()=>loading,createBootProgress:()=>progress,isDebugEnabled:()=>true,
+    createBootModules:options=>createBootModules({...options,storage:()=>({getItem:key=>moduleStorage.get(key),setItem:(key,value)=>moduleStorage.set(key,value),removeItem:key=>moduleStorage.delete(key)})}),
     createActivityLogView:()=>order.push('log-view'),waitForPaint:async()=>{},performance:{now:()=>++clock},importModule,console:{error(){}}};
   await new AsyncFunction(...Object.keys(input),source)(...Object.values(input));
-  return {records,events,document,window,activityLog,order,nodes,get current(){return current;},get flushes(){return flushes;}};
+  return {records,events,document,window,activityLog,order,nodes,get current(){return current;},get flushes(){return flushes;},get reloads(){return reloads;}};
 }
 
 {
@@ -83,5 +87,17 @@ for(const failure of ['decode','app']){
   assert(record.details.resources['./content-pack.json'].downloadMs<record.details.resources['./image.png'].downloadMs,
     'later failures do not extend a completed configuration download');
   assert.equal(fixture.nodes.get('start-button')?.disabled??true,true,'failed boot does not enable gameplay');
+}
+{
+  const moduleStorage=new Map(),first=await boot({failure:'module',moduleStorage});
+  assert.equal(first.reloads,1,'a native module transport failure gets one fresh document');
+  assert.equal(first.records[0].details.modules.group,'config');
+  assert.equal(first.records[0].details.moduleRecovery.action,'reload');
+  assert.equal(first.flushes,1,'the failed attempt is persisted before reload');
+  const failedRetry=await boot({failure:'module',moduleStorage});
+  assert.equal(failedRetry.reloads,0,'persistent failures cannot create a reload loop');
+  assert.equal(failedRetry.records[0].status,'error');
+  const success=await boot({moduleStorage});
+  assert.equal(success.records[0].summary,'首页已就绪');assert.equal(moduleStorage.size,0);
 }
 console.log('Boot activity log QA passed: early access, fallback/retry reasons, cumulative bytes, download/decode timing, boot failures, runtime error ownership and lifecycle flush.');

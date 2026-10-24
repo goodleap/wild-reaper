@@ -3,7 +3,7 @@ import {FramePacer, MAX_SIMULATION_STEP} from './dist/render-performance.js';
 import {harness} from './qa-app-harness.mjs';
 
 const state={game:{},scene:{},status:'playing',paused:false,hidden:false};
-for(const fps of [30,60])for(const refresh of [20,30,60,90,120,144]){
+for(const fps of [30,60,120])for(const refresh of [20,30,60,90,120,144]){
   const pacing=new FramePacer();let frames=0,elapsed=0;
   pacing.take(0,state,{fps,live:true});
   for(let i=1;i<=refresh*2;i++){
@@ -31,7 +31,7 @@ async function quiet(fps=60){
     keys.add('KeyD');updateHUD();framePacer.reset();`);
   h.tick(0);return h;
 }
-for(const [fps,refresh] of [[60,120],[30,120],[60,20],[30,20]]){
+for(const [fps,refresh] of [[60,120],[30,120],[60,20],[30,20],[120,120],[120,60],[120,20],[120,144]]){
   const h=await quiet(fps),before=h.run('gameDraws');
   for(let i=0;i<refresh*2;i++)h.tick(1000/refresh);
   assert.equal(h.run('gameDraws')-before,Math.min(fps,refresh)*2);
@@ -49,19 +49,32 @@ for(const [fps,refresh] of [[60,120],[30,120],[60,20],[30,20]]){
 }
 // The setting belongs to the browser, not a particular run or account save.
 const h=await quiet();h.nodes['pause-button'].onclick();h.nodes['pause-frame-rate-button'].onclick();
+assert.equal(h.storage.get('wild-echoes-frame-rate'),'120');assert.equal(h.run('gameplayFps'),120);
+assert.match(h.nodes['pause-frame-rate-button'].textContent,/高帧 120/);
+assert.equal(harness('',{storage:h.storage}).run('gameplayFps'),120,'120 FPS survives a page reload');
+h.nodes['pause-frame-rate-button'].onclick();
 assert.equal(h.storage.get('wild-echoes-frame-rate'),'30');assert.equal(h.run('gameplayFps'),30);
 assert.match(h.nodes['pause-frame-rate-button'].textContent,/省电 30/);
 const reloaded=harness('',{storage:h.storage});assert.equal(reloaded.run('gameplayFps'),30);
+h.nodes['pause-frame-rate-button'].onclick();
+assert.equal(h.storage.get('wild-echoes-frame-rate'),'60');assert.equal(h.run('gameplayFps'),60);
+assert.match(h.nodes['pause-frame-rate-button'].textContent,/流畅 60/);
+for(const value of [undefined,'0','240','invalid']){
+  const storage=new Map(value===undefined?[]:[['wild-echoes-frame-rate',value]]);
+  assert.equal(harness('',{storage}).run('gameplayFps'),60,'missing or invalid settings keep the 60 FPS default');
+}
 reloaded.tick(0);const intro=reloaded.run('introDraws');
 for(let i=0;i<120;i++)reloaded.tick(1000/120);
 assert.equal(reloaded.run('introDraws')-intro,30,'the homepage animates at 30 FPS');
 
 // Manual profiling counts actual submitted frames in power-saving mode.
-const profiled=await quiet(30);profiled.nodes['pause-button'].onclick();profiled.nodes['diagnostic-start'].onclick();
+for(const fps of [30,120]){
+const profiled=await quiet(fps);profiled.nodes['pause-button'].onclick();profiled.nodes['diagnostic-start'].onclick();
 profiled.run('diagnostics._captureDurationMs=1000;');
 for(let i=0;i<130&&profiled.run('diagnostics.running');i++)profiled.tick(1000/120);
 assert.equal(profiled.run('diagnostics.reports.length'),1);
-assert(Math.abs(profiled.run('diagnostics.reports[0].fps')-30)<1,'manual capture counts roughly 30 draws, not 120 display callbacks, including its initial UI refresh');
-assert.equal(profiled.run('diagnostics.reports[0].metadata.targetFps'),30);
+assert(Math.abs(profiled.run('diagnostics.reports[0].fps')-fps)<1,'manual capture counts actual draws at the selected target, including its initial UI refresh');
+assert.equal(profiled.run('diagnostics.reports[0].metadata.targetFps'),fps);
 assert.equal(profiled.run('diagnostics.reports[0].metadata.frameSampling'),'rendered');
-console.log('Frame pacing: 30/60 FPS limits, 20–144 Hz timing, mobile movement/cooldowns, single input edges, bounded pause/stall recovery, saved settings, intro and actual draw diagnostics passed.');
+}
+console.log('Frame pacing: 30/60/120 FPS limits, 20–144 Hz timing, mobile movement/cooldowns, single input edges, bounded pause/stall recovery, saved settings, intro and actual draw diagnostics passed.');

@@ -9,7 +9,7 @@
     "build:config": "node scripts/build-content-config.mjs",
     "test:config": "node qa-config-loading.mjs && npm run test:config-api && node qa-config-integration.mjs && node qa-config-content.mjs && node qa-config-enemies.mjs && node qa-config-worlds.mjs && npm run test:loading && node qa-config-rendering.mjs",
     "test:config-api": "node qa-server-config.mjs",
-    "test:loading": "node qa-loading-ui.mjs && node qa-boot-progress.mjs && node qa-loading-resource.mjs",
+    "test:loading": "node qa-loading-ui.mjs && node qa-boot-progress.mjs && node qa-boot-modules.mjs && node qa-loading-resource.mjs",
     "test:combat86": "node qa-player-skills86.mjs && node qa-abilities86.mjs && node qa-specialist-enemies.mjs && node qa-specialist-bosses.mjs && node qa-boss-pacing.mjs && node qa-specialist-art.mjs && node qa-combat86-integration.mjs && node qa-player-freeze86.mjs",
     "test:debug-startup": "node qa-debug-startup.mjs",
     "test:debug-options": "node qa-debug-training.mjs && node qa-debug-roster.mjs && node qa-debug-preparation.mjs && node qa-debug-auto-choices.mjs && node qa-debug-startup.mjs",

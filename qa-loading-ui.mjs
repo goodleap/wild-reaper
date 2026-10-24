@@ -86,9 +86,9 @@ function fixture(options={}){
   await Promise.resolve();assert(!done);frame();await Promise.resolve();assert(!done,'map work cannot run inside the loading RAF');advance(0);await painted;assert(done);
 }
 const bootstrap=fs.readFileSync(new URL('./dist/bootstrap.js',import.meta.url),'utf8');
-assert.deepEqual([...bootstrap.matchAll(/^import .* from '([^']+)'/gm)].map(match=>match[1]),['./loading-ui.js','./boot-progress.js','./debug-search.js','./activity-log.js','./activity-log-view.js'],'only lightweight loading and diagnostic utilities are in the initial dependency graph');
-assert(bootstrap.indexOf("loading.start('boot'")<bootstrap.indexOf("await import('./content-config.js')"));
-assert(bootstrap.indexOf('await loadContentConfig')<bootstrap.indexOf("await import('./app.js')"));
+assert.deepEqual([...bootstrap.matchAll(/^import .* from '([^']+)'/gm)].map(match=>match[1]),['./loading-ui.js','./boot-progress.js','./debug-search.js','./activity-log.js','./activity-log-view.js','./boot-modules.js'],'only lightweight loading and diagnostic utilities are in the initial dependency graph');
+assert(bootstrap.indexOf("loading.start('boot'")<bootstrap.indexOf("modules.load('config'"));
+assert(bootstrap.indexOf('await loadContentConfig')<bootstrap.indexOf("modules.load('app'"));
 const html=fs.readFileSync(new URL('./dist/index.html',import.meta.url),'utf8');
 assert.match(html,/<script type="module" src="\.\/bootstrap\.js(?:[^\"]*)"><\/script>/);
 for(const id of ['start-button','archive-button','help-button','sound-button'])assert.match(html,new RegExp(`id="${id}" disabled`));

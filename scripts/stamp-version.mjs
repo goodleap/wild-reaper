@@ -55,7 +55,10 @@ function versionedURL(url){
     assetHashes.set(url.pathname,createHash('sha256').update(assetBuffer(url)).digest('hex').slice(0,12));
   }
   const updated=new URL(url);
-  updated.searchParams.set('v',version);
+  // A release number must not invalidate unchanged modules (notably the large
+  // bundled configuration). The document's import map selects every module by
+  // content, including transitive dependencies whose importing parent is reused.
+  updated.searchParams.delete('v');
   updated.searchParams.set('h',assetHashes.get(url.pathname));
   return relativeURL(updated);
 }

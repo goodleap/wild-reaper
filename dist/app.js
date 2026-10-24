@@ -72,7 +72,7 @@ import { WORLD_ARCHIVE_CATEGORIES } from './world-archive.js';
 import { groundOffset, rockShadowParts } from './terrain.js';
 import { isGrounded, obstacleHeight } from './height-rules.js';
 import { WorldMap, minimapBounds, landmarkLabel, landmarkState } from './world-map.js';
-import { backingResolution, RenderSchedule, FrameMetrics, FramePacer, MAX_SIMULATION_STEP } from './render-performance.js';
+import { backingResolution, RenderSchedule, FrameMetrics, FramePacer, MAX_SIMULATION_STEP, GAMEPLAY_FRAME_RATES, normalizeFrameRate } from './render-performance.js';
 import { cameraViewport } from './camera-viewport.js';
 import { createDebugViewportControls } from './debug-viewport.js';
 import { FrameDiagnostics } from './frame-diagnostics.js';
@@ -162,7 +162,7 @@ const frameMetrics=new FrameMetrics();
 const renderSchedule=new RenderSchedule();
 const framePacer=new FramePacer();
 let gameplayFps=60;
-try{if(localStorage.getItem('wild-echoes-frame-rate')==='30')gameplayFps=30;}catch{}
+try{gameplayFps=normalizeFrameRate(Number(localStorage.getItem('wild-echoes-frame-rate')));}catch{}
 if(debugFpsNode){
   debugFpsNode.classList.remove('hidden');
   debugFpsNode.title='每秒提交绘制帧数；暂停时复用最后一帧';
@@ -283,7 +283,7 @@ viewportControls=createDebugViewportControls({document,enabled:debugMode,
 });
 
 function syncSound(){document.body.classList.toggle('sound-enabled',soundOn);$('sound-button').setAttribute('aria-label',soundOn?'关闭音效':'开启音效');$('sound-button').title=soundOn?'关闭音效':'开启音效';$('sound-button').setAttribute('aria-pressed',String(soundOn));$('pause-sound-button').setAttribute('aria-pressed',String(soundOn));$('pause-sound-button').setAttribute('aria-label',soundOn?'关闭音效':'开启音效');$('pause-sound-button').textContent=soundOn?'音效：开':'音效：关';}
-function syncFrameRate(){const button=$('pause-frame-rate-button');button.textContent=gameplayFps===30?'省电 30帧':'流畅 60帧';button.setAttribute('aria-label',`画面模式：${button.textContent}，点击切换`);button.setAttribute('aria-pressed',String(gameplayFps===30));}
+function syncFrameRate(){const button=$('pause-frame-rate-button');button.textContent=gameplayFps===30?'省电 30帧':gameplayFps===120?'高帧 120帧':'流畅 60帧';button.setAttribute('aria-label',`画面模式：${button.textContent}，点击切换`);button.removeAttribute('aria-pressed');}
 function initAudio(){if(!soundOn)return;try{audio??=new (window.AudioContext||window.webkitAudioContext)();audio.resume().catch(()=>{});}catch{soundOn=false;syncSound();}}
 function tone(freq,duration=.07,type='sine',volume=.035,end=freq){if(!soundOn||!audio||audio.state!=='running')return;const now=audio.currentTime,osc=audio.createOscillator(),gain=audio.createGain();osc.type=type;osc.frequency.setValueAtTime(freq,now);osc.frequency.exponentialRampToValueAtTime(Math.max(30,end),now+duration);gain.gain.setValueAtTime(volume,now);gain.gain.exponentialRampToValueAtTime(.001,now+duration);osc.connect(gain);gain.connect(audio.destination);osc.start(now);osc.stop(now+duration);}
 let feedbackGame=null,superToneAt=-Infinity,superImpactAt=-Infinity;
@@ -1337,7 +1337,7 @@ $('world-atlas-content').addEventListener('click',event=>{
   else $('world-travel-feedback').textContent=game.worldTravel.travelReason(worldId)||'现在无法传送';
 });
 $('start-button').onclick=openPrepare;$('prepare-start-button').onclick=()=>{if(prepareOpen&&!helpOpen&&!archiveOpen)return startGame();};$('prepare-back-button').onclick=closePrepare;$('prepare-help-button').onclick=openHelp;$('restart-button').onclick=restartGame;$('home-button').onclick=home;$('quit-button').onclick=home;$('pause-button').onclick=pause;$('resume-button').onclick=resume;$('close-pause').onclick=resume;$('close-shop').onclick=closeShop;$('help-button').onclick=openHelp;$('pause-help-button').onclick=openHelp;$('close-help').onclick=closeHelp;$('help-done').onclick=closeHelp;
-$('pause-frame-rate-button').onclick=()=>{gameplayFps=gameplayFps===60?30:60;try{localStorage.setItem('wild-echoes-frame-rate',String(gameplayFps));}catch{}syncFrameRate();framePacer.reset();resetDebugFps();playPerformance?.finish('帧率设置变化');cancelDiagnosticCapture('帧率设置变化');renderSchedule.invalidate();};
+$('pause-frame-rate-button').onclick=()=>{gameplayFps=GAMEPLAY_FRAME_RATES[(GAMEPLAY_FRAME_RATES.indexOf(gameplayFps)+1)%GAMEPLAY_FRAME_RATES.length];try{localStorage.setItem('wild-echoes-frame-rate',String(gameplayFps));}catch{}syncFrameRate();framePacer.reset();resetDebugFps();playPerformance?.finish('帧率设置变化');cancelDiagnosticCapture('帧率设置变化');renderSchedule.invalidate();};
 $('sound-button').onclick=$('pause-sound-button').onclick=()=>{soundOn=!soundOn;syncSound();try{localStorage.setItem('wild-echoes-sound',soundOn?'on':'off');}catch{}initAudio();if(soundOn)tone(660,.1);};
 canvas.tabIndex=-1;
 // Cancel selection/callouts inside the game before child UI can stop bubbling.

@@ -29,6 +29,8 @@ export class RenderSchedule {
 
 export const MAX_SIMULATION_STEP = 1 / 30;
 export const MAX_FRAME_ELAPSED = .2;
+export const GAMEPLAY_FRAME_RATES = Object.freeze([30, 60, 120]);
+export const normalizeFrameRate = fps => GAMEPLAY_FRAME_RATES.includes(fps) ? fps : 60;
 const pacingKeys = [...sceneKeys, 'transition', 'dialogue'];
 // Accumulate skipped display callbacks, then spend their elapsed time in
 // bounded simulation steps. Pauses/scenes start a fresh clock domain.
@@ -36,7 +38,7 @@ export class FramePacer {
   constructor() { this.reset(); }
   reset() { this.last = null; this.nextAt = null; this.pending = 0; this.state = null; }
   take(now, state, {fps = 60, live = false, force = false} = {}) {
-    const interval = 1000 / (fps === 30 ? 30 : 60);
+    const interval = 1000 / normalizeFrameRate(fps);
     const delta = this.last === null || now < this.last ? 0 : Math.min(MAX_FRAME_ELAPSED, (now - this.last) / 1000);
     const changed = !this.state || pacingKeys.some(key => state[key] !== this.state[key]);
     this.last = now; this.state = {...state};
