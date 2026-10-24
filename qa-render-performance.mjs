@@ -59,4 +59,4 @@ assert.equal(idle.fps, 0); assert(Math.abs(idle.rafMs - 1000 / 60) < 1e-8);
 assert.equal(idle.updateMs, 0); assert.equal(idle.renderMs, 0);
 metrics.reset(); assert.equal(metrics.sample(600000), null, 'background time is excluded after reset');
 assert.equal(metrics.sample(600100, {rendered: true}), null);
-console.log('Render performance: stable backing budget, exact transforms, frozen-scene invalidation, no active frame cap and honest throttled CPU/RAF telemetry passed.');
+console.log('Render performance: stable backing budget, exact transforms, frozen-scene invalidation, frozen-scene reuse and honest throttled CPU/RAF telemetry passed.');

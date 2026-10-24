@@ -52,19 +52,20 @@ export class AccountClient {
   _read(key){try{if(!this.storage?.getItem)throw Error();return this.storage.getItem(key);}catch{throw new AccountError('STORAGE_UNAVAILABLE');}}
   _write(key,value){try{if(!this.storage?.setItem)throw Error();this.storage.setItem(key,value);}catch{throw new AccountError('STORAGE_UNAVAILABLE');}}
   _remove(key){try{if(!this.storage?.removeItem)throw Error();this.storage.removeItem(key);}catch{throw new AccountError('STORAGE_UNAVAILABLE');}}
+  _checkSaveText(text){if(typeof text!=='string'||bytes(text)>MAX_BYTES)throw new AccountError('INVALID_SAVE');}
   _parseSave(text){
     if(text===null)return null;
-    if(typeof text!=='string'||bytes(text)>MAX_BYTES)throw new AccountError('INVALID_SAVE');
+    this._checkSaveText(text);
     try{const save=JSON.parse(text);this.validateSave(save);return save;}catch{throw new AccountError('INVALID_SAVE');}
   }
-  _saveText(save){if(save===null)return null;const text=JSON.stringify(save);this._parseSave(text);return text;}
+  _saveText(save){if(save===null)return null;try{this.validateSave(save);const text=JSON.stringify(save);this._checkSaveText(text);return text;}catch{throw new AccountError('INVALID_SAVE');}}
   _key(){return `${this._namespace}${this.debug?'debug-save':'save'}:${this.user.id}`;}
   _loadRecord(){
     const raw=this._read(this._key());this._cacheRaw=raw;this._record=null;if(!raw)return;
     let record;try{record=JSON.parse(raw);}catch{throw new AccountError('INVALID_SAVE');}
     if(record?.format!==1||!integer(record.revision)||typeof record.dirty!=='boolean'||typeof record.loaded!=='boolean'||typeof record.stamp!=='string')throw new AccountError('INVALID_SAVE');
     this._parseSave(record.saveText);
-    if(record.pending){const p=record.pending;if(!integer(p.expectedRevision)||p.expectedRevision!==record.revision||!mutationValid(p.mutationId)||!record.dirty)throw new AccountError('INVALID_SAVE');if(p.sameSave===true&&!Object.hasOwn(p,'saveText'))p.saveText=record.saveText;delete p.sameSave;this._parseSave(p.saveText);}
+    if(record.pending){const p=record.pending;if(!integer(p.expectedRevision)||p.expectedRevision!==record.revision||!mutationValid(p.mutationId)||!record.dirty)throw new AccountError('INVALID_SAVE');if(p.sameSave===true&&!Object.hasOwn(p,'saveText'))p.saveText=record.saveText;delete p.sameSave;if(p.saveText!==record.saveText)this._parseSave(p.saveText);}
     this._record=record;
   }
   _emptyRecord(){return {format:1,revision:0,updatedAt:null,saveText:null,dirty:false,pending:null,loaded:false,stamp:this.makeId()};}
@@ -99,6 +100,9 @@ export class AccountClient {
     return {
       getItem:key=>{if(key!==GUEST_SAVE_KEY)return null;check();return this.mode==='guest'?this._guestText:this._record?.saveText??null;},
       setItem:(key,text)=>{if(key!==GUEST_SAVE_KEY)throw new AccountError('INVALID_SAVE');check();this._parseSave(text);this._storeText(text);},
+      // Only the in-process WorldSave codec may use this after validating its
+      // freshly encoded snapshot. Disk and network reads use full validation.
+      setValidatedItem:(key,text)=>{if(key!==GUEST_SAVE_KEY)throw new AccountError('INVALID_SAVE');check();this._checkSaveText(text);this._storeText(text);},
       removeItem:key=>{if(key!==GUEST_SAVE_KEY)return;check();this._storeText(null);},
     };
   }
@@ -136,6 +140,11 @@ export class AccountClient {
   _envelope(value){
     if(!value||!integer(value.revision)||!(value.updatedAt===null||typeof value.updatedAt==='string')||!Object.hasOwn(value,'save'))throw new AccountError('INVALID_SAVE');
     return {revision:value.revision,updatedAt:value.updatedAt,saveText:this._saveText(value.save)};
+  }
+  _ack(value,pending){
+    if(!value||Object.keys(value).sort().join(',')!=='mutationId,revision,updatedAt'||!integer(value.revision)||!mutationValid(value.mutationId)||typeof value.updatedAt!=='string'||!Number.isFinite(Date.parse(value.updatedAt))||new Date(value.updatedAt).toISOString()!==value.updatedAt)throw new AccountError('INVALID_SAVE');
+    if(value.revision!==pending.expectedRevision+1||value.mutationId!==pending.mutationId)throw new AccountError('SAVE_CONFLICT',409);
+    return value;
   }
   _adoptUser(user){
     if(!userValid(user))throw new AccountError('INVALID_SAVE');
@@ -249,10 +258,13 @@ export class AccountClient {
         if(!this._record.pending){const previous=this._record;this._record={...previous,pending:{expectedRevision:previous.revision,mutationId:this.makeId(),saveText:previous.saveText}};try{this._persistRecord();}catch(error){this._record=previous;throw error;}}
         const pending=this._record.pending;
         this._set('syncing','正在同步进度。');
-        const result=this._envelope(await this._request(this._savePath,{method:'PUT',account:true,body:{expectedRevision:pending.expectedRevision,mutationId:pending.mutationId,save:this._parseSave(pending.saveText)}}));
+        // Pending text was validated before storage (and again on disk load).
+        // Upload it once; the server acknowledges its revision and mutation,
+        // rather than echoing the whole world snapshot back to this browser.
+        const reply=await this._request(this._savePath,{method:'PUT',account:true,body:{expectedRevision:pending.expectedRevision,mutationId:pending.mutationId,save:pending.saveText===null?null:JSON.parse(pending.saveText)}});
         if(epoch!==this._epoch||this._disposed)return false;
         this._checkExternal();
-        if(result.revision!==pending.expectedRevision+1||result.saveText!==pending.saveText)throw new AccountError('SAVE_CONFLICT',409);
+        const result=this._ack(reply,pending);
         const dirty=this._record.saveText!==pending.saveText;
         const previous=this._record;this._record={...previous,revision:result.revision,updatedAt:result.updatedAt,loaded:true,pending:null,dirty};
         try{this._persistRecord();}catch(error){this._record=previous;throw error;}

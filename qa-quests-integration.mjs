@@ -116,7 +116,7 @@ assert.equal(forest.gold,forestGold+30);assert.equal(forest.crystals,forestCryst
 assert.equal(forest.quests.accept('underground-return'),false);assert.equal(forest.gold,forestGold+30,'acceptance pays previously completed facts only once');
 assert.equal(factsReload.quests.accept('underground-return'),false,'a stale tab learns the other tab already accepted and claimed');assert.equal(factsReload.gold,0);
 const out=forest.regions.portals.find(portal=>portal.nextRegionIndex===1);assert(out);approach(forest,portalDoor(out));request(forest,out.id);
-assert.equal(forest.worldId,'marsh');assert.equal(forest.quests.getEntries().length,0);assert.equal(forest.quests.getProps().length,0);assert.equal(forest.quests.getGuide(),null);
+assert.equal(forest.worldId,'marsh');assert.equal(forest.quests.getEntries().length,1);assert.equal(entry(forest,'moss-stone-road').status,'available');assert.equal(forest.quests.getProps().length,3);assert.equal(forest.quests.getGuide(),null,'discovering the regional road commission never accepts or tracks it');
 const back=forest.regions.portals.find(portal=>portal.nextRegionIndex===WORLD_IDS.indexOf('rift-forest'));approach(forest,portalDoor(back));request(forest,back.id);
 assert.equal(forest.worldId,'rift-forest');assert(forest.terrain.riftGateOpen('bell-shortcut'));assert.equal(entry(forest,'underground-return').status,'completed');
 const reopenedForest=fresh('rift-forest',storage);assert(reopenedForest.terrain.riftGateOpen('bell-shortcut'));assert.equal(entry(reopenedForest,'underground-return').status,'completed');

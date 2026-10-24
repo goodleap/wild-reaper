@@ -209,4 +209,9 @@ assert.equal(runtimeRecords[0].status, 'error', 'normal performance completion c
 assert.equal(runtimeRecords[0].events.filter(event => event.level === 'error').length, 1);
 assert.equal(runtimeRecords[0].details.performance.samples, 2);
 
-console.log('Activity performance: bounded continuous sampling, 30-second summaries, one-second counts, pause/background isolation, merged throttled warnings, and timing hierarchy passed.');
+const saving=fixture({context:()=>({targetFps:30,frameSampling:'rendered'})});
+saving.frame(0);let savingReport;for(let i=1;i<=900;i++)savingReport=saving.frame(i*1000/30)||savingReport;
+assert(Math.abs(savingReport.fps-30)<.01);
+assert.equal(saving.log.records[0].events.length,0,'intentional 30 FPS does not generate sustained-slowness warnings');
+
+console.log('Activity performance: bounded continuous sampling, 30-second summaries, one-second counts, pause/background isolation, merged throttled warnings, selected FPS budget, and timing hierarchy passed.');

@@ -367,6 +367,53 @@ export class Game {
       }
     return found;
   }
+  _separateEnemies(dt) {
+    // Only ordinary, unfrozen movers can receive these soft pushes. Sleeping
+    // guards, Bosses and test fixtures still remain in the full combat grid.
+    const movers=new Set();let alive=0;
+    for(const e of this.enemies)if(e.hp>0){
+      alive++;
+      if(e.type!=='boss'&&!e.trainingDummy&&!e.charge&&e.guardActive!==false&&!this.abilities.isFrozen(e))movers.add(e);
+    }
+    if(!movers.size)return;
+    // Build this small mask only when stationary actors dominate the scene.
+    // An immovable source needs a query only if a higher-ID mover could occupy
+    // one of its queried buckets. Keep original source/candidate order and the
+    // nine-candidate budget, including pairs owned by a sleeping lower ID.
+    let movableNeighborIds;
+    if(alive-movers.size>movers.size){
+      movableNeighborIds=new Map();const halo=Math.ceil(48/this._cell);
+      for(const e of movers){
+        const cx=Math.floor(e.x/this._cell),cy=Math.floor(e.y/this._cell);
+        for(let x=cx-halo;x<=cx+halo;x++)for(let y=cy-halo;y<=cy+halo;y++){
+          const key=`${x},${y}`;movableNeighborIds.set(key,Math.max(movableNeighborIds.get(key)??-Infinity,e.id));
+        }
+      }
+    }
+    // Cache broad terrain candidates only for this pass; every actual push
+    // still resolves against the same live obstacle geometry.
+    const separationQuery={result:[],limit:9,afterId:0},movementQueries=new Map();
+    for(const e of this.enemies) {
+      if(e.hp<=0)continue;
+      if(movableNeighborIds&&!movers.has(e)&&(movableNeighborIds.get(`${Math.floor(e.x/this._cell)},${Math.floor(e.y/this._cell)}`)??-Infinity)<=e.id)continue;
+      separationQuery.afterId=e.id;
+      for(const n of this._nearby(e.x,e.y,48,separationQuery)) {
+        if(isFrostcrownBody(e)||isFrostcrownBody(n)){
+          const deer=isFrostcrownBody(e)?e:n,other=deer===e?n:e;
+          if(!movers.has(other))continue;
+          const otherFoot=friendlyFoot(other),contact=frostcrownGroundContact(deer,otherFoot.x,otherFoot.y,other.r*.76,.76);
+          if(contact){const force=Math.min(contact.overlap,30*dt)*.5;this._moveEntity(other,contact.nx*force,contact.ny*force,false,movementQueries);}
+          continue;
+        }
+        const dx=e.x-n.x,dy=e.y-n.y,d=Math.hypot(dx,dy),overlap=(e.r+n.r)*.76-d;
+        if(overlap>0&&d>.1){
+          const force=Math.min(overlap,30*dt)*.5;
+          if(movers.has(e))this._moveEntity(e,dx/d*force,dy/d*force,false,movementQueries);
+          if(movers.has(n))this._moveEntity(n,-dx/d*force,-dy/d*force,false,movementQueries);
+        }
+      }
+    }
+  }
   _moveEntity(entity,dx,dy,isPlayer=false,movementQueries=null) {
     const safety=!isPlayer&&!entity.isCompanion&&!entity.heroId&&this.worldTravel?.safety.active?this.worldTravel.safety:null;
     if(safety)({dx,dy}=safety.limitMovement(entity,dx,dy));
@@ -701,29 +748,7 @@ export class Game {
       if(!handled)this._moveEnemy(e,dt);
     }
     this._rebuildGrid();
-    // Soft separation keeps the horde readable while preserving dense swarms.
-    // Reuse only this pass's candidates and local terrain queries. Every push
-    // still resolves separately; a cache never outlives movement or a scene.
-    const separationQuery={result:[],limit:9,afterId:0},movementQueries=new Map();
-    for(const e of this.enemies) {
-      if(e.hp<=0) continue;
-      separationQuery.afterId=e.id;
-      for(const n of this._nearby(e.x,e.y,48,separationQuery)) {
-        if(isFrostcrownBody(e)||isFrostcrownBody(n)){
-          const deer=isFrostcrownBody(e)?e:n,other=deer===e?n:e;
-          if(other.type==='boss'||other.trainingDummy||other.charge||other.guardActive===false||this.abilities.isFrozen(other))continue;
-          const otherFoot=friendlyFoot(other),contact=frostcrownGroundContact(deer,otherFoot.x,otherFoot.y,other.r*.76,.76);
-          if(contact){const force=Math.min(contact.overlap,30*dt)*.5;this._moveEntity(other,contact.nx*force,contact.ny*force,false,movementQueries);}
-          continue;
-        }
-        const dx=e.x-n.x,dy=e.y-n.y,d=Math.hypot(dx,dy),overlap=(e.r+n.r)*.76-d;
-        if(overlap>0 && d>.1) {
-          const force=Math.min(overlap,30*dt)*.5;
-          if(e.type!=='boss'&&!e.trainingDummy&&!e.charge&&e.guardActive!==false&&!this.abilities.isFrozen(e))this._moveEntity(e,dx/d*force,dy/d*force,false,movementQueries);
-          if(n.type!=='boss'&&!n.trainingDummy&&!n.charge&&n.guardActive!==false&&!this.abilities.isFrozen(n))this._moveEntity(n,-dx/d*force,-dy/d*force,false,movementQueries);
-        }
-      }
-    }
+    this._separateEnemies(dt);
     // Sample resolved movement after collisions. Knockback displacement was
     // excluded at the start; airborne attacks and frozen bodies never step.
     for(const e of this.enemies)if(e.hp>0&&!e.trainingDummy&&usesEnemyLocomotion(e)){

@@ -20,7 +20,7 @@ export function questPanelHTML(entries=[],{storageMode}={}){
     const rank=entry=>entry.status==='active'?(entry.tracked?0:1):entry.status==='available'?2:3;
     return rank(a.entry)-rank(b.entry)||a.index-b.index;
   }).map(({entry})=>entry);
-  const note=storageMode==='persistent'?'任务与角色进度一起保存在当前浏览器。':storageMode==='session-debug'?'调试冒险的任务记录不写入正式进度。':storageMode==='session'?'任务记录仅在本次冒险内有效。':'';
+  const note=storageMode==='persistent'?'任务随当前旅程一起保存。':storageMode==='session-debug'?'调试冒险的任务记录不写入正式进度。':storageMode==='session'?'任务记录仅在本次冒险内有效。':'';
   return (ordered.length?ordered.map(cardHTML).join(''):'<p class="quest-empty">尚未发现委托。留意营地的告示与沿途线索。</p>')+(note?`<p class="quest-save-note">${note}</p>`:'');
 }
 

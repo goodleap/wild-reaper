@@ -15,7 +15,7 @@ for(const search of ['', '?debug']){
   tick();
   const liveBefore=run('gameDraws'),timeBefore=run('game.runTime');
   for(let i=0;i<120;i++)tick(1000/120);
-  assert.equal(run('gameDraws'),liveBefore+120,'live play submits every available high-refresh frame');
+  assert.equal(run('gameDraws'),liveBefore+60,'high-refresh callbacks submit at most 60 gameplay frames per second');
   assert(Math.abs(run('game.runTime')-timeBefore-1)<1e-9,'render scheduling preserves elapsed gameplay time');
   if(search){assert(clockReads()>0);assert.match(debugDetails[0].textContent,/Δ[\d.]+ms\nU[\d.]+ms\nD[\d.]+ms\n[\d.]+×[\d.]+M/,'debug displays cadence, CPU timings and buffer size');assert.match(debugDetails[0].title,/不含 GPU/,'CPU timing is explicitly distinguished from GPU cost');}
   else assert.equal(clockReads(),0,'ordinary play has no diagnostic timing overhead');

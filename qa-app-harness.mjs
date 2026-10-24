@@ -110,7 +110,7 @@ export function harness(search='',{storage=new Map(),consoleImpl=console,coarse=
   for(const id of ['start-button','archive-button','help-button','sound-button'])nodes[id].disabled=false;
   const run=script=>vm.runInContext(script,sandbox);
   run('const shippedRenderGame=renderGame;let gameDraws=0,introDraws=0;renderGame=()=>{gameDraws++;};renderIntro=()=>{introDraws++;};');
-  const tick=(delta=1000/60)=>{for(const [id,callback] of frames)if(callback===sandbox.frame)frames.delete(id);const before=scheduled;run(`frame(${now+=delta})`);assert.equal(scheduled,before+1,'every callback schedules its successor without a frame-rate limiter');drainTimers();};
+  const tick=(delta=1000/60)=>{for(const [id,callback] of frames)if(callback===sandbox.frame)frames.delete(id);const before=scheduled;run(`frame(${now+=delta})`);assert.equal(scheduled,before+1,'every display callback schedules its successor while expensive work is paced');drainTimers();};
   // Drive real asynchronous startup through its paint/timer boundaries. Do not
   // bypass startGame or substitute a synchronously constructed Game.
   const flush=async()=>{

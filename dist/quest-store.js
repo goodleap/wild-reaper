@@ -1,4 +1,5 @@
-import { WORLD_QUESTS,questDefinition } from './quest-definitions.js';
+import { WORLD_QUESTS,questDefinition,questWorlds } from './quest-definitions.js';
+import { WORLD_IDS } from './world-definitions.js';
 
 export const QUEST_STORAGE_KEY='wild-echoes-world-quests-v1';
 const empty=()=>({version:1,records:{},tracked:{}});
@@ -17,7 +18,8 @@ function clean(raw){
     record.rewardClaimed=record.completed&&record.rewardClaimed;
     if(record.accepted||Object.keys(record.objectives).length)record.discovered=true;
     data.records[definition.id]=record;
-    if(record.accepted&&!record.completed&&raw.tracked?.[definition.worldId]===definition.id)data.tracked[definition.worldId]=definition.id;
+    if(record.accepted&&!record.completed)for(const worldId of definition.worldIds?WORLD_IDS:questWorlds(definition))if(raw.tracked?.[worldId]===definition.id)data.tracked[worldId]=definition.id;
+    if(record.accepted&&!record.completed&&definition.worldIds&&raw.tracked?.journey===definition.id)data.tracked.journey=definition.id;
   }
   return data;
 }

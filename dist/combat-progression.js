@@ -29,6 +29,16 @@ export class CombatProgression {
     return owner?.baseRank===0?'acquisition':'enhancement';
   }
 
+  _reinforcementsOnly(){return this.game.mode==='world'&&this.game._worldExploration===true;}
+  _canOffer(id) {
+    const g=this.game,definition=getUpgradeDefinition(id);
+    if(!definition||!canTakeUpgrade(g.build,id))return false;
+    if(!this._reinforcementsOnly()||definition.category==='attribute')return true;
+    // World travel and its merchants introduce abilities. Crystal choices
+    // may strengthen their owner only after that ability has been learned.
+    return !!(g.build.getWeapon(definition.ownerId)||g.build.getSkill(definition.ownerId))?.acquired;
+  }
+
   _ordinary(pool,count) {
     const g=this.game,chosen=[];
     const groups=Object.fromEntries(['acquisition','enhancement','attribute'].map(group=>[group,pool.filter(choice=>this._group(choice)===group)]));
@@ -96,9 +106,9 @@ export class CombatProgression {
   getChoices() {
     const g=this.game;
     if(g._choices)return g._choices;
-    const pool=UPGRADE_DEFS.filter(definition=>canTakeUpgrade(g.build,definition.id));
-    pool.push(...g.superSkills.getUpgradeChoices());
-    if(pool.length<3)pool.push(...ENDLESS_UPGRADES.filter(definition=>canTakeUpgrade(g.build,definition.id)));
+    const pool=UPGRADE_DEFS.filter(definition=>this._canOffer(definition.id));
+    pool.push(...g.superSkills.getUpgradeChoices().filter(definition=>this._canOffer(definition.id)));
+    if(pool.length<3)pool.push(...ENDLESS_UPGRADES.filter(definition=>this._canOffer(definition.id)));
 
     // Present both exclusive branches together and keep the third card as a
     // deferral. A successful purchase advances the cursor; inspection does not.
@@ -107,7 +117,7 @@ export class CombatProgression {
       const owner=BRANCH_WEAPONS[((g._branchOfferCursor||0)+i)%BRANCH_WEAPONS.length];
       if(isBranchReady(g,owner)){g._branchOfferWeapon=owner;break;}
     }
-    const opening=g.progressionTier===1&&!g._branchOfferWeapon&&ACQUISITIONS.every(id=>!g.build.getRank(id));
+    const opening=!this._reinforcementsOnly()&&g.progressionTier===1&&!g._branchOfferWeapon&&ACQUISITIONS.every(id=>!g.build.getRank(id));
     const ordinary=opening?['arrow','barrier',randomEntry(['orbit','pulse','lightning','fireball','frostbolt'])].map(id=>pool.find(choice=>choice.id===id)).filter(Boolean):this._ordinary(pool,g._branchOfferWeapon?1:3);
     const offers=g._branchOfferWeapon===g.initialWeaponId?ordinary:this._withPrimaryWeapon(ordinary,pool);
     let choices=offers.map(choice=>this._choice(choice));
@@ -125,6 +135,7 @@ export class CombatProgression {
     if(g.status!=='upgrade'||g.crystals<g.crystalsNext)return false;
     const choice=this.getChoices().find(candidate=>candidate.id===id);
     if(!choice)return false;
+    if(!choice.branch&&!this._canOffer(id))return false;
     const p=g.player,paidCost=g.crystalsNext;
     if(choice.branch) {
       const definition=branchDefinition(choice.weaponId,choice.branch);

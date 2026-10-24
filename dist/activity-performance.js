@@ -10,7 +10,7 @@ const WINDOW_MS = 5000;
 const WARNING_INTERVAL_MS = 30000;
 const nonnegative = value => Number.isFinite(value) && value > 0 ? value : 0;
 const NOTES = Object.freeze([
-  '所有耗时单位均为 ms；RAF 是相邻连续有效帧的间隔，CPU 是完整回调经过的时间。',
+  '所有耗时单位均为 ms；raf 是相邻有效绘制帧的间隔（包含限帧等待），CPU 是提交该帧的完整回调耗时。',
   'simulation（核心模拟）和 auxiliary（辅助逻辑）是 update（逻辑）的子项；HUD 与逻辑可能重叠，不能相加。',
   'lighting（光影提交）是 render（绘制提交）的子项，不能重复相加；render 不含完整 GPU 和浏览器合成耗时。',
   '数量为每秒读取已有缓存的快照均值/峰值，可能遗漏两个快照之间的短暂峰值。',
@@ -41,7 +41,7 @@ export class ActivityPerformance {
   _clearWindow() {
     this._windowMs = 0; this._windowSamples = 0;
     this._windowCpu = 0; this._windowCpuMax = 0;
-    this._windowOver25 = 0; this._windowOver50 = 0; this._windowCpuOverBudget = 0;
+    this._windowOver25 = 0; this._windowOver50 = 0; this._windowLate = 0; this._windowCpuOverBudget = 0;
   }
 
   _clear() {
@@ -54,7 +54,9 @@ export class ActivityPerformance {
   }
 
   _begin(now) {
-    this._id = this.log.begin('play', '持续游玩', copyContext(this.context));
+    const context = copyContext(this.context);
+    this._frameBudget = 1000 / (context.targetFps === 30 ? 30 : 60);
+    this._id = this.log.begin('play', '持续游玩', context);
     // This module never sets the current activity; the app arbitrates between
     // play, loading, and manual comparison activities.
     this._snapshotCounts(now);
@@ -111,7 +113,8 @@ export class ActivityPerformance {
     if (cpu > this._windowCpuMax) this._windowCpuMax = cpu;
     if (elapsed > 25) this._windowOver25++;
     if (elapsed > 50) this._windowOver50++;
-    if (cpu > 1000 / 60) this._windowCpuOverBudget++;
+    if (elapsed > this._frameBudget * 1.5 + .1) this._windowLate++;
+    if (cpu > this._frameBudget) this._windowCpuOverBudget++;
     if (this._lastCountAt === null || now - this._lastCountAt >= COUNT_INTERVAL_MS) this._snapshotCounts(now);
     if (this._windowMs >= WINDOW_MS) this._checkWindow(now);
     if (this._elapsed >= this.durationMs) {
@@ -128,8 +131,8 @@ export class ActivityPerformance {
     const samples = this._windowSamples;
     const meanRafMs = this._windowMs / samples;
     const cpuMeanMs = this._windowCpu / samples;
-    const rafSlow = this._windowOver25 >= 3 && (meanRafMs > 25 || this._windowOver25 / samples >= .2 || this._windowOver50 >= 3);
-    const cpuSlow = this._windowCpuOverBudget >= 3 && (cpuMeanMs > 1000 / 60 || this._windowCpuOverBudget / samples >= .2);
+    const rafSlow = this._windowLate >= 3 && (meanRafMs > this._frameBudget * 1.5 || this._windowLate / samples >= .2);
+    const cpuSlow = this._windowCpuOverBudget >= 3 && (cpuMeanMs > this._frameBudget || this._windowCpuOverBudget / samples >= .2);
     // Require several slow frames: one isolated stall must not masquerade as
     // sustained slowness. The cooldown spans pauses and successive records.
     if (samples >= 5 && (rafSlow || cpuSlow) && now - this._lastWarningAt >= WARNING_INTERVAL_MS) {
@@ -142,7 +145,7 @@ export class ActivityPerformance {
       this._lastWarningAt = now; this._warnings++;
       this.log.event(this._id, 'warning', message, {
         classification, activeMs:this._windowMs, samples, fps:samples * 1000 / this._windowMs,
-        meanRafMs, over25:this._windowOver25, over50:this._windowOver50,
+        meanRafMs, targetFps:1000 / this._frameBudget, over25:this._windowOver25, over50:this._windowOver50,
         cpuMeanMs, cpuMaxMs:this._windowCpuMax,
       });
       const details = this._details('异常阶段摘要');
@@ -182,7 +185,7 @@ export class ActivityPerformance {
   }
 
   _summary(report) {
-    return `${(report.activeMs / 1000).toFixed(1)} 秒 · ${report.fps.toFixed(1)} FPS · RAF P95 ${report.raf.p95Ms.toFixed(2)} ms · CPU 均值 ${report.cpu.meanMs.toFixed(2)} ms · >50 ms ${report.raf.over50} 帧`;
+    return `${(report.activeMs / 1000).toFixed(1)} 秒 · ${report.fps.toFixed(1)} FPS · 帧间隔 P95 ${report.raf.p95Ms.toFixed(2)} ms · CPU 均值 ${report.cpu.meanMs.toFixed(2)} ms · >50 ms ${report.raf.over50} 帧`;
   }
 
   finish(reason = '暂停') {

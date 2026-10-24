@@ -13,6 +13,7 @@ class Service {
   constructor(){this.users=new Map();this.current=null;this.calls=[];this.offline=false;this.losePut=false;this.pausePut=null;this.nextId=0;}
   add(username,level=null){const user={id:`account-${++this.nextId}`,username};this.users.set(username,{user,password:'password8',revision:level===null?0:1,save:level===null?null:world(level),mutation:null,debug:{revision:0,save:null,mutation:null}});return user;}
   envelope(record){return {revision:record.revision,updatedAt:record.revision?'2026-10-24T00:00:00.000Z':null,save:record.save};}
+  ack(record){return {revision:record.revision,updatedAt:'2026-10-24T00:00:00.000Z',mutationId:record.mutation};}
   fetch=async(url,options)=>{
     const path=new URL(url).pathname,body=options.body?JSON.parse(options.body):null;
     assert.equal(options.credentials,'include');assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
@@ -35,11 +36,11 @@ class Service {
     const account=path.endsWith('/debug-save')?this.current.debug:this.current;
     if(options.method==='GET')return response(this.envelope(account));
     if(this.pausePut){const gate=this.pausePut;this.pausePut=null;await gate.promise;}
-    if(account.mutation===body.mutationId)return response(this.envelope(account));
+    if(account.mutation===body.mutationId)return response(this.ack(account));
     if(body.expectedRevision!==account.revision)return response({error:'SAVE_CONFLICT',revision:account.revision},409);
     account.revision++;account.save=body.save;account.mutation=body.mutationId;
     if(this.losePut){this.losePut=false;throw Error('reply lost after commit');}
-    return response(this.envelope(account));
+    return response(this.ack(account));
   };
 }
 const clients=[];
@@ -147,6 +148,41 @@ try {
   await login(ack,'ack_user');ack.createSaveStorage().setItem(GUEST_SAVE_KEY,text(6));armed=true;assert.equal(await ack.flush(),false);assert.equal(ack.snapshot.status,'error');assert(ack.snapshot.dirty);assert.equal(ackApi.current.revision,1);
   failAck=false;armed=false;assert(await ack.flush());assert.equal(ackApi.current.revision,1);assert.equal(ack.snapshot.dirty,false);
 
+  // A successful HTTP status is insufficient: only the exact mutation's
+  // canonical compact ACK can clear the durable pending write.
+  for(const [kind,change,expectedStatus] of [
+    ['wrong-mutation',value=>({...value,mutationId:'ffffffff-ffff-4fff-8fff-ffffffffffff'}),'conflict'],
+    ['wrong-revision',value=>({...value,revision:value.revision+1}),'conflict'],
+    ['invalid-timestamp',value=>({...value,updatedAt:'not-a-date'}),'error'],
+    ['old-full-envelope',value=>({revision:value.revision,updatedAt:value.updatedAt,save:world(61)}),'error'],
+  ]){
+    const protocolApi=new Service(),protocolStorage=memory();protocolApi.add('protocol_user');
+    const protocol=client(protocolApi,protocolStorage,{fetchImpl:async(url,options)=>{
+      const reply=await protocolApi.fetch(url,options);
+      return options.method==='PUT'&&reply.ok?response(change(await reply.json())):reply;
+    }});
+    await login(protocol,'protocol_user');protocol.createSaveStorage().setItem(GUEST_SAVE_KEY,text(61));
+    assert.equal(await protocol.flush(),false,kind);assert.equal(protocol.snapshot.status,expectedStatus,kind);assert(protocol.snapshot.dirty,kind);
+    const pending=protocol._record.pending;assert(pending&&pending.saveText===text(61),`${kind}: local payload is retained`);
+    protocol.dispose();const resumed=client(protocolApi,protocolStorage);await resumed.initialize();
+    assert.equal(resumed.snapshot.status,'ready',kind);assert.equal(protocolApi.current.revision,1,`${kind}: refresh retries the same already committed operation`);
+    assert.equal(resumed.createSaveStorage().getItem(GUEST_SAVE_KEY),text(61));
+  }
+
+  // The campaign codec validates fresh snapshots itself. Its trusted adapter
+  // avoids a second full tree walk while preserving byte/identity/disk guards.
+  let validations=0;const efficientApi=new Service(),efficientStorage=memory();efficientApi.add('efficient_user',3);
+  const efficient=client(efficientApi,efficientStorage,{validateSave:value=>{validations++;validateSave(value);}});
+  await login(efficient,'efficient_user');assert.equal(validations,1,'cloud objects are fully validated once');
+  const efficientSlot=efficient.createSaveStorage();efficientSlot.setItem(GUEST_SAVE_KEY,text(4));assert.equal(validations,2,'general writes remain fully validated');
+  efficientSlot.setValidatedItem(GUEST_SAVE_KEY,text(5));assert.equal(validations,2);
+  assert(await efficient.flush());assert.equal(validations,2,'a validated pending upload and its compact ACK do not rewalk the world');
+  assert.equal(efficientApi.current.save.player.level,5);
+  assert.throws(()=>efficientSlot.setValidatedItem('another-slot',text(6)),{code:'INVALID_SAVE'});
+  assert.throws(()=>efficientSlot.setValidatedItem(GUEST_SAVE_KEY,'界'.repeat(1_333_334)),{code:'INVALID_SAVE'},'byte cap still rejects multi-byte oversized text');
+  assert.equal(efficientSlot.getItem(GUEST_SAVE_KEY),text(5));
+  await efficient.logout();assert.throws(()=>efficientSlot.setValidatedItem(GUEST_SAVE_KEY,text(6)),{code:'STALE_STORAGE'});
+
   // The browser storage event stops an already running page before its next
   // checkpoint; write-time checks also cover a missed or delayed event.
   const events=new EventTarget(),eventStorage=memory(),eventApi=new Service();eventApi.add('event_user');
@@ -227,5 +263,5 @@ try {
   assert(modesApi.calls.filter(call=>call.path.endsWith('/debug-save')).length>0);
 
   const requests=api.calls.filter(c=>c.method==='PUT');assert(requests.every(c=>!Object.hasOwn(c.body,'username')&&!Object.hasOwn(c.body,'password')));
-  console.log('Account client: isolated guest/account and normal/DEBUG slots, explicit adoption, shared identity with independent cloud revisions, durable CAS/idempotent retries, serial writes, offline/cold-load recovery, reset revisions, multi-device/tab conflicts, cookie binding, corrupt cache recovery, bounded quota-safe pending data and proxy upload limits passed.');
+  console.log('Account client: compact mutation ACKs and malformed-response retention, validated-codec fast path, isolated guest/account and normal/DEBUG slots, durable CAS/retries, serial writes, offline recovery, multi-device/tab conflicts, cookie binding, bounded quota-safe pending data and upload limits passed.');
 } finally {for(const c of clients)c.dispose();}

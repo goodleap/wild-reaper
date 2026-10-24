@@ -21,9 +21,35 @@ export class RenderSchedule {
   }
   shouldRender(state) {
     if (state.hidden) return false;
-    return this.dirty || this.isLive(state) || !this.lastState || sceneKeys.some(key => state[key] !== this.lastState[key]);
+    return this.isLive(state) || this.needsRender(state);
   }
+  needsRender(state) { return !state.hidden && (this.dirty || !this.lastState || sceneKeys.some(key => state[key] !== this.lastState[key])); }
   commit(state) { this.lastState = { ...state }; this.dirty = false; }
+}
+
+export const MAX_SIMULATION_STEP = 1 / 30;
+export const MAX_FRAME_ELAPSED = .2;
+const pacingKeys = [...sceneKeys, 'transition', 'dialogue'];
+// Accumulate skipped display callbacks, then spend their elapsed time in
+// bounded simulation steps. Pauses/scenes start a fresh clock domain.
+export class FramePacer {
+  constructor() { this.reset(); }
+  reset() { this.last = null; this.nextAt = null; this.pending = 0; this.state = null; }
+  take(now, state, {fps = 60, live = false, force = false} = {}) {
+    const interval = 1000 / (fps === 30 ? 30 : 60);
+    const delta = this.last === null || now < this.last ? 0 : Math.min(MAX_FRAME_ELAPSED, (now - this.last) / 1000);
+    const changed = !this.state || pacingKeys.some(key => state[key] !== this.state[key]);
+    this.last = now; this.state = {...state};
+    if (!live || state.hidden) { this.pending = 0; this.nextAt = null; return {ready:force && !state.hidden, elapsed:0}; }
+    if (changed) { this.pending = 0; this.nextAt = now; }
+    this.pending = Math.min(MAX_FRAME_ELAPSED, this.pending + (changed ? Math.min(delta, interval / 1000) : delta));
+    if (this.nextAt === null) this.nextAt = now;
+    if (!force && now + .1 < this.nextAt) return {ready:false, elapsed:0};
+    // Keep the target phase instead of rounding 60 FPS down on 90/144 Hz displays.
+    if (now + .1 >= this.nextAt) this.nextAt += (Math.floor((now - this.nextAt + .1) / interval) + 1) * interval;
+    const elapsed = this.pending; this.pending = 0;
+    return {ready:true, elapsed};
+  }
 }
 
 // Submission CPU time excludes browser compositing / GPU work. RAF cadence is

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { createWorldSaveDiagnostics } from './dist/world-save-diagnostics.js';
+let now=0;const rows=[];
+const log={begin(kind,title,context){rows.push({kind,title,context});return rows.length-1;},end(id,data){Object.assign(rows[id],data);},update(id,data){Object.assign(rows[id],data);}};
+const metrics=createWorldSaveDiagnostics({log,clock:()=>now});
+const sample={status:'success',reason:'autosave',totalMs:6,snapshotMs:2,validateMs:1,serializeMs:1,storageMs:2,bytes:1000,rebuiltRegions:1,reusedRegions:4,save:{password:'never-record',player:{hp:99}}};
+for(let i=0;i<20;i++)metrics.record(sample,{debug:true,mode:'account'});
+assert.equal(rows.length,1);assert.equal(rows[0].details.writes,20);assert.equal(rows[0].details.totalMs,120);assert.equal(rows[0].details.reusedRegions,80);
+assert(!JSON.stringify(rows).includes('never-record'));assert(!JSON.stringify(rows).includes('player'));
+now=60000;metrics.record(sample,{debug:true,mode:'account'});assert.equal(rows.length,2);assert.equal(rows[1].details.writes,1);
+metrics.record({...sample,status:'error',totalMs:10},{debug:true,mode:'account'});assert.equal(rows.length,3);assert.equal(rows[2].status,'error');
+assert.equal(metrics.snapshot.writes,22);assert.equal(metrics.snapshot.failures,1);assert.equal(metrics.snapshot.maxMs,10);
+const snapshot=metrics.snapshot;snapshot.writes=0;assert.equal(metrics.snapshot.writes,22);
+const broken=createWorldSaveDiagnostics({log:{begin(){throw Error('log unavailable');}}});assert.doesNotThrow(()=>broken.record(sample));assert.equal(broken.snapshot.writes,1);
+console.log('World save diagnostics: bounded minute batches, local timing phases, failure visibility and metadata-only logging passed.');

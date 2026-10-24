@@ -10,6 +10,8 @@ import { restoreDebugTools } from './debug-training.js';
 
 export const WORLD_SAVE_KEY='wild-echoes-guest-world-v1';
 const MAX_BYTES=4_000_000,MAX_ACTORS=1600;
+const encoder=new TextEncoder();
+const now=()=>globalThis.performance?.now?.()??Date.now();
 const plain=value=>value&&Object.getPrototypeOf(value)===Object.prototype;
 const finite=value=>Number.isFinite(value)&&Math.abs(value)<=Number.MAX_SAFE_INTEGER;
 const permitted=game=>game?.mode==='world'&&!game.stage&&!game.expedition;
@@ -134,34 +136,56 @@ function connectionIds(values,toNames=false){
   if(toNames)return [...values].map(key=>key.split(':').map(Number).map(index=>WORLD_IDS[index])).filter(pair=>pair.length===2&&pair.every(Boolean));
   return new Set(list(values).filter(pair=>Array.isArray(pair)&&pair.length===2&&pair.every(id=>WORLD_IDS.includes(id))).map(pair=>pair.map(id=>WORLD_IDS.indexOf(id)).sort((a,b)=>a-b).join(':')));
 }
-export function validateWorldSaveData(data){
+function validateHeader(data){
   if(!plain(data)||data.version!==1||!plain(data.regions)||!plain(data.player)||!plain(data.start)||!WORLD_IDS.includes(data.start.worldId)||!WORLD_IDS.includes(data.location?.worldId))throw new Error('存档格式无效');
   if(![data.player.hp,data.player.level,data.player.xp,data.player.xpNext,data.gold,data.crystals,data.crystalsNext].every(finite)||data.player.level<1||data.player.xpNext<=0||data.crystalsNext<=0||data.gold<0||data.crystals<0)throw new Error('存档成长数据无效');
   if(data.build?.version!==3||data.build.heroId!==data.start.hero)throw new Error('存档能力数据无效');
   CombatBuild.fromSnapshot(data.build);
   if(Object.keys(data.regions).some(id=>!WORLD_IDS.includes(id)))throw new Error('存档地图无效');
-  for(const region of Object.values(data.regions)){
+}
+function validateRegion(region){
     if(!plain(region)||!plain(region.dungeons)||['enemies','gems','coins','settlements','relicSites','rift','territories','discoveredMap','portals','camps'].some(key=>!Array.isArray(region[key])))throw new Error('存档区域数据无效');
     for(const scene of [region,...Object.values(region.dungeons)]){
       if(!Array.isArray(scene.enemies)||scene.enemies.length>MAX_ACTORS||scene.enemies.some(enemy=>!ENEMY_IDS.includes(enemy.type)||![enemy.id,enemy.hp,enemy.maxHp,enemy.x,enemy.y].every(finite)))throw new Error('存档守卫数据无效');
     }
-  }
-  let nodes=0;
+}
+function inspectTree(data,freeze=false){
+  let nodes=0,height=0;
   const walk=(value,depth=0,path='save')=>{
     if(++nodes>400000||depth>18)throw new Error('存档超出上限');
+    height=Math.max(height,depth);
     if(typeof value==='number'&&!finite(value))throw new Error(`存档数值无效：${path}`);
-    if(value&&typeof value==='object')for(const [key,item] of Object.entries(value)){
-      if(['__proto__','prototype','constructor'].includes(key))throw new Error('存档字段无效');walk(item,depth+1,`${path}.${key}`);
+    if(value&&typeof value==='object'){
+      for(const [key,item] of Object.entries(value)){
+        if(['__proto__','prototype','constructor'].includes(key))throw new Error('存档字段无效');walk(item,depth+1,`${path}.${key}`);
+      }
+      if(freeze)Object.freeze(value);
     }
-  };walk(data);return data;
+  };walk(data);return {nodes,height};
+}
+export function validateWorldSaveData(data){
+  validateHeader(data);
+  for(const region of Object.values(data.regions))validateRegion(region);
+  inspectTree(data);return data;
+}
+// Inactive worlds are suspended by Regions.saveWorld(). Connection changes
+// replace their enemy array. Small progress stamps also catch in-place edits
+// to doors/quest mechanisms without revisiting every actor and loot record.
+function inactiveProgress(source){
+  return JSON.stringify([
+    source.bossDefeated,source.nextBossAt,
+    [source.portals,source.settlements?.sites,source.relicSites?.sites,source.riftExploration?.sites,source.territories?.groups].map(progressObjects),
+    [...(source.dungeonStates||[])].map(([id,state])=>[id,state.bossDefeated,state.rewardClaimed,progress(state.treasure),progressObjects(state.chests),progressObjects(state.mechanisms),[...state.rooms].map(([roomId,room])=>[roomId,progress(room)])])
+  ]);
 }
 
 /** One campaign in the supplied identity-bound storage. Quest flags and assets commit together. */
 export class WorldSave {
-  constructor({storage=browserStorage(),enabled=true,onNotice=()=>{}}={}){
-    this.enabled=!!enabled;this.storage=storage;this.onNotice=onNotice;this.data=empty();this._storageOk=!!storage;this._blocked=false;this._applied=new WeakSet();this._dungeonApplied=new WeakSet();
+  constructor({storage=browserStorage(),enabled=true,onNotice=()=>{},onMetrics=null}={}){
+    this.enabled=!!enabled;this.storage=storage;this.onNotice=onNotice;this.onMetrics=onMetrics;this.data=empty();this._storageOk=!!storage;this._blocked=false;this._applied=new WeakSet();this._dungeonApplied=new WeakSet();
+    this._inactiveRegions=new Map();this._regionChecks=new WeakMap();this._regionJSON=new WeakMap();
     this.questStorage={getItem:key=>key===QUEST_STORAGE_KEY&&this.data.quests?JSON.stringify(this.data.quests):null,setItem:(key,value)=>{if(key===QUEST_STORAGE_KEY)this.data.quests=JSON.parse(value);},removeItem:key=>{if(key===QUEST_STORAGE_KEY)this.data.quests=null;}};
-    if(this.enabled&&storage)try{const raw=storage.getItem(WORLD_SAVE_KEY);if(raw){if(raw.length>MAX_BYTES)throw new Error('存档超出上限');this.data=validateWorldSaveData(JSON.parse(raw));}}
+    if(this.enabled&&storage)try{const raw=storage.getItem(WORLD_SAVE_KEY);if(raw){if(encoder.encode(raw).byteLength>MAX_BYTES)throw new Error('存档超出上限');this.data=validateWorldSaveData(JSON.parse(raw));}}
     catch(error){this._blocked=true;this._fail(error,'read');}
   }
   get hasSave(){return !!this.data.start;}
@@ -169,9 +193,11 @@ export class WorldSave {
   get revision(){return this.data.revision||0;}
   startOptions(){return this.hasSave?{...this.data.start,worldId:this.data.location.worldId}:{worldId:getConfigSection('worlds').travel.startWorldId};}
   _fail(error,reason){this._storageOk=false;this.onNotice({type:'worldSaveError',reason,message:reason==='read'?'世界存档无法读取，请保留页面并检查浏览器存储。':'世界进度未能保存，请保留页面。',detail:String(error?.message||error)});return false;}
+  invalidateRegion(worldId){this._inactiveRegions.delete(worldId);}
+  _metrics(report){try{this.onMetrics?.(report);}catch{}}
   reset(){
     if(!this.enabled)return false;
-    try{if(!this.storage?.removeItem)throw new Error('浏览器存储不可用');this.storage.removeItem(WORLD_SAVE_KEY);this.data=empty();this._blocked=false;this._storageOk=true;this._applied=new WeakSet();this._dungeonApplied=new WeakSet();return true;}
+    try{if(!this.storage?.removeItem)throw new Error('浏览器存储不可用');this.storage.removeItem(WORLD_SAVE_KEY);this.data=empty();this._blocked=false;this._storageOk=true;this._applied=new WeakSet();this._dungeonApplied=new WeakSet();this._inactiveRegions.clear();this._regionChecks=new WeakMap();this._regionJSON=new WeakMap();return true;}
     catch(error){return this._fail(error,'reset');}
   }
   attach(game){
@@ -257,6 +283,7 @@ export class WorldSave {
   }
   capture(game,{reason='checkpoint',respawn=null}={}){
     if(!this.enabled||!permitted(game)||this._blocked)return false;
+    const started=now(),metrics={reason:String(reason).slice(0,64),status:'error',snapshotMs:0,validateMs:0,serializeMs:0,storageMs:0,bytes:0,rebuiltRegions:0,reusedRegions:0};
     try{
       game.quests?.flush();game.dungeon?._saveScene();
       const d=empty();d.quests=copy(this.data.quests);d.regions={...this.data.regions};d.revision=this.revision+1;d.savedAt=Date.now();d.reason=String(reason).slice(0,64);
@@ -276,14 +303,45 @@ export class WorldSave {
       d.travel=game.worldTravel?.serialize()??null;d.shops=game.worldShops?.serialize()??null;
       const c=game.companions;d.party={members:c.members.map(member=>pick(member,['id','kind','hp','state','recovery','sourceId'])),...pick(c,['nextPayrollAt','graceUntil','unpaidCost','rescuedCount']),rescueSources:[...c._rescueSources]};
       d.connections={unlocked:connectionIds(game.regions.unlockedConnections,true),claimed:connectionIds(game.regions.claimedConnections,true)};
-      for(const [index,state] of game.regions.states){const id=WORLD_IDS[index];if(id)d.regions[id]=surfaceSnapshot(game,state,d.regions[id]);}
+      const pendingRegions=[];this._inactiveRegions.delete(game.worldId);
+      for(const [index,state] of game.regions.states){
+        const id=WORLD_IDS[index];if(!id||id===game.worldId)continue;
+        const stamp=inactiveProgress(state),previous=this._inactiveRegions.get(id);
+        if(previous?.source===state&&previous.enemies===state.enemies&&previous.stamp===stamp){d.regions[id]=previous.data;metrics.reusedRegions++;}
+        else{
+          d.regions[id]=surfaceSnapshot(game,state,d.regions[id]);metrics.rebuiltRegions++;
+          pendingRegions.push([id,{source:state,enemies:state.enemies,stamp,data:d.regions[id]}]);
+        }
+      }
       const source={...game,...(world||{}),portals:game.regions.portals,dungeonStates:game.dungeon.states,discoveredMap:game.discoveredMap,
         companionCamps:world?.companionCamps??c.camps,companionNextAt:world?.companionNextAt??c.nextAt};
       d.regions[game.worldId]=surfaceSnapshot(game,source,d.regions[game.worldId]);
       d.regions[game.worldId].pendingRewards=[game.regions.rewardPortal,...game.regions._rewardQueue].filter(Boolean).map(reward=>reward.id);
-      validateWorldSaveData(d);const text=JSON.stringify(d);if(text.length>MAX_BYTES)throw new Error('世界存档超出容量上限');
-      if(!this.storage?.setItem)throw new Error('浏览器存储不可用');
-      this.storage.setItem(WORLD_SAVE_KEY,text);this.data=d;this._storageOk=true;return true;
+      metrics.rebuiltRegions++;metrics.reusedRegions=Object.keys(d.regions).length-metrics.rebuiltRegions;metrics.snapshotMs=now()-started;
+      // Loaded data always takes the full public validator. Internally produced
+      // immutable region snapshots can reuse their validated tree statistics;
+      // the aggregate node/depth limits still apply to the complete campaign.
+      let phase=now();validateHeader(d);const {regions,...header}=d,headStats=inspectTree(header);
+      let nodes=headStats.nodes+1;
+      for(const region of Object.values(regions)){
+        let checked=this._regionChecks.get(region);
+        if(!checked){validateRegion(region);checked=inspectTree(region,true);this._regionChecks.set(region,checked);}
+        nodes+=checked.nodes;if(nodes>400000||checked.height+2>18)throw new Error('存档超出上限');
+      }
+      metrics.validateMs=now()-phase;phase=now();
+      const head=JSON.stringify(header),parts=[];let bytes=encoder.encode(head).byteLength+13;
+      for(const [id,region] of Object.entries(regions)){
+        let serialized=this._regionJSON.get(region);
+        if(!serialized){const text=JSON.stringify(region);serialized={text,bytes:encoder.encode(text).byteLength};this._regionJSON.set(region,serialized);}
+        const key=JSON.stringify(id);bytes+=encoder.encode(key).byteLength+1+serialized.bytes+(parts.length?1:0);parts.push(key+':'+serialized.text);
+      }
+      const text=head.slice(0,-1)+',"regions":{'+parts.join(',')+'}}';
+      metrics.bytes=bytes;metrics.serializeMs=now()-phase;if(bytes>MAX_BYTES)throw new Error('世界存档超出容量上限');
+      const write=this.storage?.setValidatedItem||this.storage?.setItem;if(!write)throw new Error('浏览器存储不可用');
+      phase=now();write.call(this.storage,WORLD_SAVE_KEY,text);metrics.storageMs=now()-phase;
+      this.data=d;this._storageOk=true;for(const [id,cached] of pendingRegions)this._inactiveRegions.set(id,cached);
+      metrics.status='success';return true;
     }catch(error){return this._fail(error,'write');}
+    finally{metrics.totalMs=now()-started;this._metrics(metrics);}
   }
 }

@@ -120,12 +120,12 @@ export class FrameDiagnostics {
     const ending = {duration:'采样完成', manual:'手动结束', capacity:'已达样本上限'}[report.reason] || '采样结束';
     return [
       `${report.modeLabel} · ${ending} · ${(report.activeMs / 1000).toFixed(1)} 秒 · ${report.samples} 帧 · ${report.fps.toFixed(1)} FPS`,
-      `RAF 间隔：均值 ${fixed(raf.meanMs)} / P95 ${fixed(raf.p95Ms)} / 最大 ${fixed(raf.maxMs)} ms`,
-      `长帧：>25 ms ${raf.over25} 次 / >50 ms ${raf.over50} 次；移动样本 ${(report.movingRatio * 100).toFixed(0)}%`,
+      `绘制帧间隔：均值 ${fixed(raf.meanMs)} / P95 ${fixed(raf.p95Ms)} / 最大 ${fixed(raf.maxMs)} ms`,
+      `帧间隔分布：>25 ms ${raf.over25} 次 / >50 ms ${raf.over50} 次；移动样本 ${(report.movingRatio * 100).toFixed(0)}%`,
       `完整回调 CPU：均值 ${fixed(cpu.meanMs)} / P95 ${fixed(cpu.p95Ms)} / 最大 ${fixed(cpu.maxMs)} ms`,
       `U 逻辑：${fixed(update.meanMs)} / ${fixed(update.maxMs)} ms；D 绘制提交：${fixed(render.meanMs)} / ${fixed(render.maxMs)} ms`,
       `HUD：${fixed(hud.meanMs)} / ${fixed(hud.maxMs)} ms（以上分项为均值 / 最大）`,
-      'HUD 已计入完整回调 CPU；其中逻辑阶段触发的 HUD 也计入 U，不能相加。D 不含 GPU 和浏览器合成耗时。',
+      '帧间隔包含限帧等待；30 帧模式约 33.3 ms 属于正常节奏。HUD 已计入完整回调 CPU，其中逻辑阶段触发的 HUD 也计入 U，不能相加。D 不含 GPU 和浏览器合成耗时。',
     ].join('\n');
   }
 
