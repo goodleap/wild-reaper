@@ -24,6 +24,7 @@ import { armyPanelHTML } from './army-panel.js';
 import { HutArt } from './hut-art.js';
 import { AuthoredInteriorArt } from './authored-interior-art.js';
 import { WorldHubArt, worldHubVisual } from './world-hub-art.js';
+import { ShopInteriorArt, shopFurnitureVisual } from './shop-interior-art.js';
 import { WorldSave } from './world-save.js';
 import { worldAtlasHTML, inventoryHTML } from './world-atlas-ui.js';
 import { REGIONS } from './world-definitions.js';
@@ -127,6 +128,7 @@ const islandArt=new IslandArt();
 const hutArt=new HutArt(()=>document.createElement('canvas'));
 const authoredInteriorArt=new AuthoredInteriorArt(()=>document.createElement('canvas'));
 const worldHubArt=new WorldHubArt(()=>document.createElement('canvas'));
+const shopInteriorArt=new ShopInteriorArt(()=>document.createElement('canvas'));
 const superArt=new SuperArt(()=>document.createElement('canvas'));
 const propArt=new PropArt(()=>document.createElement('canvas'));
 const encounterArt=new EncounterArt(()=>document.createElement('canvas'));
@@ -627,6 +629,11 @@ function openMap(event,{travel=false}={}){
   const origin=focusNavigation.capture(event);if(characterOpen)closeCharacter();
   mapReturnFocus=origin;mapOpen=true;mapTravelMode=travel;if(travel)mapView='world';clearInput();show('map-overlay');$('map-button').setAttribute('aria-expanded','true');renderExpandedMap();focusNavigation.enter($('map-overlay'),$('close-map'),origin);
 }
+function openQuestJournal(id){
+  mapView='region';openMap();
+  const card=[...$('quest-journal-list').querySelectorAll('[data-quest-entry]')].find(node=>node.getAttribute('data-quest-entry')===id);
+  card?.scrollIntoView?.({block:'nearest'});
+}
 function closeMap(){
   if(!mapOpen)return;mapOpen=false;mapTravelMode=false;clearInput();show('map-overlay',false);$('map-button').setAttribute('aria-expanded','false');
   restoreInteractionFocus(mapReturnFocus);mapReturnFocus=null;
@@ -647,7 +654,8 @@ function renderExpandedMap(){
   renderQuestPanel($('quest-journal-list'),questEntries,{
     storageMode:game.quests?.storageMode,
     onAccept:id=>{game.quests?.accept(id);renderExpandedMap();updateQuestHUD();renderSchedule.invalidate();},
-    onTrack:id=>{game.quests?.track(id);renderExpandedMap();updateQuestHUD();renderSchedule.invalidate();}
+    onTrack:id=>{game.quests?.track(id);renderExpandedMap();updateQuestHUD();renderSchedule.invalidate();},
+    onDecline:()=>closeMap()
   });
   show('quest-journal',game.mode==='world'&&questEntries.length>0);
   const target=$('expanded-map-canvas'),mapCtx=target.getContext('2d'),side=420;
@@ -1440,7 +1448,7 @@ function flightOverlapsSilhouette(actor,prop){
 }
 function sceneDrawList(actors,props,adventureProps=[],weaponItems=[]){
   const items=actors.map(actor=>({kind:'actor',sortY:actor.footY,actor}));
-  for(const prop of props)if(prop.visual!==false&&(!prop.structureId||prop.variant==='castle-wall'||prop.variant==='hut-wall'))items.push({kind:'terrain',sortY:prop.sortY??prop.y,prop});
+  for(const prop of props)if(prop.visual!==false&&(!prop.structureId||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.variant==='shop-wall'))items.push({kind:'terrain',sortY:prop.sortY??prop.y,prop});
   for(const prop of adventureProps)items.push({kind:'adventure',sortY:prop.sortY??prop.y,prop});
   const scenery=items.filter(item=>item.kind!=='actor'),low=scenery.filter(item=>item.kind==='terrain'&&obstacleHeight(item.prop)==='low');
   for(const item of items){
@@ -1557,7 +1565,7 @@ function rubbleShadowPaths(prop){
 }
 function drawTerrainShadowPaths(mask,props){
   for(const prop of props){
-    if(prop.visual===false||prop.castsShadow===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.structureId)continue;
+    if(prop.visual===false||prop.castsShadow===false||prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.variant==='shop-wall'||prop.structureId)continue;
     const {x,y,r,type,scale=1}=prop;
     if(prop.variant==='city-native'&&['oak','cypress','apple','shrub','ivy','rubble'].includes(prop.cityArt?.sprite)){
       const visual=prop.visual||{},offset=visual.shadowOffset??12,cx=x+SUN.x*offset,cy=y+SUN.y*offset;
@@ -1603,7 +1611,7 @@ function drawTerrainLog(prop){sceneryArt.drawLog(ctx,prop);}
 function drawDeadTree(prop,mainPlayer){regionalArt.drawDeadTree(ctx,prop,treeCanopyOpacity(prop,mainPlayer));}
 function drawRuinsStone(prop){regionalArt.drawRuinsStone(ctx,prop);}
 function drawRuinsWall(prop){regionalArt.drawRuinsWall(ctx,prop);}
-function drawTerrain(prop,mainPlayer){if(prop.visual===false)return;if(prop.variant==='castle-wall'||prop.variant==='hut-wall'){drawDungeonWall(prop,mainPlayer);return;}if(prop.structureId)return;
+function drawTerrain(prop,mainPlayer){if(prop.visual===false)return;if(prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.variant==='shop-wall'){drawDungeonWall(prop,mainPlayer);return;}if(prop.structureId)return;
   if(prop.variant==='mountain-native'&&drawMountainProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer),player:mainPlayer,footY:mainPlayer?mainPlayer.y+groundOffset(mainPlayer,true):undefined}))return;
   if(prop.variant==='snow-native'&&drawSnowProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer),player:mainPlayer,footY:mainPlayer?mainPlayer.y+groundOffset(mainPlayer,true):undefined}))return;
   if(drawBeachProp(ctx,prop,{canopyAlpha:treeCanopyOpacity(prop,mainPlayer),player:mainPlayer,footY:mainPlayer?mainPlayer.y+groundOffset(mainPlayer,true):undefined}))return;
@@ -1632,7 +1640,7 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   props.push(...questSceneProps(game.quests?.getProps()).filter(visible));
   if(adventure?.treasure&&visible(adventure.treasure))props.push({...adventure.treasure,type:'treasure'});
   props.push(...(game?.environment?.props||[]).filter(prop=>prop.state!=='spent'&&visible(prop)));
-  if(!game.dungeon?.active)for(const portal of game.regions?.portals||[])if(visible({...portal,y:portal.y-30}))props.push({...portal,type:'portal',...(portal.natural?{kind:'exit',angle:Math.atan2(-(portal.arrivalDirection?.y||0),-(portal.arrivalDirection?.x||0)),isRiftLandmark:true}:{}),sortY:portal.y});
+  if(!game.dungeon?.active)for(const portal of game.regions?.portals||[]){const sign=portal.sign||portal;if(visible({...sign,y:sign.y-30}))props.push({...portal,x:sign.x,y:sign.y,type:'portal',...(portal.natural?{kind:'exit',angle:Math.atan2(-(portal.arrivalDirection?.y||0),-(portal.arrivalDirection?.x||0)),isRiftLandmark:true}:{}),sortY:sign.y});}
   if(!game.dungeon?.active)for(const site of game.riftExploration?.sites||[])if(visible(site))props.push({...site,type:site.kind==='chest'?'treasure':site.kind,state:site.kind==='chest'?(site.state==='claimed'?'opened':'unlocked'):site.state,isRiftLandmark:site.kind!=='chest',sortY:site.y});
   if(!game.dungeon?.active)for(const site of game.settlements?.sites||[]){
     const visual=worldHubVisual(site)||(game.worldId==='clockshadow-city'?nativeCitySettlementVisual(site,{artStyle:game.terrain.island?.layout?.artStyle}):game.worldId==='ember-realm-large'?emberSettlementVisual(site):null);
@@ -1642,7 +1650,7 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   if(game.dungeon?.active){const dungeon=game.dungeon.active;for(const chest of [dungeon.treasure,...(dungeon.chests||[])])if(chest&&visible(chest)&&sceneVisible(chest))props.push({...chest,type:'treasure',isDungeonTreasure:true,royal:chest===dungeon.treasure,sortY:chest.y});}
   if(game.dungeon?.active){
     const dungeon=game.dungeon.active;
-    for(const prop of dungeon.props||[])if(visible(prop))props.push({...prop,isInteriorProp:!!dungeon.authoredLayout,isHutFurniture:['table','stool','bed','shelf','rug','cargo','barrel','minecart'].includes(prop.type),sortY:prop.y+(prop.type==='rug'?-1000:0)});
+    for(const prop of dungeon.props||[])if(visible(prop)){const shop=dungeon.kind==='shop',visual=shop?shopFurnitureVisual(prop):null;props.push({...prop,isShopFurniture:shop,isInteriorProp:!!dungeon.authoredLayout,isHutFurniture:!shop&&['table','stool','bed','shelf','rug','cargo','barrel','minecart'].includes(prop.type),...(visual?{visual}:{}),...(prop.type==='rug'?{renderLayer:'ground'}:{}),sortY:prop.type==='rug'?prop.y-1000:(visual?.sortY??prop.y)});}
     for(const mechanism of dungeon.mechanisms||[])if(visible(mechanism))props.push({...mechanism,type:'interiorWinch',isInteriorProp:true,sortY:mechanism.y});
   }
   if(!game.dungeon?.active)for(const site of game.relicSites?.sites||[]){const special=site.type==='stonevault'||site.type==='dogcamp'||site.appearance==='golemaltar';props.push(...(special?companionArt.props(site):site.type==='hunt'?encounterArt.props(site):relicArt.props(site)).filter(visible));}
@@ -1650,10 +1658,10 @@ function adventureSceneProps(camX,camY,viewWidth=game?.viewWidth??width,viewHeig
   return props;
 }
 function drawAdventureShadowPaths(mask,props){
-  for(const prop of props){if(worldHubArt.drawShadowPath(mask,prop,SUN)||drawQuestShadowPath(mask,prop,SUN)||prop.isHutFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'||prop.type==='companionSitePart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
+  for(const prop of props){if(worldHubArt.drawShadowPath(mask,prop,SUN)||drawQuestShadowPath(mask,prop,SUN)||prop.isHutFurniture||prop.isShopFurniture)continue;if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'||prop.type==='companionSitePart'){const w=(prop.shadowWidth||16)*.5,len=prop.shadowHeight||26,x=prop.x,y=prop.y;mask.moveTo(x-w,y-3);mask.lineTo(x+w,y-3);mask.lineTo(x+w+SUN.x*len,y+SUN.y*len);mask.lineTo(x-w+SUN.x*len,y+SUN.y*len);mask.closePath();continue;}if(prop.isSettlement){if(prop.type!=='angel'&&prop.type!=='merchant'){const w=prop.width||140,d=prop.depth||70,length=prop.type==='castle'?44:26;mask.moveTo(prop.x-w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2,prop.y-d*.5);mask.lineTo(prop.x+w/2+SUN.x*length,prop.y+SUN.y*length);mask.lineTo(prop.x-w/2+SUN.x*length,prop.y+SUN.y*length);mask.closePath();}continue;}if(prop.type==='portal')continue;if(prop.type==='huntMarker'){const x=prop.x,y=prop.y,dx=SUN.x*23,dy=SUN.y*23;mask.moveTo(x-10,y-6);mask.lineTo(x+10,y-6);mask.lineTo(x+10+dx,y+8+dy);mask.lineTo(x-10+dx,y+8+dy);mask.closePath();continue;}const large=prop.type==='treasure',mushroom=prop.type==='mushroom',offset=large?14:mushroom?5:10,rx=large?25:mushroom?14:19,ry=large?21:mushroom?12:16,cx=prop.x+SUN.x*offset,cy=prop.y+SUN.y*offset;
     mask.moveTo(cx+rx*Math.cos(SUN_ANGLE),cy+rx*Math.sin(SUN_ANGLE));mask.ellipse(cx,cy,rx,ry,SUN_ANGLE,0,TAU);mask.closePath();}
 }
-function drawAdventureProp(prop){if(prop.isInteriorProp&&authoredInteriorArt.drawProp(ctx,prop))return;if(drawQuestProp(ctx,prop))return;if(prop.isRiftLandmark&&(drawEmberLandmark(ctx,prop,{player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawNativeCityLandmark(ctx,prop,{library:cityArtLibrary,artStyle:game.terrain.island?.layout?.artStyle,player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawRiftLandmark(ctx,prop)))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
+function drawAdventureProp(prop){if(prop.isShopFurniture){shopInteriorArt.drawFurniture(ctx,prop,game.dungeon.active);return;}if(prop.isInteriorProp&&authoredInteriorArt.drawProp(ctx,prop))return;if(drawQuestProp(ctx,prop))return;if(prop.isRiftLandmark&&(drawEmberLandmark(ctx,prop,{player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawNativeCityLandmark(ctx,prop,{library:cityArtLibrary,artStyle:game.terrain.island?.layout?.artStyle,player:game.player,footY:game.player.y+groundOffset(game.player,true)})||drawRiftLandmark(ctx,prop)))return;if(worldSiteArt.drawProp(ctx,prop,combatOptions))return;if(companionArt.drawProp(ctx,prop,combatOptions))return;if(prop.isHutFurniture){hutArt.drawProp(ctx,prop);return;}
   if(prop.type==='rescueRelicPart'||prop.type==='runeRelicPart'){relicArt.drawProp(ctx,prop,combatOptions);return;}
   if(prop.type==='huntMarker'){encounterArt.drawMarker(ctx,prop,combatOptions);return;}
   if(prop.isSettlement){drawSettlement(prop);return;}if(prop.isDungeonTreasure){drawDungeonChest(prop);return;}
@@ -2018,17 +2026,18 @@ function drawSettlement(site){
   if(site.state==='spent'||site.state==='claimed'||site.explored){ctx.font='9px system-ui';ctx.fillStyle='#99ad91';fillSceneLabel('已探索',0,33);}else if(site.type==='occupied'&&site.state==='active'){ctx.font='9px system-ui';ctx.fillStyle='#edc29c';fillSceneLabel('屋内尚有守卫',0,35);}
   ctx.restore();
 }
-function drawDungeonBackground(camX,camY){const {width,height}=sceneViewport();const dungeon=game.dungeon.active;if(dungeon.authoredLayout)authoredInteriorArt.drawGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='cave')drawRiftCaveGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='hut')hutArt.drawGround(ctx,dungeon,camX,camY,width,height);else regionalArt.drawDungeonGround(ctx,dungeon,camX,camY,width,height);}
+function drawDungeonBackground(camX,camY){const {width,height}=sceneViewport();const dungeon=game.dungeon.active;if(dungeon.kind==='shop')shopInteriorArt.drawGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.authoredLayout)authoredInteriorArt.drawGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='cave')drawRiftCaveGround(ctx,dungeon,camX,camY,width,height);else if(dungeon.kind==='hut')hutArt.drawGround(ctx,dungeon,camX,camY,width,height);else regionalArt.drawDungeonGround(ctx,dungeon,camX,camY,width,height);}
 function drawDungeonWall(prop,mainPlayer){
   dungeonWallArt.draw(ctx,prop,mainPlayer,game.dungeon.vision,game._clock,(target,wall)=>{
-    if(wall.authoredStyle)authoredInteriorArt.drawWall(target,wall);
+    if(wall.variant==='shop-wall')shopInteriorArt.drawWall(target,wall);
+    else if(wall.authoredStyle)authoredInteriorArt.drawWall(target,wall);
     else if(game.dungeon?.active?.kind==='cave')drawRiftCaveWall(target,game.dungeon.active.artTheme?{...wall,artTheme:game.dungeon.active.artTheme}:wall);
     else if(wall.variant==='hut-wall')hutArt.drawWall(target,wall,false);
     else regionalArt.drawDungeonWall(target,wall,false);
   });
 }
 function drawDungeonGround(){
-  const dungeon=game.dungeon?.active;if(!dungeon)return;if(dungeon.kind==='cave'){drawRiftCaveExits(ctx,dungeon);return;}const e=dungeon.entrance;ctx.save();ctx.strokeStyle='#a2d5c58c';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(e.x,e.y,42,24,0,0,TAU);ctx.stroke();ctx.font='600 10px system-ui';ctx.textAlign='center';ctx.fillStyle='#c9e3c7';ctx.fillText('返回荒野',e.x,e.y+41);for(const side of [-1,1]){line(e.x+side*30,e.y-14,e.x+side*30,e.y+10,'#9eaa8377',4);}ctx.restore();
+  const dungeon=game.dungeon?.active;if(!dungeon)return;if(dungeon.kind==='cave'){drawRiftCaveExits(ctx,dungeon);return;}const e=dungeon.entrance;ctx.save();ctx.strokeStyle='#a2d5c58c';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(e.x,e.y,42,24,0,0,TAU);ctx.stroke();ctx.font='600 10px system-ui';ctx.textAlign='center';ctx.fillStyle='#c9e3c7';ctx.fillText(dungeon.kind==='shop'?'返回城镇':'返回荒野',e.x,e.y+41);for(const side of [-1,1]){line(e.x+side*30,e.y-14,e.x+side*30,e.y+10,'#9eaa8377',4);}ctx.restore();
 }
 function drawDungeonChest(prop){
   propArt.drawProp(ctx,prop,combatOptions);
@@ -2168,7 +2177,7 @@ function bossFeedbackVisible(){return game.enemies.some(enemy=>enemy.type==='bos
 function activityLogOpen(){return $('activity-log-dialog')?.open===true;}
 function frameState(){return {game,scene:game?.dungeon?.active??game?.mapId??game?.regionIndex??null,status:(game?.sceneTransition.active&&game.status==='victory'?'playing':game?.status)??'intro',paused:paused||startLoading||activityLogOpen(),prepareOpen,helpOpen,mapOpen,characterOpen,archiveOpen,runEnded,hidden:!!document.hidden};}
 const cpuNow=()=>globalThis.performance?.now?.()??Date.now();
-function updateGameFrame(dt){input.x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+(touch?.dx||0);input.y=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+(touch?.dy||0);input.skill=skillRequested;input.interact=portalRequested;skillRequested=false;portalRequested=false;const simulationBegan=debugMode?cpuNow():0;game.update(dt,input);if(debugMode)frameSimulationMs=cpuNow()-simulationBegan;syncSceneInput();observeSceneDialogue(dt);if((game.runTime??0)>=archiveObserveAt||game.status!=='playing'){observeArchive();archiveObserveAt=(game.runTime??0)+.25;}if(!game.sceneTransition.active)worldMap.discover(game,{viewportWidth:viewWidth,viewportHeight:viewHeight});let hitSound=false;for(const e of game.events){if(e.type==='worldTravelOpen')openMap(undefined,{travel:true});if(e.type==='superCast'||e.type==='superImpact')playSuperFeedback(e);if(e.type==='shoot')tone(700,.045,'triangle',.012,330);if(e.type==='swordSwing')tone(e.branch==='heavy'?240:430,.075,'triangle',.012,e.branch==='heavy'?80:140);if(e.type==='kill')hitSound=true;if(e.type==='hurt'){shake=8;tone(150,.1,'triangle',.055,70);}if(e.type==='skill'){updateHUD();shake=reduced?0:5;tone(85,.48,'triangle',.065,32);tone(720,.25,'sawtooth',.02,90);}if(e.type==='level')tone(650,.24,'sine',.05,1200);if(e.type==='evolution'){tone(620,.3,'sine',.045,1240);}if(e.type==='companionJoined'){archive.recordRecruit?.(game,e.kind);tone(540,.3,'sine',.035,1080);}if(e.type==='encounterComplete')tone(540,.22,'sine',.03,880);if(e.type==='mushroomArmed')tone(480,.08,'sine',.012,650);if(e.type==='mushroomBlast')tone(120,.14,'triangle',.025,55);if(bossSound(e.type)&&bossFeedbackVisible()){if(e.type==='bossSlam')shake=reduced?0:Math.max(shake,3);tone(...bossSound(e.type));}if(e.type==='bossKill'){shake=reduced?0:Math.max(shake,4);tone(95,.35,'triangle',.045,40);}if(e.type==='boss'&&bossFeedbackVisible())tone(130,.5,'triangle',.07,75);if(e.type==='heal')tone(600,.1,'sine',.015,900);}if(hitSound)tone(170,.04,'triangle',.018,95);announceCombatEvents(game.events);game.events.length=0;}
+function updateGameFrame(dt){input.x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+(touch?.dx||0);input.y=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+(touch?.dy||0);input.skill=skillRequested;input.interact=portalRequested;skillRequested=false;portalRequested=false;const simulationBegan=debugMode?cpuNow():0;game.update(dt,input);if(debugMode)frameSimulationMs=cpuNow()-simulationBegan;syncSceneInput();observeSceneDialogue(dt);if((game.runTime??0)>=archiveObserveAt||game.status!=='playing'){observeArchive();archiveObserveAt=(game.runTime??0)+.25;}if(!game.sceneTransition.active)worldMap.discover(game,{viewportWidth:viewWidth,viewportHeight:viewHeight});let hitSound=false;for(const e of game.events){if(e.type==='worldTravelOpen')openMap(undefined,{travel:true});if(e.type==='questBoardOpen')openQuestJournal(e.id);if(e.type==='superCast'||e.type==='superImpact')playSuperFeedback(e);if(e.type==='shoot')tone(700,.045,'triangle',.012,330);if(e.type==='swordSwing')tone(e.branch==='heavy'?240:430,.075,'triangle',.012,e.branch==='heavy'?80:140);if(e.type==='kill')hitSound=true;if(e.type==='hurt'){shake=8;tone(150,.1,'triangle',.055,70);}if(e.type==='skill'){updateHUD();shake=reduced?0:5;tone(85,.48,'triangle',.065,32);tone(720,.25,'sawtooth',.02,90);}if(e.type==='level')tone(650,.24,'sine',.05,1200);if(e.type==='evolution'){tone(620,.3,'sine',.045,1240);}if(e.type==='companionJoined'){archive.recordRecruit?.(game,e.kind);tone(540,.3,'sine',.035,1080);}if(e.type==='encounterComplete')tone(540,.22,'sine',.03,880);if(e.type==='mushroomArmed')tone(480,.08,'sine',.012,650);if(e.type==='mushroomBlast')tone(120,.14,'triangle',.025,55);if(bossSound(e.type)&&bossFeedbackVisible()){if(e.type==='bossSlam')shake=reduced?0:Math.max(shake,3);tone(...bossSound(e.type));}if(e.type==='bossKill'){shake=reduced?0:Math.max(shake,4);tone(95,.35,'triangle',.045,40);}if(e.type==='boss'&&bossFeedbackVisible())tone(130,.5,'triangle',.07,75);if(e.type==='heal')tone(600,.1,'sine',.015,900);}if(hitSound)tone(170,.04,'triangle',.018,95);announceCombatEvents(game.events);game.events.length=0;}
 function frame(now){
   const cityGround=game?.terrain?.island?.layout?.artStyle==='clockshadow-renewed'&&!game?.dungeon?.active;
   const frameBegan=debugMode||cityGround?cpuNow():0;frameHudMs=0;frameSimulationMs=0;frameLightingMs=0;

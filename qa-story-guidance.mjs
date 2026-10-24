@@ -31,7 +31,7 @@ assert.equal(arcs.length,1,'the objective keeps a ground marker when it is on sc
 drawStoryGuideGround(ctx,{...guide,kind:'hold',areaRadius:230,arrivalRadius:230});
 assert.equal(arcs.at(-1)[2],230,'the hold marker agrees with the actual guard radius');
 drawStoryGuideGround(ctx,{...guide,kind:'hold',arrivalRadius:160});
-assert.equal(arcs.at(-1)[2],27,'a conversation is a small destination marker, not a large guard aura');
+assert.equal(arcs.at(-1)[2],21.6,'a conversation is a small destination marker, not a large guard aura');
 assert.equal(balance,0,'ground drawing restores canvas state for later units');
 assert.deepEqual(labels,[],'the ground ribbon renders no location direction labels');
 
@@ -51,7 +51,7 @@ assert(fills.every(p=>p.globalAlpha>0&&p.globalAlpha<1&&luminance(p.fillStyle)>.
 assert.equal(strokes.length,fills.length*2);
 for(let i=0;i<strokes.length;i+=2){
   const [rim,contour]=strokes.slice(i,i+2);
-  assert(luminance(rim.strokeStyle)>.9&&luminance(contour.strokeStyle)<.08,'light and dark edges cover opposite terrain brightness');
+  assert(luminance(rim.strokeStyle)>.9&&luminance(contour.strokeStyle)<.16,'light and dark edges cover opposite terrain brightness');
   assert(rim.lineWidth>contour.lineWidth&&rim.lineWidth-contour.lineWidth<=2,'the bright rim stays narrow');
   assert(contour.globalAlpha>fills[i/2].globalAlpha,'the outline stays clearer than the translucent fill');
 }

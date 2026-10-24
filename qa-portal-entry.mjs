@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {Game} from './dist/engine.js';
 import {Terrain,groundOffset} from './dist/terrain.js';
-import {PORTAL_GEOMETRY as GEOMETRY,portalDoor,portalEntranceContains} from './dist/portal-geometry.js';
+import {PORTAL_GEOMETRY as GEOMETRY,portalDoor,portalEntranceContains,portalExitGeometry} from './dist/portal-geometry.js';
 import {waterIntersectsCircle} from './dist/water-geometry.js';
 
 let seed=314870;
@@ -40,7 +40,7 @@ function verifyWalls(g){
   const walls=structures(g);assert.equal(walls.length,g.regions.portals.filter(p=>!p.natural).length*3,'stone portals have three solid frame segments; natural paths have none');
   assert.equal(new Set(walls.map(w=>w.id)).size,walls.length,'restoring a world must not duplicate portal collision');
   for(const p of g.regions.portals){
-    if(p.natural){assert.equal(walls.filter(w=>w.structureId===p.id).length,0);assert(g.terrain.isFree(p.x,p.y,g.player.r));continue;}
+    if(p.natural){const doorway=portalDoor(p);assert.equal(walls.filter(w=>w.structureId===p.id).length,0);assert(g.terrain.isFree(doorway.x,doorway.y,g.player.r));continue;}
     assert.equal(walls.filter(w=>w.structureId===p.id).length,3);
     const d=portalDoor(p);assert(g.terrain.isFree(d.x,d.y,g.player.r),'the centered front doorway fits the player');
     for(const q of [{x:p.x-GEOMETRY.halfWidth,y:p.y},{x:p.x+GEOMETRY.halfWidth,y:p.y},{x:p.x,y:p.y+GEOMETRY.backY}])
@@ -96,10 +96,10 @@ for(const debug of [false,true])for(const approach of ['left','right','back']){
   assert(portalEntranceContains(p,foot(g)));finish(g);assert.equal(g.regionIndex,1);
 }
 
-const locked=arena(true),lockedGate=activate(locked);lockedGate.state='locked';
+const locked=arena(true),lockedGate=activate(locked),lockedIndex=locked.regionIndex;lockedGate.state='locked';
 place(locked,{x:lockedGate.x,y:lockedGate.y+90});assert(walkTo(locked,portalDoor(lockedGate)));
 for(let i=0;i<4;i++)locked.update(.05,{interact:true});
-assert.equal(locked.regionIndex,0);assert.equal(locked.sceneTransition.active,false);assert.equal(locked.canEnterPortal(lockedGate.id),false);verifyWalls(locked);
+assert.equal(locked.regionIndex,lockedIndex);assert.equal(locked.sceneTransition.active,false);assert.equal(locked.canEnterPortal(lockedGate.id),false);verifyWalls(locked);
 
 // A blocked preferred landing must search only the front, and must respect
 // water rather than choosing one of the old negative-Y/back-side offsets.
@@ -121,18 +121,20 @@ const sanctuary=world.settlements.sites.find(s=>s.type==='angel'&&s.anchorId?.st
 const portal=world.regions.portals.find(p=>p.nextRegionIndex===1),boss=world.enemies.find(e=>e.id===portal.bossId);
 if(boss){place(world,{x:portal.x,y:portal.y+250});world.regionGrace=0;world.regions.update();world._hurtEnemy(boss,boss.hp+1);world.regions.flushReward();assert(world.chooseSuper(world.getSuperChoices()[0].id));}
 else assert(portal.natural&&portal.state==='active','the forest connection is a natural open road');
-const originalTerrain=world.terrain,otherOwners=new Map([...world.terrain._structureOwners].filter(([owner])=>owner!=='portals').map(([owner,walls])=>[owner,walls.map(w=>w.id)]));
-for(const target of [1,0,1,0,1,0]){
+const originalTerrain=world.terrain,originIndex=world.regionIndex,otherOwners=new Map([...world.terrain._structureOwners].filter(([owner])=>owner!=='portals').map(([owner,walls])=>[owner,walls.map(w=>w.id)]));
+for(const target of [portal.nextRegionIndex,originIndex,portal.nextRegionIndex,originIndex,portal.nextRegionIndex,originIndex]){
   const endpoint=world.regions.portals.find(p=>p.nextRegionIndex===target);place(world,portalDoor(endpoint));assert(world.enterPortal(endpoint.id));
   const arrival=world.regions.portals.find(p=>p.nextRegionIndex!==target&&p.connectionId===endpoint.connectionId);
-  assert(arrival);assert(foot(world).y>arrival.y,'paired travel always arrives in front');assert(world.terrain.isFree(foot(world).x,foot(world).y,world.player.r));
+  assert(arrival);const normal=portalExitGeometry(arrival)?.normal||arrival.arrivalDirection||{x:0,y:1},landed=foot(world);
+  assert((landed.x-arrival.x)*normal.x+(landed.y-arrival.y)*normal.y>0,'paired travel always arrives on the receiving road inward side');
+  assert(world.terrain.isFree(landed.x,landed.y,world.player.r));
   for(let i=0;i<4;i++){world.update(0);assert.equal(world.regionIndex,target);assert.equal(world.sceneTransition.active,false,'arrival does not bounce back automatically');}
   verifyWalls(world);assert.equal(world.settlements.sites.filter(s=>s.type==='angel'&&s.anchorId?.startsWith('portal:')).length,0,'paired travel does not recreate retired gate angels');
-  if(target===0){assert.equal(world.terrain,originalTerrain);assert(world.settlements.sites.includes(sanctuary),'returning preserves the original spawn sanctuary');for(const [owner,ids] of otherOwners)assert.deepEqual(world.terrain._structureOwners.get(owner).map(w=>w.id),ids,'portal restoration must preserve other collision owners');}
+  if(target===originIndex){assert.equal(world.terrain,originalTerrain);assert(world.settlements.sites.includes(sanctuary),'returning preserves the original spawn sanctuary');for(const [owner,ids] of otherOwners)assert.deepEqual(world.terrain._structureOwners.get(owner).map(w=>w.id),ids,'portal restoration must preserve other collision owners');}
 }
 // Scene-local collision does not leak into hut/castle interiors, and returning
 // restores the same outdoor geometry rather than re-appending the frame.
-const hut=world.settlements.sites.find(s=>s.type==='supply');place(world,hut.door);assert(world.interact(hut.id));
+const hut=world.settlements.sites.find(s=>s.type==='supply'&&!s.worldFacility);place(world,hut.door);assert(world.interact(hut.id));
 assert.equal(world.dungeon.active.kind,'hut');assert.equal(structures(world).length,0);assert(!world.terrain._structures.some(o=>o.structureType==='portal'));
 place(world,world.dungeon.active.entrance);assert(world.dungeon.exit());assert.equal(world.terrain,originalTerrain);verifyWalls(world);
 console.log('Portal entrances: real three-second normal/debug travel, front walk/keyboard entry, solid side/rear walls, debug 960-speed and clamped frame sweeps, locked gates, front dry arrival, persistent independent owners and spawn sanctuary, bounded round trips and interior isolation passed.');

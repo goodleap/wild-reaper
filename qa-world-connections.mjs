@@ -6,6 +6,13 @@ import { Regions, worldConnectionId } from './dist/regions.js';
 import { REGIONS, WORLD_IDS, WORLD_CONNECTIONS, worldNeighbors } from './dist/world-definitions.js';
 import { portalDoor } from './dist/portal-geometry.js';
 import { terrainNavigation } from './dist/terrain-navigation.js';
+import { getConfigSection } from './dist/content-config.js';
+
+const travelConfig=getConfigSection('worlds').travel;
+const authoredEntrance=(worldId,target,point)=>{
+  const connection=travelConfig.connections.find(edge=>edge.endpoints[worldId]&&(edge.from===WORLD_IDS[target]||edge.to===WORLD_IDS[target]));
+  return connection?portalDoor({...connection.endpoints[worldId],natural:true,worldConnection:true}):point;
+};
 
 assert.deepEqual(WORLD_IDS,['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest']);
 for(const retiredId of ['city','volcano'])assert(!WORLD_IDS.includes(retiredId),'retired worlds are not registered as aliases');
@@ -32,19 +39,21 @@ for(const [index,region] of existingRegions.entries())for(const seed of region.n
   assert.deepEqual(new Island({region:region.id,seed}).plan,island.plan,'generation is deterministic');
   assert.equal(Object.keys(island.plan).filter(key=>key.startsWith('portal:')).length,region.naturalIsland?2:portals.length,'historic clearings can remain without activating inter-world travel');
   for(const key of ['merchant','supply','occupied','castle','hunt','rescue','rune','rescue-warden','dogcamp','owlroost','golemaltar','stonevault'])assert(island.plan[key],`${region.id} retains ${key}`);
-  for(const portal of portals){
-    assert(island.isDry(portal.x,portal.y,region.authored?24:portal.r+100));
+  for(const [i,portal] of portals.entries()){
+    const entrance=authoredEntrance(region.id,worldNeighbors(index)[i],portal);
+    assert(island.isDry(entrance.x,entrance.y,region.authored?24:portal.r+100));
     for(const other of portals)if(other!==portal)assert(Math.hypot(portal.x-other.x,portal.y-other.y)>600,'all endpoints have separated arenas');
   }
   if(region.authored){
     const terrain=new Terrain({region:region.id,seed,island});
     for(const target of worldNeighbors(index)){
-      const point=island.plan[`portal:${target}`];assert(terrain.isFree(point.x,point.y,24),'a natural world exit has full-body standing room');
+      const point=authoredEntrance(region.id,target,island.plan[`portal:${target}`]);assert(terrain.isFree(point.x,point.y,24),'a natural world exit has full-body standing room inside the boundary');
     }
     for(const passage of island.layout.passages){
       if(passage.gateId)continue;
-      for(let i=1;i<passage.waypoints.length;i++){
-        const a=passage.waypoints[i-1],b=passage.waypoints[i];
+      const points=passage.waypoints.map((point,i)=>passage.kind==='exit'&&i===passage.waypoints.length-1?authoredEntrance(region.id,WORLD_IDS.indexOf(passage.id.replace('travel:','')),point):point);
+      for(let i=1;i<points.length;i++){
+        const a=points[i-1],b=points[i];
         assert(!terrain.rift.firstBlocker(a.x,a.y,b.x,b.y,24),`${region.id}/${passage.id}: every declared route has a continuous body sweep`);
       }
     }
@@ -86,7 +95,7 @@ const verify=()=>{
   assert.deepEqual(game.regions.portals.map(portal=>portal.nextRegionIndex).sort((a,b)=>a-b),[...worldNeighbors(game.regionIndex)].sort((a,b)=>a-b));
   for(const portal of game.regions.portals){
     const door=portalDoor(portal);assert(game.terrain.isFree(door.x,door.y,game.player.r));
-    assert(game.terrain.island.isDry(portal.x,portal.y,portal.natural?24:200));
+    assert(game.terrain.island.isDry(door.x,door.y,portal.natural?24:200));
     assert(portal.natural&&portal.worldConnection,'every exploration edge is a natural regional connection');
     assert.equal(portal.state,'active','natural routes have no guardian lock');
     assert.equal(game.enemies.filter(enemy=>enemy.hp>0&&enemy.portalId===portal.id).length,portal.state==='locked'?1:0);

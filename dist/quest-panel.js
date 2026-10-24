@@ -9,7 +9,7 @@ function objectiveHTML(objective){
 
 function cardHTML(entry){
   const status=statusLabel[entry.status]?entry.status:'active',completed=status==='completed',available=status==='available';
-  const action=available&&entry.canAccept!==false?`<button class="quest-action" type="button" data-quest-action="accept" data-quest-id="${escape(entry.id)}">接受委托</button>`:status==='active'&&!entry.tracked?`<button class="quest-action" type="button" data-quest-action="track" data-quest-id="${escape(entry.id)}">追踪任务</button>`:'';
+  const action=available&&entry.canAccept!==false?`<button class="quest-action" type="button" data-quest-action="accept" data-quest-id="${escape(entry.id)}">接受委托</button><button class="quest-action" type="button" data-quest-action="decline" data-quest-id="${escape(entry.id)}">暂不接取</button>`:status==='active'&&!entry.tracked?`<button class="quest-action" type="button" data-quest-action="track" data-quest-id="${escape(entry.id)}">追踪任务</button>`:'';
   const heading=`<span class="quest-entry-name">${escape(entry.name)}</span><span class="quest-entry-status">${entry.tracked&&!completed?'正在追踪':statusLabel[status]}</span>`;
   const body=`${entry.description?`<p class="quest-description">${escape(entry.description)}</p>`:''}<ol class="quest-steps">${(entry.objectives||[]).map(objectiveHTML).join('')}</ol>${entry.rewardText?`<p class="quest-reward"><span>${completed?'已获得':'完成后'}</span>${escape(entry.rewardText)}</p>`:''}${action?`<div class="quest-entry-actions">${action}</div>`:''}`;
   return completed?`<details class="quest-entry is-complete" data-quest-entry="${escape(entry.id)}"><summary class="quest-entry-heading">${heading}</summary><div class="quest-entry-body">${body}</div></details>`:`<article class="quest-entry${entry.tracked?' is-tracked':''}" data-quest-entry="${escape(entry.id)}" tabindex="-1"><h4 class="quest-entry-heading">${heading}</h4>${body}</article>`;
@@ -20,7 +20,7 @@ export function questPanelHTML(entries=[],{storageMode}={}){
     const rank=entry=>entry.status==='active'?(entry.tracked?0:1):entry.status==='available'?2:3;
     return rank(a.entry)-rank(b.entry)||a.index-b.index;
   }).map(({entry})=>entry);
-  const note=storageMode==='persistent'?'任务记录单独保存；角色与装备按本局计算。':storageMode==='session-debug'?'调试冒险的任务记录不写入正式进度。':storageMode==='session'?'任务记录仅在本次冒险内有效。':'';
+  const note=storageMode==='persistent'?'任务与角色进度一起保存在当前浏览器。':storageMode==='session-debug'?'调试冒险的任务记录不写入正式进度。':storageMode==='session'?'任务记录仅在本次冒险内有效。':'';
   return (ordered.length?ordered.map(cardHTML).join(''):'<p class="quest-empty">尚未发现委托。留意营地的告示与沿途线索。</p>')+(note?`<p class="quest-save-note">${note}</p>`:'');
 }
 
@@ -37,6 +37,7 @@ export function renderQuestPanel(container,entries=[],options={}){
       const id=button.getAttribute('data-quest-id'),action=button.getAttribute('data-quest-action');
       if(action==='accept')state.options.onAccept?.(id,event);
       else if(action==='track')state.options.onTrack?.(id,event);
+      else if(action==='decline')state.options.onDecline?.(id,event);
       if(event.detail===0&&button.isConnected===false){
         const card=[...container.querySelectorAll('[data-quest-entry]')].find(node=>node.getAttribute('data-quest-entry')===id);
         card?.focus?.({preventScroll:true});

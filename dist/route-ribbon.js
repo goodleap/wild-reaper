@@ -3,14 +3,14 @@
 const TAU=Math.PI*2;
 const finite=point=>point&&Number.isFinite(point.x)&&Number.isFinite(point.y);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-export const ROUTE_RIBBON_RULES=Object.freeze({spacing:42,firstMark:28,opacity:.56,width:28,length:30});
-const PALETTE=Object.freeze({fill:'#dcf5ff',outline:'#183743',edge:'#f5feff'});
+export const ROUTE_RIBBON_RULES=Object.freeze({spacing:42,firstMark:28,opacity:.56,width:22.4,length:24});
+const PALETTE=Object.freeze({fill:'#dcf5ff',outline:'#536d76',edge:'#f5feff'});
 
 function strokeRibbon(ctx,opacity=1){
   // The narrow light rim separates the dark contour from shaded ground;
   // the contour remains readable on pale sand, snow and lunar terrain.
   ctx.globalAlpha=.76*opacity;ctx.strokeStyle=PALETTE.edge;ctx.lineWidth=4;ctx.stroke();
-  ctx.globalAlpha=.88*opacity;ctx.strokeStyle=PALETTE.outline;ctx.lineWidth=2.2;ctx.stroke();
+  ctx.globalAlpha=.76*opacity;ctx.strokeStyle=PALETTE.outline;ctx.lineWidth=2.2;ctx.stroke();
 }
 
 export function routeRibbonMarks(guide){
@@ -39,7 +39,7 @@ export function routeRibbonMarks(guide){
 export function drawRouteRibbonGround(ctx,guide,{zoom=1,bounds=null}={}){
   if(!guide)return;
   const visible=(point,margin=30)=>!bounds||point.x>=bounds.minX-margin&&point.x<=bounds.maxX+margin&&point.y>=bounds.minY-margin&&point.y<=bounds.maxY+margin;
-  const scale=1;
+  const scale=.8;
   ctx.save();ctx.lineJoin='round';ctx.lineCap='round';
   // Translucent filled chevrons share the terrain pass. Bodies, trees, walls
   // and combat effects are composited afterwards with their normal depth.

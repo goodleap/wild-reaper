@@ -151,7 +151,10 @@ export class Game {
     this.encounters=encounters?new Encounters(this,{generation:ambientContent&&!this.stage}):null;
     this.combat=new CombatResolution(this);this.attacks=new CombatAttacks(this);
     this.combatStatus=new CombatStatus(this);
-    this.worldTravel=new WorldTravel(this);this.worldTravel.initialize();
+    this.worldTravel=new WorldTravel(this);this.worldTravel.prepareRegion();
+    const townStart=this.worldTravel.spawnPoint();
+    if(townStart){this.player.x=townStart.x;this.player.y=townStart.y-groundOffset(this.player,true);resetLocomotion(this.player);}
+    this.worldTravel.initialize();
     this.worldShops=new WorldShops(this);
     // Reserve the nearby debug entrance before environmental hazards choose
     // their positions. The ordinary world keeps its original generation order.
@@ -180,7 +183,7 @@ export class Game {
     this.story?.initialize();
     this.quests=new WorldQuests(this,{storage:questStorage});
     if(this.worldTravel.enabled){
-      const landing=this.worldTravel.arrivalPoint({arrivalKind:'waypoint',targetWaypointId:this.worldTravel.waypoint.id},this.player.r);
+      const landing=this.worldTravel.spawnPoint(this.player.r);
       if(landing){this.player.x=landing.x;this.player.y=landing.y-groundOffset(this.player,true);resetLocomotion(this.player);}
       this.worldTravel.update();
     }
@@ -648,7 +651,7 @@ export class Game {
     updateLocomotion(p,oldX,oldY,dt);
     if(p.moving)p.moveFacing=Math.atan2(p.y-oldY,p.x-oldX);
     this.story?.updateActors?.(dt);
-    this.worldTravel.update();
+    if(this.worldTravel.update())return;
     this.quests?.update();
     if(this.sceneContent.allows('worldContent')&&this.touchInteractions.update())return;
     if(this.sceneContent.allows('worldContent'))this.adventure?.update(dt);

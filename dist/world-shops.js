@@ -3,6 +3,7 @@ import { WEAPON_DEFS, SKILL_DEFS, getUpgradeDefinition, canTakeUpgrade } from '.
 import { SETTLEMENT_RULES } from './site-definitions.js';
 import { groundOffset } from './terrain.js';
 import { resetLocomotion } from './locomotion.js';
+import { isWorldShop } from './shop-interior.js';
 
 const economy=getConfigSection('economy'),rules=economy.worldShops;
 const ITEM_IDS=Object.freeze(['heal','magnet','fury','shield']);
@@ -35,14 +36,25 @@ export class WorldShops {
     this.inventory={...inventory};return true;
   }
   _siteValid(site){
+    const g=this.game,state=g.dungeon?.active;
+    if(g.mode!=='world'||!site?.worldFacility||!g.settlements?.sites.includes(site)||site.region!==g.worldId)return false;
+    return site.worldFacility==='rest'?!state:isWorldShop(site)&&state?.kind==='shop'&&state.site===site;
+  }
+  canEnter(site){
     const g=this.game;
-    return g.mode==='world'&&!g.dungeon?.active&&site?.worldFacility&&
-      g.settlements?.sites.includes(site)&&site.region===g.worldId;
+    return g.mode==='world'&&!g.dungeon?.active&&isWorldShop(site)&&g.settlements?.sites.includes(site)&&site.region===g.worldId;
   }
   _withinReach(site){
-    const p=point(this.game.player);
-    return Math.hypot(p.x-site.door.x,p.y-site.door.y)<=site.interactRadius&&
-      !this.game.terrain?.firstBlocker(p.x,p.y,site.door.x,site.door.y,0);
+    const g=this.game,p=point(g.player),merchant=site.worldFacility!=='rest'?g.dungeon?.active?.merchant:null;
+    const target=merchant?.interaction||site.door,radius=merchant?.interactRadius||site.interactRadius;
+    return Math.hypot(p.x-target.x,p.y-target.y)<=radius&&
+      !g.terrain?.firstBlocker(p.x,p.y,target.x,target.y,0);
+  }
+  canTrade(site){return isWorldShop(site)&&this._siteValid(site)&&this._withinReach(site);}
+  open(site){
+    const g=this.game;
+    if(g.status!=='playing'||!this.canTrade(site))return false;
+    g.settlements.activeShop=site;g.status='shop';g._emit('shopOpen',{name:site.name});return true;
   }
   getItems(site){
     const g=this.game;if(!this._siteValid(site)||site.worldFacility==='rest')return [];

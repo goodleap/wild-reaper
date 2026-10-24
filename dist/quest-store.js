@@ -11,12 +11,13 @@ function clean(raw){
     const record=emptyQuestRecord();
     for(const key of ['discovered','accepted','completed','rewardClaimed'])record[key]=value[key]===true;
     for(const objective of definition.objectives)if(value.objectives?.[objective.id]===true)record.objectives[objective.id]=true;
-    // A corrupt completion flag must not open a route without its objectives.
-    record.completed=record.completed&&definition.objectives.every(objective=>record.objectives[objective.id]);
-    if(record.completed)record.accepted=true;
+    // Completion and payment require a real acceptance; objective facts alone
+    // can predate it and must survive until the player chooses the commission.
+    record.completed=record.accepted&&record.completed&&definition.objectives.every(objective=>record.objectives[objective.id]);
+    record.rewardClaimed=record.completed&&record.rewardClaimed;
     if(record.accepted||Object.keys(record.objectives).length)record.discovered=true;
     data.records[definition.id]=record;
-    if(raw.tracked?.[definition.worldId]===definition.id)data.tracked[definition.worldId]=definition.id;
+    if(record.accepted&&!record.completed&&raw.tracked?.[definition.worldId]===definition.id)data.tracked[definition.worldId]=definition.id;
   }
   return data;
 }

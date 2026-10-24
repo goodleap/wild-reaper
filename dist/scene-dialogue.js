@@ -46,6 +46,10 @@ export function dialogueSpeakers(game){
   }
   for(const enemy of game.enemies||[])if(live(enemy)&&!enemy.trainingDummy&&(worldContent||enemy.storyId||enemy.storyEnemy))result.push(speaker('enemy',enemy));
   for(const member of game.companions?.members||[])if(member.state==='active'&&live(member)&&(worldContent||member.storyId||member.storyActor))result.push(speaker('companion',member));
+  if(game.dungeon?.active?.kind==='shop'){
+    const merchant=game.dungeon.active.merchant;
+    result.push(speaker('site',{...merchant,type:'merchant',state:'ready'},{...merchant,y:merchant.y-19.8,isTownNpc:true,townKind:'merchant',heroId:'traveler'}));
+  }
   if(game.dungeon?.active||!worldContent)return result;
   for(const site of game.settlements?.sites||[])if(['merchant','angel'].includes(site.type)&&site.state!=='spent')
     result.push(speaker('site',site,{x:site.x,y:site.y-19.8,r:15,isTownNpc:true,townKind:site.type,heroId:'traveler',flying:!!site.flying,id:site.id}));

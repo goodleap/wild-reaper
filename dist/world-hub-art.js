@@ -148,8 +148,44 @@ function groundMarks(c,theme,w,h,seed=0){const p=COLORS[theme]||COLORS.forest;
 }
 function hull(points){const sorted=points.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]),cross=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]),lower=[],upper=[];for(const point of sorted){while(lower.length>1&&cross(lower.at(-2),lower.at(-1),point)<=0)lower.pop();lower.push(point);}for(let i=sorted.length-1;i>=0;i--){const point=sorted[i];while(upper.length>1&&cross(upper.at(-2),upper.at(-1),point)<=0)upper.pop();upper.push(point);}return lower.slice(0,-1).concat(upper.slice(0,-1));}
 
+// These are the same streets used to place doors and keep the settlement free.
+// Fill their union before texturing it, so overlapping aprons never leave seams.
+function settlementPath(c,ground){
+  c.beginPath();
+  for(const plaza of ground.plazas){c.moveTo(plaza.x-plaza.width/2+12,plaza.y-plaza.depth/2);c.roundRect(plaza.x-plaza.width/2,plaza.y-plaza.depth/2,plaza.width,plaza.depth,12);}
+  for(const street of ground.streets){
+    const r=street.width/2;
+    for(let i=1;i<street.points.length;i++){
+      const a=street.points[i-1],b=street.points[i],angle=Math.atan2(b.y-a.y,b.x-a.x),dx=Math.sin(angle)*r,dy=-Math.cos(angle)*r;
+      c.moveTo(a.x+dx,a.y+dy);c.lineTo(b.x+dx,b.y+dy);c.arc(b.x,b.y,r,angle-Math.PI/2,angle+Math.PI/2);c.lineTo(a.x-dx,a.y-dy);c.arc(a.x,a.y,r,angle+Math.PI/2,angle+Math.PI*1.5);c.closePath();
+    }
+  }
+}
+function settlementGround(core){
+  const source=core.ground;if(!source)return null;
+  const plazas=(source.plazas||[]).filter(p=>[p.x,p.y,p.width,p.depth].every(Number.isFinite)&&p.width>0&&p.depth>0).map(p=>({...p,x:p.x-core.x,y:p.y-core.y}));
+  const streets=(source.streets||[]).filter(s=>Number.isFinite(s.width)&&s.width>0&&s.points?.length>1).map(s=>({width:s.width,points:s.points.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)).map(p=>({x:p.x-core.x,y:p.y-core.y}))})).filter(s=>s.points.length>1);
+  if(!plazas.length&&!streets.length)return null;
+  const bounds=[];for(const p of plazas)bounds.push([p.x-p.width/2,p.y-p.depth/2],[p.x+p.width/2,p.y+p.depth/2]);for(const s of streets)for(const p of s.points)bounds.push([p.x-s.width/2,p.y-s.width/2],[p.x+s.width/2,p.y+s.width/2]);
+  const minX=Math.floor(Math.min(...bounds.map(p=>p[0]))-8),minY=Math.floor(Math.min(...bounds.map(p=>p[1]))-8),maxX=Math.ceil(Math.max(...bounds.map(p=>p[0]))+8),maxY=Math.ceil(Math.max(...bounds.map(p=>p[1]))+8);
+  return{plazas,streets,minX,minY,w:maxX-minX,h:maxY-minY,key:JSON.stringify([plazas,streets])};
+}
+function paintSettlementGround(c,ground,p,theme){
+  settlementPath(c,ground);c.strokeStyle=p.shade+'b8';c.lineWidth=8;c.stroke();c.fillStyle=p.ground;c.fill();c.save();c.clip();
+  const tw=42,th=28;
+  for(let row=Math.floor(ground.minY/th);row<=Math.ceil((ground.minY+ground.h)/th);row++)for(let col=Math.floor(ground.minX/tw)-1;col<=Math.ceil((ground.minX+ground.w)/tw);col++){
+    const x=col*tw+(row%2)*tw/2,y=row*th,n=noise(col+57,row+19);
+    poly(c,[[x+1.5,y+1.5],[x+40,y+1],[x+40.5,y+25.5],[x+2,y+26]],n>.78?p.light+'a6':n>.32?p.stone:p.stone+'c4');
+    line(c,[[x+3,y+3],[x+38,y+2]],p.light+'c0',1);line(c,[[x+40,y+3],[x+40,y+25],[x+3,y+26]],p.shade+'70',.8);
+    if(n>.9)line(c,[[x+27,y+2],[x+25,y+7],[x+29,y+11]],p.shade+'80',.8);
+  }
+  // Larger inset stones anchor the square without adding a raised obstacle.
+  for(const plaza of ground.plazas){if(plaza.width<160||plaza.depth<140)continue;const rx=Math.min(46,plaza.width*.18),ry=Math.min(34,plaza.depth*.18),x=plaza.x,y=plaza.y;poly(c,[[x-rx,y],[x,y-ry],[x+rx,y],[x,y+ry]],p.shade+'7a',p.light+'99',1.4);poly(c,[[x-rx+8,y],[x,y-ry+6],[x+rx-8,y],[x,y+ry-6]],p.stone,p.ground,1);line(c,[[x-rx+8,y],[x+rx-8,y]],p.light,1);line(c,[[x,y-ry+6],[x,y+ry-6]],p.light,1);}
+  if(theme==='snow'){c.globalAlpha=.18;c.translate(ground.minX,ground.minY);groundMarks(c,theme,ground.w,ground.h,43);}c.restore();
+}
+
 export class WorldHubArt {
-  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.bytes=0;this.builds=0;}
+  constructor(makeCanvas=()=>document.createElement('canvas')){this.makeCanvas=makeCanvas;this.cache=new Map();this.bytes=0;this.builds=0;this.groundRecords=new WeakMap();}
   get cacheStats(){return{entries:this.cache.size,bytes:this.bytes,limitBytes:LIMIT_BYTES,builds:this.builds};}
   _stamp(key,w,h,ox,oy,paint,ratio=1.5){
     let image=this.cache.get(key);if(image){this.cache.delete(key);this.cache.set(key,image);return image;}
@@ -167,6 +203,11 @@ export class WorldHubArt {
     const points=[[L,B],[R,B],[R,F],[L,F]],outline=hull([...points,...points.map(([x,y])=>[x+sx,y+sy])]);outline.forEach(([x,y],i)=>c[i?'lineTo':'moveTo'](x,y));c.closePath();return true;
   }
   drawGround(c,core){
+    if(!core||!Number.isFinite(core.x)||!Number.isFinite(core.y))return false;
+    if(core?.ground){
+      let record=this.groundRecords.get(core);if(!record||record.source!==core.ground){record={source:core.ground,ground:settlementGround(core)};this.groundRecords.set(core,record);}
+      if(record.ground){const ground=record.ground,theme=core.artTheme||'forest',p=COLORS[theme]||COLORS.forest,ratio=Math.min(1,Math.sqrt(1_500_000/(ground.w*ground.h))),image=this._stamp(`streets:${theme}:${ground.key}`,ground.w,ground.h,-ground.minX,-ground.minY,g=>paintSettlementGround(g,ground,p,theme),ratio);c.drawImage(image.canvas,core.x+ground.minX,core.y+ground.minY,image.w,image.h);return true;}
+    }
     if(!core||!Number.isFinite(core.x)||!Number.isFinite(core.y))return false;const theme=core.artTheme||'forest',kind=core.kind||'camp',p=COLORS[theme]||COLORS.forest,paved=['town','city','village','settlement'].includes(kind),key=`ground:${theme}:${paved?'paved':'earth'}`;
     const image=this._stamp(key,384,300,192,150,g=>{
       groundShape(g);g.fillStyle=p.ground+'38';g.fill();g.save();groundShape(g);g.clip();

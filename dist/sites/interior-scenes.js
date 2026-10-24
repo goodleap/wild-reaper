@@ -1,8 +1,14 @@
 import { DUNGEON_RULES, HUT_RULES, INTERIOR_REWARDS } from '../interior-profiles.js';
 import { createHutState, populateHut, claimHutChest } from '../hut-interior.js';
 import { seedFor } from './interior-seed.js';
+import { createShopState } from '../shop-interior.js';
 
 export const INTERIOR_SCENES=Object.freeze({
+  shop:Object.freeze({
+    maxStates:27,
+    create:(dungeon,site)=>createShopState(dungeon.game,site,seedFor(site.id)),
+    populate(){},claimChest(){return false;},roomCleared(){}
+  }),
   castle:Object.freeze({
     maxStates:DUNGEON_RULES.maxStates,
     create:(dungeon,site)=>dungeon._makeState(site),

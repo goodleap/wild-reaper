@@ -8,10 +8,10 @@ import { Game } from './dist/engine.js';
 import { Terrain } from './dist/terrain.js';
 import { Environment } from './dist/environment.js';
 
-// Terrain recipes retain their v0.0.148 baseline. Authored-map snapshots include
-// the approved wilderness approaches; all areas, encounters, underground sites
-// and non-exit passages were compared against v0.0.153 before this update.
-// The complete new approaches and service doors also have real navigation QA.
+// Terrain recipes retain their v0.0.148 baseline. The authored snapshots include
+// junction settlements and boundary exits; the separate internal-content digest
+// retains every area, original passage, activity and encounter identity from v154.
+// Town streets, foundations and boundary approaches also have real navigation QA.
 const expected={
   "exports": {
     "environment": "5a2e7540eee34a6d3ef9ea0b5029222765e9f6bd5b0b869552f15993a5f164c3",
@@ -32,13 +32,13 @@ const expected={
     "ember-realm-large": "420cabb482f2a3afefe2c783e2b60d20d81b550aedeac76a445378eca304cdf3"
   },
   "worlds": {
-    "rift-forest": "b66c769b9c1712e3e9ebb0aeb7b67b5b74525ca21c000a0f0bea268b3e123a87",
-    "marsh": "8033dddf442b4697a5724e1bfa5a44c347128f1d8cb49c0c746c93c2834a852e",
-    "ruins": "ef69f4a4a6a5d0efec87d755afc22fd1aba4d6b0c2d63192e0181f57a110fa3e",
-    "beach": "02fe149f6c67c702550d271542d08665fbdde390f8f945f203b02b6089063a97",
-    "mountain": "d093cf4aed031d069c4469e4fb1c4d039c91e84898939f9ad66c51bad1a69df5",
-    "snow": "b432e90a01def4f0a6cf52e6e6e31e461a19302529e6080c15dd73720e04d4f2",
-    "verdant-rift": "51418f84fecb83f44783b6f4660d2944be1c99a9ff8841312568467263142b19",
+    "rift-forest": "e71de7f6b09607d5f619c65e98b1f097d200769b7a01a0acffc7c1a956c76404",
+    "marsh": "5a5062c62127ce0725d59c9091c67145960df3a0080679ebd383361e4b538fe0",
+    "ruins": "c06139c9551c47c5d25e61159275cbaa6899fdfd522cd40b6444313ad4e43cf4",
+    "beach": "a3da5583b4b1026d8404e3b9e4f41bdd556a1a1386824467b47ea873a7db7e16",
+    "mountain": "e7e19814be3fed310dd579eb3891cb8eb01fc7567b719250eaebfb4fce3795a8",
+    "snow": "14dac4bdd8dce072bc8c7108c516c8fbcd7ffeb1b0840b17db2b09da4f0e12e4",
+    "verdant-rift": "38b9d953f10abcbe7540ea49d5cdfe5bd739699b2bce64b83f3ad91762ce8b0e",
     "clockshadow-city": "74adbb691cfddc89ddc010025a7b3e8391ca1300608aecc1114d21ac7a676e9d",
     "ember-realm-large": "c1bc6b361a861aa8adebe385ec5a28e96d4e9792dd6a356074089392fab6f8dc",
     "forest": "2eaa67a9d83874cfd6c7be230adff6b8f887649bd95f9886b2a1faa4ead53c66"
@@ -48,6 +48,8 @@ const expected={
 };
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+const preservedAuthoredContent='1f3a1fef15af6f95c81b37f251a7d9959961e3f6f72c41da9939137e4fc3f72a';
+const authoredContent=worlds=>worlds.definitions.filter(w=>w.authored).map(({id,authored:l})=>({id,spawn:l.spawn,areas:l.areas,passages:l.passages.filter(p=>p.kind!=='exit'),interactions:l.interactions,encounters:l.encounters.map(({x,y,area,...e})=>e),plan:Object.fromEntries(Object.entries(l.plan).filter(([k])=>!k.startsWith('portal:')).map(([k,{x,y,area,...v}])=>[k,v])),cityStructures:l.cityStructures,emberProps:l.emberScene?.props}));
 const currentWorldIds=['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest'];
 assert.deepEqual(WORLD_IDS,currentWorldIds,'only the current maps retain registered world identities');
 for(const [id,hash]of Object.entries(expected.exports)){
@@ -74,6 +76,7 @@ for(const world of REGIONS.filter(world=>Object.hasOwn(expected.traces,world.id)
 assert.equal(STAGES.length,8);assert.equal(WORLD_IDS.length,10);assert.equal(WORLD_CONNECTIONS.length,12);assert.equal(worldForId('missing'),REGIONS[0]);
 const sections=Object.fromEntries(['worlds','stages','geography','enemies','encounters','economy'].map(id=>[id,JSON.parse(readFileSync(new URL(`./dist/config/${id}.json`,import.meta.url)))]));
 assert(validateWorlds(sections));
+assert.equal(digest(authoredContent(sections.worlds)),preservedAuthoredContent,'all internal areas, roads, underground entrances and encounter/activity identities survive town relocation');
 assert.deepEqual(new Set(sections.worlds.definitions.map(world=>world.id)),new Set(currentWorldIds));
 for(const retiredId of ['city','volcano']){
   assert(!sections.worlds.definitions.some(world=>world.id===retiredId),'retired IDs have no world definition');
@@ -82,7 +85,7 @@ for(const retiredId of ['city','volcano']){
 for(const world of sections.worlds.definitions){
   const data=structuredClone(world);
   if(['clockshadow-city','ember-realm-large'].includes(world.id))delete data.authored;
-  assert.equal(digest(data),expected.worlds[world.id],`${world.id}: existing content outside the approved exits/theme data remains unchanged`);
+  assert.equal(digest(data),expected.worlds[world.id],`${world.id}: exact reviewed map configuration matches its snapshot`);
 }
 assert.equal(digest(sections.stages.definitions.map(stage=>({id:stage.id,boss:stage.boss,reward:stage.reward}))),expected.stageEncounters,'eight single-scene trials retain their reviewed core Boss values and rewards');
 assert.equal(digest(sections.stages.expeditions),expected.expeditions,'commemorative survival, ship and moon content remains unchanged');

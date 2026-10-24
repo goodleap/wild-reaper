@@ -22,15 +22,16 @@ export class WorldQuests {
   get definitions(){return this.enabled?this._definitions.filter(definition=>definition.worldId===this.game.worldId):[];}
   get definition(){const definitions=this.definitions,tracked=this.store.data.tracked[this.game.worldId];return definitions.find(definition=>definition.id===tracked&&!this._record(definition.id).completed)||definitions.find(definition=>!this._record(definition.id).completed)||definitions[0]||null;}
   _record(id=this.definition?.id){return id?this.store.record(id):null;}
-  _changed(){this.revision++;this.store.changed();this._applyWorldEffects();}
+  _changed(){this.revision++;this.store.changed();this._applyWorldEffects();this.game._scheduleWorldSave?.('quest-progress');}
   flush(){return this.store.flush();}
   _known(definition){return !!definition&&this.definitions.includes(definition);}
   _discover(id=this.definition?.id){const record=this._record(id);if(!record||record.discovered)return false;record.discovered=true;this._changed();return true;}
   _boardPoint(){
-    const g=this.game,spawn=g.terrain.island?.layout?.spawn;if(!spawn)return null;
-    for(const radius of [115,155,195])for(const [dx,dy] of [[-1,.4],[-1,-.4],[0,1],[0,-1],[1,.8]]){
-      const p={x:spawn.x+dx*radius,y:spawn.y+dy*radius};
-      if(!g.terrain.isFree(p.x,p.y,28)||g.terrain.firstBlocker(spawn.x,spawn.y,p.x,p.y,18))continue;
+    const g=this.game,core=g.worldTravel?.enabled?g.worldTravel.current?.core:null,anchor=core||g.terrain.island?.layout?.spawn;if(!anchor)return null;
+    const approach=core?.spawn||(core?.waypoint?{x:core.waypoint.x,y:core.waypoint.y+30}:anchor),candidates=core?.questBoard?[core.questBoard]:[];
+    for(const radius of [115,155,195])for(const [dx,dy] of [[-1,.4],[-1,-.4],[0,1],[0,-1],[1,.8]])candidates.push({x:anchor.x+dx*radius,y:anchor.y+dy*radius});
+    for(const p of candidates){
+      if(!g.terrain.isFree(p.x,p.y,28)||g.terrain.firstBlocker(approach.x,approach.y,p.x,p.y,18))continue;
       if(g.environment?.isHazardFree?.(p.x,p.y,40)===false)continue;
       if(g.settlements?.sites.some(site=>distance(p,site)<85))continue;
       if(this.boards.some(board=>distance(p,board)<75))continue;
@@ -74,11 +75,11 @@ export class WorldQuests {
   }
   accept(id){
     const definition=questDefinition(id);if(!this._known(definition))return false;
+    this.store.refresh();this._applyWorldEffects();
     const record=this._record(id);if(!record.discovered||record.accepted||record.completed)return false;
     record.accepted=true;this.store.data.tracked[definition.worldId]=id;this._changed();
-    this.game._emit('questAccepted',{id,name:definition.name});return true;
+    this.game._emit('questAccepted',{id,name:definition.name});this._complete(id);return true;
   }
-  _acceptRelevant(id){this._discover(id);this.accept(id);}
   track(id){
     const definition=questDefinition(id);if(!this._known(definition))return false;
     const record=this._record(id);if(!record.accepted||record.completed)return false;
@@ -87,16 +88,18 @@ export class WorldQuests {
   _objective(id,questId){
     const definition=questDefinition(questId);if(!this._known(definition)||!definition.objectives.some(objective=>objective.id===id))return false;
     const record=this._record(questId);if(record.objectives[id])return false;
-    this._acceptRelevant(questId);record.objectives[id]=true;this._changed();this._complete(questId);return true;
+    // These are world facts, including one-time chest claims and route changes.
+    // Finding them never opts the player into a commission or its rewards.
+    record.discovered=true;record.objectives[id]=true;this._changed();this._complete(questId);return true;
   }
   _complete(id){
     const definition=questDefinition(id),record=this._record(id);
-    if(!record)return false;
+    if(!record?.accepted)return false;
     if(record.completed){this._applyWorldEffects();return false;}
     if(!definition.objectives.every(objective=>record.objectives[objective.id]))return false;
     this.store.refresh();
     if(record.completed){this._applyWorldEffects();return false;}
-    const reward=!record.rewardClaimed;record.completed=true;record.accepted=true;record.rewardClaimed=true;
+    const reward=!record.rewardClaimed;record.completed=true;record.rewardClaimed=true;
     this._changed();this._applyWorldEffects();
     if(reward)this.game.grantResources(definition.reward,`quest:${definition.id}`);
     this.game._emit('questCompleted',{id:definition.id,name:definition.name,rewardText:definition.rewardText});return true;
@@ -121,9 +124,9 @@ export class WorldQuests {
     if(!this.definition||this.game.dungeon?.active!==state||state.site?.id!==site.id)return;
     this._route=null;this._targetId=null;this._exitChoice=null;
     if(this.game.worldId===FOREST&&site.caveId==='underground-passage'&&['cave05','cave15'].includes(site.entryKey)){
-      this._trip={state,entry:site.entryKey};this._acceptRelevant('underground-return');
+      this._trip={state,entry:site.entryKey};this._discover('underground-return');
     }else if(this.game.worldId===CITY&&(site.id===this._occupied()?.id||site.caveId==='city-cellar')){
-      this._acceptRelevant('clock-bridge');
+      this._discover('clock-bridge');
       const chest=site.caveId==='city-cellar'?this._chainChest(state):state.chests[0];
       // Existing opened scenes remain valid if the journal was unavailable at
       // their first visit. No new loot or duplicate ordinary chest reward.
@@ -154,7 +157,7 @@ export class WorldQuests {
   getInteraction(){
     const g=this.game,definition=this.definition;if(!definition||g.dungeon?.active||g.status!=='playing')return null;
     const p=foot(g),board=[...this.boards].filter(board=>!this._record(board.questId).accepted&&distance(p,board)<90&&!g.terrain.firstBlocker(p.x,p.y,board.x,board.y,0,'sight')).sort((a,b)=>distance(p,a)-distance(p,b))[0];
-    if(board){const entry=questDefinition(board.questId);return {id:board.id,questId:entry.id,category:'quest',type:'questBoard',label:`接取委托 · ${entry.name}`,description:entry.description,x:board.x,y:board.y,touchRadius:30,enabled:true};}
+    if(board){const entry=questDefinition(board.questId);return {id:board.id,questId:entry.id,category:'quest',type:'questBoard',label:`查看委托 · ${entry.name}`,description:entry.description,x:board.x,y:board.y,touchRadius:30,enabled:true};}
     const record=this._record('clock-bridge');
     if(this._known(questDefinition('clock-bridge'))&&!record.objectives.bridge&&distance(p,CLOCK_BRIDGE.approach)<105&&!g.terrain.firstBlocker(p.x,p.y,CLOCK_BRIDGE.approach.x,CLOCK_BRIDGE.approach.y,0,'sight')){
       const ready=record.objectives.gear&&record.objectives.chain;
@@ -164,7 +167,7 @@ export class WorldQuests {
   }
   interact(id){
     const current=this.getInteraction();if(!current||current.id!==id||!current.enabled)return false;
-    if(current.type==='questBoard'){this._discover(current.questId);return this.accept(current.questId);}
+    if(current.type==='questBoard'){this._discover(current.questId);this.game._emit('questBoardOpen',{id:current.questId,name:questDefinition(current.questId).name});return true;}
     if(current.type==='questMechanism'){
       this._objective('bridge','clock-bridge');this.game._effect(CLOCK_BRIDGE.winch.x,CLOCK_BRIDGE.winch.y,'ring',.65,54,'#dfce92');return true;
     }
@@ -220,11 +223,10 @@ export class WorldQuests {
     return result.filter(target=>Number.isFinite(target.x)&&Number.isFinite(target.y));
   }
   getEntries(){
-    return this.definitions.filter(definition=>this._record(definition.id).discovered).map(definition=>{const record=this._record(definition.id);return {id:definition.id,name:definition.name,description:definition.description,status:record.completed?'completed':record.accepted?'active':'available',objectives:definition.objectives.map(objective=>({...objective,current:record.objectives[objective.id]?1:0,total:1,done:!!record.objectives[objective.id]})),rewardText:definition.rewardText,tracked:this.store.data.tracked[definition.worldId]===definition.id&&!record.completed,canAccept:!record.accepted&&!record.completed};});
+    return this.definitions.filter(definition=>this._record(definition.id).discovered).map(definition=>{const record=this._record(definition.id);return {id:definition.id,name:definition.name,description:definition.description,status:record.completed?'completed':record.accepted?'active':'available',objectives:definition.objectives.map(objective=>({...objective,current:record.objectives[objective.id]?1:0,total:1,done:!!record.objectives[objective.id]})),rewardText:definition.rewardText,tracked:record.accepted&&this.store.data.tracked[definition.worldId]===definition.id&&!record.completed,canAccept:!record.accepted&&!record.completed};});
   }
   getTracker(){
-    const definition=this.definition,record=this._record();if(!definition||!record?.discovered||record.completed)return null;
-    if(!record.accepted)return {id:definition.id,name:definition.name,text:'查看区域委托',status:'available'};
+    const definition=this.definition,record=this._record();if(!definition||!record?.accepted||record.completed)return null;
     if(this.store.data.tracked[definition.worldId]!==definition.id)return null;
     const remaining=definition.objectives.filter(objective=>!record.objectives[objective.id]);
     const target=this._selectedTarget();

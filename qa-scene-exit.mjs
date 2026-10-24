@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {Game} from './dist/engine.js';
 import {Terrain,groundOffset} from './dist/terrain.js';
 import {movementProfile} from './dist/height-rules.js';
-import {portalDoor} from './dist/portal-geometry.js';
+import {portalDoor,portalExitGeometry} from './dist/portal-geometry.js';
 
 let seed=780921;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
 const foot=m=>({x:m.x,y:m.y+groundOffset(m,true)});
@@ -10,13 +10,15 @@ const place=(m,point)=>{m.x=point.x;m.y=point.y-groundOffset(m,true);};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function recruit(g){for(const kind of ['stormcaller','warden','dog','owl','golem'])assert(g.companions.recruit(kind));}
 function quiet(g){g._spawn=g._shot=g.nextBossAt=g.player.xpNext=g.crystalsNext=Infinity;g.gold=1000;g.build.setEquipped('sword',false);}
-function verifyParty(g,door,direction=1){
+function verifyParty(g,door,direction=1,forwardLimit=125){
   const p=foot(g.player),members=g.companions.members;assert.equal(members.length,5);
+  const normal=typeof direction==='number'?{x:0,y:direction}:direction,tangent={x:-normal.y,y:normal.x};
+  const projection=(point,origin,axis)=>(point.x-origin.x)*axis.x+(point.y-origin.y)*axis.y;
   assert(g.terrain.isFree(p.x,p.y,g.player.r),'player receives a walkable doorway position');
-  assert(Math.abs(p.x-door.x)<=56&&Math.abs(p.y-door.y)<=125,'player remains near the receiving doorway');
+  assert(Math.abs(projection(p,door,tangent))<=56&&Math.abs(projection(p,door,normal))<=forwardLimit,'player remains near the receiving doorway');
   for(const member of members){
     const point=foot(member),profile=movementProfile(member);
-    assert((point.y-p.y)*direction<0,`${member.kind} receives a trailing position, not a ring around the player`);
+    assert(projection(point,p,normal)<0,`${member.kind} receives a trailing position, not a ring around the player`);
     assert(distance(point,door)<170,`${member.kind} stays beside the same doorway`);
     assert(g.terrain.isFree(point.x,point.y,member.r,profile),`${member.kind} clears walls with its own movement profile`);
     assert(!g.terrain.firstBlocker(p.x,p.y,point.x,point.y,member.r,profile),`${member.kind} can reach the hero`);
@@ -37,8 +39,8 @@ function verifyParty(g,door,direction=1){
 function finish(g){for(let i=0;i<32&&g.sceneTransition.active;i++)g.update(.025);assert.equal(g.sceneTransition.active,false);}
 
 const world=new Game();quiet(world);recruit(world);
-for(const type of ['supply','occupied','castle']){
-  const site=world.settlements.sites.find(s=>s.type===type);assert(site);
+for(const type of ['supply','occupied','castle','weapons','skills','supplies']){
+  const site=world.settlements.sites.find(s=>s.worldFacility===type||!s.worldFacility&&s.type===type);assert(site);
   const terrain=world.terrain,oldPoint={x:site.door.x+55,y:site.door.y};place(world.player,oldPoint);
   assert(world.dungeon.enter(site));const inside=world.dungeon.active;
   verifyParty(world,inside.entrance,-1);
@@ -60,14 +62,15 @@ for(const type of ['supply','occupied','castle']){
 
 // The same five-member placement is exercised at actual paired world gates,
 // including active guardian angels and both outbound and return directions.
-const gate=world.regions.portals.find(p=>p.nextRegionIndex===1),boss=world.enemies.find(e=>e.id===gate.bossId);
+const originIndex=world.regionIndex,gate=world.regions.portals.find(p=>p.nextRegionIndex===1),boss=world.enemies.find(e=>e.id===gate.bossId);
 if(boss){place(world.player,{x:gate.x,y:gate.y+250});world.regionGrace=0;world.regions.update();
 world._hurtEnemy(boss,boss.hp+1);world.regions.flushReward();assert(world.chooseSuper(world.getSuperChoices()[0].id));}
 else assert(gate.natural&&gate.state==='active');
-for(const target of [1,0]){
+for(const target of [gate.nextRegionIndex,originIndex]){
   const departure=world.regions.portals.find(p=>p.nextRegionIndex===target);place(world.player,portalDoor(departure));
   assert(world.requestInteraction(departure.id));finish(world);assert.equal(world.regionIndex,target);
-  const arrival=world.regions.portals.find(p=>p.connectionId===departure.connectionId);verifyParty(world,portalDoor(arrival));
+  const arrival=world.regions.portals.find(p=>p.connectionId===departure.connectionId),edge=portalExitGeometry(arrival);
+  verifyParty(world,portalDoor(arrival),edge?.normal||arrival.arrivalDirection||{x:0,y:1},edge?180:125);
   for(let i=0;i<4;i++){world.touchInteractions.update();assert.equal(world.sceneTransition.active,false);assert.equal(world.regionIndex,target);}
 }
 

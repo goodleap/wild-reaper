@@ -10,6 +10,7 @@ import { DUNGEON_RULES, interiorRewardFor } from './interior-profiles.js';
 import { createCastleState, populateCastle } from './sites/castle-interior.js';
 import { createAuthoredInterior, populateAuthoredInterior } from './sites/authored-interior.js';
 import { settlementType } from './site-definitions.js';
+import { isWorldShop } from './shop-interior.js';
 export { DUNGEON_RULES } from './interior-profiles.js';
 
 const DIRS=Object.freeze([{dx:0,dy:-1,opposite:2},{dx:1,dy:0,opposite:3},{dx:0,dy:1,opposite:0},{dx:-1,dy:0,opposite:1}]);
@@ -54,7 +55,10 @@ export class Dungeon {
   enter(site){
     const g=this.game;
     if(!site||!site.id||this.active||g.status!=='playing'||!this._near(this._door(site),site.interactRadius||100))return false;
-    const definition=site.type?settlementType(site):settlementType('castle'),kind=site.riftCave?'cave':definition?.interior,scene=interiorSceneFor(kind);
+    // A facility's exterior shares a building footprint with supply huts,
+    // but must never inherit their free chest or occupied-room content.
+    if(site.worldFacility&&(!isWorldShop(site)||!g.worldShops?.canEnter(site)))return false;
+    const definition=site.type?settlementType(site):settlementType('castle'),kind=site.worldFacility?'shop':site.riftCave?'cave':definition?.interior,scene=interiorSceneFor(kind);
     if(!kind||!scene)return false;
     let state=this.states.get(site.id);
     if(!state){
@@ -73,7 +77,7 @@ export class Dungeon {
     if(caveEntry){const d=caveEntry.direction;this._placePlayer({x:caveEntry.x+d.x*90,y:caveEntry.y+d.y*90},{doorway:caveEntry,direction:d});}
     else this._placePlayer(state.landing||state.entrance,{doorway:state.entrance,direction:{x:0,y:-1}});
     if(!state.populated){state.populated=true;interiorSceneFor(state).populate(this,state);if(state.kind==='cave'&&!state.authoredLayout){const boss=g.enemies.find(e=>e.id===state.bossId);if(boss)boss.name='暗河守卫';}}
-    g.worldSave?.restoreDungeon(g,state);
+    if(state.kind!=='shop')g.worldSave?.restoreDungeon(g,state);
     this._clearScene();g._refreshStats();g._refreshWeapons();this.update(0);
     g.quests?.onDungeonEnter(state,site);
     g._emit('dungeonEnter',{name:state.name,revisit:state.visited.size>1});return true;
@@ -114,7 +118,12 @@ export class Dungeon {
   getInteraction(){
     const g=this.game,state=this.active;if(!state||g.status!=='playing')return null;
     for(const exit of state.riftExits||[])if(this._near(exit,95)&&this.vision.isVisible(exit.x,exit.y))return {id:exit.id,type:'dungeonExit',label:exit.name,description:'保留洞穴探索与战斗进度',x:exit.x,y:exit.y,enabled:true};
-    if(!state.riftExits&&this._near(state.entrance,95)&&this.vision.isVisible(state.entrance))return {id:`${state.id}:exit`,type:'dungeonExit',label:'返回荒野',description:'保留探索与战斗进度',...state.entrance,enabled:true};
+    if(!state.riftExits&&this._near(state.entrance,95)&&this.vision.isVisible(state.entrance))return {id:`${state.id}:exit`,type:'dungeonExit',label:state.kind==='shop'?'离开商店':'返回荒野',description:state.kind==='shop'?'返回进店前的门口':'保留探索与战斗进度',...state.entrance,enabled:true};
+    if(state.kind==='shop'){
+      const merchant=state.merchant,point=merchant.interaction;
+      if(g.worldShops.canTrade(state.site)&&this.vision.isVisible(merchant))return {id:merchant.id,type:'shopMerchant',label:`与${merchant.name}交易`,description:state.shopKind==='supplies'?'购买补给，随身携带并按需使用':'购买尚未掌握的基础能力',...point,touchRadius:merchant.touchRadius,enabled:true};
+      return null;
+    }
     const mechanism=state.mechanisms?.find(item=>!item.opened&&this._near(item,62)&&this.vision.isVisible(item.x,item.y));
     if(mechanism)return {id:mechanism.id,type:'interiorMechanism',label:mechanism.name,description:'打开栅门，接通近路',x:mechanism.x,y:mechanism.y,enabled:true};
     if(state.treasure&&this._near(state.treasure)&&this.vision.isVisible(state.treasure.x,state.treasure.y)){
@@ -128,6 +137,7 @@ export class Dungeon {
   interact(id){
     const state=this.active,g=this.game,choice=this.getInteraction();if(!state||!choice||!choice.enabled||choice.id!==id)return false;
     if(choice.type==='dungeonExit')return this.exit(choice.id);
+    if(choice.type==='shopMerchant')return g.worldShops.open(state.site);
     if(choice.type==='interiorMechanism'){
       const mechanism=state.mechanisms.find(item=>item.id===id);if(!mechanism||mechanism.opened)return false;
       mechanism.opened=true;state.terrain.setStructures([],`interior:${mechanism.id}`);
@@ -204,6 +214,7 @@ export class Dungeon {
     const state=this.active;if(!state)return null;const p=this._playerFoot(),known=point=>this.vision.isExplored(point.x,point.y);
     const markable=point=>revealMarkers||known(point);
     const landmarks=state.riftExits?state.riftExits.map(exit=>({...exit,type:'exit',state:'active',completed:false})):[{id:`${state.id}:exit`,type:'exit',name:'荒野出口',...state.entrance,state:'active',completed:false}];
+    if(state.kind==='shop')landmarks.push({...state.merchant,type:'merchant',state:'active',completed:false});
     for(const chest of state.chests)if(markable(chest))landmarks.push({...chest,type:'chest',name:state.kind==='hut'?'小屋补给':state.kind==='cave'?'洞窟宝箱':'古堡宝箱',completed:chest.state==='claimed'});
     if(state.treasure&&markable(state.treasure))landmarks.push({...state.treasure,type:'chest',name:state.treasureName||'王城宝藏',completed:state.rewardClaimed});
     for(const mechanism of state.mechanisms||[])if(markable(mechanism))landmarks.push({...mechanism,type:'shortcut',completed:mechanism.opened});
@@ -219,7 +230,8 @@ export class Dungeon {
     const p=this._playerFoot(),cell=this._cellAt(p.x,p.y)||state.cells[state.entranceId],room=state.rooms.get(cell.id);
     const remaining=room?this.game.enemies.filter(e=>e.hp>0&&e.dungeonId===state.id&&e.dungeonRoom===cell.id&&this.vision.isVisible(foot(e))).length:0;
     const battleRooms=[...state.rooms.values()].filter(r=>r.kind!=='boss'&&state.visited.has(r.cellId)),chest=state.chests.find(c=>c.cellId===cell.id&&c.state==='closed'&&this.vision.isExplored(c.x,c.y));let next;
-    if(state.kind==='hut'){
+    if(state.kind==='shop')next={...state.merchant.interaction,kind:'shop',label:`与${state.merchant.name}交易`};
+    else if(state.kind==='hut'){
       next=remaining?{x:cell.x,y:cell.y,kind:'battle',label:`清理屋内守卫 ${room.total-remaining}/${room.total}`}:
         chest?{x:chest.x,y:chest.y,kind:'treasure',label:`领取${state.treasureName||'小屋补给'}`}:{...state.entrance,kind:'route',label:'返回荒野'};
     }else if(state.bossDefeated&&this.vision.isExplored(state.treasure.x,state.treasure.y))next={...state.treasure,kind:'treasure',label:state.rewardClaimed?(state.kind==='cave'?'遗藏已领取 · 寻找洞口':'携宝返回荒野'):`领取${state.treasureName||'王城宝藏'}`};

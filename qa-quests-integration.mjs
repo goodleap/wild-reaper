@@ -11,6 +11,7 @@ const memory=()=>{const data=new Map();return {data,getItem:key=>data.get(key)??
 const fresh=(worldId='clockshadow-city',storage=null,extra={})=>{
   const g=new Game({mode:'world',worldId,questStorage:storage,environment:false,...extra});
   g.player.invuln=Infinity;g.player.xpNext=Infinity;g.crystalsNext=Infinity;g._spawn=g.nextBossAt=Infinity;
+  g.quests.update();
   return g;
 };
 const feet=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
@@ -64,11 +65,19 @@ function collectChain(g){
 // these interactions; the underground traversal below uses actual body movement.
 const storage=memory(),city=fresh('clockshadow-city',storage),staleCity=fresh('clockshadow-city',storage);
 assert.equal(entry(city,'clock-bridge').status,'available');assert(bridgeBlocked(city));
+const board=city.quests.board;assert(board);approach(city,board);
+assert(city.touchInteractions.update(),'touching the board opens its available commission');
+assert.equal(city.events.filter(event=>event.type==='questBoardOpen').length,1);
+assert.equal(entry(city,'clock-bridge').status,'available');assert.equal(city.quests.getTracker(),null);
+assert(!city.events.some(event=>event.type==='questAccepted'),'board contact never accepts a commission');
+assert.equal(city.touchInteractions.update(),false,'closing the panel on the same contact does not immediately reopen it');
 const supply=city.settlements.sites.find(site=>site.type==='supply'&&!site.worldFacility);assert(supply);approach(city,supply);request(city,supply.id);
 claimChest(city,city.dungeon.active.chests[0],{guarded:false});leave(city);
 assert.equal(entry(city,'clock-bridge').status,'available','unrelated supplies do not accept or advance a quest');
 assert(entry(city,'clock-bridge').objectives.every(item=>!item.done));
-collectGear(city);assert.equal(entry(city,'clock-bridge').status,'active','finding a real quest item before reading the board records it immediately');
+collectGear(city);assert.equal(entry(city,'clock-bridge').status,'available','finding a real quest item records its fact without accepting the commission');
+assert.equal(city.quests.getTracker(),null);assert.equal(city.quests.getGuide(),null);assert.deepEqual(city.quests.getMarkers(),[]);
+assert(city.quests.accept('clock-bridge'));assert.equal(entry(city,'clock-bridge').status,'active');assert(done(city,'clock-bridge','gear'),'acceptance retains the previously claimed material');
 assert(bridgeBlocked(city));collectChain(city);assert(bridgeBlocked(city),'possessing both items does not silently remove the bridge shutter');
 put(city,CLOCK_BRIDGE.approach);const before={gold:city.gold,crystals:city.crystals};request(city,'quest:clock-bridge:winch');
 assert.equal(entry(city,'clock-bridge').status,'completed');assert(!bridgeBlocked(city),'the visible opened shutter also opens physical movement');
@@ -87,14 +96,24 @@ const forest=fresh('rift-forest',storage),cave05=forest.riftExploration.sites.fi
 assert(cave05&&cave15);approach(forest,cave05);request(forest,cave05.id);
 let cave=forest.dungeon.active;const same=cave.riftExits.find(exit=>exit.key==='cave05');leave(forest,same);
 assert(!done(forest,'underground-return','crossing'),'entering and backing out the same mouth is not a crossing');
+assert.equal(entry(forest,'underground-return').status,'available');assert.equal(forest.quests.getGuide(),null);
 approach(forest,cave05);request(forest,cave05.id);cave=forest.dungeon.active;
 const opposite=cave.riftExits.find(exit=>exit.key==='cave15'),guide=forest.quests.getGuide();
-assert(guide?.complete,'forest underground guidance must connect the full multi-room route');assert(Math.hypot(guide.target.x-opposite.x,guide.target.y-opposite.y)<1);
+assert.equal(guide,null,'independent exploration never enables quest guidance');
 assert(walkRooms(forest,opposite)>=5);request(forest,opposite.id);assert(done(forest,'underground-return','crossing'));
 assert(Math.hypot(feet(forest).x-cave15.x,feet(forest).y-cave15.y)<150);
 const gate=forest.riftExploration.sites.find(site=>site.gateId==='bell-shortcut'),north=forest.riftExploration._gateApproach(gate),dx=north.x-gate.x,dy=north.y-gate.y;
 put(forest,{x:gate.x-dx,y:gate.y-dy});assert.equal(forest.requestInteraction(gate.id),false,'the shortcut still has a real locked side');
-put(forest,north);request(forest,gate.id);assert.equal(entry(forest,'underground-return').status,'completed');assert(forest.terrain.riftGateOpen('bell-shortcut'));
+put(forest,north);const forestGold=forest.gold,forestCrystals=forest.crystals;request(forest,gate.id);
+assert.equal(entry(forest,'underground-return').status,'available');assert(forest.terrain.riftGateOpen('bell-shortcut'));
+assert(entry(forest,'underground-return').objectives.every(objective=>objective.done),'all one-time exploration facts persist before acceptance');
+assert.equal(forest.gold,forestGold);assert.equal(forest.crystals,forestCrystals,'an unaccepted commission never grants its reward');
+const factsReload=fresh('rift-forest',storage);assert.equal(entry(factsReload,'underground-return').status,'available');assert(factsReload.terrain.riftGateOpen('bell-shortcut'));
+assert.equal(factsReload.quests.getTracker(),null);assert.equal(factsReload.quests.getGuide(),null);assert.deepEqual(factsReload.quests.getMarkers(),[]);
+assert(forest.quests.accept('underground-return'));assert.equal(entry(forest,'underground-return').status,'completed');
+assert.equal(forest.gold,forestGold+30);assert.equal(forest.crystals,forestCrystals+20);
+assert.equal(forest.quests.accept('underground-return'),false);assert.equal(forest.gold,forestGold+30,'acceptance pays previously completed facts only once');
+assert.equal(factsReload.quests.accept('underground-return'),false,'a stale tab learns the other tab already accepted and claimed');assert.equal(factsReload.gold,0);
 const out=forest.regions.portals.find(portal=>portal.nextRegionIndex===1);assert(out);approach(forest,portalDoor(out));request(forest,out.id);
 assert.equal(forest.worldId,'marsh');assert.equal(forest.quests.getEntries().length,0);assert.equal(forest.quests.getProps().length,0);assert.equal(forest.quests.getGuide(),null);
 const back=forest.regions.portals.find(portal=>portal.nextRegionIndex===WORLD_IDS.indexOf('rift-forest'));approach(forest,portalDoor(back));request(forest,back.id);
@@ -108,12 +127,22 @@ for(const options of [{mode:'story'},{mode:'dungeon',dungeonId:'survival'}]){
 // The harness counts draws rather than claiming device/browser rendering FPS.
 const h=harness('?debug'),node=id=>h.document.getElementById(id);
 function click(id){const target=node(id);h.listeners['document:pointerdown']?.({target,pointerType:'mouse'});target.focus();h.fire(target,'click',{detail:1});h.run(`focusNavigation.settlePointerAction({target:$(${JSON.stringify(id)}),detail:1});`);}
+function questAction(action){
+  const target=node('quest-journal-list').querySelector(`[data-quest-action="${action}"]`);assert(target);
+  h.listeners['document:pointerdown']?.({target,pointerType:'mouse'});target.focus();h.fire(node('quest-journal-list'),'click',{target,detail:1});
+  h.run('focusNavigation.settlePointerAction({target:$("quest-journal-list"),detail:1});');
+}
 click('start-button');click('prepare-start-button');await h.flush();
-h.run('game.enemies=[];game._spawn=game.nextBossAt=Infinity;game.player.invuln=Infinity;game.player.xpNext=game.crystalsNext=Infinity;');
-click('map-button');assert(h.run('mapOpen'));const frozen=h.run('game.time');h.tick();assert.equal(h.run('game.time'),frozen);
-const accept=node('quest-journal-list').querySelector('[data-quest-action="accept"]');assert(accept);
-h.listeners['document:pointerdown']?.({target:accept,pointerType:'mouse'});accept.focus();h.fire(node('quest-journal-list'),'click',{target:accept,detail:1});
-h.run('focusNavigation.settlePointerAction({target:$(' + JSON.stringify('quest-journal-list') + '),detail:1});');
+h.run('game.enemies=[];game._spawn=game.nextBossAt=Infinity;game.player.invuln=Infinity;game.player.xpNext=game.crystalsNext=Infinity;game.quests.update();');
+h.run('mapView="world";game.player.x=game.quests.board.x;game.player.y=game.quests.board.y-groundOffset(game.player,true);updateGameFrame(.016);');
+assert(h.run('mapOpen'),'real board contact opens the existing journal');assert.equal(h.run('mapView'),'region','board entry shows quests even after using the world atlas');
+assert.equal(h.run('game.quests.getEntries()[0].status'),'available');assert(node('quest-tracker').hidden);
+const declinedTime=h.run('game.time');h.tick();assert.equal(h.run('game.time'),declinedTime,'reading a commission pauses the adventure');
+questAction('decline');assert(!h.run('mapOpen'));assert.equal(h.run('game.quests.getEntries()[0].status'),'available');assert.equal(h.document.activeElement.id,'game-canvas');
+h.tick();assert(!h.run('mapOpen'),'declining while standing at the board keeps its contact latch');
+h.run('game.player.x=game.worldTravel.current.core.spawn.x;game.player.y=game.worldTravel.current.core.spawn.y-groundOffset(game.player,true);updateGameFrame(.016);game.player.x=game.quests.board.x;game.player.y=game.quests.board.y-groundOffset(game.player,true);updateGameFrame(.016);');
+assert(h.run('mapOpen'),'leaving and returning lets the player reconsider the commission');
+const frozen=h.run('game.time');questAction('accept');
 assert.equal(h.run('game.quests.getEntries()[0].status'),'active');assert(h.run('mapOpen'));h.tick();assert.equal(h.run('game.time'),frozen);
 click('map-done');assert(!h.run('mapOpen'));assert.equal(h.document.activeElement.id,'game-canvas');
 h.run('updateHUD();');assert(!node('quest-tracker').hidden);click('quest-tracker');assert(h.run('mapOpen'));click('map-done');

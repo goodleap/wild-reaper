@@ -20,7 +20,7 @@ function crossesObstacle(prop,from,to){
 
 function occluderVisual(prop){
   if(prop.visual)return prop.visual;
-  if(prop.variant==='castle-wall'||prop.variant==='hut-wall'){
+  if(prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.variant==='shop-wall'){
     const half=prop.halfLength||0,r=prop.r||14,projection=prop.variant==='hut-wall'?25:35;
     return {halfWidth:Math.abs(Math.cos(prop.angle||0))*half+r+5,top:Math.abs(Math.sin(prop.angle||0))*half+r+projection+5,bottom:Math.abs(Math.sin(prop.angle||0))*half+r};
   }

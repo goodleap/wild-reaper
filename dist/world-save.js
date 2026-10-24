@@ -5,6 +5,7 @@ import { RELICS } from './relics.js';
 import { QUEST_STORAGE_KEY } from './quest-store.js';
 import { groundOffset } from './terrain.js';
 import { getConfigSection } from './content-config.js';
+import { isWorldShop } from './shop-interior.js';
 
 export const WORLD_SAVE_KEY='wild-echoes-world-save-v1';
 const MAX_BYTES=4_000_000,MAX_ACTORS=1600;
@@ -44,6 +45,37 @@ const ENEMY_KEYS='id type name x y r hp maxHp speed damage xp bossIndex bossKind
 const HOME_KEYS=['territoryHome','portalHome','rescueHome','dungeonHome','huntHome','settlementHome','affix'];
 const enemies=values=>list(values,MAX_ACTORS).filter(e=>e.hp>0&&ENEMY_IDS.includes(e.type)).map(e=>({...pick(e,ENEMY_KEYS),...pick(e,HOME_KEYS)}));
 const objects=values=>list(values).map(value=>({...record(value,['door','mechanism','guardIds','memberIds','direction','footprint','stock','reward']),...(value._remaining instanceof Set?{remainingIds:[...value._remaining]}:{})}));
+// Authored identities and geometry are rebuilt from the current content.
+// Disk records may restore progress, never relocate a door, road or collider.
+const PROGRESS_KEYS='id state discovered explored cleared announced open opened gateOpen progress remainingGuards guardIds memberIds rewardClaimed rewardQueued rewarded bossId battleId workerId openProgress activationAge activationDuration started stock'.split(' ');
+const MECHANISM_PROGRESS='state remaining maxRemaining warning charge hp _shot activationAge activationDuration'.split(' ');
+function progress(value){
+  const saved=pick(value,PROGRESS_KEYS);
+  if(value?.mechanism)saved.mechanism=pick(value.mechanism,MECHANISM_PROGRESS);
+  const remaining=value?._remaining instanceof Set?[...value._remaining]:value?.remainingIds;
+  if(Array.isArray(remaining))saved.remainingIds=copy(remaining);
+  return saved;
+}
+const progressObjects=values=>list(values).map(progress);
+function applyProgress(target,saved){
+  const next=progress(saved),mechanism=next.mechanism;delete next.mechanism;
+  Object.assign(target,next);
+  if(mechanism&&target.mechanism)Object.assign(target.mechanism,mechanism);
+  if(next.remainingIds){target._remaining=new Set(next.remainingIds);delete target.remainingIds;}
+}
+function shopReturnPoint(game,site,source=game){
+  if(!isWorldShop(site))return null;
+  const door=site.door,terrain=source.terrain,environment=source.environment,clearance=game.player.r+4;
+  if(!door||!terrain)return null;
+  const safe=point=>terrain.isFree(point.x,point.y,clearance)&&!terrain.firstBlocker(door.x,door.y,point.x,point.y,clearance)&&
+    environment?.isHazardFree?.(point.x,point.y,clearance)!==false&&
+    !environment?.props?.some(prop=>prop.state!=='spent'&&Math.hypot(prop.x-point.x,prop.y-point.y)<(prop.blastRadius||82)+clearance);
+  const inset=Math.max(52,(site.touchRadius??26)+26);
+  for(const offset of [inset,inset+20,inset+44,inset+68])for(const side of [0,-28,28,-56,56]){
+    const point={x:door.x+side,y:door.y+offset};if(safe(point))return point;
+  }
+  return null;
+}
 function restoreRecords(values){return copy(values).map(value=>{if(value.remainingIds){value._remaining=new Set(value.remainingIds);delete value.remainingIds;}return value;});}
 const sparse=bits=>{const result=[];if(bits)for(let i=0;i<bits.length;i++)if(bits[i])result.push([i,bits[i]]);return result;};
 function applyBits(bits,entries){if(!bits)return;bits.fill(0);for(const [index,value] of list(entries,65536))if(Number.isInteger(index)&&index>=0&&index<bits.length&&Number.isInteger(value)&&value>0&&value<=255)bits[index]=value;}
@@ -61,20 +93,20 @@ function visionSnapshot(dungeon,state){
   return {seen:sparse(memory.seen),walls:memory.pieces.filter(piece=>piece.seen).map(piece=>piece.id)};
 }
 function dungeonSnapshot(dungeon,state){
-  return {id:state.id,...pick(state,['bossId','bossDefeated','bossDiscovered','rewardClaimed','populated']),visited:[...state.visited],
-    enemies:enemies(state.enemies),gems:objects(state.gems),coins:objects(state.coins),chests:objects(state.chests),mechanisms:objects(state.mechanisms),
-    treasure:state.treasure?record(state.treasure):null,rooms:[...state.rooms].map(([id,room])=>[id,record(room)]),adventure:adventureSnapshot(state.adventure),vision:visionSnapshot(dungeon,state)};
+  return {id:state.id,kind:state.kind,...pick(state,['bossId','bossDefeated','bossDiscovered','rewardClaimed','populated']),visited:[...state.visited],
+    enemies:enemies(state.enemies),gems:objects(state.gems),coins:objects(state.coins),chests:progressObjects(state.chests),mechanisms:progressObjects(state.mechanisms),
+    treasure:state.treasure?progress(state.treasure):null,rooms:[...state.rooms].map(([id,room])=>[id,progress(room)]),adventure:adventureSnapshot(state.adventure),vision:visionSnapshot(dungeon,state)};
 }
 function surfaceSnapshot(game,source,old){
   const c=game.companions,dungeons=source.dungeonStates||game.dungeon.states;
   const saved={savedAt:source.savedAt??game.time,...pick(source,['bossDefeated','nextBossAt']),enemies:enemies(source.enemies),gems:objects(source.gems),coins:objects(source.coins),
     adventure:adventureSnapshot(source.adventure),environment:source.environment?{props:objects(source.environment.props),consumed:sparse(source.environment._consumed?.bits),mechanisms:objects(source.environment.mechanisms?.props),used:sparse(source.environment.mechanisms?._used?.bits)}:null,
-    settlements:objects(source.settlements?.sites),relicSites:objects(source.relicSites?.sites),rift:objects(source.riftExploration?.sites),
-    territories:objects(source.territories?.groups),discoveredMap:[...(source.discoveredMap||[])],explored:[...(source.terrain?.island?.explored||[])],portals:objects(source.portals),
+    settlements:progressObjects(source.settlements?.sites),relicSites:progressObjects(source.relicSites?.sites),rift:progressObjects(source.riftExploration?.sites),
+    territories:progressObjects(source.territories?.groups),discoveredMap:[...(source.discoveredMap||[])],explored:[...(source.terrain?.island?.explored||[])],portals:progressObjects(source.portals),
     camps:objects(source.companionCamps??c?.camps),companionNextAt:source.companionNextAt??c?.nextAt??0,
     encounters:source.encounters?{nextAt:source.encounters.nextAt,_id:source.encounters._id,activities:source.encounters.activities.map(a=>({...record(a,['guardIds','pendingGuards','spawnWarnings']),remaining:[...(a._remaining||[])]}))}:null,
-    pendingRewards:[...(old?.pendingRewards||[])],dungeons:{...(old?.dungeons||{})}};
-  for(const [id,state] of dungeons)saved.dungeons[id]=dungeonSnapshot(game.dungeon,state);
+    pendingRewards:[...(old?.pendingRewards||[])],dungeons:Object.fromEntries(Object.entries(old?.dungeons||{}).filter(([,state])=>state.kind!=='shop'))};
+  for(const [id,state] of dungeons){if(state.kind==='shop')delete saved.dungeons[id];else saved.dungeons[id]=dungeonSnapshot(game.dungeon,state);}
   return saved;
 }
 function restoreEnemies(game,saved){
@@ -94,7 +126,7 @@ function restoreEnemies(game,saved){
 function mergeObjects(target,saved){
   if(!target)return;
   const byId=new Map(list(saved).map(value=>[value.id,value]));
-  for(const item of target){const next=byId.get(item.id);if(next){Object.assign(item,copy(next));if(next.remainingIds){item._remaining=new Set(next.remainingIds);delete item.remainingIds;}}}
+  for(const item of target){const next=byId.get(item.id);if(next)applyProgress(item,next);}
 }
 function connectionIds(values,toNames=false){
   if(toNames)return [...values].map(key=>key.split(':').map(Number).map(index=>WORLD_IDS[index])).filter(pair=>pair.length===2&&pair.every(Boolean));
@@ -158,10 +190,13 @@ export class WorldSave {
     this.restoreRegion(game);
     game._refreshStats();game._refreshWeapons();
     p.hp=d.location.recover?p.maxHp:Math.max(1,Math.min(p.maxHp,d.player.hp));
-    const location=d.location;
-    if(finite(location.x)&&finite(location.y)&&game.terrain.isFree(location.x,location.y,p.r,'ground')){p.x=location.x;p.y=location.y-groundOffset(p,true);}
+    const rest=game.worldTravel?.getRestAnchor(),site=game.settlements?.sites.find(site=>site.id===d.location.facilityId);
+    const location=d.location.recover?(rest?.worldId===game.worldId?rest:game.worldTravel?.spawnPoint()):
+      d.location.facilityId?shopReturnPoint(game,site)||game.worldTravel?.spawnPoint():d.location;
+    if(location&&finite(location.x)&&finite(location.y)&&game.terrain.isFree(location.x,location.y,p.r,'ground')){p.x=location.x;p.y=location.y-groundOffset(p,true);}
     p.invuln=2;game.regionGrace=2;
     this._restoreParty(game,d.party);
+    game.worldTravel?.onRegionEntered();
     const find=id=>game.territories?.byId.get(id)||game.regions.portals.find(portal=>portal.id===id);
     game.regions._rewardQueue=list(d.regions[game.worldId]?.pendingRewards).map(find).filter(item=>item&&!item.rewardClaimed);
     game.regions.rewardPortal=null;game.superSkills.pending=null;game._regionRewardPending=false;
@@ -204,13 +239,14 @@ export class WorldSave {
     return true;
   }
   restoreDungeon(game,state){
-    if(!this.enabled||!permitted(game)||this._dungeonApplied.has(state))return false;
+    if(!this.enabled||!permitted(game)||state.kind==='shop'||this._dungeonApplied.has(state))return false;
     this._dungeonApplied.add(state);
     const d=this.data.regions[game.worldId]?.dungeons?.[state.id];if(!d)return false;
     state.enemies=restoreEnemies(game,d.enemies);state.gems=game.gems=copy(d.gems);state.coins=game.coins=copy(d.coins);
     Object.assign(state,pick(d,['bossId','bossDefeated','bossDiscovered','rewardClaimed','populated']));state.rewardPending=false;state.visited=new Set(d.visited);
-    state.rooms=new Map(copy(d.rooms));mergeObjects(state.chests,d.chests);mergeObjects(state.mechanisms,d.mechanisms);
-    if(state.treasure){Object.assign(state.treasure,copy(d.treasure));state.treasure.state=state.rewardClaimed?'claimed':state.bossDefeated?'unlocked':'locked';}
+    for(const [id,saved] of list(d.rooms)){const room=state.rooms.get(id);if(room)applyProgress(room,saved);}
+    mergeObjects(state.chests,d.chests);mergeObjects(state.mechanisms,d.mechanisms);
+    if(state.treasure){applyProgress(state.treasure,d.treasure);state.treasure.state=state.rewardClaimed?'claimed':state.bossDefeated?'unlocked':'locked';}
     for(const mechanism of state.mechanisms||[])if(mechanism.opened)state.terrain.setStructures([],`interior:${mechanism.id}`);
     restoreAdventure(state.adventure,d.adventure);
     if(d.vision){const record=game.dungeon.vision._record(state);applyBits(record.seen,d.vision.seen);record.count=record.seen.reduce((sum,n)=>sum+(n?1:0),0);record.dirty=true;const ids=new Set(d.vision.walls);for(const piece of record.pieces)piece.seen=ids.has(piece.id);record.known=record.pieces.filter(piece=>piece.seen);record.knownByWall=new Map();for(const piece of record.known){if(!record.knownByWall.has(piece.wallId))record.knownByWall.set(piece.wallId,[]);record.knownByWall.get(piece.wallId).push(piece);}}
@@ -224,9 +260,11 @@ export class WorldSave {
       d.start={hero:game.hero.id,appearanceId:game.appearanceId,initialWeaponId:game.initialWeaponId,worldId:game.startWorldId};
       const underground=game.dungeon.active,world=underground?game.dungeon._world:null;
       const recovering=!!respawn||game.player.hp<=0;
-      const recovery=recovering?(plain(respawn)?respawn:game.worldTravel?.getRestAnchor()||{worldId:game.worldId,...game.worldTravel?.current?.core}):null;
-      const position=recovery||(world?world.returnPoint:{x:game.player.x,y:game.player.y+groundOffset(game.player,true)});
-      d.location={worldId:recovery?.worldId||game.worldId,x:position.x??0,y:position.y??0,recover:recovering};
+      const coreSpawn=game.worldTravel?.current?.core.spawn;
+      const recovery=recovering?(game.worldTravel?.getRestAnchor()||{worldId:game.worldId,...coreSpawn}):null;
+      const shop=underground?.kind==='shop'?underground.site:null;
+      const position=recovery||(shop?shopReturnPoint(game,shop,world)||coreSpawn:world?world.returnPoint:{x:game.player.x,y:game.player.y+groundOffset(game.player,true)});
+      d.location={worldId:recovery?.worldId||game.worldId,x:position.x??0,y:position.y??0,recover:recovering,...(shop&&!recovering?{facilityId:shop.id}:{})};
       if(!WORLD_IDS.includes(d.location.worldId))throw new Error('恢复地点无效');
       d.player=pick(game.player,['hp','level','xp','xpNext','baseMaxHp','skillCooldown','facing']);d.build=game.build.serialize();
       Object.assign(d,pick(game,['gold','crystals','crystalsNext','time','runTime','kills','wave','bossCount','bossKills','_clock','_id','_branchOfferCursor','_branchOfferWeapon']));

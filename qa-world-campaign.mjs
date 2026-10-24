@@ -10,9 +10,17 @@ const game=new Game({...save.startOptions(),questStorage:save.questStorage});
 assert(save.attach(game));
 const place=(g,point)=>{g.player.x=point.x;g.player.y=point.y-groundOffset(g.player,true);};
 const finishTransition=g=>{for(let i=0;i<50&&g.sceneTransition.active;i++)g.update(.05);assert(!g.sceneTransition.active);assert(g.sceneTransition.commitSucceeded);};
+const leaveShop=()=>{
+  if(game.status==='shop')assert(game.closeShop());
+  const room=game.dungeon.active;assert.equal(room?.kind,'shop');place(game,room.entrance);
+  assert(game.requestInteraction(game.getInteraction().id));finishTransition(game);assert.equal(game.dungeon.active,null);
+};
 const openShop=kind=>{
+  if(game.dungeon.active)leaveShop();
   const site=game.settlements.sites.find(site=>site.worldFacility===kind);assert(site);
-  place(game,site.door);assert(game.requestInteraction(site.id));assert.equal(game.status,'shop');assert(!game.dungeon.active);assert(!game.sceneTransition.active);return site;
+  place(game,site.door);assert(game.requestInteraction(site.id));assert.equal(game.status,'playing');assert(game.sceneTransition.active);finishTransition(game);
+  const room=game.dungeon.active;assert.equal(room.kind,'shop');place(game,room.merchant.interaction);assert(game.requestInteraction(room.merchant.id));
+  assert.equal(game.status,'shop');assert(!game.sceneTransition.active);return site;
 };
 assert.equal(game.worldId,'rift-forest');
 assert(game.worldTravel.activated.has('rift-forest'));
@@ -34,6 +42,7 @@ const inventory=game.worldShops.inventory;
 assert.equal(inventory.heal,2);game.player.hp=game.player.maxHp;
 assert(!game.worldShops.useConsumable('heal'));assert.equal(inventory.heal,2);
 game.player.hp-=45;assert(game.worldShops.useConsumable('heal'));assert.equal(inventory.heal,1);
+leaveShop();
 
 const outward=game.regions.portals.find(portal=>portal.nextRegion.id==='verdant-rift');assert(outward?.natural);
 place(game,outward);assert(game.canEnterPortal(outward.id));assert(game.requestInteraction(outward.id));finishTransition(game);

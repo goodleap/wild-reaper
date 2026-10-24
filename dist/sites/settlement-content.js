@@ -56,7 +56,7 @@ const SETTLEMENT_ACTIONS=Object.freeze({
 export function activateSettlement(settlements,site){
   if(site?.worldFacility){
     if(settlements.game.mode!=='world')return false;
-    return site.worldFacility==='rest'?settlements.game.worldShops.rest(site):SETTLEMENT_ACTIONS.shop(settlements,site);
+    return site.worldFacility==='rest'?settlements.game.worldShops.rest(site):SETTLEMENT_ACTIONS.interior(settlements,site);
   }
   return SETTLEMENT_ACTIONS[settlementType(site)?.interaction]?.(settlements,site)||false;
 }

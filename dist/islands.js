@@ -3,6 +3,7 @@ import { COAST_RULES } from './placement-rules.js';
 import { WORLD_IDS, regionFor, worldNeighbors } from './world-definitions.js';
 import { createWorldLayout } from './worlds/world-layout.js';
 import { createRiftLayout } from './worlds/rift-layout.js';
+import { getConfigSection } from './content-config.js';
 // Deterministic island outlines are shared by coast paint, collision, spawning
 // and natural terrain generation. The radius varies smoothly: no hidden
 // rectangular world wall and no narrow pixel-scale bays trapping a creature.
@@ -16,10 +17,25 @@ function segmentDistanceSq(ax,ay,bx,by,cx,cy,dx,dy){
   if(Math.abs(den)>1e-10){const t=((cx-ax)*vy-(cy-ay)*vx)/den,s=((cx-ax)*uy-(cy-ay)*ux)/den;if(t>=0&&t<=1&&s>=0&&s<=1)return 0;}
   return Math.min(distanceSq(ax,ay,cx,cy,dx,dy),distanceSq(bx,by,cx,cy,dx,dy),distanceSq(cx,cy,ax,ay,bx,by),distanceSq(dx,dy,ax,ay,bx,by));
 }
+function segmentInBox(ax,ay,bx,by,box,padding){
+  let start=0,end=1;
+  for(const [a,b,min,max] of [[ax,bx,box.minX-padding,box.maxX+padding],[ay,by,box.minY-padding,box.maxY+padding]]){
+    const delta=b-a;
+    if(Math.abs(delta)<1e-9){if(a<min||a>max)return false;continue;}
+    const t1=(min-a)/delta,t2=(max-a)/delta;start=Math.max(start,Math.min(t1,t2));end=Math.min(end,Math.max(t1,t2));if(start>end)return false;
+  }
+  return true;
+}
 export class Island {
   constructor({region='forest',seed=0}={}){
     this.region=WORLD_IDS.includes(region)?region:'forest';this.seed=Number.isFinite(seed)?Math.trunc(seed):0;
     this.mapId=this.region;
+    // Reserve authored streets and real foundations against natural scenery,
+    // keeping trees around the settlement instead of clearing its safety disk.
+    const core=getConfigSection('worlds').travel.regions.find(entry=>entry.worldId===this.region)?.core;
+    this._townBoxes=[];this._townStreets=core?.ground?.streets||[];
+    for(const point of core?.ground?.plazas||[])this._townBoxes.push({minX:point.x-point.width/2,maxX:point.x+point.width/2,minY:point.y-point.depth/2,maxY:point.y+point.depth/2});
+    for(const point of core?[...core.facilities,core.waypoint]:[])this._townBoxes.push({minX:point.x-point.width/2-18,maxX:point.x+point.width/2+18,minY:point.y-point.depth-18,maxY:point.y+75});
     this.worldId=WORLD_IDS.indexOf(this.region);this.shallowWidth=COAST_RULES.shallowWidth;this.beachWidth=regionFor(this.worldId).coast.beachWidth??COAST_RULES.beachWidth;this.routeRadius=80;
     if(regionFor(this.worldId).authored?.kind==='rift-forest'){
       this.layout=createRiftLayout(this.region);this.bounds=this.layout.bounds;this.spawn=this.layout.spawn;this.plan=this.layout.plan;this.routes=this.layout.routes;
@@ -111,6 +127,10 @@ export class Island {
   }
   isReserved(x,y,r=0){return this.isReservedCapsule(x,y,x,y,r);}
   isReservedCapsule(ax,ay,bx,by,r=0){
+    if(this._townBoxes.some(box=>segmentInBox(ax,ay,bx,by,box,r+12)))return true;
+    for(const street of this._townStreets)for(let i=1;i<street.points.length;i++){
+      const a=street.points[i-1],b=street.points[i];if(segmentDistanceSq(ax,ay,bx,by,a.x,a.y,b.x,b.y)<(street.width/2+r+12)**2)return true;
+    }
     const spawn=this.layout?.kind==='rift-forest'?this.layout.spawn:{x:0,y:0};
     if(distanceSq(spawn.x,spawn.y,ax,ay,bx,by)<(260+r)**2)return true;
     if(Object.values(this.plan).some(p=>distanceSq(p.x,p.y,ax,ay,bx,by)<(p.r+r)**2))return true;

@@ -12,10 +12,15 @@ merchant.closeShop();for(let i=0;i<5;i++)merchant.update(0);assert.equal(merchan
 place(merchant,{x:shop.door.x-80,y:shop.door.y});merchant.update(0);place(merchant,shop.door);merchant.update(0);assert.equal(merchant.status,'shop','leaving and returning permits a new visit');
 const town=fresh(),weaponShop=site(town,'supply');Object.assign(weaponShop,{worldFacility:'weapons',region:town.worldId});town.settlements._setStructures();town.gold=100;
 place(town,weaponShop.door);assert.equal(town.getInteraction().type,'worldShop');town.update(0);
-assert.equal(town.status,'shop');assert.equal(town.dungeon.active,null);assert.equal(town.sceneTransition.active,false,'fixed shop contact never starts an indoor fade');
+assert.equal(town.status,'playing');assert.equal(town.dungeon.active,null);finishTransition(town);
+const store=town.dungeon.active;assert.equal(store.kind,'shop');town.update(0);
+place(town,store.merchant.interaction);town.update(0);assert.equal(town.status,'shop');assert.equal(town.sceneTransition.active,false);
 assert.ok(town.buyShopItem('arrow'));assert.equal(town.status,'shop');assert.equal(weaponShop.state,'ready');assert.equal(town.build.getWeapon('arrow').baseRank,1);
 town.closeShop();town.update(0);assert.equal(town.status,'playing','a permanent shop retains the same contact latch after purchase');
-place(town,{x:weaponShop.door.x,y:weaponShop.door.y+85});town.update(0);place(town,weaponShop.door);town.update(0);assert.equal(town.status,'shop');assert.equal(town.buyShopItem('arrow'),false);
+assert.equal(town.dungeon.active,store);
+place(town,{x:100,y:store.merchant.interaction.y});town.update(0);place(town,store.merchant.interaction);town.update(0);assert.equal(town.status,'shop');assert.equal(town.buyShopItem('arrow'),false);
+town.closeShop();place(town,store.entrance);town.update(0);finishTransition(town);assert.equal(town.dungeon.active,null);
+for(let i=0;i<3;i++)town.update(0);assert.equal(town.dungeon.active,null,'shop return cannot immediately reenter');
 const g=fresh(),hut=site(g,'supply');place(g,hut.door);g.update(0);assert.equal(g.dungeon.active,null,'the old scene stays visible before fade-out');finishTransition(g);assert.equal(g.dungeon.active?.kind,'hut');const interior=g.dungeon.active;
 for(let i=0;i<3;i++)g.update(0);assert.equal(g.dungeon.active,interior,'inset arrival never sends player straight back');
 const box=interior.chests[0];place(g,box);g.update(0);assert.equal(box.state,'claimed');assert.equal(g.gold,4);assert.equal(g.crystals,12);g.update(0);assert.equal(g.gold,4);

@@ -3,7 +3,7 @@ import { mapSeed } from './map-context.js';
 import { enemyDefinition } from './enemy-definitions.js';
 import { groundOffset } from './terrain.js';
 import { placementAllowed } from './placement-rules.js';
-import { PORTAL_GEOMETRY, portalDoor, portalEntranceContains, portalObstacles } from './portal-geometry.js';
+import { PORTAL_GEOMETRY, portalDoor, portalEntranceContains, portalExitGeometry, portalObstacles } from './portal-geometry.js';
 import { REGIONS, regionFor, normalizeWorldIndex, worldNeighbors } from './world-definitions.js';
 export { REGIONS, WORLD_IDS, regionFor, normalizeWorldIndex, worldNeighbors, WORLD_CONNECTIONS } from './world-definitions.js';
 export const worldConnectionId=(a,b)=>[normalizeWorldIndex(a),normalizeWorldIndex(b)].sort((x,y)=>x-y).join(':');
@@ -201,18 +201,30 @@ export class Regions {
     const g=this.game,portal=this._portal(portalOrId);
     return !!(portal&&portal.state==='active'&&g.status==='playing'&&!g.superSkills.pending&&!this._rewardQueue.length&&!g.dungeon?.active&&
       !this.rewardPortal&&(!g.stage||portal.kind==='victory'&&g.stage.bossDefeated&&this.portals.includes(portal))&&
-      (g.stage||portal.worldConnection||!g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false))&&portalEntranceContains(portal,feet(g)));
+      (g.stage||portal.worldConnection||!g.enemies.some(e=>e.type==='boss'&&!e.debugBoss&&e.hp>0&&e.guardActive!==false))&&portalEntranceContains(portal,feet(g),g.player.r));
   }
   getInteraction() {
     const portal=this.nearest(),g=this.game;if(!portal||g.status!=='playing'||g.dungeon?.active)return null;
     const door=portalDoor(portal);if(distance(feet(g),door)>portal.interactRadius)return null;
     const locked=portal.state!=='active',enabled=this.canEnter(portal);
     if(portal.kind==='victory')return {id:portal.id,type:'stageExit',label:'进入通关门',description:'完成本局试炼',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
-    if(portal.kind==='travel')return {id:portal.id,type:'portal',label:`前往${portal.nextRegion.name}`,description:portal.natural?'沿通路离开 · 可返回探索':'可自由往返',...door,touchRadius:portal.touchRadius||PORTAL_GEOMETRY.touchRadius,enabled};
+    if(portal.kind==='travel')return {id:portal.id,type:'portal',label:`前往${portal.nextRegion.name}`,description:portal.exitTrigger?'沿道路走到地图边缘自动前往':portal.natural?'沿通路离开 · 可返回探索':'可自由往返',...door,touchRadius:portal.touchRadius||PORTAL_GEOMETRY.touchRadius,edgeExit:!!portalExitGeometry(portal),enabled};
     return {id:portal.id,type:'portal',label:locked?`通往${portal.nextRegion.name}`:`前往${portal.nextRegion.name}`,description:locked?'击败驻门首领 · 解锁双向通道':'已激活 · 可以往返穿越',...door,touchRadius:PORTAL_GEOMETRY.touchRadius,enabled};
   }
   arrivalPoint(portal,r=this.game.player.r){
     const g=this.game,door=portalDoor(portal),clearance=r+4;
+    const exit=portalExitGeometry(portal);
+    if(exit){
+      const safe=point=>!portalEntranceContains(portal,point,clearance+24)&&g.terrain.isFree(point.x,point.y,clearance)&&
+        !g.terrain.firstBlocker(door.x,door.y,point.x,point.y,clearance)&&g.environment?.isHazardFree?.(point.x,point.y,clearance)!==false;
+      const start=Math.max(160,exit.depth+clearance+60);
+      for(const offset of [start,start+40,start+80,start+140])for(const across of [0,-35,35,-70,70]){
+        if(Math.abs(across)+clearance>exit.halfWidth)continue;
+        const point={x:exit.point.x+exit.normal.x*offset+exit.tangent.x*across,y:exit.point.y+exit.normal.y*offset+exit.tangent.y*across};
+        if(safe(point))return point;
+      }
+      return null;
+    }
     if(portal.natural){
       const d=portal.arrivalDirection||{x:0,y:1};
       for(const offset of [110,140,170,80]){const point={x:door.x+d.x*offset,y:door.y+d.y*offset};if(g.terrain.isFree(point.x,point.y,clearance)&&!g.terrain.firstBlocker(door.x,door.y,point.x,point.y,clearance))return point;}

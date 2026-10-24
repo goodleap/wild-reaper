@@ -29,12 +29,14 @@ h.run('closeMap();openMap(undefined,{travel:true});');
 for(const button of node(h,'world-atlas-content').querySelectorAll('[data-world-target]'))assert(button.disabled,'undiscovered destinations and current region cannot be selected for travel');
 h.run('closeMap();');
 
-// Fixed purchases stay in the same shop and put consumables in inventory.
-h.run(`const shopSite=game.settlements.sites.find(site=>site.worldFacility==='supplies');game.player.x=shopSite.door.x;game.player.y=shopSite.door.y-groundOffset(game.player,true);game.gold=1000;game.settlements.interact(shopSite.id);openShop();`);
+// Enter the shop scene, then trade with its merchant. Purchases stay open.
+h.run(`const shopSite=game.settlements.sites.find(site=>site.worldFacility==='supplies');game.player.x=shopSite.door.x;game.player.y=shopSite.door.y-groundOffset(game.player,true);game.gold=1000;game.requestInteraction(shopSite.id);for(let i=0;game.sceneTransition.active&&i<30;i++)game.sceneTransition.update(.05);`);
+assert.equal(h.run('game.dungeon.active.kind'),'shop');assert.equal(h.run('game.status'),'playing');
+h.run(`const shopMerchant=game.dungeon.active.merchant;game.player.x=shopMerchant.interaction.x;game.player.y=shopMerchant.interaction.y-groundOffset(game.player,true);game.interact(shopMerchant.id);openShop();`);
 assert.equal(h.run('game.status'),'shop');
 for(let i=0;i<2;i++){const button=node(h,'shop-items').querySelector('button');h.fire(button,'click');assert.equal(h.run('game.status'),'shop');assert(visible(h,'shop-overlay'));}
 assert.equal(h.run('game.worldShops.inventory.heal'),2);assert.doesNotMatch(node(h,'shop-items').textContent,/剩余 1 份/);
-click(h,'shop-close');h.run("game.player.hp-=10;openCharacter('supplies');");
+click(h,'shop-close');assert.equal(h.run('game.dungeon.active.kind'),'shop');h.run("game.player.hp-=10;openCharacter('supplies');");
 const use=node(h,'character-content').querySelector('[data-use-supply="heal"]');h.fire(node(h,'character-content'),'click',{target:use});
 assert.equal(h.run('game.worldShops.inventory.heal'),1);assert.equal(h.run('game.player.hp===game.player.maxHp'),true);
 h.run('closeCharacter();game.gold=321;home();');
@@ -46,6 +48,7 @@ assert.equal(node(restored,'prepare-start-label').textContent,'继续探索');as
 assert(node(restored,'hero-princess-v2').disabled);assert(node(restored,'weapon-arrow').disabled);
 click(restored,'prepare-start-button');await restored.flush();
 assert.equal(restored.run('game.hero.id'),'princess');assert.equal(restored.run('game.initialWeaponId'),'arrow');assert.equal(restored.run('game.gold'),321);assert.equal(restored.run('game.worldShops.inventory.heal'),1);
+assert.equal(restored.run('game.dungeon.active'),null,'continuing after leaving from the shop returns safely outside');
 restored.run('home();');click(restored,'start-button');
 const before=storage.get(WORLD_SAVE_KEY);click(restored,'world-new-button');assert(visible(restored,'world-reset-confirm'));assert.equal(storage.get(WORLD_SAVE_KEY),before);
 click(restored,'world-reset-cancel');assert.equal(storage.get(WORLD_SAVE_KEY),before);

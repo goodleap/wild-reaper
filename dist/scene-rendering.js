@@ -43,8 +43,8 @@ export function sceneItemVisible(item,vision){
   const prop=item.prop;
   // Walls own remembered-segment rendering, not live actor visibility. Their
   // existing fixed structure pieces keep foreground occlusion depth-sorted.
-  if(prop.variant==='castle-wall'||prop.variant==='hut-wall')return true;
-  if(prop.isInteriorProp&&prop.collision===true)return terrainVisible(interiorPropFootprint(prop),vision);
+  if(prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.variant==='shop-wall')return true;
+  if((prop.isShopFurniture&&prop.solid)||(prop.isInteriorProp&&prop.collision===true))return terrainVisible(interiorPropFootprint(prop),vision);
   return item.kind==='terrain'?terrainVisible(prop,vision):vision.isVisible(prop.x,prop.y,prop.r||0);
 }
 

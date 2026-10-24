@@ -8,7 +8,7 @@ import { damageFriendly } from './dist/friendly-combat.js';
 import { CombatResolution } from './dist/combat-resolution.js';
 import { AbilityRuntime } from './dist/ability-runtime.js';
 
-const definition=(worldId,x,y)=>({worldId,atlas:{x,y},core:{id:`core:${worldId}`,name:worldId,kind:'camp',x:0,y:0,radius:300,artTheme:'forest',facilities:[],waypoint:{x:0,y:0,width:56,depth:36}}});
+const definition=(worldId,x,y)=>({worldId,atlas:{x,y},core:{id:`core:${worldId}`,name:worldId,kind:'camp',x:0,y:0,radius:300,artTheme:'forest',facilities:[{id:'rest',kind:'rest',x:65,y:60}],waypoint:{x:0,y:0,width:56,depth:36}}});
 const config={startWorldId:'rift-forest',regions:[definition('rift-forest',0,0),definition('marsh',1,0),definition('verdant-rift',0,1)],
   connections:[{id:'forest-marsh',from:'rift-forest',to:'marsh',name:'林间湿地路',endpoints:{'rift-forest':{x:550,y:0,arrivalDirection:{x:-1,y:0}},marsh:{x:-500,y:0,arrivalDirection:{x:1,y:0}}}}]};
 const place=(g,x,y)=>{g.player.x=x;g.player.y=y-groundOffset(g.player,true);};
@@ -25,6 +25,8 @@ const create=(options={})=>{
 const enter=(g,id)=>{g.worldId=id;g.regionIndex=WORLD_IDS.indexOf(id);g.region=REGIONS[g.regionIndex];g.worldTravel.onRegionEntered();};
 
 const g=create();place(g,0,75);g.worldTravel.initialize();
+assert.equal(g.worldTravel.activated.size,0,'preparing a region does not activate a waypoint at the previous spawn');
+g.worldTravel.update();
 assert.deepEqual(g.worldTravel.serialize().discovered,['rift-forest']);assert(g.worldTravel.activated.has('rift-forest'));
 assert.equal(g.terrain.structures.get('world-waypoints')[0].halfLength,10,'56 × 36 waypoint has its measured ground footprint');
 const foundation=g.terrain.structures.get('world-waypoints')[0];
@@ -48,13 +50,26 @@ assert(g.worldTravel.requestTravel('marsh'));assert(g.worldTravel.pending);asser
 g.sceneTransition.update(.05);g.sceneTransition.update(.05);assert.equal(switches,0);
 g.sceneTransition.update(.05);assert.equal(switches,1);assert.equal(g.worldId,'marsh');assert.equal(g.worldTravel.pending,null);
 for(let i=0;i<6;i++)g.sceneTransition.update(.05);assert.equal(g.sceneTransition.active,false);assert.equal(switches,1);
-assert(g.worldTravel.setRestAnchor({id:'rest:marsh',x:65,y:90}));assert.equal(g.worldTravel.getRestAnchor().worldId,'marsh');
+assert(g.worldTravel.setRestAnchor({id:'facility:core:marsh:rest',x:65,y:90}));assert.equal(g.worldTravel.getRestAnchor().worldId,'marsh');
 assert.equal(g.worldTravel.setRestAnchor({id:'bad',x:900,y:900}),false,'rest anchors belong to the protected core');
-const restored=create();assert(restored.worldTravel.restore(g.worldTravel.serialize()));assert(restored.worldTravel.activated.has('marsh'));assert.equal(restored.worldTravel.getRestAnchor().facilityId,'rest:marsh');
+const restored=create();assert(restored.worldTravel.restore(g.worldTravel.serialize()));assert(restored.worldTravel.activated.has('marsh'));assert.equal(restored.worldTravel.getRestAnchor().facilityId,'facility:core:marsh:rest');
+assert.deepEqual(g.worldTravel.serialize().restAnchor,{worldId:'marsh',facilityId:'facility:core:marsh:rest'},'rest saves keep facility identity rather than stale coordinates');
+const anchorConfig=structuredClone(config),anchorCore=anchorConfig.regions.find(region=>region.worldId==='marsh').core;
+Object.assign(anchorCore,{x:1000,y:900});Object.assign(anchorCore.facilities[0],{x:1065,y:960});
+const movedAnchor=new WorldTravel(create(),{config:anchorConfig,data:g.worldTravel.serialize()});
+assert.deepEqual(movedAnchor.getRestAnchor(),{worldId:'marsh',x:1065,y:990,facilityId:'facility:core:marsh:rest'},'restoring the same facility follows the new town location');
+assert(movedAnchor.restore({restAnchor:{worldId:'marsh',facilityId:'missing'}}));assert.equal(movedAnchor.getRestAnchor(),null,'unknown facility identities are rejected');
 assert.equal(restored.worldTravel.portalTo(WORLD_IDS.indexOf('marsh')).connectionId,portal.connectionId,'serialized travel and canonical region connection IDs remain aligned');
-const debug=create({debug:true});assert.equal(debug.worldTravel.restore(g.worldTravel.serialize()),false);place(debug,0,75);debug.worldTravel.initialize();
+const debug=create({debug:true});assert.equal(debug.worldTravel.restore(g.worldTravel.serialize()),false);place(debug,0,75);debug.worldTravel.initialize();debug.worldTravel.update();
 assert(debug.worldTravel.enabled&&debug.worldTravel.activated.has('rift-forest'),'debug exercises the same world mechanics');assert.equal(debug.saved.length,0,'debug does not write formal progression');assert(!debug.worldTravel.activated.has('marsh'),'debug does not read formal progression');
 for(const options of [{mode:'story'},{mode:'dungeon'},{stage:{}},{expedition:{}},{worldId:'forest'}])assert.equal(create(options).worldTravel.enabled,false);
+const relocated=create();
+const movedConfig=structuredClone(config),movedCore=movedConfig.regions[0].core;
+Object.assign(movedCore,{x:800,y:700,spawn:{x:800,y:780},waypoint:{x:800,y:700,width:56,depth:36}});
+relocated.worldTravel=new WorldTravel(relocated,{config:movedConfig});place(relocated,0,75);relocated.worldTravel.initialize();relocated.worldTravel.update();
+assert.equal(relocated.worldTravel.activated.size,0,'the old authored spawn cannot activate the relocated town');
+assert.deepEqual(relocated.worldTravel.spawnPoint(),movedCore.spawn);assert(!relocated.worldTravel.safety.contains(0,0));assert(relocated.worldTravel.safety.contains(800,700));
+place(relocated,800,780);relocated.worldTravel.update();assert(relocated.worldTravel.activated.has('rift-forest'));
 
 const safety=g.worldTravel.safety;place(g,0,0);
 assert(safety.protects(g.player));assert.equal(safety.allowsSpawn(280,0,25),false);assert(safety.allowsSpawn(450,0,20));

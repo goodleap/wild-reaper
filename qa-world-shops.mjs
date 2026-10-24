@@ -20,7 +20,14 @@ const facilities=['weapons','skills','supplies','rest'].map(kind=>({id:`test:${k
   name:kind,x:0,y:-30,width:120,depth:65,door:{x:0,y:0},interactRadius:82,state:'ready'}));
 game.settlements={game,sites:facilities,activeShop:null,closeShop(){this.activeShop=null;game.status='playing';return true;}};
 const shops=game.worldShops=new WorldShops(game),[weapons,skills,supplies,rest]=facilities;
-function open(site){game.status='playing';assert.ok(activateSettlement(game.settlements,site));assert.equal(game.status,'shop');}
+game.dungeon={active:null,enter(site){if(!shops.canEnter(site))return false;this.active={kind:'shop',site,merchant:{interaction:{x:0,y:0},interactRadius:82}};return true;}};
+assert.equal(shops.open(weapons),false,'the outside door cannot open a transaction');
+assert.deepEqual(shops.getItems(weapons),[],'outside buildings cannot expose an active sale');
+function open(site){
+  game.status='playing';game.settlements.activeShop=null;game.dungeon.active=null;
+  assert.ok(activateSettlement(game.settlements,site));assert.equal(game.status,'playing','door changes the scene before any trade');
+  assert.ok(shops.open(site));assert.equal(game.status,'shop');
+}
 open(weapons);
 assert.equal(getShopItems(game.settlements).find(item=>item.id==='sword').reason,'已掌握');
 assert.equal(buyShopItem(game.settlements,'sword'),false);
@@ -54,7 +61,7 @@ assert.equal(fresh.restore({inventory:{heal:1,magnet:0,fury:0,shield:0,extra:1}}
 open(supplies);shops.inventory.heal=99;const balance=game.gold;assert.equal(buyShopItem(game.settlements,'heal'),false);assert.equal(game.gold,balance);
 shops.inventory.heal=1;game.gold=0;assert.equal(buyShopItem(game.settlements,'heal'),false);assert.equal(shops.inventory.heal,1);
 game.gold=balance;game.player.x=300;assert.equal(buyShopItem(game.settlements,'heal'),false,'stale remote shop cannot sell');game.player.x=0;
-game.settlements.closeShop();game.player.hp=20;
+game.settlements.closeShop();game.dungeon.active=null;game.player.hp=20;
 game.companions.members=[{id:'test-ally',hp:0,maxHp:80,state:'recovering',r:15,isCompanion:true,x:100,y:100,groundOffset:19.8}];
 assert.ok(activateSettlement(game.settlements,rest));assert.equal(game.player.hp,100);assert.equal(game.companions.members[0].hp,80);
 assert.equal(game.companions.members[0].state,'active');assert.deepEqual(game.worldTravel.anchor,{x:0,y:0,worldId:'rift-forest'});
@@ -73,6 +80,8 @@ const sections=structuredClone(getConfigSnapshot().sections);
 sections.economy.worldShops.skillPrices.storm=1;
 assert.throws(()=>validateContent(sections),/base ability/,'innate and special skills are not shop stock');
 
+const place=(g,p)=>{g.player.x=p.x;g.player.y=p.y-groundOffset(g.player,true);};
+const finishTransition=g=>{for(let i=0;g.sceneTransition.active&&i<24;i++)g.update(.05);assert.equal(g.sceneTransition.active,false);};
 let actualFacilities=0,actualNpcs=0;
 for(const entry of getConfigSnapshot().sections.worlds.travel.regions){
   const actual=new Game({mode:'world',worldId:entry.worldId,debug:true,debugOptions:{extraGold:true},companions:false,encounters:false,questStorage:null});
@@ -93,24 +102,70 @@ for(const entry of getConfigSnapshot().sections.worlds.travel.regions){
     actual.player.x=site.door.x;actual.player.y=site.door.y-groundOffset(actual.player,true);actual.touchInteractions.latched=null;
     assert.equal(actual.getInteraction()?.id,site.id,`${label}: doorway selects its own facility`);
     if(site.worldFacility==='rest')actual.player.hp-=10;
+    const surface={terrain:actual.terrain,enemies:actual.enemies,gems:actual.gems,coins:actual.coins,adventure:actual.adventure};
+    const beforeEntry={gold:actual.gold,crystals:actual.crystals,build:actual.build.serialize()};
     assert.ok(actual.touchInteractions.update(),`${label}: contact performs its action`);
-    assert.equal(actual.sceneTransition.active,false);assert.equal(actual.dungeon.active,null);
     if(site.worldFacility==='rest'){
+      assert.equal(actual.sceneTransition.active,false);assert.equal(actual.dungeon.active,null);
       assert.equal(actual.player.hp,actual.player.maxHp);
       assert.equal(actual.worldTravel.getRestAnchor().facilityId,site.id);
+      assert.equal(actual.dungeon.enter(site),false,'rest facilities never inherit supply-hut rewards');
     }else{
+      assert.equal(actual.sceneTransition.active,true);assert.equal(actual.dungeon.active,null,'map switch waits for the opaque frame');
+      finishTransition(actual);
+      const room=actual.dungeon.active;
+      assert.equal(room.kind,'shop');assert.equal(room.shopKind,site.worldFacility);assert.equal(room.site,site);
+      assert.equal(actual.status,'playing');assert.notEqual(actual.terrain,surface.terrain);
+      assert.deepEqual({gold:actual.gold,crystals:actual.crystals,build:actual.build.serialize()},beforeEntry,'entry grants no items or resources');
+      assert.deepEqual([room.chests.length,room.enemies.length,room.gems.length,room.coins.length,room.rooms.size],[0,0,0,0,0]);
+      assert.equal(room.treasure,null);assert.equal(room.rewardClaimed,false);
+      assert.ok(actual.dungeon.vision.isVisible(room.merchant),'the merchant is visible from the landing');
+      assert.ok(actual.terrain.isFree(room.landing.x,room.landing.y,actual.player.r));
+      assert.equal(actual.terrain.firstBlocker(room.landing.x,room.landing.y,room.merchant.interaction.x,room.merchant.interaction.y,actual.player.r),null,'entry connects to the counter');
+      const counter=room.props.find(prop=>prop.kind==='counter');
+      assert.equal(actual.terrain.isFree(counter.x,counter.y-counter.depth/2,0),false,'painted counter has a floor collision');
+      assert.equal(actual.buyShopItem('heal'),false,'room entry cannot purchase before trading');
+      actual.touchInteractions.update();place(actual,room.merchant.interaction);actual.dungeon.update(0);
+      assert.equal(actual.getInteraction()?.id,room.merchant.id);
+      assert.ok(actual.touchInteractions.update(),'touching the merchant opens a trade');
+      assert.equal(actual.sceneTransition.active,false,'talking at the counter does not change maps');
       assert.equal(actual.status,'shop');
       const id=site.worldFacility==='weapons'?'arrow':site.worldFacility==='skills'?'barrier':'heal';
       assert.ok(actual.buyShopItem(id),`${label}: a real purchase succeeds`);
       assert.equal(actual.status,'shop');assert.equal(site.state,'ready');
       if(site.worldFacility==='supplies')assert.equal(actual.worldShops.inventory.heal,1);
       else assert.equal(actual.buyShopItem(id),false,`${label}: cannot buy an acquired base rank twice`);
-      actual.closeShop();actual.touchInteractions.update();assert.equal(actual.status,'playing','closing retains doorway contact latch');
+      actual.closeShop();actual.touchInteractions.update();assert.equal(actual.status,'playing','closing retains the merchant contact latch');
+      assert.equal(actual.dungeon.active,room,'closing a trade stays inside the same room');
+      const earned={gold:actual.gold,crystals:actual.crystals,build:actual.build.serialize()},outdoorEnemies=surface.enemies.map(enemy=>[enemy.x,enemy.y,enemy.hp]);
+      for(let i=0;i<80;i++)actual.update(.05);
+      assert.deepEqual([actual.enemies.length,actual.gems.length,actual.coins.length,actual.adventure.props.length],[0,0,0,0],'shop time cannot generate fights or free rewards');
+      assert.deepEqual(surface.enemies.map(enemy=>[enemy.x,enemy.y,enemy.hp]),outdoorEnemies,'surface enemies remain frozen while shopping');
+      const exit=()=>{place(actual,room.entrance);actual.dungeon.update(0);assert.ok(actual.requestInteraction(actual.getInteraction().id));finishTransition(actual);actual.touchInteractions.update();};
+      exit();
+      for(const [key,value] of Object.entries(surface))assert.equal(actual[key],value,`exit restores the same surface ${key}`);
+      assert.ok(Math.hypot(actual.player.x-site.door.x,actual.player.y+groundOffset(actual.player,true)-site.door.y)<=150,'exit returns to this physical door');
+      place(actual,site.door);assert.ok(actual.requestInteraction(site.id));finishTransition(actual);
+      assert.equal(actual.dungeon.active,room,'reentry retains the same shop scene');
+      assert.deepEqual({gold:actual.gold,crystals:actual.crystals,build:actual.build.serialize()},earned,'reentry cannot reroll a reward or reset purchases');
+      exit();
     }
     actualFacilities++;
   }
   for(const npc of actual.settlements.sites.filter(site=>site.type==='angel')){
     assert.ok(actual.terrain.isFree(npc.x,npc.y,npc.r||15),`${entry.worldId}: guardian feet do not overlap buildings`);actualNpcs++;
+  }
+  if(entry.worldId==='rift-forest'){
+    const hut=actual.settlements.sites.find(site=>site.type==='supply'&&!site.worldFacility);
+    place(actual,hut.door);assert.ok(actual.dungeon.enter(hut));const remembered=actual.dungeon.active,chest=remembered.chests[0];
+    place(actual,chest);actual.dungeon.update(0);assert.ok(actual.dungeon.interact(chest.id));
+    place(actual,remembered.entrance);assert.ok(actual.dungeon.exit());
+    const shop=facilities.find(site=>site.worldFacility==='supplies');place(actual,shop.door);assert.ok(actual.dungeon.enter(shop));
+    assert.equal(actual.dungeon.states.get(hut.id),remembered,'entering another shop keeps the existing hut scene');
+    place(actual,actual.dungeon.active.entrance);assert.ok(actual.dungeon.exit());
+    place(actual,hut.door);assert.ok(actual.dungeon.enter(hut));assert.equal(actual.dungeon.active,remembered);
+    assert.equal(chest.state,'claimed');assert.equal(remembered.rewardClaimed,true,'shopping cannot reset a previously claimed hut reward');
+    place(actual,remembered.entrance);assert.ok(actual.dungeon.exit());
   }
   actual.dispose('qa-world-shops');
 }

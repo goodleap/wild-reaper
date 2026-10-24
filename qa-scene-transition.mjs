@@ -113,9 +113,14 @@ const shop=fresh({mode:'dungeon'}),merchant=site(shop,'merchant');place(shop,mer
 assert(shop.requestInteraction(merchant.id));assert.equal(shop.status,'shop');assert.equal(shop.sceneTransition.active,false);assert.equal(shop.gold,17,'opening a shop remains immediate and never buys an item');
 const town=fresh(),supplies=site(town,'supply');Object.assign(supplies,{worldFacility:'supplies',region:town.worldId});place(town,supplies.door);
 assert.equal(town.getInteraction().type,'worldShop');assert(town.requestInteraction(supplies.id));
-assert.equal(town.status,'shop');assert.equal(town.sceneTransition.active,false);assert.equal(town.dungeon.active,null,'a shop building is not a hut entrance');
+assert.equal(town.status,'playing');assert.equal(town.sceneTransition.active,true);assert.equal(town.dungeon.active,null);
+finish(town);assert.equal(town.dungeon.active.kind,'shop','a facility enters a static shop instead of a reward hut');
+const merchantRoom=town.dungeon.active;place(town,merchantRoom.merchant.interaction);town.dungeon.update(0);
+assert.equal(town.getInteraction().type,'shopMerchant');assert(town.requestInteraction(merchantRoom.merchant.id));
+assert.equal(town.status,'shop');assert.equal(town.sceneTransition.active,false);
 assert.ok(town.buyShopItem('heal'));assert.equal(town.worldShops.inventory.heal,1);assert.equal(town.player.hp,73,'supply purchases are carried, not consumed at the doorway');
 assert.equal(town.status,'shop');assert.equal(town.sceneTransition.opacity,0);
+assert(town.closeShop());assert.equal(town.dungeon.active,merchantRoom);assert.equal(town.status,'playing');
 const chest=fresh(),hut=site(chest,'supply');place(chest,hut.door);assert(chest.interact(hut.id),'low-level setup API remains immediate outside transitions');
 const box=chest.dungeon.active.chests[0];place(chest,box);chest.dungeon.update(0);
 assert(chest.requestInteraction(chest.getInteraction().id));assert.equal(box.state,'claimed');assert.equal(chest.sceneTransition.active,false,'claiming a chest does not fade the world');

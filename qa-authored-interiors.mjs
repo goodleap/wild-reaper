@@ -152,7 +152,7 @@ const rewardBalance={gold:game.gold,crystals:game.crystals};assert.equal(game.du
 assert.deepEqual({gold:game.gold,crystals:game.crystals},rewardBalance,'the final treasury cannot pay twice');
 walk(castle.entrance,'castle exit');assert.ok(game.dungeon.exit());
 
-const hutSite=game.settlements.sites.find(site=>site.type==='supply');assert.ok(hutSite);
+const hutSite=game.settlements.sites.find(site=>site.type==='supply'&&!site.worldFacility);assert.ok(hutSite);
 const hut=enterSite(hutSite);assert.equal(hut.kind,'hut');
 const furnishings=hut.props.filter(prop=>prop.footprint);assert.ok(furnishings.length>=2,'the small hut contains usable furnishings');
 for(const prop of furnishings)assert.equal(game.terrain.isFree(prop.x,prop.y+(prop.footprint.offsetY||0),0),false,'furniture blocks its painted floor footprint');

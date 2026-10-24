@@ -2,6 +2,7 @@ import { getConfigSection } from './content-config.js';
 import { REGIONS, WORLD_IDS, regionFor } from './world-definitions.js';
 import { groundOffset } from './terrain.js';
 import { WorldSafety } from './world-safety.js';
+import { portalEntranceContains, portalExitGeometry } from './portal-geometry.js';
 
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const playerFoot=g=>({x:g.player.x,y:g.player.y+groundOffset(g.player,true)});
@@ -14,7 +15,7 @@ export class WorldTravel {
   constructor(game,{config=getConfigSection('worlds').travel,data=null,onChange=null}={}){
     this.game=game;this.config=config;this.onChange=onChange;this.pending=null;
     this.definitions=new Map((config?.regions||[]).map(region=>[region.worldId,region]));
-    this.discovered=new Set();this.activated=new Set();this.restAnchor=null;
+    this.discovered=new Set();this.activated=new Set();this.restAnchor=null;this._edgeLatches=new Set();
     this.safety=new WorldSafety(game,{enabled:()=>this.enabled,zones:[...this.definitions.values()].map(({worldId,core})=>({worldId,id:core.id,x:core.x,y:core.y,radius:core.radius}))});
     if(data)this.restore(data);
   }
@@ -35,7 +36,7 @@ export class WorldTravel {
     if(this.onChange)this.onChange(this.serialize(),reason);
     else this.game._scheduleWorldSave?.(reason);
   }
-  initialize(){if(!this.enabled)return false;this.prepareRegion();this.onRegionEntered();this.update();return true;}
+  initialize(){if(!this.enabled)return false;this.prepareRegion();this.onRegionEntered();return true;}
   prepareRegion(){
     const point=this.waypoint,structures=[];
     if(point){
@@ -49,6 +50,9 @@ export class WorldTravel {
     if(!this.enabled)return false;
     this.prepareRegion();
     const id=this.current.worldId,first=!this.discovered.has(id);
+    this._edgeLatches.clear();
+    const p=playerFoot(this.game),radius=this.game.player.r+24;
+    for(const portal of this.game.regions?.portals||[])if(portalExitGeometry(portal)&&portalEntranceContains(portal,p,radius))this._edgeLatches.add(portal.id);
     this.discovered.add(id);
     if(first){this.game._emit?.('worldRegionDiscovered',{worldId:id,name:regionFor(WORLD_IDS.indexOf(id)).name});this._notify('world-discovered');}
     return first;
@@ -59,8 +63,25 @@ export class WorldTravel {
     return !!door&&distance(p,door)<=radius&&!this.game.terrain?.firstBlocker?.(p.x,p.y,door.x,door.y,0,'sight');
   }
   update(){
-    if(!this.enabled||this.game.status!=='playing'||this.game.sceneTransition?.active)return;
+    if(!this.enabled||this.game.status!=='playing'||this.game.sceneTransition?.active)return false;
     if(!this.activated.has(this.current.worldId)&&this._nearWaypoint(WAYPOINT_RULES.activationRadius))this.activateWaypoint();
+    return this._updateExits();
+  }
+  _updateExits(){
+    const g=this.game;
+    if(g.dungeon?.active||g.sceneKind==='dungeon'||g.sceneContent?.allows('worldContent')===false)return false;
+    const p=playerFoot(g),portals=(g.regions?.portals||[]).filter(portal=>portalExitGeometry(portal));
+    for(const id of this._edgeLatches){
+      const portal=portals.find(candidate=>candidate.id===id);
+      if(!portal||!portalEntranceContains(portal,p,g.player.r+24))this._edgeLatches.delete(id);
+    }
+    const portal=portals.find(candidate=>!this._edgeLatches.has(candidate.id)&&g.regions.canEnter(candidate));
+    if(!portal)return false;
+    const from=this.current.worldId;
+    const started=g.sceneTransition?.run(`前往${portal.nextRegion.name}`,()=>
+      this.enabled&&this.current.worldId===from&&g.regions.portals.includes(portal)&&g.enterPortal(portal.id))===true;
+    if(started)this._edgeLatches.add(portal.id);
+    return started;
   }
   activateWaypoint(id=this.waypoint?.id){
     const point=this.waypoint;
@@ -138,6 +159,13 @@ export class WorldTravel {
     }
     return null;
   }
+  spawnPoint(r=this.game.player.r){
+    if(!this.enabled)return null;
+    const spawn=this.current.core.spawn;
+    if(spawn&&[spawn.x,spawn.y].every(Number.isFinite)&&this.safety.contains(spawn.x,spawn.y)&&
+      this.game.terrain?.isFree(spawn.x,spawn.y,r+4)!==false&&this.game.environment?.isHazardFree?.(spawn.x,spawn.y,r+4)!==false)return {...spawn};
+    return this.arrivalPoint({arrivalKind:'waypoint',targetWaypointId:this.waypoint.id},r);
+  }
   requestTravel(worldId){
     if(this.pending||!this.canTravel(worldId))return false;
     const target=this.definitions.get(worldId),index=WORLD_IDS.indexOf(worldId);
@@ -154,19 +182,27 @@ export class WorldTravel {
   }
   setRestAnchor(site){
     if(!this.enabled||!site||![site.x,site.y].every(Number.isFinite)||!this.safety.contains(site.x,site.y))return false;
-    if(this.game.terrain?.isFree(site.x,site.y,this.game.player.r+3)===false)return false;
-    this.restAnchor={worldId:this.current.worldId,x:site.x,y:site.y,facilityId:site.id};
+    const anchor=this._resolveRestAnchor({worldId:this.current.worldId,facilityId:site.id});
+    if(!anchor||distance(anchor,site)>1||this.game.terrain?.isFree(anchor.x,anchor.y,this.game.player.r+3)===false)return false;
+    this.restAnchor={worldId:anchor.worldId,facilityId:anchor.facilityId};
     this._notify('rest-anchor');return true;
   }
-  getRestAnchor(){return this.restAnchor?{...this.restAnchor}:null;}
-  serialize(){return {discovered:[...this.discovered],activated:[...this.activated],restAnchor:this.getRestAnchor()};}
+  _resolveRestAnchor(anchor){
+    const core=anchor&&this.definitions.get(anchor.worldId)?.core;
+    const site=core?.facilities.find(site=>site.kind==='rest'&&`facility:${core.id}:${site.id}`===anchor.facilityId);
+    if(!site||![site.x,site.y].every(Number.isFinite))return null;
+    const point={x:site.x,y:site.y+30};
+    return distance(point,core)<=core.radius?{worldId:anchor.worldId,...point,facilityId:anchor.facilityId}:null;
+  }
+  getRestAnchor(){return this._resolveRestAnchor(this.restAnchor);}
+  serialize(){return {discovered:[...this.discovered],activated:[...this.activated],restAnchor:this.restAnchor?{...this.restAnchor}:null};}
   restore(data){
     if(this.game.debug||!data||typeof data!=='object')return false;
     this.discovered=new Set((Array.isArray(data.discovered)?data.discovered:[]).filter(id=>this.definitions.has(id)));
     this.activated=new Set((Array.isArray(data.activated)?data.activated:[]).filter(id=>this.definitions.has(id)));
     for(const id of this.activated)this.discovered.add(id);
-    const anchor=data.restAnchor,core=anchor&&this.definitions.get(anchor.worldId)?.core;
-    this.restAnchor=core&&[anchor.x,anchor.y].every(Number.isFinite)&&distance(anchor,core)<=core.radius?{worldId:anchor.worldId,x:anchor.x,y:anchor.y,facilityId:anchor.facilityId}:null;
+    const anchor=this._resolveRestAnchor(data.restAnchor);
+    this.restAnchor=anchor?{worldId:anchor.worldId,facilityId:anchor.facilityId}:null;
     return true;
   }
 }

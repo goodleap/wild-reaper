@@ -4,12 +4,31 @@ import { Terrain, groundOffset } from './dist/terrain.js';
 import { Adventure } from './dist/adventure.js';
 import { Encounters } from './dist/encounters.js';
 import { portalDoor } from './dist/portal-geometry.js';
+import { PORTAL_RULES, worldConnectionId } from './dist/regions.js';
+
+const startIndex=REGIONS.findIndex(region=>region.id==='rift-forest');
+const fixtureNeighbors=new Map([[startIndex,[1,2]],[1,[startIndex,2]],[2,[1,startIndex]]]);
 
 // Focused state transitions and enemy behaviors, not a long-run difficulty bot.
 let seed=195870;
 Math.random=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
 function arena(options={}) {
   const g=new Game({terrain:new Terrain({obstacles:[]}),adventure:false,encounters:false,environment:false,...options});
+  // Guardian and elite mechanics use an explicit survival fixture. Ordinary
+  // exploration now has open edge roads, covered by qa-world-edge-exits.
+  g._worldExploration=false;g.player.x=0;g.player.y=0;g.regions.portals=[];g.portal=null;g.regions.unlockedConnections.clear();g.regions._setStructures();
+  g.regions._endpoint=function(target,{origin=null,back=false}={}){
+    if(!fixtureNeighbors.get(g.regionIndex)?.includes(target))return null;
+    const authored=g.terrain.island?.layout,origins=authored?.areas?.map(area=>area.center)||[origin||{x:0,y:0}];
+    let point=null;
+    for(const center of origins){point=this._safePoint(center,true,!!authored,target);if(point)break;}
+    if(!point)return null;
+    const connectionId=worldConnectionId(g.regionIndex,target);
+    return {id:`portal:${g.regionIndex}:${target}`,...point,r:32,interactRadius:PORTAL_RULES.interactRadius,
+      state:this.unlockedConnections.has(connectionId)?'active':'locked',direction:back?'back':'forward',connectionId,
+      nextRegionIndex:target,nextRegion:REGIONS[target],targetPortalId:`portal:${target}:${g.regionIndex}`,
+      discovered:back,rewardClaimed:this.claimedConnections.has(connectionId)};
+  };
   assert(g.build.increment('arrow'));assert(g.build.setEquipped('sword',false));g._refreshWeapons();
   g.enemies=[];g.gems=[];g.events=[];g.effects=[];
   g._spawn=Infinity;g._shot=Infinity;g._lightning=Infinity;g.nextBossAt=Infinity;
@@ -43,7 +62,7 @@ function openPortal(g) {
 function standAtPortal(g,portal=g.portal) {const door=portalDoor(portal);g.player.x=door.x;g.player.y=door.y-groundOffset(g.player,true);}
 function usePortal(g,portal=g.portal) {standAtPortal(g,portal);return g.enterPortal(portal.id);}
 
-assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins','beach','city','mountain','snow','volcano','verdant-rift','clockshadow-city','ember-realm-large'],'new exploration worlds append without shifting the ten existing numeric identities');
+assert.deepEqual(REGIONS.map(r=>r.id),['forest','marsh','ruins','beach','clockshadow-city','mountain','snow','ember-realm-large','verdant-rift','rift-forest'],'portal fixtures use the current explicit world catalog');
 const swampGate=arena(),water=[{id:'gate-water',x:1120,y:0,rx:80,ry:45},{id:'guardian-water',x:0,y:1235,rx:80,ry:45}];
 swampGate.environment={muds:water,props:[],isHazardFree:()=>true};
 const clearGate=swampGate.regions._safePoint({x:0,y:0},true);
@@ -63,23 +82,23 @@ const firstOffer=access.getSuperChoices().map(c=>c.id);access._hurtEnemy(firstBo
 assert.equal(access.portal.id,portalId);assert.deepEqual(access.getSuperChoices().map(c=>c.id),firstOffer,'death cannot reroll the reward');
 assert.equal(access.enterPortal(),false,'pending skill reward precedes travel');
 access.update(0);assert.equal(access.status,'super','the first frame after a lethal hit opens the reward immediately');
-assert.equal(access.regionIndex,0);const choices=access.getSuperChoices(),choiceIds=choices.map(c=>c.id);
+assert.equal(access.regionIndex,startIndex);const choices=access.getSuperChoices(),choiceIds=choices.map(c=>c.id);
 assert.equal(choices.length,3);assert.equal(new Set(choiceIds).size,3);
 const frozen={time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y};
 advance(access,2,{x:1,skill:true});assert.deepEqual({time:access.time,cooldown:access.player.skillCooldown,x:access.player.x,y:access.player.y},frozen);
-assert.equal(access.chooseSuper('invalid-relic'),false);assert(access.chooseSuper(choiceIds[0]));assert.equal(access.regionIndex,0);
+assert.equal(access.chooseSuper('invalid-relic'),false);assert(access.chooseSuper(choiceIds[0]));assert.equal(access.regionIndex,startIndex);
 assert.equal(access.chooseSuper(choiceIds[0]),false);assert.equal(access.portal.rewardClaimed,true);
 assert.equal(access.enterPortal(),false,'remote interaction cannot travel');standAtPortal(access);
-for(const state of ['paused','upgrade','dead']){access.status=state;access.update(0);assert.equal(access.enterPortal(),false);assert.equal(access.regionIndex,0,'touching a gate cannot travel while gameplay is paused');}
-access.status='playing';const blockingBoss=monster(access,'boss',450,0);access.update(0);assert.equal(access.regionIndex,0);assert.equal(access.enterPortal(),false,'an engaged Boss prevents flight through a gate');
-blockingBoss.guardActive=false;access.update(0);assert.equal(access.regionIndex,0,'portal contact keeps the original scene until the fade cut');finishTransition(access);assert.equal(access.region.id,'marsh','touching an activated gate automatically travels once eligible; dormant remote guardians do not lock every gate');
+for(const state of ['paused','upgrade','dead']){access.status=state;access.update(0);assert.equal(access.enterPortal(),false);assert.equal(access.regionIndex,startIndex,'touching a gate cannot travel while gameplay is paused');}
+access.status='playing';const blockingBoss=monster(access,'boss',450,0);access.update(0);assert.equal(access.regionIndex,startIndex);assert.equal(access.enterPortal(),false,'an engaged Boss prevents flight through a gate');
+blockingBoss.guardActive=false;access.update(0);assert.equal(access.regionIndex,startIndex,'portal contact keeps the original scene until the fade cut');finishTransition(access);assert.equal(access.region.id,'marsh','touching an activated gate automatically travels once eligible; dormant remote guardians do not lock every gate');
 const returnGate=access.regions.portals.find(p=>p.direction==='back');assert(returnGate&&returnGate.state==='active');
 // Even if the player is still touching the paired doorway on the first frame
 // in a new scene, arrival must not trigger an immediate return or a bounce loop.
 standAtPortal(access,returnGate);access.update(0);access.update(0);assert.equal(access.regionIndex,1,'arrival contact is latched until the player leaves the doorway');
 access.player.x=returnGate.x+75;access.player.y=returnGate.y-groundOffset(access.player,true);access.update(0);
-standAtPortal(access,returnGate);access.update(0);assert.equal(access.regionIndex,1);finishTransition(access);assert.equal(access.regionIndex,0,'leaving and touching the return gate again automatically returns');
-access.update(0);access.update(0);assert.equal(access.regionIndex,0,'the restored region also remains stable after arrival');
+standAtPortal(access,returnGate);access.update(0);assert.equal(access.regionIndex,1);finishTransition(access);assert.equal(access.regionIndex,startIndex,'leaving and touching the return gate again automatically returns');
+access.update(0);access.update(0);assert.equal(access.regionIndex,startIndex,'the restored region also remains stable after arrival');
 assert.equal(access.portal.id,portalId);assert.equal(rewardRank(access,choiceIds[0]),1);
 assert.equal(access.superSkills.pending,null,'return journeys do not award the same skill again');
 
@@ -120,12 +139,12 @@ assert(usePortal(travel));assert.equal(travel.portal,nextGate,'revisiting uses t
 
 const route=arena(),routeIds=[route.region.id],terrainSignatures=[];
 for(let i=0;i<3;i++) {route.time=180+i*180;openPortal(route);claim(route);assert(usePortal(route));routeIds.push(route.region.id);terrainSignatures.push(JSON.stringify(route.terrain.query(200,-900,1100,900).map(o=>[o.type,o.x,o.y,o.r])));}
-assert.deepEqual(routeIds,['forest','marsh','ruins','forest']);assert.equal(new Set(terrainSignatures).size,3);assert.equal(route.regions.states.size,2);assert.equal(route.regionIndex,0);assert.equal(route.regions.unlockedConnections.size,3);assert(route.regions.endlessUnlocked);
-for(const index of [2,1,0]){const back=route.regions.portals.find(p=>p.nextRegionIndex===index);assert(back);assert.equal(back.state,'active');assert(usePortal(route,back));assert.equal(route.regionIndex,index);assert(route.regions.states.size<=2);}
+assert.deepEqual(routeIds,['rift-forest','marsh','ruins','rift-forest']);assert.equal(new Set(terrainSignatures).size,3);assert.equal(route.regions.states.size,2);assert.equal(route.regionIndex,startIndex);assert.equal(route.regions.unlockedConnections.size,3);assert(route.regions.endlessUnlocked);
+for(const index of [2,1,startIndex]){const back=route.regions.portals.find(p=>p.nextRegionIndex===index);assert(back);assert.equal(back.state,'active');assert(usePortal(route,back));assert.equal(route.regionIndex,index);assert(route.regions.states.size<=2);}
 assert.equal(route.portal.state,'active','all visited regions remain returnable');
 
 const xpChoice=arena();openPortal(xpChoice);xpChoice.crystalsNext=40;xpChoice.crystals=41;const savedXp=xpChoice.player.xp;
-claim(xpChoice);assert.equal(xpChoice.regionIndex,0);assert.equal(xpChoice.status,'upgrade');assert.equal(xpChoice.crystals,41);assert.equal(xpChoice.player.xp,savedXp);
+claim(xpChoice);assert.equal(xpChoice.regionIndex,startIndex);assert.equal(xpChoice.status,'upgrade');assert.equal(xpChoice.crystals,41);assert.equal(xpChoice.player.xp,savedXp);
 assert(xpChoice.chooseUpgrade(xpChoice.getUpgradeChoices()[0].id));assert.equal(xpChoice.crystals,1);
 
 const debugStorm=arena({debug:true}),stormTarget=monster(debugStorm,'slime',90,0);

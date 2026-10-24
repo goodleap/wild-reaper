@@ -15,7 +15,7 @@ function pixelRect(rect,transform){
 }
 
 function wallGeometry(prop){
-  const vertical=Math.abs(Math.sin(prop.angle||0))>.5,half=prop.halfLength||0,r=prop.r||14,hut=prop.variant==='hut-wall';
+  const vertical=Math.abs(Math.sin(prop.angle||0))>.5,half=prop.halfLength||0,r=prop.r||14,hut=prop.variant==='hut-wall'||prop.variant==='shop-wall';
   return {vertical,half,r,hut,dx:Math.abs(Math.cos(prop.angle||0))*half,dy:Math.abs(Math.sin(prop.angle||0))*half,projection:hut?25:35,pad:r+5};
 }
 // Spatial fading has no binary threshold when the player crosses a wall's

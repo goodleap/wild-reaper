@@ -17,7 +17,9 @@ export class TouchInteractions {
       return false;
     }
     if(this.latched&&this._distance(this.latched)>this.latched.r)this.latched=null;
-    if(!choice||choice.enabled===false||this._distance(choice)>this._radius(choice))return false;
+    // Regional roads own a full-width contact strip in WorldTravel. They must
+    // not fall back to a circular nearest-interaction doorway here.
+    if(!choice||choice.edgeExit||choice.enabled===false||this._distance(choice)>this._radius(choice))return false;
     if(this.latched&&Math.hypot(choice.x-this.latched.x,choice.y-this.latched.y)<8)return false;
     const anchor=this._anchor(choice);
     if(!g.requestInteraction(choice.id))return false;
