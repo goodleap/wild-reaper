@@ -1,0 +1,35 @@
+.account-entry{display:flex;align-items:center;gap:12px;max-width:370px;min-height:38px;margin:7px 0 2px;pointer-events:auto}
+.account-entry-button{flex:0 1 auto;max-width:230px;min-width:0;min-height:36px;padding:6px 0;border:0;background:transparent;color:#c2d6b0;font:inherit;font-size:12px;line-height:1.5;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;touch-action:manipulation}
+.account-entry-button:disabled{cursor:default;opacity:.55}
+.account-entry-status{min-width:0;color:#9caf91;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+.account-entry-button:focus-visible{outline:2px solid #c2df9e;outline-offset:3px;border-radius:3px}
+.account-overlay{z-index:48}
+.account-overlay .account-panel{width:420px;max-width:100%;max-height:100%;padding:0;text-align:left;overflow:hidden}
+.account-panel .panel-header{padding:26px 28px 18px}
+.account-panel .panel-header h2{font-size:25px;line-height:1.3;margin:7px 0 8px;letter-spacing:1px}
+.account-panel .panel-header p{font-size:12px;line-height:1.65;color:#a6b99b;margin:0}
+.account-panel .panel-body{padding:0 28px 26px;overflow:auto;overscroll-behavior:contain;touch-action:pan-y}
+.account-tabs{display:flex;gap:4px;padding:3px;margin:0 0 21px;border:1px solid #c5dc9d24;border-radius:8px;background:#0b1e164d}
+.account-tabs button{flex:1;min-height:39px;padding:8px 12px;border:1px solid transparent;border-radius:5px;background:transparent;color:#9db18f;font:inherit;font-size:12px;cursor:pointer}
+.account-tabs button[aria-pressed=true]{background:#bedc9820;color:#d6e9bb;border-color:#c2df9e44}
+.account-form{display:grid;gap:17px;margin:0}
+.account-form>label{display:grid;gap:7px;color:#c9d9b9;font-size:12px;line-height:1.4}
+.account-form input:not([type=checkbox]){display:block;box-sizing:border-box;width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid #a8bc8d55;border-radius:7px;background:#10271e;color:#e2edd7;font:16px/1.3 system-ui,sans-serif;user-select:text;touch-action:manipulation}
+.account-form input[readonly]{color:#9bb08e;background:#13261b}
+.account-form small{color:#8fa584;font-size:10px;line-height:1.5}
+.account-form>label.account-guest-option{display:flex;align-items:center;gap:9px;margin:0;font-size:12px;cursor:pointer}
+.account-guest-option input{width:18px;height:18px;flex:0 0 18px;margin:0;accent-color:#bddb95}
+.account-panel .primary-button,.account-panel .secondary-button{min-height:44px;justify-content:center;font-size:13px;line-height:1.5;touch-action:manipulation}
+.account-profile{padding:0 0 16px;overflow-wrap:anywhere}
+.account-profile>strong{font-size:18px;color:#dfebce;font-weight:550;line-height:1.5}
+.account-status{margin:8px 0 0;color:#a7c18f;font-size:12px;line-height:1.75;white-space:pre-wrap}
+.account-status[data-state=conflict],.account-status[data-state=pending],.account-status[data-state=auth-required],.account-status[data-state=error]{color:#e0c497}
+.account-actions{display:grid;gap:10px;margin:0}
+.account-form:not(.hidden)+.account-actions{margin-top:12px}
+.account-error{margin:16px 0 0;color:#edb6a2;font-size:12px;line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap}
+.account-note{margin:16px 0 0;color:#8fa584;font-size:11px;line-height:1.65}
+.account-panel button:disabled{cursor:default;opacity:.55}
+.account-panel button:focus-visible,.account-panel input:focus-visible{outline:2px solid #c2df9e;outline-offset:3px}
+@media(hover:hover) and (pointer:fine){.account-entry-button:hover:not(:disabled){color:#e0efcb}.account-tabs button:hover:not(:disabled){color:#d6e9bb;background:#bedc9812}}
+@media(max-width:650px){.account-entry{min-height:34px;margin-top:5px;gap:9px;max-width:290px}.account-entry-button{font-size:11px;max-width:190px;min-height:34px}.account-entry-status{font-size:9px}.account-panel .panel-header{padding:23px 22px 16px}.account-panel .panel-header h2{font-size:23px}.account-panel .panel-body{padding:0 22px 23px}.account-tabs{margin-bottom:18px}.account-form{gap:15px}}
+@media(max-height:550px){.account-panel .panel-header{padding-top:17px;padding-bottom:12px}.account-panel .panel-header .eyebrow{display:none}.account-panel .panel-header h2{font-size:21px;margin-top:0}.account-panel .panel-body{padding-bottom:18px}.account-form{gap:10px}.account-tabs{margin-bottom:12px}.account-note{margin-top:10px}}

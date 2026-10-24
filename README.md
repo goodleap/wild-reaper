@@ -17,7 +17,7 @@ npm run check
 npm test
 ```
 
-世界探索使用一个连续存档，从裂谷林海开始，在游戏内通过自然通路或已点亮的传送点前往其他区域。`world-save.js` 将角色、背包、任务和已访问场景状态一起写入当前浏览器；调试、剧情及极限挑战不读写这份存档。准备页提供继续探索和明确确认后的重新开始。
+世界探索使用一个连续存档，从裂谷林海开始，在游戏内通过自然通路或已点亮的传送点前往其他区域。`world-save.js` 将角色、背包、任务和已访问场景状态一起保存：游客使用当前浏览器，账号使用后端与本地待同步缓存；调试、剧情及极限挑战不读写这份存档。准备页提供继续探索和明确确认后的重新开始。
 
 区域连接、城镇设施及传送点配置位于 `config/worlds.json` 的 `travel`；商店价格和区域供货位于 `config/economy.json` 的 `worldShops`。`exitTrigger` 定义地图边缘的全宽切换区，`sign` 单独定义路牌位置；城镇的 `ground`、`spawn`、`questBoard` 与设施同源生成。修改后构建配置，运行 `npm run test:world-campaign`，覆盖真实门口通行、边缘跨区、交易、存档及界面。配置与运行时仍以稳定世界 ID 关联。
 
@@ -84,6 +84,16 @@ npm run test:forest-maintenance
 修改地图布局后运行 `npm run test:maps`，检查八世界实际入口与探索空地的可达性、连续障碍绕行、领域及奖励持久化、水域查询、地表缓存和三个副本通路；渲染仍需在云端浏览器检查手机 540 视野与桌面画面。固定地形、地表绘制和小地图共用 `Island.layout`，不要分别生成不一致的碰撞和外观。
 
 固定森林地图的离线源在 `scripts/build-rift-map.py`，自然轮廓处理在 `scripts/natural_contours.py`；只在需要重烘焙几何时安装构建依赖 Shapely，运行该脚本后执行 `npm run build:config`。浏览器只读取 `config/worlds.json` 的 `rift-forest.authored` 数据，不加载 Python 或生成工具。修改这张地图还需运行 `npm run test:rift`，验证入口封闭后的隔离性、桥梁与水域边界、伙伴绕行、捷径及跨场景状态，以及景物预留空间、补给和宝箱的实际可达性。
+
+## 账号与进度
+
+`account-client.js` 管理账号会话及存档同步，`account-panel.js` 仅处理界面。账号 API 复用 `config-source.js` 的完整域名推导和开发地址覆盖，但独立于配置加载开关。请求携带服务端 HttpOnly Cookie；存档请求绑定当前账号 ID，写请求由后端检查允许的 Origin 和浏览器请求头。
+
+游客使用新的 `wild-echoes-guest-world-v1` 本地槽，账号缓存按 API 地址和用户 ID 隔离。账号功能不读取或迁移旧世界存档。注册时可明确选择沿用游客进度；登录已有账号读取其云端进度。调试冒险不写入任一正式进度槽。
+
+保存先写本地缓存，再异步合并发送；关键节点和定期检查点沿用世界存档入口。后端按版本号原子更新，重试复用同一操作 ID；冲突停止旧进度上传，玩家读取最新存档后继续。退出账号保留该账号的待同步缓存，游客槽独立。页面离开时尽力同步，本地缓存负责保留未完成的请求，不依赖页面关闭后网络继续执行。
+
+修改账号代码后运行 `npm run test:accounts`、`node qa-world-save.mjs`、`node qa-world-selection.mjs` 与 `npm run test:focus`，并用独立浏览器上下文验证注册、续档、断网恢复和冲突。后端账号接口、SQLite 备份及代理上传限制见 `goodleap/wild-reaper-server` README；不要将账号密码、会话凭据或完整存档写入行为日志。
 
 ## 内容配置
 

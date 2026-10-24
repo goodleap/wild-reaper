@@ -7,7 +7,7 @@ import { groundOffset } from './terrain.js';
 import { getConfigSection } from './content-config.js';
 import { isWorldShop } from './shop-interior.js';
 
-export const WORLD_SAVE_KEY='wild-echoes-world-save-v1';
+export const WORLD_SAVE_KEY='wild-echoes-guest-world-v1';
 const MAX_BYTES=4_000_000,MAX_ACTORS=1600;
 const plain=value=>value&&Object.getPrototypeOf(value)===Object.prototype;
 const finite=value=>Number.isFinite(value)&&Math.abs(value)<=Number.MAX_SAFE_INTEGER;
@@ -132,7 +132,7 @@ function connectionIds(values,toNames=false){
   if(toNames)return [...values].map(key=>key.split(':').map(Number).map(index=>WORLD_IDS[index])).filter(pair=>pair.length===2&&pair.every(Boolean));
   return new Set(list(values).filter(pair=>Array.isArray(pair)&&pair.length===2&&pair.every(id=>WORLD_IDS.includes(id))).map(pair=>pair.map(id=>WORLD_IDS.indexOf(id)).sort((a,b)=>a-b).join(':')));
 }
-function validate(data){
+export function validateWorldSaveData(data){
   if(!plain(data)||data.version!==1||!plain(data.regions)||!plain(data.player)||!plain(data.start)||!WORLD_IDS.includes(data.start.worldId)||!WORLD_IDS.includes(data.location?.worldId))throw new Error('存档格式无效');
   if(![data.player.hp,data.player.level,data.player.xp,data.player.xpNext,data.gold,data.crystals,data.crystalsNext].every(finite)||data.player.level<1||data.player.xpNext<=0||data.crystalsNext<=0||data.gold<0||data.crystals<0)throw new Error('存档成长数据无效');
   if(data.build?.version!==3||data.build.heroId!==data.start.hero)throw new Error('存档能力数据无效');
@@ -154,12 +154,12 @@ function validate(data){
   };walk(data);return data;
 }
 
-/** One browser-local campaign. Every commit includes quest flags and assets. */
+/** One campaign in the supplied identity-bound storage. Quest flags and assets commit together. */
 export class WorldSave {
   constructor({storage=browserStorage(),enabled=true,onNotice=()=>{}}={}){
     this.enabled=!!enabled;this.storage=storage;this.onNotice=onNotice;this.data=empty();this._storageOk=!!storage;this._blocked=false;this._applied=new WeakSet();this._dungeonApplied=new WeakSet();
     this.questStorage={getItem:key=>key===QUEST_STORAGE_KEY&&this.data.quests?JSON.stringify(this.data.quests):null,setItem:(key,value)=>{if(key===QUEST_STORAGE_KEY)this.data.quests=JSON.parse(value);},removeItem:key=>{if(key===QUEST_STORAGE_KEY)this.data.quests=null;}};
-    if(this.enabled&&storage)try{const raw=storage.getItem(WORLD_SAVE_KEY);if(raw){if(raw.length>MAX_BYTES)throw new Error('存档超出上限');this.data=validate(JSON.parse(raw));}}
+    if(this.enabled&&storage)try{const raw=storage.getItem(WORLD_SAVE_KEY);if(raw){if(raw.length>MAX_BYTES)throw new Error('存档超出上限');this.data=validateWorldSaveData(JSON.parse(raw));}}
     catch(error){this._blocked=true;this._fail(error,'read');}
   }
   get hasSave(){return !!this.data.start;}
@@ -278,7 +278,7 @@ export class WorldSave {
         companionCamps:world?.companionCamps??c.camps,companionNextAt:world?.companionNextAt??c.nextAt};
       d.regions[game.worldId]=surfaceSnapshot(game,source,d.regions[game.worldId]);
       d.regions[game.worldId].pendingRewards=[game.regions.rewardPortal,...game.regions._rewardQueue].filter(Boolean).map(reward=>reward.id);
-      validate(d);const text=JSON.stringify(d);if(text.length>MAX_BYTES)throw new Error('世界存档超出容量上限');
+      validateWorldSaveData(d);const text=JSON.stringify(d);if(text.length>MAX_BYTES)throw new Error('世界存档超出容量上限');
       if(!this.storage?.setItem)throw new Error('浏览器存储不可用');
       this.storage.setItem(WORLD_SAVE_KEY,text);this.data=d;this._storageOk=true;return true;
     }catch(error){return this._fail(error,'write');}
