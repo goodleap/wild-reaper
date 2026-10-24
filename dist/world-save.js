@@ -6,12 +6,13 @@ import { QUEST_STORAGE_KEY } from './quest-store.js';
 import { groundOffset } from './terrain.js';
 import { getConfigSection } from './content-config.js';
 import { isWorldShop } from './shop-interior.js';
+import { restoreDebugTools } from './debug-training.js';
 
 export const WORLD_SAVE_KEY='wild-echoes-guest-world-v1';
 const MAX_BYTES=4_000_000,MAX_ACTORS=1600;
 const plain=value=>value&&Object.getPrototypeOf(value)===Object.prototype;
 const finite=value=>Number.isFinite(value)&&Math.abs(value)<=Number.MAX_SAFE_INTEGER;
-const permitted=game=>game?.mode==='world'&&!game.debug&&!game.stage&&!game.expedition;
+const permitted=game=>game?.mode==='world'&&!game.stage&&!game.expedition;
 const browserStorage=()=>{try{return globalThis.localStorage??null;}catch{return null;}};
 const empty=()=>({version:1,revision:0,quests:null,regions:{}});
 const list=(values,max=4096)=>Array.isArray(values)?values.slice(0,max):[];
@@ -41,7 +42,7 @@ function record(value,nested=[]){
   for(const key of nested)if(value?.[key]!==undefined)result[key]=copy(value[key]);
   return result;
 }
-const ENEMY_KEYS='id type name x y r hp maxHp speed damage xp bossIndex bossKind worldBoss dungeonBoss dungeonId dungeonRoom territoryId territoryState guardActive portalId guardianId eventId eventRole rescueId rescueGuard settlementId relicSiteId summoned summonerId elite flying heightBand bodyKind bossBody facing _escapeAngle _territoryOrder _worldBossAnnounced _portalAnnounced'.split(' ');
+const ENEMY_KEYS='id type name x y r hp maxHp speed damage xp bossIndex bossKind worldBoss dungeonBoss dungeonId dungeonRoom territoryId territoryState guardActive portalId guardianId eventId eventRole rescueId rescueGuard settlementId relicSiteId debugBoss debugBossId debugMonster summoned summonerId elite flying heightBand bodyKind bossBody facing _escapeAngle _territoryOrder _worldBossAnnounced _portalAnnounced'.split(' ');
 const HOME_KEYS=['territoryHome','portalHome','rescueHome','dungeonHome','huntHome','settlementHome','affix'];
 const enemies=values=>list(values,MAX_ACTORS).filter(e=>e.hp>0&&ENEMY_IDS.includes(e.type)).map(e=>({...pick(e,ENEMY_KEYS),...pick(e,HOME_KEYS)}));
 const objects=values=>list(values).map(value=>({...record(value,['door','mechanism','guardIds','memberIds','direction','footprint','stock','reward']),...(value._remaining instanceof Set?{remainingIds:[...value._remaining]}:{})}));
@@ -117,7 +118,8 @@ function restoreEnemies(game,saved){
     if(dto.type==='boss')game._initializeRegionalBoss(enemy,dto.bossKind);
     Object.assign(enemy,copy(dto));
     if(enemy.affix){enemy.affix.phase='idle';enemy.affix.life=0;}
-    enemy.guardActive=false;enemy.territoryState=enemy.territoryId?'idle':enemy.territoryState;
+    enemy.guardActive=dto.debugBoss||dto.debugMonster?dto.guardActive:false;
+    enemy.territoryState=enemy.territoryId?'idle':enemy.territoryState;
     game._id=Math.max(game._id,enemy.id||0);
   }
   game._grid?.clear();game._friendlySnapshot=null;
@@ -200,6 +202,7 @@ export class WorldSave {
     const find=id=>game.territories?.byId.get(id)||game.regions.portals.find(portal=>portal.id===id);
     game.regions._rewardQueue=list(d.regions[game.worldId]?.pendingRewards).map(find).filter(item=>item&&!item.rewardClaimed);
     game.regions.rewardPortal=null;game.superSkills.pending=null;game._regionRewardPending=false;
+    restoreDebugTools(game);
     game.status='playing';
     if(d.relics?.pending){game.relics.pending=true;game.relics.choices=[];game.status='relic';}
     else if(!game.regions.flushReward())game.progression.tryUpgrade();

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { AccountClient, GUEST_SAVE_KEY } from './dist/account-client.js';
+import { AccountClient, GUEST_SAVE_KEY, DEBUG_GUEST_SAVE_KEY } from './dist/account-client.js';
 
 const origin='https://api.game.example';
 const world=level=>({version:1,start:{hero:'traveler'},player:{level}});
@@ -11,7 +11,7 @@ const deferred=()=>{let resolve;return {promise:new Promise(done=>{resolve=done;
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 class Service {
   constructor(){this.users=new Map();this.current=null;this.calls=[];this.offline=false;this.losePut=false;this.pausePut=null;this.nextId=0;}
-  add(username,level=null){const user={id:`account-${++this.nextId}`,username};this.users.set(username,{user,password:'password8',revision:level===null?0:1,save:level===null?null:world(level),mutation:null});return user;}
+  add(username,level=null){const user={id:`account-${++this.nextId}`,username};this.users.set(username,{user,password:'password8',revision:level===null?0:1,save:level===null?null:world(level),mutation:null,debug:{revision:0,save:null,mutation:null}});return user;}
   envelope(record){return {revision:record.revision,updatedAt:record.revision?'2026-10-24T00:00:00.000Z':null,save:record.save};}
   fetch=async(url,options)=>{
     const path=new URL(url).pathname,body=options.body?JSON.parse(options.body):null;
@@ -31,8 +31,8 @@ class Service {
     if(!this.current)return response({error:'AUTH_REQUIRED'},401);
     if(options.headers['X-WR-Account']!==this.current.user.id)return response({error:'ACCOUNT_CHANGED'},401);
     if(path.endsWith('/logout')){this.current=null;return response({user:null});}
-    assert.equal(path,'/api/account/save');
-    const account=this.current;
+    assert(['/api/account/save','/api/account/debug-save'].includes(path));
+    const account=path.endsWith('/debug-save')?this.current.debug:this.current;
     if(options.method==='GET')return response(this.envelope(account));
     if(this.pausePut){const gate=this.pausePut;this.pausePut=null;await gate.promise;}
     if(account.mutation===body.mutationId)return response(this.envelope(account));
@@ -174,6 +174,58 @@ try {
   const disposedLogin=client(raceApi,disposedStorage,{fetchImpl:()=>loginGate.promise,onChange:()=>disposedChange++});const lateLogin=login(disposedLogin,'race_old');disposedLogin.dispose();
   loginGate.resolve(response({user:raceApi.users.get('race_old').user}));await lateLogin;assert.equal(disposedStorage.map.size,0,'disposed authentication does not write a new identity or cache');assert.equal(disposedChange,0);
 
+  // DEBUG uses the same login identity but its own visitor, account cache and
+  // cloud revision. Both modes can be open without conflicting on save writes.
+  const modesApi=new Service(),modesStorage=memory(),modeEvents=new EventTarget();
+  const normal=client(modesApi,modesStorage,{eventTarget:modeEvents}),debug=client(modesApi,modesStorage,{debug:true,eventTarget:modeEvents});
+  await normal.initialize();await debug.initialize();
+  assert.equal(normal.snapshot.debug,false);assert.equal(debug.snapshot.debug,true);
+  normal.createSaveStorage().setItem(GUEST_SAVE_KEY,text(11));
+  modeEvents.dispatchEvent(Object.assign(new Event('storage'),{key:GUEST_SAVE_KEY,newValue:text(11)}));
+  assert.equal(debug.snapshot.status,'guest');assert.equal(debug.snapshot.hasGuestSave,false);
+  debug.createSaveStorage().setItem(GUEST_SAVE_KEY,text(88));
+  modeEvents.dispatchEvent(Object.assign(new Event('storage'),{key:DEBUG_GUEST_SAVE_KEY,newValue:text(88)}));
+  assert.equal(normal.snapshot.status,'guest');
+  assert.equal(modesStorage.getItem(GUEST_SAVE_KEY),text(11));assert.equal(modesStorage.getItem(DEBUG_GUEST_SAVE_KEY),text(88));
+  const debugReload=client(modesApi,modesStorage,{debug:true});await debugReload.initialize();
+  assert.equal(debugReload.createSaveStorage().getItem(GUEST_SAVE_KEY),text(88));debugReload.dispose();
+
+  await debug.register({username:'mode_player',password:'password8',useGuestProgress:true});
+  assert.equal(modesApi.current.debug.save.player.level,88);assert.equal(modesApi.current.debug.revision,1);
+  assert.equal(modesApi.current.save,null);assert.equal(modesApi.current.revision,0,'debug registration cannot adopt its guest into normal progress');
+  await normal.initialize();assert.equal(normal.snapshot.user.id,debug.snapshot.user.id);
+  assert.equal(normal.createSaveStorage().getItem(GUEST_SAVE_KEY),null);
+  const normalKey=[...modesStorage.map.keys()].find(key=>key.includes(':save:'));
+  const debugKey=[...modesStorage.map.keys()].find(key=>key.includes(':debug-save:'));
+  assert(normalKey&&debugKey);assert.notEqual(normalKey,debugKey);
+  const debugPeer=client(modesApi,memory(),{debug:true});await debugPeer.initialize();
+  normal.createSaveStorage().setItem(GUEST_SAVE_KEY,text(12));assert(await normal.flush());
+  modeEvents.dispatchEvent(Object.assign(new Event('storage'),{key:normalKey,newValue:modesStorage.getItem(normalKey)}));
+  assert.equal(debug.snapshot.status,'ready');
+  debug.createSaveStorage().setItem(GUEST_SAVE_KEY,text(89));assert(await debug.flush());
+  modeEvents.dispatchEvent(Object.assign(new Event('storage'),{key:debugKey,newValue:modesStorage.getItem(debugKey)}));
+  assert.equal(normal.snapshot.status,'ready');assert.equal(modesApi.current.save.player.level,12);
+  assert.equal(modesApi.current.revision,1);assert.equal(modesApi.current.debug.revision,2);
+  debugPeer.createSaveStorage().setItem(GUEST_SAVE_KEY,text(99));assert.equal(await debugPeer.flush(),false);
+  assert.equal(debugPeer.snapshot.status,'conflict');assert.equal(normal.snapshot.status,'ready');
+  await debugPeer.reloadCloud();assert.equal(debugPeer.createSaveStorage().getItem(GUEST_SAVE_KEY),text(89));
+
+  debug.createSaveStorage().removeItem(GUEST_SAVE_KEY);assert(await debug.flush());
+  assert.equal(modesApi.current.debug.save,null);assert.equal(modesApi.current.debug.revision,3);
+  assert.equal(modesApi.current.save.player.level,12);assert.equal(modesApi.current.revision,1);
+  const normalCached=modesStorage.getItem(normalKey);
+  debug.createSaveStorage().setItem(GUEST_SAVE_KEY,text(90));modesApi.offline=true;assert.equal(await debug.flush(),false);debug.dispose();
+  const debugOffline=client(modesApi,modesStorage,{debug:true});await debugOffline.initialize();
+  assert(debugOffline.snapshot.canPlay);assert.equal(debugOffline.createSaveStorage().getItem(GUEST_SAVE_KEY),text(90));
+  assert.equal(modesStorage.getItem(normalKey),normalCached,'debug pending cache never changes normal cache');
+  modesApi.offline=false;assert(await debugOffline.flush());assert.equal(modesApi.current.debug.save.player.level,90);
+  const activeModeKey=[...modesStorage.map.keys()].find(key=>key.endsWith(':active'));
+  await debugOffline.logout();assert.equal(debugOffline.createSaveStorage().getItem(GUEST_SAVE_KEY),text(88));
+  assert.equal(modesStorage.getItem(GUEST_SAVE_KEY),text(11));assert.equal(modesStorage.getItem(normalKey),normalCached);
+  modeEvents.dispatchEvent(Object.assign(new Event('storage'),{key:activeModeKey,newValue:null}));
+  assert.equal(normal.snapshot.status,'auth-required','logout invalidates shared login across both modes');
+  assert(modesApi.calls.filter(call=>call.path.endsWith('/debug-save')).length>0);
+
   const requests=api.calls.filter(c=>c.method==='PUT');assert(requests.every(c=>!Object.hasOwn(c.body,'username')&&!Object.hasOwn(c.body,'password')));
-  console.log('Account client: isolated guest/account slots, explicit adoption, identity-bound adapters, durable CAS/idempotent retries, serial writes, offline/cold-load recovery, reset revisions, multi-device/tab conflicts, cookie binding, corrupt cache recovery, bounded quota-safe pending data and proxy upload limits passed.');
+  console.log('Account client: isolated guest/account and normal/DEBUG slots, explicit adoption, shared identity with independent cloud revisions, durable CAS/idempotent retries, serial writes, offline/cold-load recovery, reset revisions, multi-device/tab conflicts, cookie binding, corrupt cache recovery, bounded quota-safe pending data and proxy upload limits passed.');
 } finally {for(const c of clients)c.dispose();}

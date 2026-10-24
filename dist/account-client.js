@@ -1,6 +1,7 @@
 import { getServerConfigOptions } from './config-source.js';
 
 export const GUEST_SAVE_KEY='wild-echoes-guest-world-v1';
+export const DEBUG_GUEST_SAVE_KEY='wild-echoes-debug-guest-world-v1';
 const PREFIX='wild-echoes-account-v1:',MAX_BYTES=4_000_000;
 const uuid=()=>globalThis.crypto.randomUUID();
 const storageDefault=()=>{try{return globalThis.localStorage??null;}catch{return null;}};
@@ -26,24 +27,26 @@ export class AccountError extends Error {
 
 /** A single world-save slot, with identity-bound adapters and atomic cloud writes. */
 export class AccountClient {
-  constructor({storage=storageDefault(),fetchImpl=globalThis.fetch,location=globalThis.location,origin,
+  constructor({storage=storageDefault(),fetchImpl=globalThis.fetch,location=globalThis.location,origin,debug=false,
     validateSave=value=>{if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('save');return value;},
     onChange=()=>{},eventTarget=globalThis,debounceMs=1000,timeoutMs=12000,
     retryDelays=[3000,10000,30000],makeId=uuid,setTimer=(...args)=>globalThis.setTimeout(...args),clearTimer=id=>globalThis.clearTimeout(id)}={}){
     Object.assign(this,{storage,fetchImpl,validateSave,onChange,eventTarget,debounceMs,timeoutMs,retryDelays,makeId,setTimer,clearTimer});
+    this.debug=debug===true;this._guestKey=this.debug?DEBUG_GUEST_SAVE_KEY:GUEST_SAVE_KEY;
+    this._savePath=this.debug?'/api/account/debug-save':'/api/account/save';
     this.origin=null;try{this.origin=getServerConfigOptions({enabled:true,location,...(origin?{originOverride:origin}:{})}).origin;}catch{}
     this._namespace=this.origin?`${PREFIX}${encodeURIComponent(this.origin)}:`:null;
     this._activeKey=this._namespace?`${this._namespace}active`:null;
     this.user=null;this.mode='guest';this.ready=true;this.status='guest';this.message='游客进度仅保存在当前浏览器。';
     this._epoch=0;this._timer=null;this._flight=null;this._identityBusy=false;this._disposed=false;this._attempt=0;this._record=null;this._cacheRaw=null;
     this._guestText=null;this._guestError=false;
-    try{this._guestText=this._read(GUEST_SAVE_KEY);this._parseSave(this._guestText);}catch{this._guestError=true;this.ready=false;this.status='error';this.message=messages.INVALID_SAVE;}
+    try{this._guestText=this._read(this._guestKey);this._parseSave(this._guestText);}catch{this._guestError=true;this.ready=false;this.status='error';this.message=messages.INVALID_SAVE;}
     if(this._activeKey)try{const hint=JSON.parse(this._read(this._activeKey)||'null');if(userValid(hint?.user)){this.user=hint.user;this.mode='account';this.ready=false;this.status='loading';this.message='正在读取账号进度。';this._loadRecord();}}catch{this.status='error';this.ready=false;this.message=messages.INVALID_SAVE;}
     if(this.origin&&this.status!=='error'){this.ready=false;this.status='loading';this.message='正在确认登录状态。';}
     this._onStorage=event=>this._storageChanged(event);
     eventTarget?.addEventListener?.('storage',this._onStorage);
   }
-  get snapshot(){return {mode:this.mode,user:clone(this.user),ready:this.ready,canPlay:this.ready&&!['conflict','auth-required','loading','error'].includes(this.status),status:this.status,dirty:!!this._record?.dirty,message:this.message,hasGuestSave:!this._guestError&&!!this._guestText,originAvailable:!!this.origin};}
+  get snapshot(){return {mode:this.mode,debug:this.debug,user:clone(this.user),ready:this.ready,canPlay:this.ready&&!['conflict','auth-required','loading','error'].includes(this.status),status:this.status,dirty:!!this._record?.dirty,message:this.message,hasGuestSave:!this._guestError&&!!this._guestText,originAvailable:!!this.origin};}
   _emit(reason,replaceSave=false){if(!this._disposed)this.onChange(this.snapshot,{reason,replaceSave});}
   _set(status,message,reason=status,replaceSave=false){this.status=status;this.message=message;this._emit(reason,replaceSave);}
   _read(key){try{if(!this.storage?.getItem)throw Error();return this.storage.getItem(key);}catch{throw new AccountError('STORAGE_UNAVAILABLE');}}
@@ -55,7 +58,7 @@ export class AccountClient {
     try{const save=JSON.parse(text);this.validateSave(save);return save;}catch{throw new AccountError('INVALID_SAVE');}
   }
   _saveText(save){if(save===null)return null;const text=JSON.stringify(save);this._parseSave(text);return text;}
-  _key(){return `${this._namespace}save:${this.user.id}`;}
+  _key(){return `${this._namespace}${this.debug?'debug-save':'save'}:${this.user.id}`;}
   _loadRecord(){
     const raw=this._read(this._key());this._cacheRaw=raw;this._record=null;if(!raw)return;
     let record;try{record=JSON.parse(raw);}catch{throw new AccountError('INVALID_SAVE');}
@@ -67,7 +70,7 @@ export class AccountClient {
   _emptyRecord(){return {format:1,revision:0,updatedAt:null,saveText:null,dirty:false,pending:null,loaded:false,stamp:this.makeId()};}
   _checkExternal(){
     if(this.mode!=='account'){
-      if(this._read(GUEST_SAVE_KEY)!==this._guestText){this._conflict('STALE_STORAGE');throw new AccountError('STALE_STORAGE');}return;
+      if(this._read(this._guestKey)!==this._guestText){this._conflict('STALE_STORAGE');throw new AccountError('STALE_STORAGE');}return;
     }
     const hint=JSON.parse(this._read(this._activeKey)||'null');
     if(hint?.user?.id!==this.user.id){this._set('auth-required',messages.ACCOUNT_CHANGED);throw new AccountError('ACCOUNT_CHANGED',401);}
@@ -82,9 +85,9 @@ export class AccountClient {
   _conflict(code='SAVE_CONFLICT'){this._cancelTimer();this.ready=!!this._record?.loaded||this.mode==='guest';this._set('conflict',messages[code]);}
   _storageChanged(event){
     if(this._disposed||this._identityBusy)return;
-    if(event.key===GUEST_SAVE_KEY){
+    if(event.key===this._guestKey){
       if(this.mode==='guest'&&event.newValue!==this._guestText)this._conflict('STALE_STORAGE');
-      else if(this.mode==='account')try{this._guestText=this._read(GUEST_SAVE_KEY);this._parseSave(this._guestText);this._guestError=false;this._emit('guest-changed');}catch{this._guestError=true;}
+      else if(this.mode==='account')try{this._guestText=this._read(this._guestKey);this._parseSave(this._guestText);this._guestError=false;this._emit('guest-changed');}catch{this._guestError=true;}
     }
     if(this.mode==='account'&&(event.key===this._key()||event.key===this._activeKey||event.key===null)){
       try{this._checkExternal();}catch{}
@@ -101,7 +104,7 @@ export class AccountClient {
   }
   _storeText(text){
     if(this.mode==='guest'){
-      if(text===null)this._remove(GUEST_SAVE_KEY);else this._write(GUEST_SAVE_KEY,text);
+      if(text===null)this._remove(this._guestKey);else this._write(this._guestKey,text);
       this._guestText=text;this._guestError=false;this._emit('saved');return;
     }
     const previous=this._record;
@@ -141,7 +144,7 @@ export class AccountClient {
   }
   async _loadCloud({discard=false}={}){
     if(this._record?.dirty&&!discard){const saved=await this.flush({allowLoading:true});if(!saved){if(this.snapshot.canPlay)this._emit('cached',true);return false;}}
-    const epoch=this._epoch,value=this._envelope(await this._request('/api/account/save',{account:true}));
+    const epoch=this._epoch,value=this._envelope(await this._request(this._savePath,{account:true}));
     if(epoch!==this._epoch||this._disposed)return false;
     this._checkExternal();
     const unchanged=this._record?.loaded&&!this._record.dirty&&!this._record.pending&&this._record.revision===value.revision&&this._record.saveText===value.saveText&&this._record.updatedAt===value.updatedAt;
@@ -182,7 +185,7 @@ export class AccountClient {
       if(this._flight)await this._flight;
       else if(this.mode==='account'&&this._record?.dirty&&!['conflict','auth-required'].includes(this.status))await this.flush();
       if(this._disposed)return this.snapshot;
-      let guest=null;if(useGuestProgress){guest=this._read(GUEST_SAVE_KEY);this._parseSave(guest);}
+      let guest=null;if(useGuestProgress){guest=this._read(this._guestKey);this._parseSave(guest);}
       const session=await this._request(path,{method:'POST',body:{username,password}});
       if(this._disposed)return this.snapshot;
       this._adoptUser(session.user);this._set('loading','正在读取账号进度。');
@@ -211,7 +214,7 @@ export class AccountClient {
       if(this._disposed)return this.snapshot;
       const hint=JSON.parse(this._read(this._activeKey)||'null');if(hint?.user?.id===this.user.id)this._remove(this._activeKey);
       this._cancelTimer();this._epoch++;this.user=null;this.mode='guest';this._record=null;this._cacheRaw=null;
-      try{this._guestText=this._read(GUEST_SAVE_KEY);this._parseSave(this._guestText);}catch(error){this._guestError=true;this.ready=false;this._set('error',error.message,'logout',true);return this.snapshot;}
+      try{this._guestText=this._read(this._guestKey);this._parseSave(this._guestText);}catch(error){this._guestError=true;this.ready=false;this._set('error',error.message,'logout',true);return this.snapshot;}
       this._guestError=false;this.ready=true;
       this._set('guest','游客进度仅保存在当前浏览器。','logout',true);return this.snapshot;
     }finally{this._identityBusy=false;}
@@ -221,7 +224,7 @@ export class AccountClient {
     try{
       this._cancelTimer();if(this._flight)await this._flight;if(this._disposed)return this.snapshot;this._epoch++;
       if(this.mode==='guest'){
-        this._guestText=this._read(GUEST_SAVE_KEY);this._parseSave(this._guestText);this._guestError=false;this.ready=true;this._set('guest','游客进度仅保存在当前浏览器。','loaded',true);
+        this._guestText=this._read(this._guestKey);this._parseSave(this._guestText);this._guestError=false;this.ready=true;this._set('guest','游客进度仅保存在当前浏览器。','loaded',true);
       }else{
         // Explicit reload discards pending local content only after a valid
         // cloud response. It can recover a malformed local cache as well.
@@ -246,7 +249,7 @@ export class AccountClient {
         if(!this._record.pending){const previous=this._record;this._record={...previous,pending:{expectedRevision:previous.revision,mutationId:this.makeId(),saveText:previous.saveText}};try{this._persistRecord();}catch(error){this._record=previous;throw error;}}
         const pending=this._record.pending;
         this._set('syncing','正在同步进度。');
-        const result=this._envelope(await this._request('/api/account/save',{method:'PUT',account:true,body:{expectedRevision:pending.expectedRevision,mutationId:pending.mutationId,save:this._parseSave(pending.saveText)}}));
+        const result=this._envelope(await this._request(this._savePath,{method:'PUT',account:true,body:{expectedRevision:pending.expectedRevision,mutationId:pending.mutationId,save:this._parseSave(pending.saveText)}}));
         if(epoch!==this._epoch||this._disposed)return false;
         this._checkExternal();
         if(result.revision!==pending.expectedRevision+1||result.saveText!==pending.saveText)throw new AccountError('SAVE_CONFLICT',409);
@@ -267,7 +270,7 @@ export class AccountClient {
     if(this.status!=='pending')return this.snapshot.canPlay;
     const epoch=this._epoch;
     try{
-      const current=this._envelope(await this._request('/api/account/save',{account:true}));if(epoch!==this._epoch||this._disposed)return false;
+      const current=this._envelope(await this._request(this._savePath,{account:true}));if(epoch!==this._epoch||this._disposed)return false;
       this._checkExternal();
       if(current.revision!==this._record.revision||!this._record.dirty&&current.saveText!==this._record.saveText)throw new AccountError('SAVE_CONFLICT',409);
       if(this._record.dirty)return this.flush();

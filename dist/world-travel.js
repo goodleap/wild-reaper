@@ -32,7 +32,6 @@ export class WorldTravel {
   }
   _door(waypoint=this.waypoint){return waypoint?{x:waypoint.x,y:waypoint.y+WAYPOINT_RULES.doorOffset}:null;}
   _notify(reason){
-    if(this.game.debug)return;
     if(this.onChange)this.onChange(this.serialize(),reason);
     else this.game._scheduleWorldSave?.(reason);
   }
@@ -197,7 +196,7 @@ export class WorldTravel {
   getRestAnchor(){return this._resolveRestAnchor(this.restAnchor);}
   serialize(){return {discovered:[...this.discovered],activated:[...this.activated],restAnchor:this.restAnchor?{...this.restAnchor}:null};}
   restore(data){
-    if(this.game.debug||!data||typeof data!=='object')return false;
+    if(!data||typeof data!=='object')return false;
     this.discovered=new Set((Array.isArray(data.discovered)?data.discovered:[]).filter(id=>this.definitions.has(id)));
     this.activated=new Set((Array.isArray(data.activated)?data.activated:[]).filter(id=>this.definitions.has(id)));
     for(const id of this.activated)this.discovered.add(id);

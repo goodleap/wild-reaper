@@ -89,8 +89,9 @@ const reload=fresh('clockshadow-city',storage);assert.equal(entry(reload,'clock-
 // A previously open tab may learn the other tab's completion on any objective
 // write. Its collision must catch up with its now-completed journal and art.
 collectGear(staleCity);assert.equal(entry(staleCity,'clock-bridge').status,'completed');assert(!bridgeBlocked(staleCity));
-const saved=storage.getItem(QUEST_STORAGE_KEY),debug=fresh('clockshadow-city',storage,{debug:true});assert(bridgeBlocked(debug));
-assert.equal(entry(debug,'clock-bridge').status,'available');collectGear(debug);assert.equal(storage.getItem(QUEST_STORAGE_KEY),saved,'debug cannot overwrite formal progress');
+const saved=storage.getItem(QUEST_STORAGE_KEY),debugStorage=memory(),debug=fresh('clockshadow-city',debugStorage,{debug:true});assert(bridgeBlocked(debug));
+assert.equal(entry(debug,'clock-bridge').status,'available');collectGear(debug);assert.equal(storage.getItem(QUEST_STORAGE_KEY),saved,'an injected debug slot leaves the other slot untouched');
+assert(JSON.parse(debugStorage.getItem(QUEST_STORAGE_KEY)).records['clock-bridge'].objectives.gear,'debug persists objective facts in its supplied campaign slot');
 
 const forest=fresh('rift-forest',storage),cave05=forest.riftExploration.sites.find(site=>site.key==='cave05'),cave15=forest.riftExploration.sites.find(site=>site.key==='cave15');
 assert(cave05&&cave15);approach(forest,cave05);request(forest,cave05.id);
@@ -148,4 +149,4 @@ click('map-done');assert(!h.run('mapOpen'));assert.equal(h.document.activeElemen
 h.run('updateHUD();');assert(!node('quest-tracker').hidden);click('quest-tracker');assert(h.run('mapOpen'));click('map-done');
 const key={code:'Space',key:' ',target:h.document.activeElement,repeat:false,preventDefault(){this.defaultPrevented=true;}};
 h.listeners['document:keydown']?.(key);h.listeners['window:keydown']?.(key);assert(key.defaultPrevented);assert(h.run('skillRequested'));assert(!h.run('mapOpen'),'Space after pointer-close returns to combat instead of reopening the map');
-console.log('Quest integration: guarded materials, connected underground traversal, physical route changes, wrong-scene isolation, durable progress/reward-once, stale-tab collision sync, debug exclusion and map pause/focus passed.');
+console.log('Quest integration: guarded materials, connected underground traversal, physical route changes, wrong-scene isolation, durable progress/reward-once, stale-tab collision sync, explicit debug storage and map pause/focus passed.');

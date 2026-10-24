@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { harness,html } from './qa-app-harness.mjs';
 import { getConfigSection } from './dist/content-config.js';
 import { WORLD_SAVE_KEY } from './dist/world-save.js';
+import { DEBUG_GUEST_SAVE_KEY } from './dist/account-client.js';
 import { landmarkState } from './dist/world-map.js';
 
 // Real shipped UI handlers, WorldSave and Game; browser geometry is checked separately.
@@ -56,10 +57,21 @@ choose(restored,'mode-dungeon');assert.equal(node(restored,'hero-princess-v2').d
 choose(restored,'mode-world');click(restored,'world-new-button');click(restored,'world-reset-confirm-button');
 assert(!storage.has(WORLD_SAVE_KEY));assert.equal(node(restored,'prepare-start-label').textContent,'开始探索');assert.equal(node(restored,'hero-princess-v2').disabled,false);
 
-// The debug launch has the same services but never reads or overwrites official progress.
+// Debug continues its own campaign, including through a stale map test URL.
 const official=new Map([[WORLD_SAVE_KEY,JSON.stringify(stored)]]),debug=harness('?debug',{storage:official});
 click(debug,'start-button');assert.equal(node(debug,'prepare-start-label').textContent,'开始探索');click(debug,'prepare-start-button');await debug.flush();
-assert(debug.run('game.worldTravel.enabled'));assert.equal(debug.run('game.hero.id'),'traveler');debug.run('game.gold=9999;home();');assert.equal(official.get(WORLD_SAVE_KEY),JSON.stringify(stored));
+assert(debug.run('game.worldTravel.enabled'));assert.equal(debug.run('game.hero.id'),'traveler');
+debug.run('game.gold=9999;game.player.level=4;game.player.xp=7;home();');
+assert.equal(official.get(WORLD_SAVE_KEY),JSON.stringify(stored));assert(official.has(DEBUG_GUEST_SAVE_KEY));
+const debugAgain=harness('?debug&world=marsh',{storage:official});
+click(debugAgain,'start-button');assert.equal(node(debugAgain,'prepare-start-label').textContent,'继续探索');
+assert.match(node(debugAgain,'world-entry-title').textContent,/DEBUG/);
+click(debugAgain,'prepare-start-button');await debugAgain.flush();
+assert.equal(debugAgain.run('game.worldId'),'rift-forest','a test URL cannot override the saved campaign region');
+assert.equal(debugAgain.run('game.gold'),9999,'debug startup gold is not granted again on resume');
+assert.equal(debugAgain.run('game.player.level'),4);assert.equal(debugAgain.run('game.player.xp'),7);
+debugAgain.run('home();');click(debugAgain,'start-button');click(debugAgain,'world-new-button');click(debugAgain,'world-reset-confirm-button');
+assert(!official.has(DEBUG_GUEST_SAVE_KEY));assert.equal(official.get(WORLD_SAVE_KEY),JSON.stringify(stored),'reset clears only the selected debug campaign');
 
 // Failed disk writes must retain the playable instance and its unsaved progress.
 const failure=harness();click(failure,'start-button');click(failure,'prepare-start-button');await failure.flush();

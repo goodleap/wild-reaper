@@ -79,3 +79,15 @@ export function spawnDebugBosses(game) {
   }
   return spawned;
 }
+
+// Loading a campaign replaces the constructor's build and enemy list. Reapply
+// selected test tools to that restored state; startup gold remains one-time.
+export function restoreDebugTools(game) {
+  if(!game.debug)return false;
+  game._debugFullApplied=false;applyFullDebugBuild(game);
+  game._debugTrainingSpawned=game.enemies.some(enemy=>enemy.trainingDummy);
+  spawnDebugTrainingDummy(game);
+  game._debugBossSpawned=game.enemies.some(enemy=>enemy.debugBoss);
+  spawnDebugBosses(game);
+  return true;
+}

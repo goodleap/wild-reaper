@@ -60,8 +60,9 @@ const movedAnchor=new WorldTravel(create(),{config:anchorConfig,data:g.worldTrav
 assert.deepEqual(movedAnchor.getRestAnchor(),{worldId:'marsh',x:1065,y:990,facilityId:'facility:core:marsh:rest'},'restoring the same facility follows the new town location');
 assert(movedAnchor.restore({restAnchor:{worldId:'marsh',facilityId:'missing'}}));assert.equal(movedAnchor.getRestAnchor(),null,'unknown facility identities are rejected');
 assert.equal(restored.worldTravel.portalTo(WORLD_IDS.indexOf('marsh')).connectionId,portal.connectionId,'serialized travel and canonical region connection IDs remain aligned');
-const debug=create({debug:true});assert.equal(debug.worldTravel.restore(g.worldTravel.serialize()),false);place(debug,0,75);debug.worldTravel.initialize();debug.worldTravel.update();
-assert(debug.worldTravel.enabled&&debug.worldTravel.activated.has('rift-forest'),'debug exercises the same world mechanics');assert.equal(debug.saved.length,0,'debug does not write formal progression');assert(!debug.worldTravel.activated.has('marsh'),'debug does not read formal progression');
+const debug=create({debug:true});assert(debug.worldTravel.restore(g.worldTravel.serialize()));place(debug,0,75);debug.worldTravel.initialize();debug.worldTravel.update();
+assert(debug.worldTravel.setRestAnchor({id:'facility:core:rift-forest:rest',x:65,y:90}));
+assert(debug.worldTravel.enabled&&debug.worldTravel.activated.has('rift-forest'),'debug exercises the same world mechanics');assert(debug.saved.length>0,'debug invokes the supplied campaign persistence');assert(debug.worldTravel.activated.has('marsh'),'debug restores the supplied waypoint progression');
 for(const options of [{mode:'story'},{mode:'dungeon'},{stage:{}},{expedition:{}},{worldId:'forest'}])assert.equal(create(options).worldTravel.enabled,false);
 const relocated=create();
 const movedConfig=structuredClone(config),movedCore=movedConfig.regions[0].core;

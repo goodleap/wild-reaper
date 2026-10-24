@@ -89,11 +89,11 @@ npm run test:forest-maintenance
 
 `account-client.js` 管理账号会话及存档同步，`account-panel.js` 仅处理界面。账号 API 复用 `config-source.js` 的完整域名推导和开发地址覆盖，但独立于配置加载开关。请求携带服务端 HttpOnly Cookie；存档请求绑定当前账号 ID，写请求由后端检查允许的 Origin 和浏览器请求头。
 
-游客使用新的 `wild-echoes-guest-world-v1` 本地槽，账号缓存按 API 地址和用户 ID 隔离。账号功能不读取或迁移旧世界存档。注册时可明确选择沿用游客进度；登录已有账号读取其云端进度。调试冒险不写入任一正式进度槽。
+游客使用新的 `wild-echoes-guest-world-v1` 本地槽，账号缓存按 API 地址和用户 ID 隔离。账号功能不读取或迁移旧世界存档。注册时可明确选择沿用游客进度；登录已有账号读取其云端进度。DEBUG 世界探索使用独立调试槽：游客写入 `wild-echoes-debug-guest-world-v1`，账号使用独立缓存和 `/api/account/debug-save` 云端接口。登录会话共用，普通与调试存档的内容、版本及重置互不影响；注册沿用游客进度时，只复制当前模式的游客槽。
 
-保存先写本地缓存，再异步合并发送；关键节点和定期检查点沿用世界存档入口。后端按版本号原子更新，重试复用同一操作 ID；冲突停止旧进度上传，玩家读取最新存档后继续。退出账号保留该账号的待同步缓存，游客槽独立。页面离开时尽力同步，本地缓存负责保留未完成的请求，不依赖页面关闭后网络继续执行。
+保存先写本地缓存，再异步合并发送；普通和 DEBUG 世界探索都在关键节点及每 20 秒有效游玩时保存，暂停、返回首页和页面离开也保存；调试续档恢复等级、经验、任务、传送点和休息点，开局金币不会重复发放。后端按版本号原子更新，重试复用同一操作 ID；冲突停止旧进度上传，玩家读取最新存档后继续。退出账号保留该账号的待同步缓存，游客槽独立。页面离开时尽力同步，本地缓存负责保留未完成的请求，不依赖页面关闭后网络继续执行。
 
-修改账号代码后运行 `npm run test:accounts`、`node qa-world-save.mjs`、`node qa-world-selection.mjs` 与 `npm run test:focus`，并用独立浏览器上下文验证注册、续档、断网恢复和冲突。后端账号接口、SQLite 备份及代理上传限制见 `goodleap/wild-reaper-server` README；不要将账号密码、会话凭据或完整存档写入行为日志。
+修改账号代码后运行 `npm run test:accounts`、`node qa-world-save.mjs`、`node qa-debug-world-save.mjs`、`node qa-world-selection.mjs` 与 `npm run test:focus`，并用独立浏览器上下文验证注册、续档、断网恢复和冲突。后端账号接口、SQLite 备份及代理上传限制见 `goodleap/wild-reaper-server` README；不要将账号密码、会话凭据或完整存档写入行为日志。
 
 ## 内容配置
 

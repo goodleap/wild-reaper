@@ -301,24 +301,24 @@ const notifications=createNotificationQueue({setTimer:setTimeout,clearTimer:clea
 }});
 function notify(message,priority=1,options){return notifications.push(message,priority,options);}
 let worldSaveNotice='',accountOpen=false,accountReturnFocus=null,accountPanel=null,lastAccountLog='';
-const accountClient=new AccountClient({storage:archiveStorage,location:window.location,validateSave:validateWorldSaveData,onChange:accountChanged});
+const accountClient=new AccountClient({storage:archiveStorage,location:window.location,debug:debugMode,validateSave:validateWorldSaveData,onChange:accountChanged});
 let worldSave=createWorldSave();
-function createWorldSave(){return new WorldSave({storage:accountClient.snapshot.canPlay?accountClient.createSaveStorage():null,enabled:!debugMode,onNotice:notice=>{
+function createWorldSave(){return new WorldSave({storage:accountClient.snapshot.canPlay?accountClient.createSaveStorage():null,onNotice:notice=>{
   worldSaveNotice=notice.message||'世界进度暂时无法保存';
   notify(notice.message||'世界进度暂时无法保存',2);
   const id=activityLog.begin('storage','保存世界进度');
   activityLog.event(id,'warning',notice.message||'世界存档不可用',{reason:notice.reason});
   activityLog.end(id,{status:'warning',summary:notice.message||'世界存档不可用'});
 }});}
-function accountAllowsPlay(){return debugMode||accountClient.snapshot.canPlay;}
+function accountAllowsPlay(){return accountClient.snapshot.canPlay;}
 function accountChanged(state,{reason='',replaceSave=false}={}){
   if(replaceSave){
-    if(game&&!game.debug)home({discardWorld:true});
+    if(game)home({discardWorld:true});
     worldSave=createWorldSave();worldSaveNotice='';
   }
   refreshAccountView();
   if(prepareOpen){refreshWorldSetup();refreshHeroSetup();refreshWeaponSetup();}
-  if(game?.mode==='world'&&!game.debug&&!state.canPlay){
+  if(game?.mode==='world'&&!state.canPlay){
     paused=true;clearInput();show('pause-overlay');
     if(!startLoading&&!accountOpen)openAccount();
   }
@@ -363,7 +363,7 @@ async function signInAccount(values,register=false){
 accountPanel=createAccountPanel($('account-overlay'),{
   onLogin:values=>signInAccount(values),onRegister:values=>signInAccount(values,true),onClose:closeAccount,
   onLogout:async()=>{leaveForAccount({discard:!accountAllowsPlay()});await accountClient.logout();accountPanel.setMode('login');},
-  onRetry:async()=>{await accountClient.retry();if(game?.mode==='world'&&!game.debug&&accountAllowsPlay()){if(!saveWorldProgress('sync-retry'))throw new Error('当前进度未能保存，请检查浏览器存储。');await accountClient.flush();}},
+  onRetry:async()=>{await accountClient.retry();if(game?.mode==='world'&&accountAllowsPlay()){if(!saveWorldProgress('sync-retry'))throw new Error('当前进度未能保存，请检查浏览器存储。');await accountClient.flush();}},
   onReload:async()=>{leaveForAccount({discard:true});await accountClient.reloadCloud();}
 });
 $('account-button').onclick=openAccount;$('pause-account-button').onclick=openAccount;
@@ -378,7 +378,7 @@ function refreshArchiveEntry(){
   $('archive-entry-note').textContent='图鉴 · 记录 · 里程碑';
 }
 function saveWorldBeforeLeaving(reason){
-  if(game?.mode!=='world'||game.debug||!game.worldSave?.enabled)return true;
+  if(game?.mode!=='world'||!game.worldSave?.enabled)return true;
   return saveWorldProgress(reason)===true;
 }
 syncSound();refreshArchiveEntry();
@@ -471,7 +471,7 @@ function refreshWorldSetup(){
   show('world-options',story);show('world-entry',!story);show('world-count',!story);show('world-new-button',continuing);
   if(!continuing)show('world-reset-confirm',false);
   $('world-count').textContent='一个世界 · '+explorableWorlds.length+' 个区域';
-  $('world-entry-title').textContent=continuing?'继续旅程 · '+explorationWorld(saved.worldId).name:'从裂谷林海启程';
+  $('world-entry-title').textContent=(debugMode?'DEBUG · ':'')+(continuing?'继续旅程 · '+explorationWorld(saved.worldId).name:'从裂谷林海启程');
   $('world-description').textContent=worldSaveNotice&&!worldSave.storageOk?worldSaveNotice:continuing?'沿用已保存的角色、武器与探索进度。':'城镇休整，沿郊外道路探索相连的区域。';
   refreshPreparationSummary();
 }
@@ -560,7 +560,7 @@ function startGame(){
   saveSetup();
   const loadout=preparationLoadout();
   const options={hero:loadout.heroId,appearanceId:loadout.appearanceId,difficulty:'normal',mode:selectedMode,storyId:selectedMode==='story'?selectedStoryId:null,worldId:selectedMode==='story'?'rift-forest':selectedMode==='world'?selectedWorldId:null,dungeonId:selectedMode==='dungeon'?selectedDungeonId:null,initialWeaponId:loadout.weaponId,stageId:selectedMode==='dungeon'&&!selectedDungeonId?selectedStageId:null,debug:debugMode,debugOptions:normalizeDebugOptions(selectedDebugOptions,debugMode),debugWorld:debugConfig.world};
-  if(selectedMode==='world'){Object.assign(options,worldSave.startOptions(),{questStorage:worldSave.questStorage});}
+  if(selectedMode==='world'){Object.assign(options,worldSave.startOptions(),{questStorage:worldSave.questStorage});if(worldSave.hasSave)options.debugWorld=null;}
   const startLogId=activityLog.begin('start','开始冒险',{...activityContext(),selection:options});
   activityLog.setCurrent(startLogId);activityLog.stage(startLogId,'创建游戏');
   // Unlock audio in the originating click, before yielding to the loading view.
@@ -607,7 +607,7 @@ function startGame(){
   })();
   return activeStartPromise;
 }
-function commitPreparedGame(preparedGame){if(preparedGame.mode==='world'&&!preparedGame.debug&&(!accountAllowsPlay()||preparedGame.worldSave!==worldSave))throw new Error('账号状态已变化，请重新开始。');playPerformance?.finish('重新开始');sceneActivity?.cancel('重新开始');sceneActivity=attachSceneActivity(preparedGame,{log:activityLog,context:()=>activityContext(preparedGame),beforeStart:()=>{playPerformance?.finish('场景切换');cancelDiagnosticCapture('场景切换');}});prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game){archive.recordStoryCompletion?.(game);if(!runEnded)archive.finish(game,'restart');game.dispose?.('restart');}resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapView='region';mapTravelMode=false;atlasSelectedId=null;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);notifications.clear();relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=preparedGame;realmMaterials=null;syncViewport();archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay','context-action','touch-context-action','tribulation-progress','story-dialogue-overlay','story-objective'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);if(debugMode&&game.mode!=='story')notify('调试设置已生效',1);updateHUD();}
+function commitPreparedGame(preparedGame){if(preparedGame.mode==='world'&&(!accountAllowsPlay()||preparedGame.worldSave!==worldSave))throw new Error('账号状态已变化，请重新开始。');playPerformance?.finish('重新开始');sceneActivity?.cancel('重新开始');sceneActivity=attachSceneActivity(preparedGame,{log:activityLog,context:()=>activityContext(preparedGame),beforeStart:()=>{playPerformance?.finish('场景切换');cancelDiagnosticCapture('场景切换');}});prepareOpen=false;arena.classList.remove('preparing');show('prepare-screen',false);if(game){archive.recordStoryCompletion?.(game);if(!runEnded)archive.finish(game,'restart');game.dispose?.('restart');}resetArchivePanel();archiveMilestonesBefore=new Set(archiveMilestones(archive.data).filter(item=>item.complete).map(item=>item.id));cancelDiagnosticCapture();diagnostics?.reset();diagnosticNotice='尚未采样';resetDebugFps();sceneInputRevision=0;blockedTransitionKeys.clear();mapOpen=false;mapView='region';mapTravelMode=false;atlasSelectedId=null;mapReturnFocus=null;characterOpen=false;characterReturnFocus=null;characterPointer=null;characterTab='attributes';$('character-button').setAttribute('aria-expanded','false');show('character-overlay',false);$('map-button').setAttribute('aria-expanded','false');show('map-overlay',false);notifications.clear();relicChoiceKey='';lastRelics='';superChoiceKey='';lastSupers='';shopKey='';game=preparedGame;realmMaterials=null;syncViewport();archiveObserveAt=0;paused=false;runEnded=false;helpOpen=false;upgradeLevel=0;lastLoadout='';shake=0;clearInput();for(const id of ['intro','upgrade-overlay','pause-overlay','end-overlay','help-overlay','boss-bar','buff-status','encounter-status','companion-status','portal-action','relic-overlay','super-overlay','shop-overlay','context-action','touch-context-action','tribulation-progress','story-dialogue-overlay','story-objective'])show(id,false);show('hud');show('run-summary');show('game-bottom');show('touch-skill',coarse);arena.classList.add('playing');initAudio();tone(440,.13,'sine',.045,660);if(debugMode&&game.mode!=='story')notify('调试设置已生效',1);updateHUD();}
 function restartGame(){
   if(startLoading)return activeStartPromise;
   if(game){

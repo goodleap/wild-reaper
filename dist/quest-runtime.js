@@ -13,12 +13,14 @@ const point=(value,label)=>value?{x:value.x,y:value.y,label}:null;
 export class WorldQuests {
   constructor(game,{storage}={}){
     this.game=game;this.enabled=game.mode==='world'&&game._features.adventure&&!game.stage&&!game.expedition;
-    this.store=new QuestStore({storage:this.enabled&&!game.debug?storage:null});
+    // A campaign supplies its own storage adapter in either play mode. A
+    // standalone debug fixture must not fall back to the browser quest key.
+    this.store=new QuestStore({storage:this.enabled&&(!game.debug||storage!==undefined)?storage:null});
     this.revision=0;this.board=null;this.boards=[];this._definitions=[];this._route=null;this._routeTerrain=null;this._trip=null;this._cellarChests=new WeakMap();this._targetId=null;
     this.enterWorld();
   }
   get storageAvailable(){return this.store.available;}
-  get storageMode(){return this.game.debug?'session-debug':this.store.available?'persistent':'session';}
+  get storageMode(){return this.store.available?'persistent':this.game.debug?'session-debug':'session';}
   get definitions(){return this.enabled?this._definitions.filter(definition=>definition.worldId===this.game.worldId):[];}
   get definition(){const definitions=this.definitions,tracked=this.store.data.tracked[this.game.worldId];return definitions.find(definition=>definition.id===tracked&&!this._record(definition.id).completed)||definitions.find(definition=>!this._record(definition.id).completed)||definitions[0]||null;}
   _record(id=this.definition?.id){return id?this.store.record(id):null;}

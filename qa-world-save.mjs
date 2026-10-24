@@ -116,11 +116,11 @@ enter(h,h.riftExploration.sites.find(site=>site.id===caveSite.id));assert.equal(
 assert.equal(h.enemies.find(enemy=>enemy.id===wounded.id).hp,wounded.hp);
 assert(loaded.capture(h));
 const stable=storage.getItem(WORLD_SAVE_KEY),writes=storage.writes;
-for(const options of [{mode:'world',debug:true},{mode:'story'},{mode:'dungeon',dungeonId:'survival'}]){
+for(const options of [{mode:'story'},{mode:'dungeon',dungeonId:'survival'}]){
   const other=new Game(options);assert.equal(loaded.attach(other),false);assert.equal(loaded.capture(other),false);
 }
 assert.equal(storage.writes,writes);assert.equal(storage.getItem(WORLD_SAVE_KEY),stable,'other modes cannot overwrite the campaign');
-let reads=0;new WorldSave({enabled:false,storage:{getItem(){reads++;throw Error('debug read');}}});assert.equal(reads,0,'debug does not even read the official save');
+let reads=0;new WorldSave({enabled:false,storage:{getItem(){reads++;throw Error('disabled read');}}});assert.equal(reads,0,'disabled storage is never read');
 
 const notices=[],failing=new WorldSave({storage:{...storage,setItem(){throw Error('quota');}},onNotice:n=>notices.push(n)});
 const failedGame=new Game({mode:'world',...failing.startOptions(),questStorage:failing.questStorage});failing.attach(failedGame);failedGame.gold+=100;
