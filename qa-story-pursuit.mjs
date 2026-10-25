@@ -3,6 +3,7 @@ import { Game } from './dist/engine.js';
 import { groundOffset } from './dist/terrain.js';
 import { terrainNavigation } from './dist/terrain-navigation.js';
 import { updateEnemyBehavior } from './dist/enemy-behaviors.js';
+import { enemyDefinition } from './dist/enemy-definitions.js';
 import { getConfigSnapshot } from './dist/content-config.js';
 import { validateStory } from './dist/config-validation/story.js';
 import { Terrain } from './dist/terrain.js';
@@ -29,12 +30,42 @@ function simulate(game,director,seconds){
   }
 }
 
+{
+  const {game,story,director}=chapter(1440,900);
+  story.flow.go('search');director.clear();
+  const origin=foot(game.player),profile=director.config.profiles.soldier;
+  const patrol=game._spawnEnemy(profile.type,1);
+  Object.assign(patrol,{x:origin.x-450,y:origin.y-groundOffset(patrol),storyId:story.id,storyPursuer:true,storySearching:true,_storyInitialHp:patrol.hp,_storyAdmission:0,_storySearchProgress:160});
+  const blocker=game.terrain.firstBlocker,move=game._moveEnemy;
+  game.terrain.firstBlocker=()=>null;
+  assert(game._inView(patrol),'The test patrol is visibly inside a desktop camera.');
+  assert.equal(story._found(),false,'Camera size is not an enemy detection radius.');
+  const targets=[];game._moveEnemy=(enemy,dt,target)=>targets.push({...target});
+  director.beforeEnemy(patrol,.1);game.player.y+=180;director.beforeEnemy(patrol,.1);
+  assert.deepEqual(targets[0],targets[1],'An unseen moving hero does not redirect the search patrol from its road.');
+  game.player.x=patrol.x+80;game.player.y=foot(patrol).y-groundOffset(game.player,true);
+  game.terrain.firstBlocker=()=>({id:'sight-wall'});
+  assert.equal(story._found(),false,'Nearby searchers cannot discover the hero through solid scenery.');
+  game.terrain.firstBlocker=()=>null;assert.equal(story._found(),true,'Actual close sight discovers the hero.');
+  game.player.x=origin.x+800;patrol.hp--;
+  assert.equal(story._found(),true,'Attacking the patrol exposes the hero even outside normal notice range.');
+  game.terrain.firstBlocker=blocker;game._moveEnemy=move;
+  director.clear();game.player.x=story.anchors.meeting.x;game.player.y=story.anchors.meeting.y-groundOffset(game.player,true);
+  story.update(.05);assert.equal(story.step,'escort','Reaching the princess unseen is a real stealth rendezvous, never an invented discovery.');
+  game.dispose();
+}
+
 for(const [width,height] of [[540,1080],[1100,650],[1440,900]]){
   const {game,story,director}=chapter(width,height);
   story.flow.go('search');
-  // The shore can be entirely visible on a tall or wide viewport. Move along
-  // the actual road before requiring admission, rather than rewarding a front
-  // spawn simply to satisfy the population budget at the initial camera.
+  assert(director.living().length>0,'Actual rear roads admit searchers before the stationary hero has moved.');
+  for(const patrol of director.living()){
+    assert(patrol._storyEntryProgress<0&&!game._inView(patrol,32),'Initial searchers enter offscreen from the authored approach behind the wake point.');
+    assert(director._reachable(foot(patrol),foot(game.player),patrol.r),'The rear search route is physically reachable through the existing forest.');
+  }
+  for(let seconds=0;seconds<12&&!story._found();seconds++)simulate(game,director,1);
+  assert(story._found(),'Waiting at the wake point is eventually discovered by actual patrol movement, without a discovery countdown.');
+  director.clear();director.stopped=false;
   const firstExit=director._routeAt(450);game.player.x=firstExit.x;game.player.y=firstExit.y-groundOffset(game.player,true);
   director.spawnSearch();
   assert(director.living().length>0,'Walking out of the initial clearing opens offscreen, reachable rear patrol admission.');
@@ -46,13 +77,13 @@ for(const [width,height] of [[540,1080],[1100,650],[1440,900]]){
     assert(game.terrain.isFree(...Object.values(foot(enemy)),enemy.r));
     const nav=terrainNavigation(game.terrain),route=nav.rift.route(foot(enemy),foot(game.player),enemy.r+3,'ground');
     assert(route?.length,'A patrol must connect to the player through the authored region graph.');
-    assert(['shieldguard','frostmage'].includes(enemy.type),'The patrol uses humanoid troops.');
+    assert(['royalguard','royallancer'].includes(enemy.type),'The patrol uses living human search troops.');
     assert(enemy._storyEntryProgress<director.routeProgress-120,'The initial patrol enters from the already-traversed side of the chapter route.');
   }
   simulate(game,director,1.2);assert(distance(foot(patrol),start)>0,'Patrol walks its real route after admission.');
   story.flow.go('escape');simulate(game,director,6);
   assert(director.active().length>=6,'An alert produces sustained local pursuit on both mobile and desktop.');
-  assert(director.living().some(enemy=>enemy.storyLeader&&enemy.bossKind==='ancient'),'A real Boss executor leads the pursuers.');
+  assert(director.living().some(enemy=>enemy.storyLeader&&enemy.bossKind==='searchcaptain'),'A human search captain leads the pursuers through the real Boss executor.');
   assert(director.living().every(enemy=>!enemy.storySearching),'Discovery activates the entire search cohort.');
   const soldier=director.living().find(enemy=>enemy.storyProfile==='soldier');
   assert(soldier.speed<game.player.speed&&soldier.speed>=game.player.speed*.85,'Correct running gains distance from ordinary pursuit without needing the medicine.');
@@ -92,7 +123,8 @@ for(const profile of ['soldier','guard','mage','captain']){
     const p=director._routeAt(progress);game.player.x=p.x;game.player.y=p.y-groundOffset(game.player,true);director.clock+=.1;director._updateProgress(p);
     const point=director._point(profile);assert(point,'Every open rear road admits a legal point.');
     assert(point.along<=director.routeProgress-160,'Turning, standing or walking back never admits the army farther ahead along the authored route.');
-    assert(!game._inView({x:point.x,y:point.y-groundOffset({type:profile.type,r:16}),r:16},64));
+    const r=enemyDefinition(profile.type).r;
+    assert(!game._inView({x:point.x,y:point.y-groundOffset({type:profile.type,r}),r},64));
     assert(Math.abs(director.routeProgress-progress)<1,'Progress stays on the locally travelled branch even when later roads pass nearby.');
   }
   // A later road is geometrically behind the player on this folded route.
@@ -160,11 +192,12 @@ for(const profile of ['soldier','guard','mage','captain']){
 {
   const {game,story,director}=chapter();story.flow.go('search');director.clear();
   const exit=director._routeAt(450);game.player.x=exit.x;game.player.y=exit.y-groundOffset(game.player,true);
-  const original=game.terrain.firstBlocker;
+  const original=game.terrain.firstBlocker,hasBlocker=game.terrain.hasBlocker;
   game.terrain.firstBlocker=()=>({id:'sealed-test-boundary'});
+  game.terrain.hasBlocker=()=>true;
   story.flow.go('escape');director.update(1);
   assert.equal(director.living().length,0,'An unreachable approach cannot fall back to spawning inside the view.');
-  game.terrain.firstBlocker=original;
+  game.terrain.firstBlocker=original;game.terrain.hasBlocker=hasBlocker;
   director.update(2);assert(director.living().length>0,'A temporary blocked approach retries when it becomes usable.');
 }
 

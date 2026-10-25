@@ -1,4 +1,5 @@
 import { getConfigSection } from './content-config.js';
+import { getStoryChapter } from './story-chapters.js';
 import { drawWorldArchiveArt } from './world-archive-art.js';
 import { enemyVisual } from './enemy-visuals.js';
 import { worldArchiveHTML, WORLD_ARCHIVE_WORLDS, WORLD_ARCHIVE_LOCATIONS } from './world-archive.js';
@@ -84,7 +85,7 @@ function stageRecordsHTML(data,difficulty){
 }
 function storyRecordsHTML(data){
   const entries=Object.entries(data.stories||{});
-  return `<section class="archive-stage-records"><h3>剧情记录</h3>${entries.length?`<div class="archive-stage-grid">${entries.map(([id,record])=>`<div class="archive-stage-record" data-story-record="${escape(id)}"><strong>${escape(getConfigSection('story').definitions.find(story=>story.id===id)?.name||id)}</strong><span>完成 <b>${number(record.clears)}</b> 次</span><span>最快 <b>${duration(record.bestTime)}</b></span><span>最近 <b>${duration(record.lastTime)}</b></span></div>`).join('')}</div>`:'<p class="archive-small-note">完成剧情后，在这里留下记录；已完成剧情仍可重玩。</p>'}</section>`;
+  return `<section class="archive-stage-records"><h3>剧情记录</h3>${entries.length?`<div class="archive-stage-grid">${entries.map(([id,record])=>`<div class="archive-stage-record" data-story-record="${escape(id)}"><strong>${escape(getStoryChapter(id)?.name||id)}</strong><span>完成 <b>${number(record.clears)}</b> 次</span><span>最快 <b>${duration(record.bestTime)}</b></span><span>最近 <b>${duration(record.lastTime)}</b></span></div>`).join('')}</div>`:'<p class="archive-small-note">完成剧情后，在这里留下记录；已完成剧情仍可重玩。</p>'}</section>`;
 }
 function recordsHTML(data,difficulty){
   const totals=data.totals||{},best=data.best?.[difficulty]||{},legacy=data.legacy;

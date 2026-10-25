@@ -22,6 +22,7 @@ export function visitSceneUnits(game,visit){
     unit({...merchant,y:merchant.y-19.8,isTownNpc:true,townKind:'merchant',heroId:'traveler',site:merchant,facing:0},true);
   }
   if(game.dungeon?.active||!worldContent)return count;
+  for(const actor of game.quests?.getActors?.()||[])unit(actor,true);
   for(const site of game.settlements?.sites||[]){
     if((site.type!=='merchant'&&site.type!=='angel')||site.state==='spent')continue;
     unit({x:site.x,y:site.y-19.8,isTownNpc:true,townKind:site.type,flying:site.flying,

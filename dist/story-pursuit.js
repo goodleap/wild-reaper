@@ -1,4 +1,5 @@
 import { enemyDefinition } from './enemy-definitions.js';
+import { bossDefinition } from './boss-definitions.js';
 import { initBoss, clearBossAttacks } from './bosses.js';
 import { groundOffset } from './terrain.js';
 import { terrainNavigation } from './terrain-navigation.js';
@@ -51,15 +52,24 @@ export class StoryPursuit {
       if(previous&&segment<1)continue;
       length+=segment;this.route.push({...point,along:length});
     }
-    // The wake point can sit at the edge of the playable shore. This short
-    // continuation only supplies candidates; real terrain must admit them.
     const start=this.route[0],next=this.route.find(point=>distance(point,start)>220)||this.route.at(-1),lengthToNext=distance(start,next)||1;
     this.entryDirection={x:(next.x-start.x)/lengthToNext,y:(next.y-start.y)/lengthToNext};
+    // Initial searchers approach through an actual rear road, even before the
+    // hero moves. Extending the outgoing heading backwards would cut straight
+    // through the forest and leave a stationary hero without any searchers.
+    this.rearRoute=[];
+    if(this.story.paths.entry?.length){
+      const entry=[...this.story.paths.entry];
+      if(distance(entry[0],start)<distance(entry.at(-1),start))entry.reverse();
+      let previous=start,along=0;
+      for(let i=entry.length-1;i>=0;i--){const segment=distance(previous,entry[i]);if(segment<1)continue;along-=segment;this.rearRoute.unshift({...entry[i],along});previous=entry[i];}
+    }
+    this.searchEnd=this._project(this.story.paths.search.at(-1))?.along??0;
   }
   _project(point,{near=null,span=Infinity}={}){
     this._ensureRoute();let best=null;
     const start=this.route[0],back={x:start.x-this.entryDirection.x*900,y:start.y-this.entryDirection.y*900,along:-900};
-    const points=[back,...this.route];
+    const points=[...(this.rearRoute.length?this.rearRoute:[back]),...this.route];
     for(let i=1;i<points.length;i++){
       const a=points[i-1],b=points[i],dx=b.x-a.x,dy=b.y-a.y,len2=dx*dx+dy*dy;
       const t=Math.max(0,Math.min(1,((point.x-a.x)*dx+(point.y-a.y)*dy)/len2)),along=a.along+(b.along-a.along)*t;
@@ -71,9 +81,10 @@ export class StoryPursuit {
   }
   _routeAt(along){
     this._ensureRoute();const start=this.route[0];
-    if(along<=0)return {x:start.x+this.entryDirection.x*along,y:start.y+this.entryDirection.y*along,dx:this.entryDirection.x,dy:this.entryDirection.y};
-    for(let i=1;i<this.route.length;i++){
-      const a=this.route[i-1],b=this.route[i];if(along>b.along)continue;
+    if(along<=0&&!this.rearRoute.length)return {x:start.x+this.entryDirection.x*along,y:start.y+this.entryDirection.y*along,dx:this.entryDirection.x,dy:this.entryDirection.y};
+    const points=along<0?[...this.rearRoute,start]:this.route;
+    for(let i=1;i<points.length;i++){
+      const a=points[i-1],b=points[i];if(along>b.along)continue;
       const length=b.along-a.along,t=(along-a.along)/length;
       return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,dx:(b.x-a.x)/length,dy:(b.y-a.y)/length};
     }
@@ -88,7 +99,7 @@ export class StoryPursuit {
     if(projection)this.routeProgress=projection.along;
     this.lastPlayer={...p};
   }
-  _outside(point,radius,type){return !this.game._inView({x:point.x,y:point.y-groundOffset({type,r:radius}),r:radius},this.config.spawnMargin);}
+  _outside(point,radius,type,bossKind){return !this.game._inView({x:point.x,y:point.y-groundOffset({type,bossKind,r:radius}),r:radius},this.config.spawnMargin);}
   _reachable(point,target,radius){
     const nav=terrainNavigation(this.game.terrain),r=radius+3;
     if(nav.clearSegment(point,target,r,'ground'))return true;
@@ -139,7 +150,7 @@ export class StoryPursuit {
     if(cached&&cached.terrain===g.terrain&&cached.revision===(g.terrain.structureRevision||0)&&cached.blocker===g.terrain.firstBlocker&&cached.width===g.viewWidth&&cached.height===g.viewHeight&&distance(cached.player,p)<48&&Math.abs(cached.progress-this.routeProgress)<64&&(!forward||Math.cos(cached.angle-forward.angle)>.985))return cached;
     const maximum=this.activeRadius()*1.8,points=[];
     if(mode==='rear'){
-      for(let along=this.routeProgress-160;along>=Math.max(-900,this.routeProgress-maximum);along-=48){
+      for(let along=this.routeProgress-160;along>=Math.max(this.rearRoute[0]?.along??-900,this.routeProgress-maximum);along-=48){
         const center=this._routeAt(along);
         for(const lateral of [0,32,-32,64,-64,96,-96])points.push({x:center.x-center.dy*lateral,y:center.y+center.dx*lateral,along,checked:false,reachable:false});
       }
@@ -155,7 +166,7 @@ export class StoryPursuit {
     this._entries.set(key,state);return state;
   }
   _point(profile) {
-    const g=this.game,p=foot(g.player),r=enemyDefinition(profile.type).r;
+    const g=this.game,p=foot(g.player),r=profile.type==='boss'?(bossDefinition(profile.bossKind).r??enemyDefinition('boss').r):enemyDefinition(profile.type).r;
     this._updateProgress(p);
     if(this._admissionBudget?.clock!==this.clock)this._admissionBudget={clock:this.clock,paths:6,candidates:96};
     const budget=this._admissionBudget,state=this._entryState(profile,p,r),maximum=this.activeRadius()*1.8;
@@ -167,7 +178,7 @@ export class StoryPursuit {
     // tick. A sealed approach never repeats thousands of full route searches
     // for every member of the same squad in a single frame.
     const living=this.living();
-    const available=point=>this._outside(point,r,profile.type)&&distance(point,p)<=maximum&&(state.mode!=='rear'||point.along<=this.routeProgress-120)&&(state.mode!=='flanks'||this._outsideForward(point,p,r+5))&&g.environment?.isHazardFree?.(point.x,point.y,r+5)!==false&&!living.some(e=>distance(foot(e),point)<e.r+r+12);
+    const available=point=>this._outside(point,r,profile.type,profile.bossKind)&&distance(point,p)<=maximum&&(state.mode!=='rear'||point.along<=this.routeProgress-120)&&(state.mode!=='flanks'||this._outsideForward(point,p,r+5))&&g.environment?.isHazardFree?.(point.x,point.y,r+5)!==false&&!living.some(e=>distance(foot(e),point)<e.r+r+12);
     const admitted=point=>{this._nextSector=(point.sector??-1)+1;return {x:point.x,y:point.y,along:point.along??this._project(point)?.along,sector:point.sector,mode:state.mode};};
     // Rotate successful arrivals among the available sides, including cached
     // entrances, so one convenient rear entrance cannot starve both flanks.
@@ -211,6 +222,7 @@ export class StoryPursuit {
       movementSurge:false,
       hp:profile.hp,maxHp:profile.hp,xp:profile.xp,_storyInitialHp:profile.hp,_navTimer:0,
       _storyAdmission:this.clock+this.config.admissionSeconds,_storyFarSince:null,_storyEntryProgress:point.along,_storyEntrySector:point.sector,_storyEntryMode:point.mode});
+    if(options.search)enemy._storySearchProgress=(point.along??0)+160;
     if(profile.behavior==='chase')enemy.specialist=null;
     g._effect?.(enemy.x,point.y,'rescueWarning',this.config.admissionSeconds,enemy.r+8,'#c8a58b',undefined,{seed:enemy.id});
     return enemy;
@@ -268,7 +280,13 @@ export class StoryPursuit {
     if(this.clock<enemy._storyAdmission){enemy.guardActive=false;return true;}
     if(enemy.storySearching){
       enemy.guardActive=false;
-      this.game._moveEnemy(enemy,dt,foot(this.game.player));return true;
+      // Patrol the road and the abandoned wake point, not the unseen player's
+      // exact coordinates. Sight or being attacked changes the whole group to
+      // pursuit through the chapter's normal discovery event.
+      this._ensureRoute();const end=this.searchEnd;
+      const progress=Math.min(end,enemy._storySearchProgress??0),target=this._routeAt(progress);
+      if(distance(foot(enemy),target)<22)enemy._storySearchProgress=Math.min(end,progress+160);
+      this.game._moveEnemy(enemy,dt,target);return true;
     }
     enemy.guardActive=true;
     if(this.config.profiles[enemy.storyProfile]?.behavior==='chase'){

@@ -263,6 +263,13 @@ export class PropArt {
     if(!options.dense){c.save();c.globalAlpha*=.55;spark(c,item.x+9,item.y-19+bob,1.5,item.type==='herb'?'#d5e9ac':item.type==='magnet'?'#e7d7f6':'#ffe6aa');c.restore();}return true;
   }
   drawEnemyBullet(c,b,options=OPTIONS){
+    if(b.type==='royalBolt'){
+      c.save();c.translate(b.x,b.y);c.rotate(Math.atan2(b.vy||0,b.vx||0));
+      path(c,[[-14,0],[5,0]],'#5f5644',2.4);path(c,[[-12,-.6],[4,-.6]],'#d5ba83',1);
+      poly(c,[[8,0],[1,-3],[2,0],[1,3]],'#d8ded0','#566158',.8);
+      poly(c,[[-10,0],[-15,-3],[-18,-3],[-14,0],[-18,3],[-15,3]],'#a0aaa0','#566158',.65);
+      c.restore();return true;
+    }
     const image=this._frame(b.type==='bloom'?'bullet:bloom':'bullet:spore'),s=(b.r||6)/6,dx=b.vx||0,dy=b.vy||0,d=Math.hypot(dx,dy)||1;
     // Filled, tapered toxic afterimage; the solid head remains the hit radius.
     if(!options.reduced){const nx=dx/d,ny=dy/d,len=options.dense?9:16;c.fillStyle=b.type==='bloom'?'#b47c9e4d':'#8a658e42';c.beginPath();c.moveTo(b.x-ny*s*3,b.y+nx*s*3);c.quadraticCurveTo(b.x-nx*len-ny*s*2,b.y-ny*len+nx*s*2,b.x-nx*(len+7),b.y-ny*(len+7));c.quadraticCurveTo(b.x-nx*len+ny*s*2,b.y-ny*len-nx*s*2,b.x+ny*s*3,b.y-nx*s*3);c.closePath();c.fill();}

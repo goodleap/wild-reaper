@@ -53,6 +53,26 @@ const skipped=new Game({mode:'story'});assert(skipped.story.advanceDialogue(true
 assert.equal(skipped.story.step,'search','Skip advances only the current conversation, not the whole chapter.');
 assert.equal(skipped.story.completed,false);assert.equal(skipped.story.pillUsed,false);skipped.dispose('quit');
 
+{
+  const patrolGame=new Game({mode:'story'}),patrolStory=patrolGame.story;
+  patrolGame.viewWidth=1440;patrolGame.viewHeight=900;
+  patrolStory.advanceDialogue(true);patrolStory.pursuit.clear();
+  const patrol=patrolGame._spawnEnemy('royalguard',1),p=foot(patrolGame.player);
+  Object.assign(patrol,{x:p.x+260,y:p.y-groundOffset(patrol),storyId:patrolStory.id,storyPursuer:true,storySearching:true,_storyInitialHp:patrol.hp});
+  patrolGame.terrain.firstBlocker=()=>null;
+  scriptTick(patrolGame,.05);
+  const cue=patrolStory.getSceneDialogue()[0];assert.equal(cue?.speaker,'searcher');assert.equal(cue.actor,patrol);
+  assert.match(cue.text,/碎印/);assert.equal(patrolStory.step,'search','The search order is observable before the hero is found.');
+  patrol.hp--;scriptTick(patrolGame,.05);assert.equal(patrolStory.step,'escape');
+  scriptTick(patrolGame,2);
+  assert.equal(patrolStory.getSceneDialogue()[0].id,cue.id,'Discovery and combat do not replace a partially displayed short cue.');
+  scriptTick(patrolGame,1.5);
+  const alert=patrolStory.getSceneDialogue()[0];assert.notEqual(alert.id,cue.id);assert.match(alert.text,/找到了/);
+  patrol.hp=0;scriptTick(patrolGame,.05);
+  assert(patrolStory.getSceneDialogue().every(line=>line.actor!==patrol),'A dead searcher cannot retain a bubble or a queued actor reference.');
+  patrolGame.dispose();assert.deepEqual(patrolStory.getSceneDialogue(),[]);
+}
+
 // These isolated stage fixtures exercise timing and lifecycle invariants. The
 // separate route test reaches the same stages through real movement/combat.
 const medicine=new Game({mode:'story'}),chapter=medicine.story;

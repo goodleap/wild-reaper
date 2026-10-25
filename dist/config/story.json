@@ -2,14 +2,54 @@
   "definitions": [
     {
       "id": "prologue",
-      "name": "序章 · 林海余烬",
+      "name": "序章 · 郊野重生",
       "worldId": "rift-forest",
-      "heroIds": ["traveler"],
-      "weaponIds": ["sword"],
-      "anchors": {"wakeArea": "01", "meetingArea": "02", "refugeArea": "03", "searchPassage": "01-02", "escapePassage": "02-03"},
-      "steps": ["awakening", "search", "escape", "escort", "pill", "burst", "fading", "sanctuary", "judgment", "conversation", "complete"],
-      "rules": {"noticeRange": 185, "arrivalRadius": 160, "pillDuration": 20, "moveSpeedBonus": 1, "damageReductionBonus": 0.95, "damageReductionCap": 0.99, "guardRadius": 330, "guardReduction": 0.8, "guardHealing": 0.08, "sanctuaryWaveSeconds": 9, "judgmentDamage": 9999, "judgmentDuration": 3, "judgmentWindup": 0.3, "prayerDuration": 3, "prayerRadius": 260, "arrivalDuration": 1.1},
-      "summonLine": "守望者，请回应古老的誓约，护住此地！",
+      "heroIds": [
+        "traveler"
+      ],
+      "weaponIds": [
+        "sword"
+      ],
+      "anchors": {
+        "wakeArea": "04",
+        "meetingArea": "05",
+        "refugeArea": "06",
+        "searchPassage": "04-05",
+        "escapePassage": "05-06",
+        "entryPassage": "02-04-west"
+      },
+      "steps": [
+        "awakening",
+        "search",
+        "escape",
+        "escort",
+        "pill",
+        "burst",
+        "fading",
+        "sanctuary",
+        "judgment",
+        "conversation",
+        "complete"
+      ],
+      "rules": {
+        "noticeRange": 185,
+        "arrivalRadius": 160,
+        "pillDuration": 20,
+        "moveSpeedBonus": 1,
+        "damageReductionBonus": 0.95,
+        "damageReductionCap": 0.99,
+        "guardRadius": 330,
+        "guardReduction": 0.8,
+        "guardHealing": 0.08,
+        "sanctuaryWaveSeconds": 9,
+        "judgmentDamage": 9999,
+        "judgmentDuration": 3,
+        "judgmentWindup": 0.3,
+        "prayerDuration": 3,
+        "prayerRadius": 260,
+        "arrivalDuration": 1.1
+      },
+      "summonLine": "信标已经启动。靠过来，掩护我等天使回应！",
       "pursuit": {
         "totalLimit": 80,
         "leaderLimit": 2,
@@ -20,7 +60,7 @@
         "admissionSeconds": 0.7,
         "profiles": {
           "soldier": {
-            "type": "shieldguard",
+            "type": "royalguard",
             "behavior": "chase",
             "speed": 288,
             "hp": 62,
@@ -28,7 +68,7 @@
             "xp": 4
           },
           "guard": {
-            "type": "shieldguard",
+            "type": "royallancer",
             "behavior": "native",
             "speed": 260,
             "hp": 145,
@@ -36,7 +76,7 @@
             "xp": 8
           },
           "mage": {
-            "type": "frostmage",
+            "type": "royalmage",
             "behavior": "native",
             "speed": 260,
             "hp": 75,
@@ -45,13 +85,21 @@
           },
           "captain": {
             "type": "boss",
-            "bossKind": "ancient",
+            "bossKind": "searchcaptain",
             "behavior": "native",
             "leader": true,
             "speed": 280,
             "hp": 1450,
             "damage": 20,
             "xp": 30
+          },
+          "archer": {
+            "type": "royalarbalist",
+            "behavior": "native",
+            "speed": 260,
+            "hp": 65,
+            "damage": 7,
+            "xp": 8
           }
         },
         "stages": {
@@ -77,6 +125,7 @@
               "soldier",
               "guard",
               "soldier",
+              "archer",
               "mage"
             ],
             "leader": "captain",
@@ -92,6 +141,7 @@
               "soldier",
               "guard",
               "soldier",
+              "archer",
               "mage"
             ],
             "leader": "captain",
@@ -107,6 +157,7 @@
               "soldier",
               "guard",
               "soldier",
+              "archer",
               "mage"
             ],
             "leader": "captain",
@@ -128,6 +179,7 @@
               "soldier",
               "guard",
               "soldier",
+              "archer",
               "mage"
             ],
             "leader": "captain",
@@ -149,6 +201,7 @@
               "soldier",
               "guard",
               "soldier",
+              "archer",
               "mage"
             ],
             "leader": "captain",
@@ -170,6 +223,7 @@
               "soldier",
               "guard",
               "soldier",
+              "archer",
               "mage"
             ],
             "leader": "captain",
@@ -191,6 +245,7 @@
               "soldier",
               "guard",
               "soldier",
+              "archer",
               "mage"
             ],
             "leader": "captain",
@@ -216,41 +271,429 @@
           }
         }
       },
-      "dialogueScopes": {"awakening": "chapter", "search": "stage", "escape": "stage", "escort": "stage", "pill": "stage", "burst": "stage", "fading": "stage", "sanctuary": "stage", "judgment": "stage", "conversation": "chapter"},
+      "dialogueScopes": {
+        "awakening": "chapter",
+        "search": "stage",
+        "escape": "stage",
+        "escort": "stage",
+        "pill": "stage",
+        "burst": "stage",
+        "fading": "stage",
+        "sanctuary": "stage",
+        "judgment": "stage",
+        "conversation": "chapter"
+      },
       "dialogue": {
         "awakening": [
-          {"speaker": "player", "text": "我本是昭衡国王子。论剑术、论风度，谁敢与我争锋？"},
-          {"speaker": "player", "text": "可沈玄策借镇界仪式夺权，把我推下祭井，还诬我引来灾变。"},
-          {"speaker": "player", "text": "我重生了……这一次，绝不重蹈覆辙。先循着林间道路离开营地。"}
+          {
+            "speaker": "player",
+            "text": "我本是昭衡国王子。论剑术，王城教习没什么新招能教我。"
+          },
+          {
+            "speaker": "player",
+            "text": "论风度，宴席上的镜子都得多擦几遍。"
+          },
+          {
+            "speaker": "player",
+            "text": "可继位礼还没办完，摄政沈玄策就借镇界祭构陷我，把我推下祭井。"
+          },
+          {
+            "speaker": "player",
+            "text": "井底那一下……我记得很清楚。我已经死了。"
+          },
+          {
+            "speaker": "player",
+            "text": "城外的风……还有这身疼。我重生了？这一次，我不会再重蹈覆辙……"
+          }
         ],
-        "search": [{"speaker": "player", "text": "脚步声……有人在搜林。先看清退路。"}],
-        "escape": [{"speaker": "player", "text": "被发现了！东边谷地有路，不能在这里被围住。"}],
+        "search": [
+          {
+            "speaker": "searcher",
+            "text": "沿旧路搜，确认那人的生死，把碎印带回去！"
+          },
+          {
+            "speaker": "player",
+            "text": "连我躺过哪儿都要查。先离开包围，再算这笔账。"
+          }
+        ],
+        "escape": [
+          {
+            "speaker": "searcher",
+            "text": "找到了！留活口，别让他跑了！"
+          },
+          {
+            "speaker": "player",
+            "text": "刚醒就这么热闹。想留我，也得先追得上。"
+          }
+        ],
         "escort": [
-          {"speaker": "princess", "text": "那枚佩饰……你是昭衡的王子？"},
-          {"speaker": "player", "text": "若你是来领赏的，能否晚些再谈？"},
-          {"speaker": "princess", "text": "我是霁川公主。先跟我走，路口还能争取一点时间！"}
+          {
+            "speaker": "princess",
+            "text": "这边有路！先离开他们的视线。"
+          },
+          {
+            "speaker": "player",
+            "text": "姑娘眼光不错，挑中了最值得救的一个。"
+          },
+          {
+            "speaker": "princess",
+            "text": "他们的腰牌我认得。你先活着出去，再说别的。"
+          }
         ],
         "pill": [
-          {"speaker": "princess", "text": "拿着这颗燃脉丸。服下后能激发潜力，但药力只有二十秒。"},
-          {"speaker": "princess", "text": "前面的誓约之地能唤来守望者。跟紧我，到那里再掩护我召唤。"},
-          {"speaker": "player", "text": "你带路，我来击退追兵！"}
+          {
+            "speaker": "player",
+            "text": "你认得他们，却敢一个人接应。看来不是碰巧路过。"
+          },
+          {
+            "speaker": "princess",
+            "text": "我在找被他们押走的一名医官。你是他们急着抓回去的人，值得问。"
+          },
+          {
+            "speaker": "princess",
+            "text": "拿着燃脉丸，准备好再服。能短时激发潜力，药力会退。"
+          },
+          {
+            "speaker": "princess",
+            "text": "沿旧路去渡口空地。我带了求援信标，到那里掩护我召唤天使。"
+          },
+          {
+            "speaker": "player",
+            "text": "你带路，我来把出口争回来！"
+          }
         ],
-        "burst": [{"speaker": "player", "text": "这股力量……王庭剑阵，随我破敌！"}],
+        "burst": [
+          {
+            "speaker": "player",
+            "text": "这才像话。沈玄策，你真该亲自来看看！"
+          }
+        ],
         "fading": [
-          {"speaker": "player", "text": "剑……怎么突然这么沉？药效尽了！"},
-          {"speaker": "princess", "text": "别逞强！往采石盆地走，守望者已回应祈愿！"}
+          {
+            "speaker": "player",
+            "text": "力气……退得真够干脆。"
+          },
+          {
+            "speaker": "princess",
+            "text": "收住，别照刚才的打法硬撞。向渡口空地靠拢！"
+          }
         ],
         "sanctuary": [
-          {"speaker": "princess", "text": "药效燃尽了！跟紧我，留在天使的守护光环里，撑到引雷完成！"}
+          {
+            "speaker": "princess",
+            "text": "药效燃尽了！留在天使的守护光环里，撑到引雷完成！"
+          }
         ],
-        "judgment": [{"speaker": "angel", "text": "此雷为护生而降——退开！"}],
+        "judgment": [
+          {
+            "speaker": "angel",
+            "text": "退到光后。天雷，落！"
+          }
+        ],
         "conversation": [
-          {"speaker": "player", "text": "我死于摄政沈玄策之手。他夺了王国，还在搜捕这些人。"},
-          {"speaker": "princess", "text": "我追查押运队才来到林海。失踪的难民，都被送往祭场。"},
-          {"speaker": "angel", "text": "林海北方留有押运痕迹。真相，需要你们自己去找。"},
-          {"speaker": "player", "text": "我曾只想着夺回王位。这一次，先救人，再讨旧账。"},
-          {"speaker": "princess", "text": "等安顿好获救的人，我们一同启航。王子，这一次，别再独自迎战。"}
+          {
+            "speaker": "princess",
+            "text": "现在说吧，他们为什么追你？"
+          },
+          {
+            "speaker": "player",
+            "text": "我是昭衡国王子。沈玄策在镇界祭上害我，醒来就在这片郊野。"
+          },
+          {
+            "speaker": "princess",
+            "text": "霁川公主。我在查一桩旧案，失踪医官是知情人。这批人的暗记，我追了很久。"
+          },
+          {
+            "speaker": "player",
+            "text": "我身上还留着这块旧印碎片。天使，你能看出什么？"
+          },
+          {
+            "speaker": "angel",
+            "text": "有过异常祭力的痕迹，如今已经沉寂。我解释不了你醒来的经过。"
+          },
+          {
+            "speaker": "player",
+            "text": "那就先留着，迟早能把这件事说清。"
+          },
+          {
+            "speaker": "angel",
+            "text": "我还要继续巡行。以后遇到危险，先准备你们自己的退路。"
+          },
+          {
+            "speaker": "princess",
+            "text": "我雇的老登在郊外接头点查路线。先去见他，或许能找到押运队。"
+          },
+          {
+            "speaker": "player",
+            "text": "同行，线索互通。各自的事，各自拿主意；改计划先告诉同行的人。"
+          },
+          {
+            "speaker": "princess",
+            "text": "成交。准备好了，就去接头点。"
+          }
         ]
+      }
+    },
+    {
+      "id": "false-orders",
+      "name": "第一章 · 王令之下",
+      "chapter": 1,
+      "requiredChapterId": "prologue",
+      "worldId": "rift-forest",
+      "heroIds": [
+        "traveler"
+      ],
+      "weaponIds": [
+        "sword"
+      ],
+      "summary": "与老登会合，查访征粮营地，带回原令、运输记录和被扣的装粮人。",
+      "completionSummary": "征粮原令与运输底页已带出，被扣人员获救。押运官沿北路逃走，旧医官的线索指向边境药站。",
+      "anchors": {
+        "contactArea": "06",
+        "levyArea": "05",
+        "campArea": "15",
+        "exitArea": "16"
+      },
+      "steps": [
+        "meeting",
+        "notice",
+        "witness",
+        "scout",
+        "infiltrate",
+        "rescue",
+        "withdraw",
+        "debrief",
+        "northroad",
+        "departure",
+        "complete"
+      ],
+      "rules": {
+        "arrivalRadius": 80,
+        "interactionRadius": 95,
+        "guardNotice": 235,
+        "recovery": 0.45
+      },
+      "kind": "chapter",
+      "startingBuild": {
+        "sword": 3,
+        "barrier": 1,
+        "vitality": 2
+      },
+      "dialogue": {
+        "meeting": [
+          {
+            "speaker": "elder",
+            "text": "人接到了？还带了一位。先说好，寻人的价钱里，可没算与官军结仇。"
+          },
+          {
+            "speaker": "princess",
+            "text": "他们也在追他。营地的押运暗记，与旧医官那条线一样。"
+          },
+          {
+            "speaker": "player",
+            "text": "昭衡国王子。如今身上银子不多，惹来的麻烦倒很值钱。"
+          },
+          {
+            "speaker": "elder",
+            "text": "头衔暂不折现。公主那笔委托照旧，新添的风险，你们得跟我一起担。"
+          },
+          {
+            "speaker": "player",
+            "text": "成交。你找路，我开路。"
+          },
+          {
+            "speaker": "elder",
+            "text": "先去猎场看看。官军在那里收粮，文书上盖着王室的印。"
+          }
+        ],
+        "notice": [
+          {
+            "speaker": "document",
+            "text": "「王子静养，摄政奉命代行。沿道各村按册供粮，不得延误。」"
+          },
+          {
+            "speaker": "player",
+            "text": "我还没坐上王位，倒先替别人收起粮了。"
+          },
+          {
+            "speaker": "princess",
+            "text": "这是张贴的副本。去问问交粮的人，原件由谁保管。"
+          }
+        ],
+        "witness": [
+          {
+            "speaker": "villager",
+            "text": "上一回刚交完，这回又加了数。家里剩下的，连下种都不够。"
+          },
+          {
+            "speaker": "player",
+            "text": "押运官每次都带新文书？"
+          },
+          {
+            "speaker": "villager",
+            "text": "对。我们认不得王城的人，只认得那个印。你若真能帮忙，先去登记棚看原令。"
+          },
+          {
+            "speaker": "elder",
+            "text": "棚在北边。签收底册也在那里，不能只拿张告示回去。"
+          }
+        ],
+        "scout": [
+          {
+            "speaker": "elder",
+            "text": "旧水沟填了，哨位也换过。熟路得重新看。"
+          },
+          {
+            "speaker": "princess",
+            "text": "左侧传令架管着外援。先拆它，可以少打一场；直接进棚，就得防着后面来人。"
+          },
+          {
+            "speaker": "player",
+            "text": "那就先看清，走哪边由我们选。"
+          }
+        ],
+        "debrief": [
+          {
+            "speaker": "princess",
+            "text": "原令写着摄政奉命代行。它能证明有人借王子的名义征粮，印记还得与旧底册核对。"
+          },
+          {
+            "speaker": "player",
+            "text": "沈玄策把字写得很干净，事却未必做得干净。"
+          },
+          {
+            "speaker": "elder",
+            "text": "路线簿不干净。粮车绕进不通军营的支路，还单列了送人的数目。"
+          },
+          {
+            "speaker": "princess",
+            "text": "这里写着旧医官暂留边境药站，受控候调。他还活着，但进入药站的路线缺了一截。"
+          },
+          {
+            "speaker": "elder",
+            "text": "我找原先的线人盯住交接。那押运官跑向北路，我们去粮道接着查。"
+          },
+          {
+            "speaker": "worker",
+            "text": "我们会把今天的事说出去。可征粮的人还会来，你们真能让他们停下吗？"
+          },
+          {
+            "speaker": "player",
+            "text": "我不拿名字向你担保。看我们接下来做什么。"
+          }
+        ],
+        "departure": [
+          {
+            "speaker": "princess",
+            "text": "人已经沿渡口旧路离开，证据也收好了。北边就是粮道。"
+          },
+          {
+            "speaker": "player",
+            "text": "走。借我的名下令，就得准备好向我交账。"
+          }
+        ]
+      },
+      "encounters": {
+        "troops": {
+          "royalguard": {
+            "hp": 260,
+            "speed": 245,
+            "damage": 10,
+            "xp": 5
+          },
+          "royallancer": {
+            "hp": 230,
+            "speed": 245,
+            "damage": 10,
+            "xp": 5
+          },
+          "royalarbalist": {
+            "hp": 160,
+            "speed": 245,
+            "damage": 10,
+            "xp": 5
+          },
+          "royalmage": {
+            "hp": 165,
+            "speed": 245,
+            "damage": 10,
+            "xp": 5
+          }
+        },
+        "bosses": {
+          "escortmarshal": {
+            "hp": 1200,
+            "speed": 235,
+            "damage": 15,
+            "xp": 20
+          },
+          "searchcaptain": {
+            "hp": 850,
+            "speed": 250,
+            "damage": 13,
+            "xp": 20
+          }
+        },
+        "reinforcement": {
+          "firstDelay": 6,
+          "interval": 18,
+          "waves": 2
+        },
+        "support": {
+          "damage": 15,
+          "interval": 1.2,
+          "range": 210
+        }
+      },
+      "sceneLines": {
+        "signalDisabled": {
+          "speaker": "elder",
+          "text": "传令绳断了。棚里的人得自己来收拾残局。"
+        },
+        "exposedOfficer": {
+          "speaker": "officer",
+          "text": "密捕令烧掉！拦住他们，后面的交接照旧！"
+        },
+        "exposedPrincess": {
+          "speaker": "princess",
+          "text": "原令在桌上，运输底页在箱里。人也要带出去！"
+        },
+        "withdraw": {
+          "speaker": "elder",
+          "text": "沿南侧旧路撤，我看着后面。别把人落在营地！"
+        },
+        "workerDeparture": {
+          "speaker": "worker",
+          "text": "路清了，我们往渡口去。你们也当心。"
+        },
+        "recordsTaken": {
+          "speaker": "player",
+          "text": "原令到手。印和落款，都留着核对。"
+        },
+        "ledgerTaken": {
+          "speaker": "player",
+          "text": "底页还在。除了粮车，他们还押着人。"
+        },
+        "workersFreed": {
+          "speaker": "worker",
+          "text": "我们是被扣来装粮的！带我们离开这儿！"
+        },
+        "healed": {
+          "speaker": "princess",
+          "text": "伤口先处理好。接下来我跟着你。"
+        },
+        "officerEscaped": {
+          "speaker": "elder",
+          "text": "押运官往北跑了。先带人和文书出去，别空手追进第二道岗。"
+        },
+        "reinforcements": {
+          "speaker": "elder",
+          "text": "北哨的援兵到了，传令架还没断！"
+        },
+        "rescueComplete": {
+          "speaker": "worker",
+          "text": "到了……文书都在你那里？我们可以作证。"
+        }
       }
     }
   ]

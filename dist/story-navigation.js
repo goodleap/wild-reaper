@@ -8,7 +8,7 @@ import { NavigationRoute, pointOnRoute, projectOnRoute } from './navigation-rout
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const foot=actor=>({x:actor.x,y:actor.y+groundOffset(actor,!!actor.heroId)});
 const TRAVEL=new Set(['search','escape','escort','burst','fading']);
-const LABELS={search:'林间谷地',burst:'救援点',escape:'会合处',escort:'突围路口',fading:'救援点',sanctuary:'守护光环',judgment:'守护光环',pill:'公主',conversation:'公主'};
+const LABELS={search:'郊外旧路',burst:'救援点',escape:'会合处',escort:'突围路口',fading:'救援点',sanctuary:'守护光环',judgment:'守护光环',pill:'公主',conversation:'公主'};
 
 // Display and guide actors consume one persistent, complete walking route.
 export class StoryNavigation {

@@ -50,7 +50,7 @@ const build=complete.build,xp=complete.player.xp;
 complete.sceneContent.restoreWorld=()=>assert.fail('A chapter victory must not restore a free exploration scene.');
 complete.story.advanceDialogue(true);complete.story.flow.go('conversation');complete.story.advanceDialogue(true);
 assert(!complete.sceneTransition.active,'Skipping the conclusion cannot start departure.');
-assert.equal(complete.story.getDialogue().nextLabel,'正式启航');assert(complete.story.advanceDialogue(false));
+assert.equal(complete.story.getDialogue().nextLabel,'正式启航');assert.equal(complete.story.getDialogue().departure,true);assert(complete.story.advanceDialogue(false));
 for(let i=0;i<32&&complete.sceneTransition.active;i++)complete.update(.025,{x:1,y:1,skill:true});
 assert(complete.story.completed);assert.equal(complete.status,'victory');emptyWorld(complete);
 assert.equal(complete.terrain,terrain,'The victory frame uses the same borrowed natural map.');

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { expectedValidator, waitForValidator } from './config-validator-ready.mjs';
 const work=process.env.GITHUB_WORKSPACE||process.cwd();
 const temp=path.join(process.env.RUNNER_TEMP||os.tmpdir(),'wild-reaper-config');
 fs.mkdirSync(temp,{recursive:true,mode:0o700});
@@ -30,8 +31,14 @@ try {
   const policy=JSON.parse(fs.readFileSync(path.join(work,'config-compatibility.json'),'utf8'));
   function number(value){const m=/^v0\.0\.(0|[1-9]\d*)$/.exec(value);if(!m||!Number.isSafeInteger(Number(m[1])))throw new Error('INVALID_COMPATIBILITY_POLICY');return Number(m[1]);}
   if(number(policy.clientMinVersion)>number(policy.clientMaxVersion))throw new Error('INVALID_COMPATIBILITY_INTERVAL');
-  const tools=path.join(temp,'tools'),archive=path.join(temp,'tools.tar.gz');fs.mkdirSync(tools,{recursive:true});
-  fs.writeFileSync(archive,ssh('config-tools',{encoding:null}),{mode:0o600});run('tar',['-xzf',archive,'-C',tools]);
+  const tools=path.join(temp,'tools'),archive=path.join(temp,'tools.tar.gz');
+  const expected=expectedValidator(work);
+  const ready=await waitForValidator({expected,fetchTools:()=>{
+   fs.rmSync(tools,{recursive:true,force:true});fs.mkdirSync(tools,{recursive:true});
+   fs.writeFileSync(archive,ssh('config-tools',{encoding:null,timeout:30000}),{mode:0o600});
+   run('tar',['-xzf',archive,'-C',tools],{timeout:10000});return tools;
+  },onWait:state=>console.log(`CONFIG_VALIDATOR=WAITING attempt=${state.attempt} changedFiles=${state.mismatches} remainingSeconds=${state.remainingSeconds}`)});
+  console.log(`CONFIG_VALIDATOR=READY attempts=${ready.attempts}`);
   const prepared=path.join(temp,'prepared.json');
   run(process.execPath,[path.join(tools,'scripts/prepare-config.mjs'),'--game-dir',work,'--client-version','v0.0.'+run('git',['rev-list','--count','HEAD']).trim(),'--out',prepared,'--client-min',policy.clientMinVersion,'--client-max',policy.clientMaxVersion],{cwd:tools});
   const source=digest(process.env.GITHUB_SHA||run('git',['rev-parse','HEAD']).trim()),tree=digest(run('git',['rev-parse',source+':dist/config']).trim()),compatibility=digest(run('git',['rev-parse',source+':config-compatibility.json']).trim()),c=connection();

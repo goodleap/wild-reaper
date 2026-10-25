@@ -12,9 +12,12 @@ const positive=(value,keys,path)=>numeric(value,keys,path,.000001);
 const refs=(values,keys,path,min=0)=>{for(const item of array(values,path,min))reference(item,keys,path);};
 const unique=(values,path)=>{if(new Set(values).size!==values.length)fail(path,'duplicate ID');};
 const specialistIds=['rootbinder','boglurker','prismguard','tidepriest','shieldguard','stoneape','windhunter','frostmage','flamelizard'];
-const enemyBehaviors=new Set(['chase','boar','spore','boss','specialist']);
-const enemyVisuals=new Set(['slime','bat','beetle','brute','boar','spore','boss','ancient','bloom','spiderling',...specialistIds,'broodmother','deepcaller','frostcrown','furnace']);
-const bossBehaviors=new Set(['ancient','bloom','broodmother','deepcaller','frostcrown','furnace']);
+const humanIds=['royalguard','royallancer','royalarbalist','royalmage'];
+const humanBossIds=['searchcaptain','escortmarshal'];
+const enemyBehaviors=new Set(['chase','boar','spore','boss','specialist','human']);
+const enemyVisuals=new Set(['slime','bat','beetle','brute','boar','spore','boss','ancient','bloom','spiderling',...specialistIds,...humanIds,...humanBossIds,'broodmother','deepcaller','frostcrown','furnace']);
+const requiredBosses=['ancient','bloom','broodmother','deepcaller','frostcrown','furnace'];
+const bossBehaviors=new Set([...requiredBosses,...humanBossIds]);
 const affixBehaviors=new Set(['shield','swift','summoner']);
 const codex=(value,path)=>{object(value,path);for(const key of ['role','description','advice','color','source'])string(value[key],`${path}.${key}`);};
 
@@ -28,6 +31,7 @@ export function validateEnemies(sections){
     if(def.easyHp!==undefined)number(def.easyHp,`${path}.easyHp`,.000001);
     reference(def.movement,new Set(['ground','air']),`${path}.movement`);reference(def.behavior,enemyBehaviors,`${path}.behavior`);reference(def.visual,enemyVisuals,`${path}.visual`);
     if(def.behavior==='specialist'&&(!specialistIds.includes(def.specialist)||def.specialist!==id))fail(path,'invalid specialist profile');
+    if(def.behavior==='human'&&(!humanIds.includes(id)||def.visual!==id))fail(path,'invalid human profile');
     if(def.locomotion!==undefined&&typeof def.locomotion!=='boolean')fail(path,'locomotion must be boolean');
     if(def.ranged!==undefined&&typeof def.ranged!=='boolean')fail(path,'ranged must be boolean');
     for(const key of ['wobble','surge'])if(def[key])numeric(def[key],'frequency amplitude',`${path}.${key}`);
@@ -35,10 +39,11 @@ export function validateEnemies(sections){
   }
   refs(enemies.codexIds,enemyIds,'enemies.codexIds',1);unique(enemies.codexIds,'enemies.codexIds');for(const id of enemies.codexIds)if(!definitions[id].codex)fail('enemies.codexIds',`missing codex ${id}`);
   const bosses=object(enemies.bosses,'enemies.bosses'),bossIds=new Set(Object.keys(bosses));
-  for(const id of bossBehaviors)reference(id,bossIds,'enemies.bosses');
+  for(const id of requiredBosses)reference(id,bossIds,'enemies.bosses');
   for(const [id,def] of Object.entries(bosses)){
     const path=`enemies.bosses.${id}`;object(def,path);if(def.id!==id)fail(path,'key and ID must match');string(def.name,`${path}.name`);
     if(def.canTargetAir!==undefined&&typeof def.canTargetAir!=='boolean')fail(path,'canTargetAir must be boolean');
+    if(def.r!==undefined)number(def.r,`${path}.r`,1,100);
     reference(def.behavior,bossBehaviors,`${path}.behavior`);reference(def.visual,enemyVisuals,`${path}.visual`);codex(def.codex,`${path}.codex`);object(def.parameters,`${path}.parameters`);
     for(const [key,value] of Object.entries(def.parameters))if(!['name','bulletColor','summonType'].includes(key))number(value,`${path}.parameters.${key}`);
     if(def.parameters.summonType!==undefined)reference(def.parameters.summonType,enemyIds,`${path}.parameters.summonType`);
@@ -53,12 +58,32 @@ export function validateEnemies(sections){
   positive(behavior.boar,'speed rushLife stunLife minRange maxRange windup chargeLength cooldown damageMultiplier','enemies.behaviorRules.boar');if(behavior.boar.minRange>behavior.boar.maxRange)fail('enemies.behaviorRules.boar','invalid charge range');
   positive(behavior.spore,'range holdRange releaseRange windup cooldown bulletSpeed bulletLife bulletRadius','enemies.behaviorRules.spore');string(behavior.spore.color,'enemies.behaviorRules.spore.color');
   validateSpecialists(enemies,sections);
+  validateHumans(enemies);
   const elite=object(enemies.elite,'enemies.elite');numeric(elite.rules,'startAt chance cap health scale xp shield range swiftWindup swiftDuration swiftSpeed swiftCooldown summonWindup summonCooldown summonCount summonOwnerCap summonGlobalCap enemyCap swiftInitialCooldown otherInitialCooldown cancelCooldown summonAttempts summonStartRadius summonRingStep summonRingSlots summonPlayerClearance','enemies.elite.rules');
   number(elite.rules.chance,'enemies.elite.rules.chance',0,1);positive(elite.rules,'health scale swiftDuration swiftCooldown summonCooldown summonRingSlots','enemies.elite.rules');for(const key of ['cap','summonCount','summonOwnerCap','summonGlobalCap','enemyCap','summonAttempts','summonRingSlots'])integer(elite.rules[key],`enemies.elite.rules.${key}`,1,1000);
   requireKeys(elite.affixes,[...affixBehaviors],'enemies.elite.affixes');for(const [id,affix] of Object.entries(elite.affixes)){reference(id,affixBehaviors,'enemies.elite.affixes');object(affix,`enemies.elite.affixes.${id}`);if(affix.id!==id)fail('enemies.elite.affixes','key and ID must match');string(affix.name,'enemies.elite.affixes.name');string(affix.color,'enemies.elite.affixes.color');}
   validateEncounters(encounters,enemyIds);
   validateDifficulty(difficulty,encounters,enemyIds);
   return true;
+}
+function validateHumans(enemies){
+  const rules=enemies.humanRules||{};object(rules,'enemies.humanRules');
+  for(const id of humanIds){
+    if(!enemies.definitions[id])continue;
+    const path=`enemies.humanRules.${id}`,r=object(rules[id],path);
+    if(enemies.definitions[id].behavior!=='human')fail(path,'human unit must use human behavior');
+    positive(r,'range reach width windup cooldown recovery initialCooldown damageMultiplier',path);
+    for(const[key,value]of Object.entries(r))if(key==='ranged'){if(typeof value!=='boolean')fail(`${path}.${key}`,'expected boolean');}else number(value,`${path}.${key}`);
+    if(r.ranged)number(r.holdRange,`${path}.holdRange`,1,r.range);
+    if(id==='royalguard'){number(r.guardArc,`${path}.guardArc`,.1,Math.PI);number(r.guardDamageMultiplier,`${path}.guardDamageMultiplier`,.1,1);positive(r,'arc',path);}
+  }
+  for(const id of Object.keys(rules))if(!humanIds.includes(id)||!enemies.definitions[id])fail(`enemies.humanRules.${id}`,'unknown human unit');
+  for(const id of humanBossIds){
+    if(!enemies.bosses[id])continue;
+    const b=enemies.bosses[id],path=`enemies.bosses.${id}`;
+    if(b.behavior!==id||b.visual!==id)fail(path,'human boss identity must match');
+    number(b.r,`${path}.r`,16,32);positive(b.parameters,'range reach secondReach width arc windup secondWindup cooldown recovery initialCooldown damageMultiplier',`${path}.parameters`);
+  }
 }
 function validateSpecialistBosses(bosses){
   const required={

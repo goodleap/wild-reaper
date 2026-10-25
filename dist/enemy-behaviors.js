@@ -3,6 +3,7 @@ import { initBoss, updateBoss } from './bosses.js';
 import { updateBoar, resolveBoarCharge } from './enemies/boar.js';
 import { updateSpore, resolveSpore } from './enemies/spore.js';
 import { initializeSpecialist, updateSpecialist, resolveSpecialist } from './enemies/specialists.js';
+import { initializeHuman, updateHuman, resolveHuman } from './enemies/royal.js';
 
 export { updateBoar } from './enemies/boar.js';
 export { updateSpore } from './enemies/spore.js';
@@ -12,6 +13,7 @@ export const ENEMY_BEHAVIORS=Object.freeze({
   boar:Object.freeze({update:updateBoar}),
   spore:Object.freeze({update:updateSpore,resolve:resolveSpore}),
   specialist:Object.freeze({initialize:initializeSpecialist,update:updateSpecialist,resolve:resolveSpecialist}),
+  human:Object.freeze({initialize:initializeHuman,update:updateHuman,resolve:resolveHuman}),
   boss:Object.freeze({initialize:initBoss,update:updateBoss})
 });
 export function enemyBehavior(type){

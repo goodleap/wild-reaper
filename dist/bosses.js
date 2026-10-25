@@ -2,6 +2,7 @@ import { bossDefinition, bossKindFor } from './boss-definitions.js';
 import { updateAncientBoss, resolveAncientBoss } from './bosses/ancient.js';
 import { initBloomBoss, clearBloomBossAttacks, updateBloomBoss, resolveBloomBoss } from './bosses/bloom.js';
 import { initSpecialistBoss, clearSpecialistBoss, updateSpecialistBoss, resolveSpecialistBoss } from './bosses/specialists.js';
+import { initializeHumanBoss, clearHumanBoss, updateHuman, resolveHuman } from './enemies/royal.js';
 
 export { ANCIENT_BOSS, BLOOM_BOSS, BOSS_DEFS, BOSS_ROTATION, bossDefinition, bossKindFor } from './boss-definitions.js';
 export { updateBloomBoss, resolveBloomBoss } from './bosses/bloom.js';
@@ -11,6 +12,7 @@ export { updateBloomBoss, resolveBloomBoss } from './bosses/bloom.js';
 export const BOSS_BEHAVIORS=Object.freeze({
   ancient:Object.freeze({update:updateAncientBoss,resolve:resolveAncientBoss,phase:'slam'}),
   bloom:Object.freeze({initialize:initBloomBoss,update:updateBloomBoss,resolve:resolveBloomBoss,clear:clearBloomBossAttacks,phase:'ranged'}),
+  ...Object.fromEntries(['searchcaptain','escortmarshal'].map(id=>[id,Object.freeze({initialize:initializeHumanBoss,update:updateHuman,resolve:resolveHuman,clear:clearHumanBoss,phase:'ranged'})])),
   ...Object.fromEntries(['broodmother','deepcaller','frostcrown','furnace'].map(id=>[id,Object.freeze({initialize:initSpecialistBoss,update:updateSpecialistBoss,resolve:resolveSpecialistBoss,clear:clearSpecialistBoss,phase:'ranged'})]))
 });
 export function bossBehavior(kind){

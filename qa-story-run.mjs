@@ -46,6 +46,12 @@ for(const mutation of [s=>s.definitions[0].anchors.meetingArea='missing',s=>s.de
 }
 
 const game=new Game({mode:'story',hero:'elder',initialWeaponId:'arrow'}),story=game.story;
+const layout=game.terrain.island.layout,anchors=story.definition.anchors;
+const wake=layout.areas.find(area=>area.id===anchors.wakeArea).center;
+assert.equal(anchors.wakeArea,'04');assert.equal(anchors.meetingArea,'05');assert.equal(anchors.refugeArea,'06');
+assert(Math.hypot(foot(game.player).x-wake.x,foot(game.player).y-wake.y)<=140,'The prologue wakes in its configured western outskirts, independently of the exploration spawn.');
+assert(Math.hypot(foot(game.player).x-layout.spawn.x,foot(game.player).y-layout.spawn.y)>800,'The old world spawn cannot silently replace the authored chapter start.');
+assert(game.terrain.isFree(foot(game.player).x,foot(game.player).y,game.player.r),'The whole hero body starts on walkable natural terrain.');
 assert.equal(game.hero.id,'traveler');assert.equal(game.initialWeaponId,'sword');
 assert.equal(story.step,'awakening');assert(story.active);assert.equal(story.completed,false);
 assert.equal(story.getAction(),null);assert.equal(story.getBuff(),null);assert(!game.settlements.sites.some(site=>site.type==='angel'));

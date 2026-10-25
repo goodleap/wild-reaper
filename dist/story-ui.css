@@ -1,5 +1,15 @@
 /* Story/tribulation additions use existing preparation and character panels. */
 .story-availability{margin:5px 3px 0;color:#a7b797;font-size:11px;line-height:1.6}
+.story-summary{margin:8px 3px 0;color:#c4d3b8;font-size:12px;line-height:1.6}
+.story-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:3px}
+.story-chapter-option{position:relative;min-width:0;cursor:pointer}
+.story-chapter-option input{position:absolute;opacity:0;width:1px;height:1px}
+.story-chapter-copy{display:flex;flex-direction:column;justify-content:center;gap:8px;min-height:84px;padding:12px;border:1px solid #6c875c66;border-radius:8px;background:#172d22;color:#dce5c9}
+.story-chapter-copy strong{font-size:13px;line-height:1.5}.story-chapter-status{color:#9fb296;font-size:10px;line-height:1.4}
+.story-chapter-option input:checked+.story-chapter-copy{border-color:#c1d99a;background:#2b432b;box-shadow:inset 0 0 0 1px #c1d99a33}
+.story-chapter-option input:focus-visible+.story-chapter-copy{outline:2px solid #f4dfa5;outline-offset:3px}
+.story-chapter-option input:disabled+.story-chapter-copy{opacity:.55}.story-chapter-option:has(input:disabled){cursor:default}
+@media(max-width:440px){.story-options{gap:8px}.story-chapter-copy{min-height:76px;padding:10px}.story-chapter-copy strong{font-size:12px}}
 #character-hud .story-buff{border-color:#e6c78577;color:#efdaa1;background:#5b432533;gap:3px}
 #character-hud .story-buff .buff-name{font-size:9px}
 .tribulation-progress{display:block;margin-top:7px;font-size:10px;color:#dfd0ff;letter-spacing:.4px}

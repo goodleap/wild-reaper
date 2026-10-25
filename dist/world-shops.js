@@ -59,7 +59,9 @@ export class WorldShops {
   getItems(site){
     const g=this.game;if(!this._siteValid(site)||site.worldFacility==='rest')return [];
     if(site.worldFacility==='supplies')return ITEM_IDS.map(id=>{
-      const def=itemCopy(itemDefinition(id)),count=this.inventory[id],reason=count>=rules.inventoryLimit?'携带数量已满':g.gold<def.price?'金币不足':'';
+      const def=itemCopy(itemDefinition(id)),questId=site.region==='beach'?'coastal-cargo':site.region==='clockshadow-city'?'city-signal':null;
+      if(questId&&g.quests?.store.record(questId)?.completed){def.price=Math.ceil(def.price*.9);def.desc+=' · 委托补给价九折';}
+      const count=this.inventory[id],reason=count>=rules.inventoryLimit?'携带数量已满':g.gold<def.price?'金币不足':'';
       return {...def,desc:`${def.desc} · 购买后放入补给`,count,stock:1,consumable:true,available:!reason,reason};
     });
     const ids=site.worldFacility==='weapons'?Object.keys(rules.weaponPrices):rules.skillSupply[site.region];

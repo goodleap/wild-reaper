@@ -18,7 +18,7 @@ const safeId=value=>typeof value==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.tes
 const emptyBest=()=>({time:0,kills:0,bossKills:0,level:0,wave:0});
 const emptyEntry=()=>({seen:true,defeats:0,acquisitions:0,maxLevel:0,branches:[],evolved:false,modifiers:{}});
 const emptyStageRecord=()=>({clears:0,bestTime:0});
-const emptyData=()=>({version:3,totals:{runs:0,time:0,kills:0,bossKills:0,maxLevel:0,maxWave:0},best:{normal:emptyBest(),casual:emptyBest()},entries:{},stages:{},stories:{},legacy:null});
+const emptyData=()=>({version:3,totals:{runs:0,time:0,kills:0,bossKills:0,maxLevel:0,maxWave:0},best:{normal:emptyBest(),casual:emptyBest()},entries:{},stages:{},stories:{},debugStories:{},legacy:null});
 const sanitizeBest=value=>({time:finite(value?.time),kills:integer(value?.kills),bossKills:integer(value?.bossKills),level:integer(value?.level,1e6),wave:integer(value?.wave,1e6)});
 function branchesOf(value){return [...new Set((Array.isArray(value)?value:[]).filter(safeId))].slice(0,12);}
 function modifiersOf(value){const result={};if(plain(value))for(const [id,cap] of MODIFIER_CAPS){const rank=integer(value[id],cap);if(rank)result[id]=rank;}return result;}
@@ -42,10 +42,10 @@ function sanitize(value){
       data.stages[id][difficulty]=clean;
     }
   }
-  if(plain(value.stories))for(const [id,record] of Object.entries(value.stories).slice(0,128)){
+  for(const scope of ['stories','debugStories'])if(plain(value[scope]))for(const [id,record] of Object.entries(value[scope]).slice(0,128)){
     if(!safeId(id)||!plain(record))continue;
     const clears=integer(record.clears);
-    if(clears)data.stories[id]={clears,bestTime:finite(record.bestTime),lastTime:finite(record.lastTime)};
+    if(clears)data[scope][id]={clears,bestTime:finite(record.bestTime),lastTime:finite(record.lastTime)};
   }
   data.legacy=legacyOf(value.legacy);return data;
 }
@@ -166,12 +166,14 @@ export class AdventureArchive {
     return this.checkpoint(game);
   }
   _snapshot(game,run){return {time:finite(game.runTime??game.time),kills:integer(game.kills),bossKills:Math.max(integer(game.bossKills),run.defeatedBosses),level:integer(game.player?.level,1e6),wave:integer(game.wave,1e6)};}
+  storyRecord(id,{debug=false}={}){return (debug?this.data.debugStories:this.data.stories)[id]||null;}
   recordStoryCompletion(game){
     const run=this._eligible(game),story=game?.story;
     if(!run||run.storyCompletion||!story?.completed||!safeId(story.id))return false;
-    const time=finite(story.completionTime??game.runTime??game.time),previous=this.data.stories[story.id];
+    const records=game.storyDebug||game.debug?this.data.debugStories:this.data.stories;
+    const time=finite(story.completionTime??game.runTime??game.time),previous=records[story.id];
     const record={clears:integer((previous?.clears||0)+1),bestTime:previous?.clears?Math.min(previous.bestTime,time):time,lastTime:time};
-    this.data.stories[story.id]=record;run.storyCompletion={id:story.id,time};this._dirty=true;this.flush();return true;
+    records[story.id]=record;run.storyCompletion={id:story.id,time};this._dirty=true;this.flush();return true;
   }
   checkpoint(game,{force=false}={}){
     const run=this._eligible(game);if(!run)return false;

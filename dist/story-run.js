@@ -11,13 +11,14 @@ import { StoryPursuit } from './story-pursuit.js';
 import { updateAngelGuardian } from './sites/angel-guardian.js';
 import { beginUnitArrival, unitArrivalComplete } from './unit-arrival.js';
 import { createJudgmentPlan, judgmentBatch } from './judgment-layout.js';
+import { clearSceneActors } from './scene-actors.js';
 
 export const STORY_DEFINITIONS=getConfigSection('story').definitions;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const foot=entity=>({x:entity.x,y:Number.isFinite(entity.groundY)?entity.groundY:entity.y+groundOffset(entity,!!entity.heroId)});
-const objectives={awakening:'林海余烬',search:'离开营地',escape:'甩开追兵，与公主会合',escort:'跟随公主突围',pill:'燃脉丸已拿到 · 点击「服药」击退追兵',burst:'跟随公主 · 前往召唤地点',fading:'药力消退 · 跟紧公主',sanctuary:'守住光环 · 为天使引雷争取时间',judgment:'天雷降临 · 留在守护之内',conversation:'危机解除',complete:'序章完成'};
+const objectives={awakening:'郊野重生',search:'避开搜寻队，沿郊外旧路前进',escape:'甩开追兵，与公主会合',escort:'跟随公主突围',pill:'燃脉丸已拿到 · 点击「服药」击退追兵',burst:'跟随公主 · 前往召唤地点',fading:'药力消退 · 跟紧公主',sanctuary:'守住光环 · 为天使引雷争取时间',judgment:'天雷降临 · 留在守护之内',conversation:'危机解除',complete:'序章完成'};
 const conversations=new Set(['awakening','escort','pill','conversation']);
-const titles={awakening:'序章 · 林海余烬',escort:'林间相逢',pill:'燃脉丸',sanctuary:'守望者降临',conversation:'余烬未熄'};
+const titles={awakening:'序章 · 郊野重生',escort:'旧路接应',pill:'燃脉丸',sanctuary:'守望者降临',conversation:'去接头点'};
 const continueLabels={awakening:'开始行动',escort:'一起突围',pill:'接过燃脉丸',sanctuary:'守住光环',conversation:'正式启航'};
 const speakerNames={player:'王子',princess:'公主',angel:'守望天使'};
 
@@ -31,6 +32,7 @@ export class StoryRun {
     this.actors=[];this.dialogue=[];this.completed=false;this.disposed=false;this.initialized=false;this.pillUsed=false;
     this.temporary=new TemporaryBuild(game);this.flow=new StoryFlow(this.definition.steps,step=>this._enter(step));
     this._lineId=0;this._lineState=new Map();
+    this._sceneQueue=[];this._sceneCue=null;this._sceneSpoken=new Set();
     this._clock=0;this._prayerProgress=0;this._sanctuaryProgress=0;this._summoning=false;this._helpReady=false;this._dialogueTotal=0;
     this.navigation=new StoryNavigation(game,this);
     this.pursuit=new StoryPursuit(game,this,this.definition.pursuit);
@@ -60,7 +62,8 @@ export class StoryRun {
   getDialogue(){
     const line=this.dialogue[0];if(!this.active||!line)return null;
     return {...line,name:speakerNames[line.speaker],index:this._dialogueTotal-this.dialogue.length+1,total:this._dialogueTotal,
-      title:titles[this.step]||this.name,nextLabel:this.dialogue.length===1?continueLabels[this.step]||'继续':'继续'};
+      title:titles[this.step]||this.name,nextLabel:this.dialogue.length===1?continueLabels[this.step]||'继续':'继续',
+      departure:this.step==='conversation'&&this.dialogue.length===1};
   }
   getSceneDialogue(){
     if(!this.active)return [];
@@ -68,7 +71,25 @@ export class StoryRun {
     if(line){const actor=line.speaker==='player'?this.game.player:this[line.speaker];return actor?[{id:line.id,speaker:line.speaker,text:'…',actor}]:[];}
     if(['fading','sanctuary'].includes(this.step)&&this.princess)return [{id:`${this.id}:medicine-ended`,speaker:'princess',text:this.definition.dialogue.sanctuary[0].text,actor:this.princess}];
     if(this._summoning&&!this._helpReady&&this.princess)return [{id:`${this.id}:summon`,speaker:'princess',text:this.definition.summonLine,actor:this.princess}];
+    if(this._sceneCue&&this._sceneActorAlive(this._sceneCue.actor))return [this._sceneCue];
     return [];
+  }
+  _sceneActorAlive(actor){return actor===this.game.player||this.actors.includes(actor)||actor?.hp>0&&this.game.enemies.includes(actor);}
+  _visibleSearcher(){const g=this.game,p=foot(g.player);return this._living().find(enemy=>g._inView(enemy,-60)&&!g.terrain.firstBlocker(enemy.x,foot(enemy).y,p.x,p.y,0,'sight'));}
+  _sceneScript(stage,searcher){
+    if(this._sceneSpoken.has(stage))return;
+    this._sceneSpoken.add(stage);
+    // An action event owns the queue; ordinary combat chatter never enters it.
+    for(const [index,line]of (this.definition.dialogue[stage]||[]).entries()){
+      const actor=line.speaker==='searcher'?searcher:line.speaker==='player'?this.game.player:this[line.speaker];
+      if(actor)this._sceneQueue.push({...line,id:`${this.id}:scene:${stage}:${index}`,actor,shown:0});
+    }
+  }
+  _updateSceneCue(dt){
+    let cue=this._sceneCue;
+    if(cue&&(!this._sceneActorAlive(cue.actor)||cue.shown>=Math.max(3,Math.min(6,cue.text.length*.12))))cue=this._sceneCue=null;
+    while(!cue&&this._sceneQueue.length){const next=this._sceneQueue.shift();if(this._sceneActorAlive(next.actor))cue=this._sceneCue=next;}
+    if(cue&&this.game._inView(cue.actor,-60))cue.shown+=dt;
   }
   advanceDialogue(skip=false){
     if(!this.dialogueBlocking)return false;
@@ -105,11 +126,16 @@ export class StoryRun {
     const g=this.game,layout=g.terrain.island?.layout,keys=this.definition.anchors;
     const area=id=>layout?.areas?.find(area=>area.id===id)?.center;
     const passage=id=>layout?.passages?.find(passage=>passage.id===id)?.waypoints;
-    const origin=foot(g.player),meeting=area(keys.meetingArea),refuge=area(keys.refugeArea);
-    const searchPath=passage(keys.searchPassage),escapePath=passage(keys.escapePassage);
-    if(!meeting||!refuge||!searchPath?.length||!escapePath?.length)throw new Error(`Story ${this.id} requires its configured walkable anchors`);
+    const wake=area(keys.wakeArea),meeting=area(keys.meetingArea),refuge=area(keys.refugeArea);
+    const entryPath=passage(keys.entryPassage),searchPath=passage(keys.searchPassage),escapePath=passage(keys.escapePassage);
+    if(!wake||!meeting||!refuge||!entryPath?.length||!searchPath?.length||!escapePath?.length)throw new Error(`Story ${this.id} requires its configured walkable anchors`);
+    this.paths={entry:entryPath,search:searchPath,escape:escapePath};
+    // Story geography is independent of the exploration town spawn. Every
+    // replay starts on the configured outskirts, with a legal whole-body foot.
+    const origin=this._safePoint(wake,{radius:g.player.r,max:140});
+    if(!origin)throw new Error(`Story ${this.id} has no safe starting point`);
+    g.player.x=origin.x;g.player.y=origin.y-groundOffset(g.player,true);resetLocomotion(g.player);
     this.anchors={wake:{...origin},meeting:{...meeting},refuge:{...refuge},pill:{...escapePath[Math.floor(escapePath.length*.42)]}};
-    this.paths={search:searchPath,escape:escapePath};
     this.anchors.refuge=this._safePoint(refuge,{radius:18,max:100})||refuge;
     this._sceneTerrain=g.terrain;this._sceneMapId=g.mapId;
     g.canonicalBuild??=g.build;
@@ -132,6 +158,12 @@ export class StoryRun {
   _linesFinished(step){return [...this._lineState.values()].filter(line=>line.step===step).every(line=>line.finished);}
   _enter(step) {
     const g=this.game;this._queue(step);
+    if(conversations.has(step)){this._sceneQueue=[];this._sceneCue=null;}
+    if(step==='escape'){
+      // Preserve a line already on screen for its minimum duration, but drop
+      // obsolete, unread search comments after real discovery.
+      this._sceneQueue=[];this._sceneScript('escape',this._visibleSearcher());
+    }
     g._emit?.('storyStep',{storyId:this.id,step});
     if(step==='fading'){
       this.temporary.stop('expired');
@@ -221,6 +253,8 @@ export class StoryRun {
     const wasBoosted=this.temporary.active;this.temporary.update(dt);
     if(wasBoosted&&!this.temporary.active&&this.step==='burst')this.flow.go('fading');
     this.pursuit.update(dt);
+    if(this.step==='search'){const searcher=this._visibleSearcher();if(searcher)this._sceneScript('search',searcher);}
+    this._updateSceneCue(dt);
     if(['burst','fading'].includes(this.step)&&!this._helpReady&&this.princess){
       if(!this._summoning&&this._near(this.anchors.refuge,180)&&distance(foot(this.princess),this.anchors.refuge)<100)this._summoning=true;
       const nearby=this._summoning&&distance(foot(g.player),foot(this.princess))<=this.rules.prayerRadius;
@@ -237,9 +271,10 @@ export class StoryRun {
         if(this._linesFinished('awakening'))this.flow.next();
         break;
       case 'search':
-        // Seeing the rear patrol or leaving camp starts the chase. Slower
-        // pursuers must never force a correctly fleeing player to walk back.
-        if(this._found()||this._living().some(enemy=>g._inView(enemy)&&!g.terrain.firstBlocker(enemy.x,foot(enemy).y,g.player.x,foot(g.player).y,0,'sight'))||this._near(this.anchors.meeting,350))this.flow.next();
+        if(this._found())this.flow.next();
+        // Successfully avoiding the patrol reaches the same rendezvous. Never
+        // invent an unseen discovery just because a waypoint was crossed.
+        else if(this._near(this.anchors.meeting))this.flow.go('escort');
         break;
       case 'escape':if(this._near(this.anchors.meeting))this.flow.next();break;
       case 'escort':
@@ -316,7 +351,7 @@ export class StoryRun {
   _complete() {
     if(this.completed)return;
     const g=this.game;this.temporary.stop('complete');this.completed=true;this.completionTime=g.runTime??this._clock;
-    this.dialogue=[];this._clearHostileAttacks();this.pursuit.clear();
+    this.dialogue=[];this._sceneQueue=[];this._sceneCue=null;this._clearHostileAttacks();this.pursuit.clear();clearSceneActors(g);
     // Keep the canonical build and earned results for the victory archive;
     // this chapter ends without instantiating an exploration population.
     g._choices=null;
@@ -327,8 +362,8 @@ export class StoryRun {
   }
   cleanup(reason='exit') {
     if(this.disposed)return false;
-    this.temporary.stop(reason);this.disposed=true;this.dialogue=[];this.actors=[];this._clearHostileAttacks();
-    this.pursuit.clear(reason);this.game.sceneContent.dispose();
+    this.temporary.stop(reason);this.disposed=true;this.dialogue=[];this._sceneQueue=[];this._sceneCue=null;this.actors=[];this._clearHostileAttacks();
+    this.pursuit.clear(reason);clearSceneActors(this.game);this.game.sceneContent.dispose();
     return true;
   }
 }

@@ -5,6 +5,7 @@ import { resolveCharacterStats, scalePlayerDamage, defenseDamageMultiplier } fro
 import { queueAttackKnockback } from './weapon-knockback.js';
 import { emitDamageNumber } from './damage-numbers.js';
 import { specialistDamageMultiplier } from './enemies/specialists.js';
+import { humanGuardMultiplier } from './enemies/royal.js';
 import { provokeEnemyGroup } from './combat-tactics.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -111,6 +112,7 @@ export class CombatResolution {
     else {
       amount*=defenseDamageMultiplier(Number.isFinite(enemy.defense)?enemy.defense:0);
       amount*=specialistDamageMultiplier(enemy,origin,source);
+      amount*=humanGuardMultiplier(enemy,origin,source);
       amount=g.elites?.beforeDamage(enemy,amount)??amount;
       amount=g.abilities?.absorbDamage(enemy,amount,origin)??amount;
     }

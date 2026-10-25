@@ -39,7 +39,8 @@ import { RiftExploration } from './rift-exploration.js';
 import { WorldQuests } from './quest-runtime.js';
 import { WorldTravel } from './world-travel.js';
 import { WorldShops } from './world-shops.js';
-import { StoryRun, STORY_DEFINITIONS } from './story-run.js';
+import { createStoryRun } from './story-runtime.js';
+import { STORY_CHAPTERS as STORY_DEFINITIONS } from './story-chapters.js';
 import { SceneContent } from './scene-content.js';
 import { RealmProgression } from './realm-progression.js';
 import { RelicSites } from './relic-sites.js';
@@ -76,6 +77,7 @@ export function xpCost(level) {
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
   constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='rift-forest',stageId=null,mode=null,dungeonId=null,storyId='prologue',questStorage}={}) {
+    this.storyDebug=mode==='story'&&debug===true;
     if(mode==='story'){
       const story=STORY_DEFINITIONS.find(entry=>entry.id===storyId);
       if(!story)throw new RangeError(`Unknown story: ${storyId}`);
@@ -179,7 +181,7 @@ export class Game {
     if(this.debugOptions.extraGold)this.grantResources({gold:500},'debugStart');
     applyFullDebugBuild(this);spawnDebugTrainingDummy(this);spawnDebugBosses(this);
     this.realms=new RealmProgression(this,{costForLevel:xpCost});
-    this.story=this.mode==='story'?new StoryRun(this,{id:storyId}):null;
+    this.story=this.mode==='story'?createStoryRun(this,{id:storyId}):null;
     this.story?.initialize();
     this.quests=new WorldQuests(this,{storage:questStorage});
     if(this.worldTravel.enabled){

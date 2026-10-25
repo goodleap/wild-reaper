@@ -1,3 +1,5 @@
+import { PropArt } from './prop-art.js';
+const cargoArt=new PropArt();
 // Small world fixtures share the ordinary raised-prop depth queue. The bridge
 // shutter is split along its footprint so actors can pass behind each section.
 const INK='#445046',WOOD='#a58a60',LIGHT='#d1ba88',IRON='#69776c';
@@ -18,7 +20,7 @@ export function drawQuestShadowPath(c,prop,sun){
   if(!prop.isQuest)return false;
   if(prop.kind==='questBarrier'&&(prop.open||prop.state==='completed'))return true;
   const height=prop.kind==='questBoard'?48:prop.kind==='questWinch'?16:30;
-  const width=prop.kind==='questBoard'?25:prop.kind==='questWinch'?24:8;
+  const width=prop.kind==='questCargo'?23:prop.kind==='questBoard'?25:prop.kind==='questWinch'?24:8;
   const dx=prop.kind==='questBarrier'?Math.cos(prop.angle??Math.PI/2)*(prop.segmentLength||0):0;
   const dy=prop.kind==='questBarrier'?Math.sin(prop.angle??Math.PI/2)*(prop.segmentLength||0):0;
   const x=prop.x,y=prop.y,sx=sun.x*height,sy=sun.y*height;
@@ -28,7 +30,9 @@ export function drawQuestShadowPath(c,prop,sun){
 export function drawQuestProp(c,prop){
   if(!prop.isQuest)return false;
   c.save();c.translate(prop.x,prop.y);c.strokeStyle=INK;c.lineWidth=2;c.lineJoin='round';c.lineCap='round';
-  if(prop.kind==='questBoard'){
+  if(prop.kind==='questCargo'){
+    cargoArt.drawProp(c,{type:'treasure',x:0,y:0,state:prop.state==='claimed'?'claimed':'unlocked'},{reduced:true});
+  }else if(prop.kind==='questBoard'){
     polygon(c,[[-20,4],[-15,-3],[18,-3],[23,4],[17,8],[-17,8]],'#8d9274');
     polygon(c,[[-4,1],[-4,-47],[4,-47],[4,1]],WOOD);
     polygon(c,[[-27,-57],[25,-59],[29,-28],[-27,-26]],WOOD);

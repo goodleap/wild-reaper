@@ -4,7 +4,7 @@ import { getConfigSection } from './content-config.js';
 const TAU=Math.PI*2;
 const clamp=n=>Math.max(0,Math.min(1,Number.isFinite(n)?n:0));
 const specialists=getConfigSection('enemies').specialistRules;
-const strides=Object.freeze({rootbinder:92,boglurker:74,prismguard:86,tidepriest:80,shieldguard:90,stoneape:48,windhunter:90,frostmage:80,flamelizard:86,spiderling:35,broodmother:150,deepcaller:168,frostcrown:48,furnace:180});
+const strides=Object.freeze({rootbinder:92,boglurker:74,prismguard:86,tidepriest:80,shieldguard:90,stoneape:48,windhunter:90,frostmage:80,flamelizard:86,spiderling:35,broodmother:150,deepcaller:168,frostcrown:48,furnace:180,royalguard:78,royallancer:86,royalarbalist:82,royalmage:80,searchcaptain:108,escortmarshal:112});
 const kind=e=>e.type==='boss'?e.bossKind:e.type;
 export const hasEnemyAnimation=e=>Object.hasOwn(strides,kind(e));
 export const usesEnemyLocomotion=e=>hasEnemyAnimation(e)||enemyDefinition(e.type).locomotion===true;
