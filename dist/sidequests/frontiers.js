@@ -383,7 +383,7 @@ class PotterFire extends FrontierScene {
     this.start=this.point('start','13',0,120);this.kiln=this.point('kiln','13',0,-10);
     this.giver=this.actor('giver',this.start,{kind:'merchant',name:'陶工·青禾'});
     this.vents=[this.local('vent-left',this.kiln,-115,35),this.local('vent-right',this.kiln,115,35)];
-    this.bench=this.local('bench',this.kiln,0,115);
+    this.bench=this.local('bench',this.kiln,90,115);
     this.state.values.heat??=20;this.state.values.left??=0;this.state.values.right??=0;this.state.values.phase??=0;
     this._fixtures();
   }
