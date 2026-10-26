@@ -54,18 +54,24 @@ export class Dungeon {
   _populate(state){return state.authoredLayout?populateAuthoredInterior(this,state):populateCastle(this,state);}
   enter(site){
     const g=this.game;
+    if(site?.sideQuestId)site=g.quests?.sidequests?.getSites().find(current=>current.id===site.id&&current.sideQuestId===site.sideQuestId);
     if(!site||!site.id||this.active||g.status!=='playing'||!this._near(this._door(site),site.interactRadius||100))return false;
     // A facility's exterior shares a building footprint with supply huts,
     // but must never inherit their free chest or occupied-room content.
     if(site.worldFacility&&(!isWorldShop(site)||!g.worldShops?.canEnter(site)))return false;
-    const definition=site.type?settlementType(site):settlementType('castle'),kind=site.worldFacility?'shop':site.riftCave?'cave':definition?.interior,scene=interiorSceneFor(kind);
-    if(!kind||!scene)return false;
     let state=this.states.get(site.id);
+    if(site.sideQuestId&&!state){state=g.quests.sidequests.createInterior(site);if(!state)return false;}
+    const definition=site.type?settlementType(site):settlementType('castle'),kind=state?.kind||(site.worldFacility?'shop':site.riftCave?'cave':definition?.interior),scene=interiorSceneFor(kind);
+    if(!kind||!scene)return false;
     if(!state){
-      const count=[...this.states.values()].filter(existing=>(existing.kind||'castle')===kind).length;
+      const count=[...this.states.values()].filter(existing=>!existing.site?.sideQuestId&&(existing.kind||'castle')===kind).length;
       if(count>=scene.maxStates)return false;
-      state=site.riftCave?g.riftExploration.createCaveState(this,site):scene.create(this,site);this.states.set(site.id,state);
+      state=site.riftCave?g.riftExploration.createCaveState(this,site):scene.create(this,site);
     }
+    this.states.set(site.id,state);
+    // Checkpoint actors and end temporary attempts while their own terrain
+    // and enemies still belong to the outgoing scene.
+    g.quests?.sidequests?.beforeDungeonEnter(site);
     this._world=this._snapshotWorld(site);
     const furyTime=g.adventure?.furyTime||0,magnetTime=g.adventure?.magnetTime||0;
     this._clearScene();if(g.superSkills)g.superSkills.pending=null;this.active=state;g.sceneKind=state.kind;g.terrain=state.terrain;g.enemies=state.enemies;g.gems=state.gems;g.coins=state.coins;g.portal=null;g.environment=null;g.encounters=null;
@@ -106,6 +112,7 @@ export class Dungeon {
     if(state.riftExits&&!caveExit)return false;
     if(!caveExit&&!this._near(state.entrance,95)&&!(state.treasure&&state.rewardClaimed&&this._near(state.treasure,95)))return false;
     if(caveExit){world.door={...state.surfaceExits[caveExit.key]};world.returnPoint={...world.door};}
+    g.quests?.sidequests?.beforeDungeonExit(state);
     const furyTime=g.adventure?.furyTime||0,magnetTime=g.adventure?.magnetTime||0;
     this._clearScene();this._saveScene();
     Object.assign(g,{terrain:world.terrain,adventure:world.adventure,environment:world.environment,encounters:world.encounters,enemies:world.enemies,gems:world.gems,coins:world.coins,portal:world.portal,sceneKind:world.sceneKind,_spawn:world.spawn});

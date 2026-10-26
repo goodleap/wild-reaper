@@ -28,6 +28,13 @@ export class AbilityRuntime {
     for(const [caster,entry] of this.visualCasts)if(caster._visualCast===entry.pose)delete caster._visualCast;
     this.effects.length=0;this.statuses.clear();this.visualBursts.length=0;this.visualCasts.clear();
   }
+  cancelCaster(caster){
+    this.effects=this.effects.filter(effect=>effect.caster!==caster);
+    const visual=this.visualCasts.get(caster);
+    if(visual&&caster._visualCast===visual.pose)delete caster._visualCast;
+    this.visualCasts.delete(caster);
+    for(const status of this.statuses.values())if(status.burn?.caster===caster)status.burn=null;
+  }
   casterActive(caster,hostile){return alive(caster)&&(!hostile||caster.guardActive!==false&&this.game.enemies.includes(caster));}
   isFrozen(entity){return (this.statuses.get(entity)?.frozenUntil||0)>this.clock;}
   movementMultiplier(entity){const status=this.statuses.get(entity);if(!status)return 1;if(status.frozenUntil>this.clock)return 0;return status.slowUntil>this.clock?status.slowMultiplier:1;}

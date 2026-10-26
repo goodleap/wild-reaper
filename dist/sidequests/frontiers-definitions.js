@@ -1,0 +1,9 @@
+const quest=(id,worldId,name,description,discovery,objectives,rewardText,reward={gold:45,crystals:25})=>Object.freeze({id,worldId,name,description,discovery,objectives:objectives.map(([id,label])=>({id,label})),rewardText,reward,sidequest:true});
+export const DEFINITIONS=Object.freeze([
+  quest('mountain-routes','mountain','两条路的价钱','商队争论走近路还是旧驿路。陪向导实走两条路线，再决定将下一处停靠点设在哪里。向导会在岔口等你。',{area:'06',dx:80,dy:80,kind:'elder',name:'山路向导'},[['short','陪向导走过采石场近路'],['long','陪向导走过西侧旧驿路'],['recommended','给商队推荐一条路线']],'路线标记与商队停靠点 · 55 金币 · 30 灵晶',{gold:55,crystals:30}),
+  quest('summit-duel','mountain','峰顶见','接引人愿意在鹰脊窄台和峰顶宽场切磋。两场都由你主动开始，点到为止；退出场地即可中止，之后还能再来。',{area:'14',dx:40,dy:80,kind:'warden',name:'接引人·阿绫'},[['spear','通过鹰脊窄台切磋'],['ranged','通过峰顶宽场切磋']],'开放常驻练习 · 50 金币 · 35 灵晶',{gold:50,crystals:35}),
+  quest('brazier-path','snow','火盆之间','受伤的探路人留在雪埋旧道。先选兽径近路或背风绕路，逐段点亮火盆，再把两人接到温暖营地；他们会在最后一个暖点等待。',{area:'12',dx:-120,dy:100,kind:'warden',name:'雪路照料人'},[['prepared','为所选路线点亮全部火盆'],['rescued','带两位探路人抵达暖营']],'留下暖点与休息营地 · 50 金币 · 30 灵晶',{gold:50,crystals:30}),
+  quest('ice-signal','snow','冰湾里的求救号','停用号管发出了求救信号。顺着可见的振动寻找中继，调整号口，定位守望遗址中的旧哨所，再实际打开它的门。',{area:'13',dx:-180,dy:60,kind:'elder',name:'守夜人'},[['relay','接通三段求救号管'],['rescued','打开旧哨所，接出值守者']],'恢复哨所与通路标记 · 45 金币 · 30 灵晶',{gold:45,crystals:30}),
+  quest('flawed-castings','ember-realm-large','把次品摆上台','铸工要求公开检验防护铸件。试场会发射实弹、驱动冲撞和近身敲击；躲在铸件后观察裂损，再决定怎样处理有问题的这一批。',{area:'14',dx:-160,dy:130,kind:'warden',name:'铸工·石锤'},[['bolt','记录实弹检验的裂损'],['charge','记录冲撞检验的裂损'],['impact','记录敲击检验的裂损'],['settled','处理次品并完成交接']],'改变铸工摊位与补给服务 · 60 金币 · 35 灵晶',{gold:60,crystals:35}),
+  quest('potter-fire','ember-realm-large','没有师承的陶工','陶工想完成一次公开烧制。温火烘干、旺火烧结，再适时出窑；观察坯色和炉温调整两处风门。烧坏可以免费重做。',{area:'13',dx:0,dy:120,kind:'merchant',name:'陶工·青禾'},[['fired','完成烘干、烧结并取出成品'],['market','决定成品和烧法的去处']],'独立陶摊或公共集市 · 45 金币 · 30 灵晶',{gold:45,crystals:30})
+]);

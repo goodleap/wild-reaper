@@ -70,6 +70,8 @@ export class CombatResolution {
   canTarget(enemy,origin=this.game.player,{requireView=false,range=Infinity,canHitFlying=true,source='raw',profile,checkPath=false,pathRadius=0}={}){
     const g=this.game;
     if(!enemy||enemy.hp<=0||enemy.rescueSpawnGrace>0)return false;
+    if(g.quests?.sidequests?.blocksPlayerAttacks&&(origin===g.player||attackSource(source).owner==='player'))return false;
+    if(g.quests?.sidequests?.canTarget?.(enemy,origin,source)===false)return false;
     if(enemy.trainingDummy&&(attackSource(source).owner==='ally'||origin?.isCompanion||origin?.isTownNpc))return false;
     if((!canHitFlying||(checkPath&&(profile??attackProfile(source))==='ground'))&&!isGrounded(enemy))return false;
     if(requireView&&!g._inView(enemy))return false;
@@ -116,7 +118,8 @@ export class CombatResolution {
       amount=g.elites?.beforeDamage(enemy,amount)??amount;
       amount=g.abilities?.absorbDamage(enemy,amount,origin)??amount;
     }
-    if(amount<=0)return 0;
+    amount=g.quests?.sidequests?.beforeEnemyDamage(enemy,amount,origin,source)??amount;
+    if(!Number.isFinite(amount)||amount<=0||enemy.hp<=0)return 0;
     const actual=Math.min(enemy.hp,amount);
     const angle=Math.atan2(enemy.y-(Number.isFinite(origin?.y)?origin.y:enemy.y),enemy.x-(Number.isFinite(origin?.x)?origin.x:enemy.x));
     const strength=clamp(actual/Math.max(1,enemy.maxHp||actual)*3,0,1),color=HIT_COLORS[source]||'#e8f3ad';
@@ -177,6 +180,9 @@ export class CombatResolution {
     amount=g.relics?.modifyIncomingDamage(amount)??amount;
     amount=g.barrier?.absorbDamage(amount)??amount;
     amount=g.abilities?.absorbDamage(p,amount,origin)??amount;
+    const questAmount=g.quests?.sidequests?.beforePlayerDamage(amount,origin)??amount;
+    if(!Number.isFinite(questAmount)||amount>0&&questAmount<=0)return false;
+    amount=questAmount;
     const previousHp=p.hp;
     p.hp=Math.max(0,p.hp-amount);p.invuln=.8;
     if(p.hp<previousHp){p.hurtFlash=.8;p.hurtFace=.24;g._emit('hurt');g._effect(p.x,p.y,'ring',.3,42,'#e48d78');}

@@ -35,7 +35,7 @@
     "test:frostcrown": "node qa-frostcrown-art.mjs && node qa-frostcrown-geometry.mjs && node qa-frostcrown-support-hits.mjs && node qa-frostcrown-environment.mjs",
     "test:ember": "node qa-ember-geometry.mjs && node qa-ember-integration.mjs",
     "test:activity-log": "node qa-activity-log.mjs && node qa-activity-performance.mjs && node qa-activity-scene.mjs && node qa-boot-activity-log.mjs && node qa-activity-integration.mjs",
-    "test:quests": "node qa-quest-store.mjs && node qa-quests-integration.mjs && node qa-quest-road.mjs && node qa-quest-commissions.mjs",
+    "test:quests": "node qa-quest-store.mjs && node qa-quests-integration.mjs && node qa-quest-road.mjs && node qa-quest-commissions.mjs && npm run test:sidequests",
     "test:ship": "node qa-ship-scenes.mjs && node qa-ship-art.mjs && node qa-expeditions.mjs && node qa-expedition-layout.mjs && node qa-scene-transition.mjs",
     "test:moon": "node qa-moon-map.mjs && node qa-moon-art.mjs && node qa-expeditions.mjs && node qa-expedition-layout.mjs",
     "test:ruins": "node qa-ruins-map.mjs && node qa-ruins-art.mjs && node qa-world-selection.mjs",
@@ -45,6 +45,7 @@
     "test:world-campaign": "node qa-world-travel.mjs && node qa-world-edge-exits.mjs && node qa-world-shops.mjs && node qa-world-save.mjs && node qa-debug-world-save.mjs && node qa-world-save-workload.mjs && node qa-world-save-diagnostics.mjs && node qa-world-acquisition.mjs && node qa-world-campaign.mjs && node qa-world-travel-config.mjs && node qa-world-travel-geometry.mjs && node qa-world-connections.mjs && node qa-world-selection.mjs",
     "test:accounts": "node qa-account-client.mjs && node qa-account-panel.mjs",
     "test:human-enemies": "node qa-human-enemies.mjs && node qa-enemy-modules.mjs",
-    "test:config-publish": "node qa-config-validator-ready.mjs"
+    "test:config-publish": "node qa-config-validator-ready.mjs",
+    "test:sidequests": "node qa-sidequest-foundation.mjs && node qa-sidequest-runtime.mjs && node qa-sidequests-nature.mjs && node qa-sidequests-settlements.mjs && node qa-sidequests-frontiers.mjs && node qa-sidequest-persistence.mjs && node qa-sidequest-play.mjs && node qa-sidequest-combat.mjs && node qa-sidequest-ui.mjs && node qa-scene-rendering.mjs"
   }
 }

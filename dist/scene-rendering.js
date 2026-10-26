@@ -44,6 +44,7 @@ export function sceneItemVisible(item,vision){
   // Walls own remembered-segment rendering, not live actor visibility. Their
   // existing fixed structure pieces keep foreground occlusion depth-sorted.
   if(prop.variant==='castle-wall'||prop.variant==='hut-wall'||prop.variant==='shop-wall')return true;
+  if(prop.kind==='questSceneProp'&&prop.a&&prop.b&&prop.radius>0)return terrainVisible({type:'log',x:prop.x,y:prop.y,r:prop.radius,halfLength:Math.hypot(prop.b.x-prop.a.x,prop.b.y-prop.a.y)/2,angle:Math.atan2(prop.b.y-prop.a.y,prop.b.x-prop.a.x)},vision);
   if((prop.isShopFurniture&&prop.solid)||(prop.isInteriorProp&&prop.collision===true))return terrainVisible(interiorPropFootprint(prop),vision);
   return item.kind==='terrain'?terrainVisible(prop,vision):vision.isVisible(prop.x,prop.y,prop.r||0);
 }

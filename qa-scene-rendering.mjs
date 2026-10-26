@@ -48,6 +48,15 @@ const hiddenScenery=scene([north,concealed]);
 assert.equal(sceneItemVisible({kind:'terrain',prop:concealed},hiddenScenery.vision),false);
 assert.equal(sceneItemVisible({kind:'adventure',prop:{...concealed,type:'castlePillar',isInteriorProp:true,collision:true}},hiddenScenery.vision),false,'furniture behind a closed wall remains hidden');
 
+// Task gates and bookshelves share the very capsule used for collision.
+for(const y of [-35,-200]){
+  const shelf={id:'task-shelf',type:'log',variant:'sidequest-gate',navigationBarrier:true,x:0,y,r:9,halfLength:52,angle:0};
+  const view=scene([north,shelf]);
+  const prop={kind:'questSceneProp',questArt:'bookcase',x:0,y,radius:9,a:{x:-52,y},b:{x:52,y}};
+  assert.equal(view.vision.isVisible(0,y),false);
+  assert.equal(sceneItemVisible({kind:'adventure',prop},view.vision),y===-35,'visible task furniture admits its near face without revealing it through another wall');
+}
+
 // Exercise the application's actual draw pass. Sprite height is deliberately
 // outside the floor polygon: adding new actor types requires no clip exception.
 const source=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8');

@@ -1,3 +1,7 @@
+import { DEFINITIONS as NATURE_QUESTS } from './sidequests/nature-definitions.js';
+import { DEFINITIONS as SETTLEMENT_QUESTS } from './sidequests/settlements-definitions.js';
+import { DEFINITIONS as FRONTIER_QUESTS } from './sidequests/frontiers-definitions.js';
+
 // Stable quest identities are independent of run-local enemy and scene IDs.
 export const WORLD_QUESTS=Object.freeze([
   Object.freeze({id:'clock-bridge',worldId:'clockshadow-city',name:'重开钟桥',
@@ -27,7 +31,8 @@ export const WORLD_QUESTS=Object.freeze([
   Object.freeze({id:'city-signal',worldId:'clockshadow-city',commission:'signal',name:'断开征发信号',
     description:'军门兵营仍在用信号台调动增援。可以先从侧翼关闭信号，再攻入兵营夺回征发账册；直接强攻也行，但必须应付赶来的援兵。',
     rewardText:'停止兵营增援 · 古城补给铺永久九折 · 60 金币 · 35 灵晶',reward:{gold:60,crystals:35},
-    objectives:[{id:'signal',label:'可选：关闭侧翼信号台，阻止增援',optional:true},{id:'orders',label:'击败兵营看守，取得征发账册'},{id:'reported',label:'将账册带回长街市集'}]})
+    objectives:[{id:'signal',label:'可选：关闭侧翼信号台，阻止增援',optional:true},{id:'orders',label:'击败兵营看守，取得征发账册'},{id:'reported',label:'将账册带回长街市集'}]}),
+  ...NATURE_QUESTS,...SETTLEMENT_QUESTS,...FRONTIER_QUESTS
 ]);
 export const questDefinition=id=>WORLD_QUESTS.find(quest=>quest.id===id)||null;
 export const questWorlds=quest=>quest.worldIds||[quest.worldId];

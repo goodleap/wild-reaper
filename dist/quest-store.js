@@ -1,5 +1,6 @@
 import { WORLD_QUESTS,questDefinition,questWorlds } from './quest-definitions.js';
 import { WORLD_IDS } from './world-definitions.js';
+import { cleanSidequestState } from './sidequests/state.js';
 
 export const QUEST_STORAGE_KEY='wild-echoes-world-quests-v1';
 const empty=()=>({version:1,records:{},tracked:{}});
@@ -28,6 +29,7 @@ function clean(raw){
     record.rewardClaimed=record.completed&&record.rewardClaimed;
     if(record.accepted||Object.keys(record.objectives).length)record.discovered=true;
     if(definition.commission)record.commission=commissionState(value.commission);
+    if(definition.sidequest)record.sidequest=cleanSidequestState(value.sidequest);
     data.records[definition.id]=record;
     if(record.accepted&&!record.completed)for(const worldId of definition.worldIds?WORLD_IDS:questWorlds(definition))if(raw.tracked?.[worldId]===definition.id)data.tracked[worldId]=definition.id;
     if(record.accepted&&!record.completed&&definition.worldIds&&raw.tracked?.journey===definition.id)data.tracked.journey=definition.id;
@@ -61,6 +63,7 @@ export class QuestStore {
       for(const definition of WORLD_QUESTS){
         const theirs=remote.records[definition.id];if(!theirs)continue;
         const ours=this.record(definition.id);
+        if(definition.sidequest&&theirs.completed&&!ours.completed)Object.assign(ours.sidequest??={},cleanSidequestState(theirs.sidequest));
         for(const key of ['discovered','accepted','completed','rewardClaimed'])ours[key]||=theirs[key];
         for(const objective of definition.objectives)if(theirs.objectives[objective.id])ours.objectives[objective.id]=true;
         if(definition.commission&&theirs.commission){ours.commission??=commissionState(null);for(const key of groups)if(theirs.commission.groups[key])ours.commission.groups[key]=true;}

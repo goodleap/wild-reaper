@@ -192,7 +192,7 @@ export class Game {
   }
 
   onEnemyDefeated(enemy){this.story?.onEnemyDefeated?.(enemy);this.realms?.onEnemyDefeated(enemy);this.onArchiveDefeat?.(enemy);}
-  dispose(reason='exit') {this._disposed=true;this.quests?.flush();this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();this.expedition?.dispose();}
+  dispose(reason='exit') {this._disposed=true;this.quests?.sidequests?.deactivate?.(reason);this.quests?.flush();this.quests?.sidequests?.dispose();this.story?.cleanup(reason);this.sceneContent.dispose();this.realms?.dispose();this.expedition?.dispose();}
 
   _createStoryExplorationContent() {
     const desired={x:this.player.x,y:this.player.y},spawn=this.terrain.island?.layout?.spawn;
@@ -264,7 +264,15 @@ export class Game {
     const dy=Math.max(0,Math.abs(entity.y-this.player.y)-this.viewHeight*.5-margin);
     return dx*dx+dy*dy<=sq(entity.r||0);
   }
-  canUseSkill(id) {return !!this.build.getSkill(id)?.acquired&&this.story?.allowsSkill?.(id)!==false;}
+  canUseSkill(id) {return !!this.build.getSkill(id)?.acquired&&this.story?.allowsSkill?.(id)!==false&&!this.quests?.sidequests?.blocksPlayerAttacks;}
+  _syncQuestAttackBlock(){
+    const blocked=!!this.quests?.sidequests?.blocksPlayerAttacks;
+    if(blocked&&!this._questAttacksBlocked){
+      this.attacks.clearTrails();this.bullets=[];this.orbitals=[];this.storm=null;this._pulseEchoes=[];this.superSkills.clearScene();this.abilities.cancelCaster(this.player);
+    }
+    this._questAttacksBlocked=blocked;
+    return blocked;
+  }
   _castStorm() { return this.canUseSkill('storm')?this.attacks.castStorm():false; }
   _nearest(x,y,range=BALANCE.arrowRange,exclude,originEntity=null,options={}) {
     const origin=originEntity||{x,y,groundY:y+groundOffset(this.player,true)};
@@ -531,7 +539,10 @@ export class Game {
   getInteraction() {
     if(this.status!=='playing')return null;
     if(!this.sceneContent.allows('worldContent'))return null;
-    if(this.dungeon.active)return this.dungeon.getInteraction();
+    if(this.dungeon.active){
+      const p=this.player,footY=p.y+groundOffset(p,true);
+      return [this.quests?.getInteraction(),this.dungeon.getInteraction()].filter(Boolean).sort((a,b)=>Number(!!a.portable)-Number(!!b.portable)||Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
+    }
     const candidates=[];
     const waypoint=this.worldTravel?.getInteraction();if(waypoint)candidates.push(waypoint);
     const expedition=this.expedition?.getInteraction?.();if(expedition)candidates.push(expedition);
@@ -541,16 +552,16 @@ export class Game {
     const rift=this.riftExploration?.getInteraction();if(rift)candidates.push(rift);
     const quest=this.quests?.getInteraction();if(quest)candidates.push(quest);
     const p=this.player,footY=p.y+groundOffset(p,true);
-    return candidates.sort((a,b)=>Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
+    return candidates.sort((a,b)=>Number(!!a.portable)-Number(!!b.portable)||Math.hypot(a.x-p.x,a.y-footY)-Math.hypot(b.x-p.x,b.y-footY))[0]||null;
   }
   interact(id) {
     if(this.sceneTransition.active&&!this.sceneTransition.committing)return false;
     const interaction=this.getInteraction();
     if(!interaction||interaction.enabled===false||(id!==undefined&&id!==interaction.id))return false;
+    if(interaction.category==='quest')return !!this.quests?.interact(interaction.id);
     if(this.dungeon.active)return this.dungeon.interact(interaction.id);
     if(interaction.category==='worldTravel')return this.worldTravel.interact(interaction.id);
     if(interaction.type==='expeditionPassage')return !!this.expedition?.interact(interaction.id);
-    if(interaction.category==='quest')return !!this.quests?.interact(interaction.id);
     if(interaction.category==='rift')return !!this.riftExploration?.interact(interaction.id);
     if(interaction.category==='relic'||interaction.type==='relic')return !!this.relicSites?.interact(interaction.id);
     return interaction.type==='portal'||interaction.type==='stageExit'?this.enterPortal(interaction.id):this.settlements.interact(interaction.id);
@@ -598,6 +609,7 @@ export class Game {
   _switchRegion(portal=this.portal) {
     if(!this.sceneContent.allows('worldContent')||this.stage)return false;
     if(!portal||!Number.isInteger(portal.nextRegionIndex)||this.dungeon.active)return false;
+    this.quests?.sidequests?.deactivate?.('region-change');
     this.realms?.cancel('scene-change');
     const from=this.region.id,fromIndex=this.regionIndex,p=this.player;
     const furyTime=this.adventure?.furyTime||0,magnetTime=this.adventure?.magnetTime||0;
@@ -665,11 +677,12 @@ export class Game {
 
   update(dt,input={}) {
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
-    if(this.status==='dead'){this.story?.cleanup('death');this.realms?.cancel('death');if(!this._deathSaved){this._deathSaved=true;this._scheduleWorldSave('death');}return;}
+    if(this.status==='dead'){this.story?.cleanup('death');this.realms?.cancel('death');if(!this._deathSaved){this.quests?.sidequests?.deactivate?.('death');this._deathSaved=true;this._scheduleWorldSave('death');}return;}
     if(this.sceneTransition.active){this.sceneTransition.update(dt);return;}
     if(this.story?.dialogueBlocking){this.story.update(dt);return;}
     this.regions.flushReward();
     if(this.status!=='playing') return;
+    this._syncQuestAttackBlock();
     if(this.worldSave){this._worldSaveElapsed=(this._worldSaveElapsed||0)+dt;if(this._worldSaveElapsed>=20){this._worldSaveElapsed=0;this._scheduleWorldSave('autosave');}}
     const interact=!!input.interact,pressed=interact&&!this._interactHeld;this._interactHeld=interact;
     if(pressed&&this.requestInteraction())return;
@@ -702,6 +715,8 @@ export class Game {
     this.story?.updateActors?.(dt);
     if(this.worldTravel.update())return;
     this.quests?.update();
+    const questAttackBlock=this._syncQuestAttackBlock();
+    if(this.status!=='playing')return;
     if(this.sceneContent.allows('worldContent')&&this.touchInteractions.update())return;
     if(this.sceneContent.allows('worldContent'))this.adventure?.update(dt);
     if(this.sceneContent.allows('worldContent'))this.companions.update(dt);
@@ -734,6 +749,7 @@ export class Game {
       if(!e.trainingDummy&&usesEnemyLocomotion(e)){e._walkStartX=e.x;e._walkStartY=e.y;}
       if(e.trainingDummy||this.abilities.isFrozen(e))continue;
       if(this.story?.active&&this.story.beforeEnemy(e,dt))continue;
+      if(this.quests?.sidequests?.beforeEnemy(e,dt))continue;
       if(!inDungeon&&this.worldTravel.safety.updateEnemy(e,dt))continue;
       if(inDungeon&&this.dungeon.updateEnemy(e,dt))continue;
       if(!inDungeon&&this.regions.updateEnemy(e,dt))continue;
@@ -774,10 +790,12 @@ export class Game {
         }
       }
     }
-    this.attacks.updateBasic(dt);
-    this._updateWeapons(dt);
-    this._updateGeneralSkills(dt);
-    this.superSkills.update(dt);
+    if(!questAttackBlock){
+      this.attacks.updateBasic(dt);
+      this._updateWeapons(dt);
+      this._updateGeneralSkills(dt);
+      this.superSkills.update(dt);
+    }
     this.combatStatus.update(dt);
     this.abilities.update(dt);
     if(this.status==='dead')return;

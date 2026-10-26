@@ -4,6 +4,7 @@ import { CLOCK_BRIDGE,MARSH_BRIDGE,questDefinition,questsForWorld,questWorlds } 
 import { QuestStore } from './quest-store.js';
 import { portalDoor } from './portal-geometry.js';
 import { QuestCommissions } from './quest-commissions.js';
+import { SideQuestRuntime } from './sidequests/runtime.js';
 
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const CITY='clockshadow-city',FOREST='rift-forest',MARSH='marsh',RUINS='ruins',ROAD='moss-stone-road';
@@ -19,7 +20,7 @@ export class WorldQuests {
     // standalone debug fixture must not fall back to the browser quest key.
     this.store=new QuestStore({storage:this.enabled&&(!game.debug||storage!==undefined)?storage:null});
     this.revision=0;this.board=null;this.boards=[];this._definitions=[];this._route=null;this._routeTerrain=null;this._trip=null;this._cellarChests=new WeakMap();this._targetId=null;
-    this.commissions=new QuestCommissions(this);this.enterWorld();
+    this.commissions=new QuestCommissions(this);this.sidequests=new SideQuestRuntime(this);this.enterWorld();
   }
   get storageAvailable(){return this.store.available;}
   get storageMode(){return this.store.available?'persistent':this.game.debug?'session-debug':'session';}
@@ -28,7 +29,7 @@ export class WorldQuests {
   get definition(){const definitions=this.definitions;return definitions.find(definition=>definition.id===this.trackedId)||definitions.find(definition=>!this._record(definition.id).completed)||definitions[0]||null;}
   _record(id=this.definition?.id){return id?this.store.record(id):null;}
   _changed(){this.revision++;this.store.changed();this._applyWorldEffects();this.game._scheduleWorldSave?.('quest-progress');}
-  flush(){this.commissions.checkpoint();return this.store.flush();}
+  flush(){this.commissions.checkpoint();this.sidequests.checkpoint();return this.store.flush();}
   _known(definition){return !!definition&&this.definitions.includes(definition);}
   _discover(id=this.definition?.id){const record=this._record(id);if(!record||record.discovered)return false;record.discovered=true;this._changed();return true;}
   _boardPoint(){
@@ -53,9 +54,10 @@ export class WorldQuests {
     const road=this._record(ROAD);if(this.enabled&&layout?.kind==='rift-forest'&&road.accepted&&!road.completed&&!this._definitions.some(definition=>definition.id===ROAD))this._definitions.push(questDefinition(ROAD));
     // A reduced mechanics fixture, or a map missing a required authored
     // source, must never receive an impossible quest or a permanent roadblock.
-    this._definitions=this._definitions.filter(definition=>definition.id==='clock-bridge'?!!(this._occupied()&&this._cellar()):definition.id==='underground-return'?!!g.riftExploration?.sites.some(site=>site.gateId==='bell-shortcut'):definition.id===ROAD?this._roadSourcesReady():this.commissions.ready(definition));
+    this._definitions=this._definitions.filter(definition=>definition.sidequest?this.sidequests.ready(definition):definition.id==='clock-bridge'?!!(this._occupied()&&this._cellar()):definition.id==='underground-return'?!!g.riftExploration?.sites.some(site=>site.gateId==='bell-shortcut'):definition.id===ROAD?this._roadSourcesReady():this.commissions.ready(definition));
+    this.sidequests.enterWorld();
     if(!this.definitions.length)return;
-    for(const definition of this.definitions){if(!questWorlds(definition).includes(g.worldId))continue;const location=this._boardPoint();if(location)this.boards.push({id:`quest:${definition.id}:board`,questId:definition.id,kind:'questBoard',...location,sortY:location.y,name:definition.name});}
+    for(const definition of this.definitions){if(definition.sidequest||!questWorlds(definition).includes(g.worldId))continue;const location=this._boardPoint();if(location)this.boards.push({id:`quest:${definition.id}:board`,questId:definition.id,kind:'questBoard',...location,sortY:location.y,name:definition.name});}
     this.board=this.boards[0]||null;
     this._applyWorldEffects();
     // The starting sign is visible from the haven, so the first journal entry
@@ -121,6 +123,7 @@ export class WorldQuests {
   }
   update(){
     this.commissions.update();
+    this.sidequests.update();
     if(!this.definition||this.game.dungeon?.active)return;
     for(const board of this.boards)if(!this._record(board.questId).discovered&&distance(foot(this.game),board)<220)this._discover(board.questId);
   }
@@ -149,6 +152,7 @@ export class WorldQuests {
     return this._cellarChests.get(state);
   }
   onDungeonEnter(state,site){
+    this.sidequests.onDungeonEnter(state,site);
     if(!this.definition||this.game.dungeon?.active!==state||state.site?.id!==site.id)return;
     this._route=null;this._targetId=null;this._exitChoice=null;
     if(this.game.worldId===FOREST&&site.caveId==='underground-passage'&&['cave05','cave15'].includes(site.entryKey)){
@@ -181,6 +185,7 @@ export class WorldQuests {
     return false;
   }
   onDungeonExit(state,exit){
+    this.sidequests.onDungeonExit(state,exit);
     if(this.definition&&this.game.worldId===FOREST&&this._trip?.state===state&&exit&&exit.key!==this._trip.entry&&['cave05','cave15'].includes(exit.key))this._objective('crossing','underground-return');
     if(this._known(questDefinition(ROAD))&&this.game.worldId===MARSH&&this._roadTrip?.state===state&&exit&&exit.key!==this._roadTrip.entry&&state.riftExits?.some(candidate=>candidate.key===exit.key))this._objective('crossing',ROAD);
     this._trip=null;this._roadTrip=null;this._route=null;this._targetId=null;this._mouthId=null;this._exitChoice=null;this._applyWorldEffects();
@@ -203,6 +208,11 @@ export class WorldQuests {
     return '';
   }
   getInteraction(){
+    if(!this.enabled||this.game.status!=='playing')return null;
+    const p=foot(this.game),choices=[this.sidequests.getInteraction(),this._legacyInteraction()].filter(Boolean);
+    return choices.sort((a,b)=>Number(!!a.portable)-Number(!!b.portable)||distance(p,a)-distance(p,b))[0]||null;
+  }
+  _legacyInteraction(){
     const g=this.game,definition=this.definition;if(!definition||g.dungeon?.active||g.status!=='playing')return null;
     const p=foot(g),board=[...this.boards].filter(board=>!this._record(board.questId).accepted&&distance(p,board)<90&&!g.terrain.firstBlocker(p.x,p.y,board.x,board.y,0,'sight')).sort((a,b)=>distance(p,a)-distance(p,b))[0];
     if(board){const entry=questDefinition(board.questId);return {id:board.id,questId:entry.id,category:'quest',type:'questBoard',label:`查看委托 · ${entry.name}`,description:entry.description,x:board.x,y:board.y,touchRadius:30,enabled:true};}
@@ -222,6 +232,7 @@ export class WorldQuests {
   }
   interact(id){
     const current=this.getInteraction();if(!current||current.id!==id||!current.enabled)return false;
+    if(current.sideQuestId)return this.sidequests.interact(id);
     if(current.type==='questBoard'){this._discover(current.questId);this.game._emit('questBoardOpen',{id:current.questId,name:questDefinition(current.questId).name});return true;}
     if(current.type==='questCommission')return this.commissions.interact(id);
     if(current.type==='questMechanism'){
@@ -230,9 +241,9 @@ export class WorldQuests {
     }
     return false;
   }
-  getActors(){return this.enabled&&!this.game.dungeon?.active?this.commissions.getActors():[];}
+  getActors(){return this.enabled?[...(this.game.dungeon?.active?[]:this.commissions.getActors()),...this.sidequests.getActors()]:[];}
   getProps(){
-    const g=this.game,definition=this.definition;if(!definition||g.dungeon?.active)return [];
+    const g=this.game,definition=this.definition,additional=this.sidequests.getProps();if(!definition||g.dungeon?.active)return additional;
     const props=this.boards.map(board=>{const record=this._record(board.questId);return {...board,state:record.completed?'completed':record.accepted?'active':'available'};});
     if(this._known(questDefinition('clock-bridge'))){
       const record=this._record('clock-bridge');
@@ -244,7 +255,7 @@ export class WorldQuests {
       props.push({id:`quest:${ROAD}:winch`,kind:'questWinch',...b.winch,sortY:b.winch.y,open:!!record.objectives.bridge,state:record.objectives.bridge?'completed':record.objectives.handle&&record.objectives.crossing&&record.objectives.bearing?'ready':'locked'});
       props.push({id:`quest:${ROAD}:barrier`,kind:'questBarrier',x:b.x,y:b.y,sortY:b.y,angle:b.angle,halfLength:b.halfLength,r:b.r,open:!!record.objectives.bridge});
     }
-    return props.concat(this.commissions.getProps());
+    return props.concat(this.commissions.getProps(),additional);
   }
   _exitTarget(label){
     const state=this.game.dungeon?.active;if(!state)return null;
@@ -297,6 +308,7 @@ export class WorldQuests {
     const record=this._record(definition?.id),g=this.game,state=g.dungeon?.active;
     if(!definition||!record?.accepted||record.completed)return [];
     const result=[];
+    if(definition.sidequest)return this.sidequests.targets(definition);
     if(definition.commission)return this.commissions.targets(definition);
     if(definition.id===ROAD)return this._roadTargets();
     if(definition.id==='clock-bridge'){

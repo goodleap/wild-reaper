@@ -66,8 +66,8 @@ function applyProgress(target,saved){
   if(mechanism&&target.mechanism)Object.assign(target.mechanism,mechanism);
   if(next.remainingIds){target._remaining=new Set(next.remainingIds);delete target.remainingIds;}
 }
-function shopReturnPoint(game,site,source=game){
-  if(!isWorldShop(site))return null;
+function interiorReturnPoint(game,site,source=game){
+  if(!isWorldShop(site)&&!site?.sideQuestId)return null;
   const door=site.door,terrain=source.terrain,environment=source.environment,clearance=game.player.r+4;
   if(!door||!terrain)return null;
   const safe=point=>terrain.isFree(point.x,point.y,clearance)&&!terrain.firstBlocker(door.x,door.y,point.x,point.y,clearance)&&
@@ -218,9 +218,9 @@ export class WorldSave {
     this.restoreRegion(game);
     game._refreshStats();game._refreshWeapons();
     p.hp=d.location.recover?p.maxHp:Math.max(1,Math.min(p.maxHp,d.player.hp));
-    const rest=game.worldTravel?.getRestAnchor(),site=game.settlements?.sites.find(site=>site.id===d.location.facilityId);
+    const rest=game.worldTravel?.getRestAnchor(),site=[...(game.settlements?.sites||[]),...(game.quests?.sidequests?.getSites()||[])].find(site=>site.id===d.location.facilityId);
     const location=d.location.recover?(rest?.worldId===game.worldId?rest:game.worldTravel?.spawnPoint()):
-      d.location.facilityId?shopReturnPoint(game,site)||game.worldTravel?.spawnPoint():d.location;
+      d.location.facilityId?interiorReturnPoint(game,site)||game.worldTravel?.spawnPoint():d.location;
     if(location&&finite(location.x)&&finite(location.y)&&game.terrain.isFree(location.x,location.y,p.r,'ground')){p.x=location.x;p.y=location.y-groundOffset(p,true);}
     p.invuln=2;game.regionGrace=2;
     this._restoreParty(game,d.party);
@@ -292,9 +292,9 @@ export class WorldSave {
       const recovering=!!respawn||game.player.hp<=0;
       const coreSpawn=game.worldTravel?.current?.core.spawn;
       const recovery=recovering?(game.worldTravel?.getRestAnchor()||{worldId:game.worldId,...coreSpawn}):null;
-      const shop=underground?.kind==='shop'?underground.site:null;
-      const position=recovery||(shop?shopReturnPoint(game,shop,world)||coreSpawn:world?world.returnPoint:{x:game.player.x,y:game.player.y+groundOffset(game.player,true)});
-      d.location={worldId:recovery?.worldId||game.worldId,x:position.x??0,y:position.y??0,recover:recovering,...(shop&&!recovering?{facilityId:shop.id}:{})};
+      const facility=underground&&(underground.kind==='shop'||underground.site?.sideQuestId)?underground.site:null;
+      const position=recovery||(facility?interiorReturnPoint(game,facility,world)||coreSpawn:world?world.returnPoint:{x:game.player.x,y:game.player.y+groundOffset(game.player,true)});
+      d.location={worldId:recovery?.worldId||game.worldId,x:position.x??0,y:position.y??0,recover:recovering,...(facility&&!recovering?{facilityId:facility.id}:{})};
       if(!WORLD_IDS.includes(d.location.worldId))throw new Error('恢复地点无效');
       d.player=pick(game.player,['hp','level','xp','xpNext','baseMaxHp','skillCooldown','facing']);d.build=game.build.serialize();
       Object.assign(d,pick(game,['gold','crystals','crystalsNext','time','runTime','kills','wave','bossCount','bossKills','_clock','_id','_branchOfferCursor','_branchOfferWeapon']));
