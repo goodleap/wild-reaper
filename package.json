@@ -46,6 +46,7 @@
     "test:accounts": "node qa-account-client.mjs && node qa-account-panel.mjs",
     "test:human-enemies": "node qa-human-enemies.mjs && node qa-enemy-modules.mjs",
     "test:config-publish": "node qa-config-validator-ready.mjs",
-    "test:sidequests": "node qa-sidequest-foundation.mjs && node qa-sidequest-runtime.mjs && node qa-sidequests-nature.mjs && node qa-sidequests-settlements.mjs && node qa-sidequests-frontiers.mjs && node qa-sidequest-persistence.mjs && node qa-sidequest-play.mjs && node qa-sidequest-combat.mjs && node qa-sidequest-ui.mjs && node qa-scene-rendering.mjs"
+    "test:sidequests": "node qa-sidequest-foundation.mjs && node qa-sidequest-runtime.mjs && node qa-sidequests-nature.mjs && node qa-sidequests-settlements.mjs && node qa-sidequests-frontiers.mjs && node qa-sidequest-persistence.mjs && node qa-sidequest-play.mjs && node qa-sidequest-combat.mjs && node qa-sidequest-ui.mjs && node qa-scene-rendering.mjs",
+    "test:character-sprites": "node qa-character-sprites.mjs && node qa-scene-rendering.mjs"
   }
 }

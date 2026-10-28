@@ -106,6 +106,7 @@ import { createCombatActionControl } from './combat-action-control.js';
 import { renderQuestPanel, updateQuestTracker } from './quest-panel.js';
 import { questSceneProps, drawQuestProp, drawQuestShadowPath } from './quest-art.js';
 import { sideQuestSceneProps, sideQuestPropInView, sideQuestCastsStaticShadow, drawSideQuestShadowPath, drawSideQuestProp, drawSideQuestAnimal } from './sidequests/art.js';
+import { characterSprites } from './character-sprites.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game-canvas'), ctx = canvas.getContext('2d', {alpha:false});
@@ -1478,10 +1479,12 @@ function actorVisual(entity,isPlayer=false,scaleOverride){
 }
 function sortActors(actors){return actors.sort((a,b)=>a.footY-b.footY||a.orderId-b.orderId||a.x-b.x||a.type.localeCompare(b.type));}
 function actorInView(actor,offsetX=0,offsetY=0){const {width,height}=sceneViewport();
+  const sprite=actor.entity!==game?.player&&actor.entity.characterSpriteId?characterSprites.geometry(actor):null;
   const {x,y,scale,footY,shape}=actor,cx=x+offsetX,cy=y+offsetY;
   // Include the entire projected shadow, not just the actor's collision radius.
-  return cx+(shape.halfWidth+5)*scale>=0&&cx-(shape.halfWidth+shape.shadowLength*.45+5)*scale<=width
+  const bodyAndShadow=cx+(shape.halfWidth+5)*scale>=0&&cx-(shape.halfWidth+shape.shadowLength*.45+5)*scale<=width
     &&cy-(shape.top+5)*scale<=height&&footY+offsetY+(shape.shadowLength+shape.shadowWidth*.4+5)*scale>=0;
+  return bodyAndShadow||!!sprite&&sprite.right+offsetX>=0&&sprite.left+offsetX<=width&&sprite.bottom+offsetY>=0&&sprite.top+offsetY<=height;
 }
 function actorShadowShapes(actors){
   const shapes=[];
@@ -1533,7 +1536,13 @@ function drawStoryEnemyActor(actor){
   monsterArt.draw(ctx,visual,{time:game?._clock??clock,reduced,dense:combatOptions.dense,frozen:game?.abilities?.isFrozen(e)??false,playerX:game?.player.x??e.x+1});ctx.restore();
   if(e.name){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e5d3a0';fillSceneLabel(e.name,actor.x,actor.y-53);ctx.restore();}
 }
-function drawActorBody(actor){const e=actor.entity;if(e.sideQuestAnimal){ctx.save();ctx.translate(actor.x,actor.footY);ctx.scale(actor.scale,actor.scale);drawSideQuestAnimal(ctx,e,{time:game?._clock??clock});ctx.restore();return;}if(e.enemyArtId){drawStoryEnemyActor(actor);return;}if(e.isTownNpc){drawTownNpc(actor);return;}if(e.isCompanion||e.isCaptive)drawCompanion(actor);else if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,e.hurtFlash||0,e);else{drawEliteAura(e);enemy(e,game?._clock??clock);drawStatusMarks(e);drawEliteMark(e);if(e.rescueId){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e9c894';fillSceneLabel('围困者',e.x,e.y-actor.shape.top*actor.scale-16);ctx.restore();}}}
+function drawCharacterSpriteActor(actor){
+  if(!characterSprites.draw(ctx,actor))return false;
+  const geometry=characterSprites.geometry(actor),entity=actor.entity;
+  if(entity.name){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e5d3a0';fillSceneLabel(entity.name,actor.x,geometry.top-8);ctx.restore();}
+  return true;
+}
+function drawActorBody(actor){const e=actor.entity;if(e!==game?.player&&e.characterSpriteId&&drawCharacterSpriteActor(actor))return;if(e.sideQuestAnimal){ctx.save();ctx.translate(actor.x,actor.footY);ctx.scale(actor.scale,actor.scale);drawSideQuestAnimal(ctx,e,{time:game?._clock??clock});ctx.restore();return;}if(e.enemyArtId){drawStoryEnemyActor(actor);return;}if(e.isTownNpc){drawTownNpc(actor);return;}if(e.isCompanion||e.isCaptive)drawCompanion(actor);else if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,e.hurtFlash||0,e);else{drawEliteAura(e);enemy(e,game?._clock??clock);drawStatusMarks(e);drawEliteMark(e);if(e.rescueId){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e9c894';fillSceneLabel('围困者',e.x,e.y-actor.shape.top*actor.scale-16);ctx.restore();}}}
 function drawActor(actor){
   const arrival=unitArrivalAlpha(actor.entity,game?._clock??0);if(arrival<=0)return;
   if(arrival<1){ctx.save();ctx.globalAlpha*=arrival;}
