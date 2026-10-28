@@ -7,6 +7,7 @@ export const ACTOR_LABEL_STYLE=Object.freeze({font:'600 9px system-ui,sans-serif
 
 export function importantActorName(entity,player){
   if(!entity||entity===player||entity.hidden||entity.hp<=0&&entity.state!=='recovering')return '';
+  if(entity.showcaseActor)return entity.name||'';
   if(entity.type==='boss')return entity.name||bossDefinition(entity.bossKind||'ancient').name;
   if(entity.isCompanion||entity.isCaptive){
     const suffix=entity.isCaptive?(entity.state==='ready'?' · 等待同行':entity.kind==='golem'?' · 沉睡':' · 受困'):entity.state==='recovering'?' · 恢复中':'';

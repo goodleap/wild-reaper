@@ -5,6 +5,11 @@ import { companionDefinition } from './companion-catalog.js';
 // Inactive scene snapshots, projectiles, loot and scenery are not units.
 export function visitSceneUnits(game,visit){
   if(!game)return 0;
+  if(game.showcase){
+    if(game.player)visit(game.player,true);
+    for(const {entity,isPlayer} of game.showcase.actors)visit(entity,isPlayer);
+    return game.showcase.actors.length+(game.player?1:0);
+  }
   let count=0;
   const worldContent=game.sceneContent?.allows('worldContent')!==false;
   const unit=(entity,isPlayer=false)=>{count++;visit(entity,isPlayer);};

@@ -11,3 +11,8 @@
 .debug-option-control:focus-visible+.debug-option-switch{outline:2px solid #e5eea9;outline-offset:3px}
 @media(max-width:600px){.debug-prepare-options{grid-template-columns:minmax(0,1fr)}.debug-option-row{min-height:44px}.debug-option-label{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.debug-option-switch,.debug-option-switch:before{transition:none}}
+.showcase-toolbar{position:absolute;z-index:12;top:18px;left:18px;max-width:calc(100% - 116px);padding:11px 13px;border:1px solid #d4d9b945;border-radius:10px;background:#1c3028e8;color:#e8e3bd;pointer-events:auto}
+.showcase-heading{display:flex;gap:12px;align-items:baseline;font-size:13px}.showcase-heading span{font-size:10px;color:#afc1a5}
+.showcase-sections{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.showcase-sections button{min-width:43px;min-height:32px;padding:5px 9px;border:1px solid #b4c8a549;border-radius:6px;background:#314638;color:#dce7d2;font:600 11px system-ui,sans-serif;cursor:pointer;touch-action:manipulation}@media(hover:hover){.showcase-sections button:hover{background:#40573f}}.showcase-sections button:focus-visible{outline:2px solid #e5eea9;outline-offset:2px}
+.showcase-mode #character-hud,.showcase-mode #map-button,.showcase-mode #run-summary,.showcase-mode #combat-notices,.showcase-mode #quest-tracker,.showcase-mode #game-bottom,.showcase-mode #touch-skill,.showcase-mode #touch-context-action{display:none!important}
+@media(max-width:600px){.showcase-toolbar{top:10px;left:10px;max-width:calc(100% - 105px);padding:9px 10px}.showcase-sections{gap:4px}.showcase-sections button{min-width:39px;padding:5px 7px}.showcase-heading{gap:8px;font-size:12px}}

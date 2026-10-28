@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { harness } from './qa-app-harness.mjs';
+import { DEBUG_OPTION_DEFS } from './dist/debug-mode.js';
 
 const storageKey='wild-echoes-debug-options';
-const defaults={fullLoadout:false,extraGold:true,fastMovement:true,zeroStormCooldown:true,testFacilities:true,allBosses:false,allMonsters:false};
+const defaults={characterShowcase:false,fullLoadout:false,extraGold:true,fastMovement:true,zeroStormCooldown:true,testFacilities:true,allBosses:false,allMonsters:false};
 const disabled=Object.fromEntries(Object.keys(defaults).map(id=>[id,false]));
 const node=(h,id)=>h.document.getElementById(id);
 const click=(h,id)=>h.fire(node(h,id),'click');
@@ -15,11 +16,11 @@ const start=async h=>{click(h,'prepare-start-button');await h.flush();assert(h.r
 for(const search of ['?debug','?debug=full']){
   const h=harness(search);click(h,'start-button');
   assert(!node(h,'debug-prepare-settings').classList.contains('hidden'));
-  assert.equal(node(h,'debug-prepare-options').children.length,7);
+  assert.equal(node(h,'debug-prepare-options').children.length,DEBUG_OPTION_DEFS.length);
   assert.match(node(h,'debug-prepare-details').textContent,/自动选首项.*木桩.*城堡/);
   assert(!/设施[^；。]*首领/.test(node(h,'debug-prepare-details').textContent),'nearby fixtures no longer promise a bundled boss');
   assert.match(node(h,'debug-option-allBosses-description').textContent,/10 万|100000|100,000/);
-  assert.match(node(h,'game-version').textContent,/ · DEBUG$/);
+  assert.match(node(h,'game-version').textContent,/ · DEBUG · (?:LOCAL|REMOTE)$/);
   assert(!node(h,'game-version').textContent.includes('FULL'));
   for(const [id,checked] of Object.entries(defaults)){
     const input=node(h,`debug-option-${id}`);

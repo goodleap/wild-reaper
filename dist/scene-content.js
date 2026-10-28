@@ -2,18 +2,19 @@ import { groundOffset } from './terrain.js';
 import { resetLocomotion } from './locomotion.js';
 
 const STORY_CONTENT=new Set(['naturalTerrain','storyActors','storyEnemies','storyInteractions','storyEffects','characterAbilities']);
+const SHOWCASE_CONTENT=new Set(['naturalTerrain']);
 const foot=entity=>({x:entity.x,y:entity.y+groundOffset(entity,!!entity.heroId||!!entity.isCompanion)});
 
 // A chapter borrows the map's natural geometry, not its exploration objects.
 // The same policy owns generation, simulation and the presentation boundary.
 export class SceneContent {
-  constructor(game,{story=false}={}) {
-    this.game=game;this.isolated=story;this.disposed=false;
+  constructor(game,{story=false,showcase=false}={}) {
+    this.game=game;this.isolated=story||showcase;this.showcase=showcase;this.disposed=false;
     this.terrain=game.terrain;this.mapId=game.mapId;
     this._gates=story?new Map(game.terrain._riftGates||[]):null;
     if(story)for(const [id] of this._gates)game.terrain.setRiftGate(id,true);
   }
-  allows(category){return !this.isolated||STORY_CONTENT.has(category);}
+  allows(category){return !this.isolated||(this.showcase?SHOWCASE_CONTENT:STORY_CONTENT).has(category);}
   _arrival(desired) {
     const g=this.game,p=g.player,r=p.r,mushroomCells=new Map();
     const mushroomsClear=point=>{

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { Terrain, groundOffset } from './dist/terrain.js';
+import { Island } from './dist/islands.js';
 import { CombatBuild } from './dist/combat-build.js';
 import { UPGRADE_DEFS, WEAPON_DEFS, SKILL_DEFS } from './dist/combat-catalog.js';
 import { debugConfigFromSearch, DEBUG_OPTION_DEFS, normalizeDebugOptions } from './dist/debug-mode.js';
@@ -56,7 +57,7 @@ for(const def of DEBUG_OPTION_DEFS) {
   assert.equal(g.build.getWeapon('arrow').acquired,def.id==='fullLoadout',`${def.id}: full loadout is independent`);
   assert.equal(g.companions.members.length,0);
   g.player.skillCooldown=5;g.update(.01,{});
-  assert.equal(g.player.skillCooldown,def.id==='zeroStormCooldown'?0:4.99,`${def.id}: cooldown update follows the run setting`);
+  assert.equal(g.player.skillCooldown,def.id==='characterShowcase'?5:def.id==='zeroStormCooldown'?0:4.99,`${def.id}: only combat runs advance skill cooldowns`);
 }
 const ordinary=factory({debug:true}),full=factory({debug:true,debugOptions:{fullLoadout:true}});
 full.enemies=full.enemies.filter(e=>e.trainingDummy);
@@ -78,7 +79,9 @@ assert.equal(applyFullDebugBuild(full),false);assert.deepEqual(full.build.serial
 assert.equal(full.player.skillCooldownMax,0);full.player.skillCooldown=5;full.update(.01,{});assert.equal(full.player.skillCooldown,0,'full mode retains the debug storm cooldown');
 
 for(let seed=0;seed<12;seed++) {
-  const g=new Game({debug:true,terrain:new Terrain({seed})}),dummy=g.enemies.find(e=>e.trainingDummy);
+  // The authored world's town spawn and training sites must use that world's
+  // terrain, rather than pairing them with an unrelated infinite forest seed.
+  const g=new Game({debug:true,terrain:new Terrain({region:'rift-forest',seed,island:new Island({region:'rift-forest',seed})})}),dummy=g.enemies.find(e=>e.trainingDummy);
   assert(dummy,`terrain ${seed} has one safe training post`);
   assert.equal(g.enemies.filter(e=>e.trainingDummy).length,1);assert.equal(spawnDebugTrainingDummy(g),null);
   const point={x:dummy.x,y:dummy.y+groundOffset(dummy)},from={x:g.player.x,y:g.player.y+groundOffset(g.player,true)},d=Math.hypot(point.x-from.x,point.y-from.y);

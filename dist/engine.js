@@ -48,7 +48,8 @@ import { TouchInteractions } from './touch-interactions.js';
 import { portalDoor } from './portal-geometry.js';
 import { SceneTransition } from './scene-transition.js';
 import { updateDebugMonsterStream } from './debug-wave.js';
-import { normalizeDebugOptions } from './debug-mode.js';
+import { normalizeDebugRunOptions } from './debug-mode.js';
+import { CharacterShowcase, createCharacterShowcaseTerrain } from './character-showcase.js';
 import { applyFullDebugBuild, spawnDebugTrainingDummy, spawnDebugBosses } from './debug-training.js';
 import { updateWeaponKnockback } from './weapon-knockback.js';
 import { friendlyTargets, friendlyFoot, isFriendlyActive, selectFriendlyTarget, damageFriendly, clearFriendlyPath } from './friendly-combat.js';
@@ -77,6 +78,12 @@ export function xpCost(level) {
 export const crystalCost=(skillLevel)=>xpCost(skillLevel);
 export class Game {
   constructor({difficulty='normal',hero='traveler',appearanceId=null,initialWeaponId='sword',terrain=null,adventure=true,encounters=adventure,environment=adventure,elites=adventure,companions=adventure,settlements=adventure,debug=false,debugOptions=null,debugWorld=null,worldId='rift-forest',stageId=null,mode=null,dungeonId=null,storyId='prologue',questStorage}={}) {
+    const showcase=debug===true&&debugOptions?.characterShowcase===true;
+    if(showcase){
+      mode='showcase';stageId=dungeonId=null;debugWorld=null;worldId='rift-forest';
+      adventure=encounters=environment=elites=companions=settlements=false;
+      terrain=createCharacterShowcaseTerrain();questStorage=null;
+    }
     this.storyDebug=mode==='story'&&debug===true;
     if(mode==='story'){
       const story=STORY_DEFINITIONS.find(entry=>entry.id===storyId);
@@ -85,9 +92,9 @@ export class Game {
     }
     this.configVersion=getConfigSnapshot().contentVersion;
     this.debug=debug===true;
-    this.debugOptions=normalizeDebugOptions(debugOptions,this.debug);
+    this.debugOptions=normalizeDebugRunOptions(debugOptions,this.debug);
     this.debugFull=this.debugOptions.fullLoadout;
-    this.mode=mode==='story'?'story':stageId||dungeonId||mode==='dungeon'?'dungeon':'world';
+    this.mode=showcase?'showcase':mode==='story'?'story':stageId||dungeonId||mode==='dungeon'?'dungeon':'world';
     this.dungeonId=this.mode==='dungeon'?dungeonId:null;
     this._worldExploration=['world','story'].includes(this.mode)&&!!adventure;
     if(['world','dungeon','story'].includes(mode))difficulty='normal';
@@ -101,7 +108,7 @@ export class Game {
     const seed=this.stage?.seed??this.region.seed??this.regionIndex;
     this.terrain=terrain??new Terrain({region:this.region.id,seed,island:new Island({region:this.region.id,seed})});
     this.stage?.prepareTerrain();
-    this.sceneContent=new SceneContent(this,{story:this.mode==='story'});
+    this.sceneContent=new SceneContent(this,{story:this.mode==='story',showcase});
     const worldContent=this.sceneContent.allows('worldContent');
     // Fixed Ember locations own their population; existing worlds retain
     // their original ambient generation and residents.
@@ -173,7 +180,7 @@ export class Game {
     this.discoveredMap=new Set();if(worldContent)this.regions.initialize();
     this.riftExploration=new RiftExploration(this,{generation:worldContent});
     this.relicSites=new RelicSites(this,{generation:!!(residentContent&&adventure&&(encounters||companions))});
-    if(this.mode!=='story')this.settlements.ensureAngels?.();
+    if(this.mode!=='story'&&!showcase)this.settlements.ensureAngels?.();
     this.territories=new MonsterTerritories(this,worldContent?{}:{generation:false});
     this.expedition?.initialize();
     // Keep debug entry immediately playable. Shop gold is granted once;
@@ -184,6 +191,12 @@ export class Game {
     this.story=this.mode==='story'?createStoryRun(this,{id:storyId}):null;
     this.story?.initialize();
     this.quests=new WorldQuests(this,{storage:questStorage});
+    this.showcase=showcase?new CharacterShowcase(this):null;
+    if(this.showcase){
+      this.player.x=this.showcase.spawn.x;this.player.y=this.showcase.spawn.y-groundOffset(this.player,true);
+      this.player.groundY=this.showcase.spawn.y;
+      resetLocomotion(this.player);
+    }
     if(this.worldTravel.enabled){
       const landing=this.worldTravel.spawnPoint(this.player.r);
       if(landing){this.player.x=landing.x;this.player.y=landing.y-groundOffset(this.player,true);resetLocomotion(this.player);}
@@ -264,7 +277,7 @@ export class Game {
     const dy=Math.max(0,Math.abs(entity.y-this.player.y)-this.viewHeight*.5-margin);
     return dx*dx+dy*dy<=sq(entity.r||0);
   }
-  canUseSkill(id) {return !!this.build.getSkill(id)?.acquired&&this.story?.allowsSkill?.(id)!==false&&!this.quests?.sidequests?.blocksPlayerAttacks;}
+  canUseSkill(id) {return !this.showcase&&!!this.build.getSkill(id)?.acquired&&this.story?.allowsSkill?.(id)!==false&&!this.quests?.sidequests?.blocksPlayerAttacks;}
   _syncQuestAttackBlock(){
     const blocked=!!this.quests?.sidequests?.blocksPlayerAttacks;
     if(blocked&&!this._questAttacksBlocked){
@@ -677,6 +690,18 @@ export class Game {
 
   update(dt,input={}) {
     dt=clamp(Number.isFinite(dt)?dt:0,0,.05);
+    if(this.showcase){
+      if(this.status!=='playing'||this._disposed)return;
+      this.time+=dt;this.runTime+=dt;this._clock+=dt;
+      let x=Number.isFinite(input.x)?input.x:0,y=Number.isFinite(input.y)?input.y:0;
+      const length=Math.hypot(x,y);if(length>1){x/=length;y/=length;}
+      const p=this.player,oldX=p.x,oldY=p.y;if(length>.01)p.facing=Math.atan2(y,x);
+      this._moveEntity(p,x*p.speed*dt,y*p.speed*dt,true);
+      p.groundY=p.y+groundOffset(p,true);
+      updateLocomotion(p,oldX,oldY,dt);if(p.moving)p.moveFacing=Math.atan2(p.y-oldY,p.x-oldX);
+      this.showcase.update(dt);
+      return;
+    }
     if(this.status==='dead'){this.story?.cleanup('death');this.realms?.cancel('death');if(!this._deathSaved){this.quests?.sidequests?.deactivate?.('death');this._deathSaved=true;this._scheduleWorldSave('death');}return;}
     if(this.sceneTransition.active){this.sceneTransition.update(dt);return;}
     if(this.story?.dialogueBlocking){this.story.update(dt);return;}
