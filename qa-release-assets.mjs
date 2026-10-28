@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { CHARACTER_SPRITE_ATLASES } from './dist/character-sprite-manifest.js';
 
 const root=fileURLToPath(new URL('./',import.meta.url));
 const originalHTML=readFileSync(resolve(root,'dist/index.html'),'utf8');
@@ -12,6 +13,7 @@ const temporary=mkdtempSync(join(tmpdir(),'wild-reaper-release-'));
 const page=resolve(temporary,'dist/index.html');
 const readPage=()=>readFileSync(page,'utf8');
 const assetHash=file=>createHash('sha256').update(readFileSync(resolve(temporary,'dist',file))).digest('hex').slice(0,12);
+const expectedAssets=['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png',...Object.values(CHARACTER_SPRITE_ATLASES).map(atlas=>atlas.path)];
 function stamp(count,expectedError){
   const result=spawnSync(process.execPath,['scripts/stamp-version.mjs','--commit-count',String(count)],{cwd:temporary,encoding:'utf8'});
   if(expectedError){
@@ -54,7 +56,7 @@ function release(html,count){
       assert.equal(bytes,readFileSync(resolve(temporary,'dist',decodeURIComponent(url.pathname.slice('/wild-reaper/'.length)))).length,`${file} reports exact on-disk bytes`);
     }
   }
-  assert.deepEqual(Object.keys(boot.assets),['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png','./assets/units/humanoids-013f39c762b0ef5c.png']);
+  assert.deepEqual(Object.keys(boot.assets),[...new Set(expectedAssets)]);
   for(const file of ['./boot-art.js','./enemy-art/frostcrown-assets.js','./character-sprites.js','./character-sprite-manifest.js']){
     assert(boot.groups.art.some(([path])=>path===file),`${file} belongs to the art boot closure`);
   }
@@ -179,16 +181,24 @@ import './comment-only.js';
   assert.deepEqual(version52.styles,revised.styles,'unchanged CSS is cached across releases');
   assert.deepEqual(version52.imports,revised.imports,'all unchanged static and dynamic modules are cached across releases');
   assert.deepEqual(version52.boot,revised.boot,'advancing the display version does not change resource sizes');
-  const valid=readPage();
+  let valid=readPage();
   stamp(0,/positive safe integer/);
   assert.equal(readPage(),valid,'invalid counts cannot partially change the page');
+
+  // Adding a motion sheet changes only the asset manifest; the release tool
+  // must discover it without another hard-coded filename in the build script.
+  const addedAtlas='./assets/units/release-fixture.png';
+  writeFileSync(resolve(temporary,'dist',addedAtlas),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64'));
+  writeFileSync(resolve(temporary,'dist/character-sprite-manifest.js'),
+    `export const CHARACTER_SPRITE_ATLASES=Object.freeze(${JSON.stringify({...CHARACTER_SPRITE_ATLASES,releaseFixture:{path:addedAtlas,width:1,height:1}})});\nexport const CHARACTER_SPRITES={};\n`);
+  expectedAssets.push(addedAtlas);stamp(52);release(readPage(),52);valid=readPage();
 
   writeFileSync(resolve(temporary,'dist/release-fixture/missing.js'),"import './does-not-exist.js';\n");
   stamp(53,/Missing local release asset/);
   assert.equal(readPage(),valid,'missing transitive modules fail before writing');
   rmSync(resolve(temporary,'dist/release-fixture/missing.js'));
-  for(const name of ['frostcrown-0d4e3d938dc5e6e0.png','humanoids-013f39c762b0ef5c.png']){
-    const image=resolve(temporary,'dist/assets/units',name),imageBytes=readFileSync(image);
+  for(const path of expectedAssets.filter(path=>path.endsWith('.png'))){
+    const image=resolve(temporary,'dist',path),imageBytes=readFileSync(image);
     rmSync(image);stamp(53,/Missing local release asset/);
     assert.equal(readPage(),valid,'missing boot assets fail before writing');writeFileSync(image,imageBytes);
   }

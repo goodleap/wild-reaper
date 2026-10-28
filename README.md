@@ -61,7 +61,7 @@ npm run test:forest-maintenance
 
 修改城市地图或城市素材时运行 `npm run test:city`，覆盖结构占地、全身体通行、建筑深度、桥面、洞穴状态、地图选择与缓存上限，并用真实浏览器检查城市画面。涉及共享地形、寻路或古城试炼时，再运行相应回归并检查受影响的地图。离线建筑实体与画面字段必须保持同源；不要再给景物添加第二套碰撞轮廓。
 
-人物图集由 `character-sprite-manifest.js` 记录源矩形、脚点和世界显示高度，`character-sprites.js` 共享一次解码结果。`boot-art.js` 在启动阶段统一加载角色图片，下载、重试和解码计入进度及行为日志；两张图集就绪后才启用游戏。任务角色通过 `characterSpriteId` 使用人物图集，指定战斗角色在 `enemy-art/royal.js` 复用同一图集和既有姿态缓存；主角保持既有绘制路径。这批是单姿态透明素材，以整体轻微变换反馈移动和蓄力，尚未提供独立方向帧与分层动作。重要角色名字统一由 `actor-labels.js` 绘制，名称位置也供气泡避让复用。相关检查：`npm run test:character-sprites`、`node qa-boot-activity-log.mjs`。云端安装 Playwright 与 Chromium 后，可用 `python scripts/capture-character-sprites.py --output-dir /tmp/character-preview` 重现实际游戏渲染的手机、桌面及放大细节截图；临时摆放仅作用于该浏览器会话。
+人物图集由 `character-sprite-manifest.js` 记录各动作的源矩形、脚点及固定身体参考高度。`character-sprites.js` 每张图集只解码一次，按实际移动步幅选择四帧行走，停步回到待机；正背向使用独立帧，左右转向镜像，冻结时保留当前帧。指定战斗角色在 `enemy-art/royal.js` 将蓄力、释放、收招和受击绑定到实际战斗阶段，复用有容量限制的姿态缓存。任务角色通过 `characterSpriteId` 指定形象，戏班领班有独立素材；主角保持既有绘制路径。`boot-art.js` 从图集清单加载全部图片，分别记录下载、重试和解码进度；版本脚本从同一清单生成资源大小。重要角色名字统一由 `actor-labels.js` 绘制，名称位置也供气泡避让复用。相关检查：`npm run test:character-sprites`、`node qa-boot-activity-log.mjs`；实际动作可在 debug「角色展示」查看。
 
 在 `?debug` 的冒险准备中勾选「角色展示」，可查看当前角色的真实大小、名字与往返移动。`character-showcase.js` 汇总当前形象并去重，复用普通单位绘制及移动姿态；独立展示模式不接入战斗、世界存档或冒险档案。分类按钮用于跳转，原移动、暂停和返回操作继续有效。专项检查：`npm run test:character-showcase`。
 

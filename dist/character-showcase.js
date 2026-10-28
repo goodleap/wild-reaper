@@ -33,7 +33,7 @@ function catalogue(){
     {type:'player',heroId:hero.heroId,appearanceId:hero.appearanceId,groundOffset:19.8});
   // Current NPC materials that are distinct from the standard playable art.
   // Warden/stormcaller are represented once in the companion section below.
-  for(const [kind,name]of [['merchant','商人'],['angel','天使'],['elder','年长居民'],['princess','戏班领班']])
+  for(const [kind,name]of [['merchant','商人'],['angel','天使'],['elder','年长居民']])
     add('npcs',`humanoid:${kind}`,name,{type:'player',heroId:kind,kind,appearanceId:kind,
       isTownNpc:true,townKind:kind==='angel'?'angel':'merchant',sideQuestActor:true,groundOffset:19.8});
   const combatSprites=new Set(Object.values(COMBAT_SPRITES));
@@ -80,9 +80,9 @@ export class CharacterShowcase{
         else if(!actor.isPlayer&&!e.sideQuestAnimal)initializeEnemyBehavior(e);
         const offset=groundOffset(e,actor.isPlayer);e.y=home.y-offset;e.groundY=home.y;
         resetLocomotion(e);
-        // Keep each lane within its own cell. Alternate a few vertical paths
-        // so directional heroes also demonstrate front/back travel.
-        const angle=actor.category==='heroes'&&index===1?Math.PI/2:0;
+        // Keep each lane within its cell; diagonal atlas paths demonstrate
+        // both authored directions while the princess keeps her vertical path.
+        const angle=actor.category==='heroes'&&index===1?Math.PI/2:e.characterSpriteId||COMBAT_SPRITES[e.bossKind||e.type]?-Math.PI/4:0;
         const reach=actor.category==='bosses'?35:28;
         actor.route={home,dx:Math.cos(angle),dy:Math.sin(angle),reach,position:0,direction:index%2?-1:1,
           speed:actor.category==='bosses'?58:72,pause:0,offset};

@@ -3,6 +3,7 @@ import { capsulePath } from '../attack-capsule.js';
 import { humanAttackCapsules } from '../royal-attack-geometry.js';
 import { characterSprites, CHARACTER_SPRITES } from '../character-sprites.js';
 import { ENEMY_VISUALS } from '../enemy-visuals.js';
+import { enemyAnimationPose } from '../enemy-animation.js';
 
 const CHARACTER_ART=Object.freeze({royalmage:'emberpriest',escortmarshal:'ironmarshal'});
 
@@ -115,10 +116,12 @@ export function paintRoyalUnit(c,kind,p=0,flip=1,pose={}){
   const characterSpriteId=CHARACTER_ART[kind];
   if(characterSpriteId){
     const visual=ENEMY_VISUALS[kind],definition=CHARACTER_SPRITES[characterSpriteId];
-    // Retain this enemy's grounded size and shared combat pose. The atlas is
-    // a complete body, so pose feedback moves it without inventing limb frames.
+    // The shared cache paints one canonical horizontal orientation, but keeps
+    // independently authored front/back and attack frames in its finite key.
+    const entity={characterSpriteId,facing:0,moving:pose.mode==='move',walkSpeed:1,walkPhase:pose.cycle||0};
+    const sampled=pose.sprite||characterSprites.sample(entity,{pose});
     c.save();c.scale(flip,1);
-    const drawn=characterSprites.draw(c,{x:0,footY:visual.foot,scale:definition.referenceScale*visual.bodyHeight/definition.worldHeight,entity:{characterSpriteId,facing:0}},{pose});
+    const drawn=characterSprites.draw(c,{x:0,footY:visual.foot,scale:definition.referenceScale*visual.bodyHeight/definition.worldHeight,entity},{sample:{...sampled,flip:1}});
     c.restore();return drawn;
   }
   const a=state(p,pose),scale=kind==='searchcaptain'?1.25:kind==='escortmarshal'?1.33:1;
@@ -156,4 +159,27 @@ function telegraph(c,e){
   else for(const capsule of humanAttackCapsules(a))capsulePath(c,capsule);
   c.fillStyle=`rgba(194,96,63,${.12+progress*.15})`;c.fill();c.strokeStyle='#c47953';c.globalAlpha=.65+progress*.3;c.lineWidth=1.8;c.stroke();c.restore();
 }
-export const ROYAL_ART=Object.freeze(Object.fromEntries(['royalguard','royallancer','royalarbalist','royalmage','searchcaptain','escortmarshal'].map(kind=>[kind,Object.freeze({animated:true,facing,telegraph,...(CHARACTER_ART[kind]?{ready:()=>characterSprites.ready}:{}),paint:(c,p,flip,pose)=>paintRoyalUnit(c,kind,p,flip,pose)})])));
+// Presentation follows the existing combat clock; it never starts attacks or
+// changes warning/hit geometry. Human melee resolves straight into recovery,
+// so its first 0.18 seconds carry the authored contact/release pose.
+export function sampleRoyalCharacterPose(kind,e,{time=0,reduced=false,frozen=false}={}){
+  const id=CHARACTER_ART[kind];if(!id)return null;
+  const pose=enemyAnimationPose(e,{time,reduced}),cast=e._visualCast;
+  if(e.guardActive!==false){
+    if(kind==='royalmage'&&cast){pose.mode=cast.phase;pose.progress=clamp(cast.progress||0,0,1);pose.action=cast.abilityId;}
+    else if(kind==='escortmarshal'&&pose.mode==='recovery'){
+      const duration=e.specialRecovery>0?e.specialRecoveryMax:e.specialist?.maxTime;
+      const remaining=e.specialRecovery>0?e.specialRecovery:e.specialist?.timer;
+      const elapsed=Math.max(0,(duration||0)-(remaining||0));
+      if(elapsed<.18){pose.mode='active';pose.progress=elapsed/.18;}
+    }
+    if(['idle','move'].includes(pose.mode)&&e.hit>0){pose.mode='hit';pose.progress=clamp(1-e.hit/.12,0,1);}
+  }
+  // Walking is driven by resolved displacement, including reduced-effects
+  // mode. It remains a real gait, not a timed translation of one rigid sprite.
+  pose.cycle=e.walkPhase||0;
+  const action=e.specialAttack||cast||(e.specialist?.phase!=='idle'?e.specialist:null);
+  const sprite=characterSprites.sample(e,{id,pose,time,reduced,frozen,facing:Number.isFinite(action?.angle)?action.angle:e.visualFacing});
+  return {...pose,sprite,key:`sprite:${sprite.key}`,spriteFlip:sprite.flip};
+}
+export const ROYAL_ART=Object.freeze(Object.fromEntries(['royalguard','royallancer','royalarbalist','royalmage','searchcaptain','escortmarshal'].map(kind=>[kind,Object.freeze({animated:true,facing,telegraph,...(CHARACTER_ART[kind]?{ready:()=>characterSprites.readyFor(CHARACTER_ART[kind]),samplePose:(e,options)=>sampleRoyalCharacterPose(kind,e,options)}:{}),paint:(c,p,flip,pose)=>paintRoyalUnit(c,kind,p,flip,pose)})])));

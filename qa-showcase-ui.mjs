@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { harness } from './qa-app-harness.mjs';
 import { DEBUG_OPTION_DEFS,normalizeDebugOptions,normalizeDebugRunOptions } from './dist/debug-mode.js';
-import { characterSprites,CHARACTER_SPRITE_ATLAS } from './dist/character-sprites.js';
+import { characterSprites } from './dist/character-sprites.js';
 
-await characterSprites.preload({load:async()=>({width:CHARACTER_SPRITE_ATLAS.width,height:CHARACTER_SPRITE_ATLAS.height})});
+await characterSprites.preload({load:async(url,atlas)=>({width:atlas.width,height:atlas.height})});
 const node=(h,id)=>h.document.getElementById(id),click=(h,id)=>h.fire(node(h,id),'click');
 const option=(h,id,value)=>{const input=node(h,`debug-option-${id}`);input.checked=value;h.fire(input,'change');};
 const selected=Object.fromEntries(DEBUG_OPTION_DEFS.map(def=>[def.id,true]));

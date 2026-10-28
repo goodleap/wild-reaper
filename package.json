@@ -47,7 +47,7 @@
     "test:human-enemies": "node qa-human-enemies.mjs && node qa-enemy-modules.mjs",
     "test:config-publish": "node qa-config-validator-ready.mjs",
     "test:sidequests": "node qa-sidequest-foundation.mjs && node qa-sidequest-runtime.mjs && node qa-sidequests-nature.mjs && node qa-sidequests-settlements.mjs && node qa-sidequests-frontiers.mjs && node qa-sidequest-persistence.mjs && node qa-sidequest-play.mjs && node qa-sidequest-combat.mjs && node qa-sidequest-ui.mjs && node qa-scene-rendering.mjs",
-    "test:character-sprites": "node qa-character-sprites.mjs && node qa-character-assignments.mjs && node qa-human-sprite-art.mjs && node qa-actor-labels.mjs && node qa-scene-rendering.mjs",
+    "test:character-sprites": "node qa-character-sprites.mjs && node qa-character-animation.mjs && node qa-character-assignments.mjs && node qa-human-sprite-art.mjs && node qa-actor-labels.mjs && node qa-scene-rendering.mjs",
     "test:character-showcase": "node qa-character-showcase.mjs && node qa-showcase-engine.mjs && node qa-showcase-ui.mjs && node qa-debug-preparation.mjs"
   }
 }

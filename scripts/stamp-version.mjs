@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CHARACTER_SPRITE_ATLASES } from '../dist/character-sprite-manifest.js';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const args=process.argv.slice(2);
@@ -120,7 +121,7 @@ function bootGroup(entry){
 }
 const bootResources={
   groups:{config:bootGroup('./content-config.js'),art:bootGroup('./boot-art.js'),app:bootGroup('./app.js')},
-  assets:Object.fromEntries(['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png','./assets/units/humanoids-013f39c762b0ef5c.png'].map(file=>[file,assetBuffer(localURL(file)).length]))
+  assets:Object.fromEntries(['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png',...Object.values(CHARACTER_SPRITE_ATLASES).map(atlas=>atlas.path)].map(file=>[file,assetBuffer(localURL(file)).length]))
 };
 
 let updated=html.replace(slot,`$1${version}$2`);

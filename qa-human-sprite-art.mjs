@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { characterSprites, CHARACTER_SPRITES, CHARACTER_SPRITE_ATLAS } from './dist/character-sprites.js';
+import { characterSprites, CHARACTER_SPRITES, CHARACTER_SPRITE_ATLASES } from './dist/character-sprites.js';
 import { ROYAL_ART, paintRoyalUnit } from './dist/enemy-art/royal.js';
 import { ENEMY_VISUALS } from './dist/enemy-visuals.js';
 import { MonsterArt } from './dist/monster-art.js';
@@ -32,17 +32,17 @@ assert.equal(art.diagnostics.builds,0,'unloaded artwork cannot cache an invisibl
 assert.equal(canvases.length,0,'unloaded artwork allocates no pose canvases');
 assert(art.draw(output.ctx,entity('royalguard')),'unmapped human art remains available independently');
 
-let loads=0;const atlas={width:CHARACTER_SPRITE_ATLAS.width,height:CHARACTER_SPRITE_ATLAS.height};
-await characterSprites.preload({load:async()=>{loads++;return atlas;}});
-await characterSprites.preload({load:()=>{throw Error('duplicate atlas decode');}});assert.equal(loads,1);
+let loads=0;const atlases=new Map();
+await characterSprites.preload({load:async(url,atlas,id)=>{loads++;const image={width:atlas.width,height:atlas.height};atlases.set(id,image);return image;}});
+await characterSprites.preload({load:()=>{throw Error('duplicate atlas decode');}});assert.equal(loads,Object.keys(CHARACTER_SPRITE_ATLASES).length);
 const mappings={royalmage:'emberpriest',escortmarshal:'ironmarshal'};
 for(const [kind,id] of Object.entries(mappings)){
   const actor=entity(kind),before=JSON.stringify(actor),record=recordingContext();
   assert(art.draw(record.ctx,actor));assert.equal(JSON.stringify(actor),before,'drawing does not alter combat, collision or coordinates');
-  const cached=record.images.at(-1).image,paint=cached.record.images.at(-1),frame=CHARACTER_SPRITES[id].frame;
-  assert.equal(paint.image,atlas,'combat uses the approved atlas');
+  const cached=record.images.at(-1).image,paint=cached.record.images.at(-1),definition=CHARACTER_SPRITES[id],frame=definition.clips.front.idle[0].frame;
+  assert.equal(paint.image,atlases.get(definition.atlas),'combat uses the approved atlas');
   assert.deepEqual(paint.args.slice(0,4),[frame.x,frame.y,frame.w,frame.h]);
-  assert(Math.abs(paint.args[7]-ENEMY_VISUALS[kind].bodyHeight)<1e-9,'combat retains its authored body height');
+  assert(Math.abs(paint.args[7]/frame.h*definition.pixelHeight-ENEMY_VISUALS[kind].bodyHeight)<1e-9,'combat retains its authored body height independent of weapon extent');
   const stableBuilds=art.diagnostics.builds;
   for(let i=0;i<30;i++)assert(art.draw(record.ctx,actor,{time:i}));
   assert.equal(art.diagnostics.builds,stableBuilds,'stationary characters reuse a warmed body');
@@ -53,17 +53,17 @@ for(const [kind,id] of Object.entries(mappings)){
   assert.equal(record.images.at(-1).corners[0].x,warmFlip,'freeze retains its facing');
   art.draw(record.ctx,actor);assert.notEqual(record.images.at(-1).corners[0].x,warmFlip,'unfrozen facing follows the shared human rule');
   assert.equal(record.depth,0);
-  // Inspect all finite shared pose samples against the real cached canvas.
-  for(const mode of ['idle','move','windup','active','recovery','hit'])for(let i=0;i<9;i++){
-    const sprite=art._sprite(kind,0,false,1,{mode,action:'royalSpell',progress:i/8,cycle:i*Math.PI/4,moving:mode==='move',key:`${mode}:${i}`});
+  // Inspect every authored front/back frame against the actual cached canvas.
+  for(const direction of ['front','back'])for(const [clip,frames] of Object.entries(definition.clips[direction]))for(let index=0;index<frames.length;index++){
+    const sampled={id,direction,clip,index,flip:1,...frames[index]},sprite=art._sprite(kind,0,false,1,{sprite:sampled,key:`qa:${direction}:${clip}:${index}`});
     const visual=ENEMY_VISUALS[kind],ratio=sprite.canvas.width/sprite.w;
     for(const image of sprite.canvas.record.images)for(const point of image.corners){
       const x=point.x/ratio-sprite.ox,y=point.y/ratio-sprite.oy;
-      assert(Math.abs(x)<=visual.halfWidth+.001&&y>=-visual.top-.001,`${kind} pose stays inside scene culling/name bounds`);
+      assert(Math.abs(x)<=visual.halfWidth+.001&&y>=-visual.top-.001,`${kind}/${direction}/${clip} stays inside scene culling/name bounds`);
     }
   }
 }
-for(const canvas of canvases)for(const image of canvas.record.images)if(image.image===atlas){
+for(const canvas of canvases)for(const image of canvas.record.images)if([...atlases.values()].includes(image.image)){
   for(const p of image.corners)assert(p.x>=-.001&&p.y>=-.001&&p.x<=canvas.width+.001&&p.y<=canvas.height+.001,`atlas pose remains inside cache: ${JSON.stringify(p)} / ${canvas.width}×${canvas.height}`);
   assert.equal(canvas.record.depth,0);
 }

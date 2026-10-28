@@ -1566,11 +1566,11 @@ function drawStoryEnemyActor(actor){
   monsterArt.draw(ctx,visual,{time:game?._clock??clock,reduced,dense:combatOptions.dense,frozen:game?.abilities?.isFrozen(e)??false,playerX:e.showcaseActor?e.x+Math.cos(e.facing||0):game?.player.x??e.x+1});ctx.restore();
 }
 function drawCharacterSpriteActor(actor){
-  if(!characterSprites.draw(ctx,actor))return false;
+  if(!characterSprites.draw(ctx,actor,{time:game?._clock??clock,reduced,frozen:game?.abilities?.isFrozen(actor.entity)??false}))return false;
   return true;
 }
 function drawActorArtwork(actor){const e=actor.entity;if(e!==game?.player&&e.characterSpriteId&&drawCharacterSpriteActor(actor))return;if(e.sideQuestAnimal){ctx.save();ctx.translate(actor.x,actor.footY);ctx.scale(actor.scale,actor.scale);drawSideQuestAnimal(ctx,e,{time:game?._clock??clock});ctx.restore();return;}if(e.enemyArtId){drawStoryEnemyActor(actor);return;}if(e.isTownNpc){drawTownNpc(actor);return;}if(e.isCompanion||e.isCaptive)drawCompanion(actor);else if(actor.isPlayer)player(actor.x,actor.y,clock,actor.scale,e.facing||0,e.hurtFlash||0,e);else{drawEliteAura(e);enemy(e,game?._clock??clock);drawStatusMarks(e);drawEliteMark(e);if(e.rescueId){ctx.save();ctx.textAlign='center';ctx.font='600 9px system-ui,sans-serif';ctx.fillStyle='#e9c894';fillSceneLabel('围困者',e.x,e.y-actor.shape.top*actor.scale-16);ctx.restore();}}}
-function actorSpriteGeometry(actor){return actor.entity!==game?.player&&characterSprites.ready?characterSprites.geometry(actor):null;}
+function actorSpriteGeometry(actor){return actor.entity!==game?.player&&characterSprites.ready?characterSprites.geometry(actor,{time:game?._clock??clock,reduced,frozen:game?.abilities?.isFrozen(actor.entity)??false}):null;}
 function drawActorBody(actor){
   drawActorArtwork(actor);
   drawActorNameplate(ctx,actorNameplate(actor,{player:game?.player,sprite:actorSpriteGeometry(actor)}));

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { Game } from './dist/engine.js';
 import { foot } from './dist/sidequests/base.js';
-import { characterSprites, CHARACTER_SPRITE_ATLAS } from './dist/character-sprites.js';
+import { characterSprites } from './dist/character-sprites.js';
 
-await characterSprites.preload({load:async()=>({width:CHARACTER_SPRITE_ATLAS.width,height:CHARACTER_SPRITE_ATLAS.height})});
+await characterSprites.preload({load:async(url,atlas)=>({width:atlas.width,height:atlas.height})});
 const worlds={
   'rift-forest':[['bow-rest','giver','hunter']],
   'verdant-rift':[['courier-race','giver','courier'],['divided-stone','giver','swordsman']],
   marsh:[['last-rollcall','giver','bellkeeper']],
-  'clockshadow-city':[['market-pickpocket','thief','bandit']],
+  'clockshadow-city':[['market-pickpocket','thief','bandit'],['courtyard-stage','giver','troupeleader']],
   'ember-realm-large':[['potter-fire','giver','potter']]
 };
 const ctx={save(){},restore(){},translate(){},scale(){},transform(){},drawImage(){}};
@@ -28,4 +28,4 @@ for(const [worldId,assignments]of Object.entries(worlds)){
   assert.equal(game.player.characterSpriteId,undefined,'the actual hero keeps layered directional art');
   game.dispose();
 }
-console.log('Production character assignments passed: six quest identities use approved art through normal setup and retain their gameplay state.');
+console.log('Production character assignments passed: seven quest identities use distinct art through normal setup and retain their gameplay state.');

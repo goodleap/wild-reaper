@@ -11,7 +11,7 @@ class SettlementScene extends SideQuestScene {
     this.home=this.point('home',d.area,d.dx||0,d.dy||0);
     this.showGiver();
   }
-  showGiver(){const d=this.definition.discovery;return this.actor('giver',this.home,{kind:d.kind,name:d.name});}
+  showGiver(){const d=this.definition.discovery;return this.actor('giver',this.home,{kind:d.kind,name:d.name,...d.characterSpriteId?{characterSpriteId:d.characterSpriteId}:{}});}
   get playerFoot(){return foot(this.game.player);}
   setFlag(key,value=true){this.state.flags[key]=value;this.changed();}
   done(id){return !!this.record.objectives?.[id];}

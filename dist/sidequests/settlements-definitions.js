@@ -1,5 +1,5 @@
-const quest=(id,worldId,name,area,kind,npc,description,objectives,rewardText,gold=50,crystals=30)=>({
-  id,sidequest:true,worldId,name,description,discovery:{area,dx:-110,dy:80,kind,name:npc},
+const quest=(id,worldId,name,area,kind,npc,description,objectives,rewardText,gold=50,crystals=30,characterSpriteId)=>({
+  id,sidequest:true,worldId,name,description,discovery:{area,dx:-110,dy:80,kind,name:npc,...characterSpriteId?{characterSpriteId}:{}},
   objectives:objectives.map(([id,label,optional])=>({id,label,...optional?{optional:true}:{}})),reward:{gold,crystals},rewardText
 });
 
@@ -24,8 +24,8 @@ export const DEFINITIONS=Object.freeze([
     '摊主不想再冤枉路过的人。站在街口观察，等窃贼实际拿走货物后，可以拦住他，也可以保持距离跟到藏赃处。被发现或跟丢后可以重新蹲守。',
     [['witnessed','亲眼看到摊位失窃'],['recovered','截住窃贼或跟到藏赃处取回失物'],['returned','把失物交还摊主']],
     '归还市集失物，留下可回访的藏赃处 · 50 金币 · 30 灵晶'),
-  quest('courtyard-stage','clockshadow-city','借我半个广场','08','princess','戏班领班',
+  quest('courtyard-stage','clockshadow-city','借我半个广场','08','merchant','戏班领班',
     '旧院还能演戏，只是舞台与杂物挡住了演员的路。安排舞台、座椅和货箱的位置，再请演员完整排练。挡路时可以重新调整，不会损失材料。',
     [['arranged','为舞台、座椅和货箱安排位置'],['rehearsed','让演员沿排练路线实际走完'],['opened','与领班一起开放演出']],
-    '广场出现常驻小戏台与观众 · 45 金币 · 25 灵晶',45,25)
+    '广场出现常驻小戏台与观众 · 45 金币 · 25 灵晶',45,25,'troupeleader')
 ]);

@@ -1,55 +1,37 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {CharacterSprites,characterSprites,CHARACTER_SPRITES} from './dist/character-sprites.js';
+import {characterSprites,CHARACTER_SPRITES,CHARACTER_SPRITE_ATLASES} from './dist/character-sprites.js';
 
-assert.equal(characterSprites.ready,false,'importing the optional renderer does not load any image');
-assert.equal(Object.keys(CHARACTER_SPRITES).length,8);
-const atlas={path:'./assets/units/test.png',width:160,height:100};
-const definitions={test:{frame:{x:40,y:10,w:80,h:80},anchor:{x:25,y:74},worldHeight:54,referenceScale:1.1}};
-const sprites=new CharacterSprites({atlas,definitions}),image={width:160,height:100,decode:async()=>{}};let loads=0;
-const first=sprites.preload({load:async()=>{loads++;return image;}}),second=sprites.preload({load:async()=>{throw Error('duplicate decode');}});
-assert.equal(first,second);await first;await sprites.preload({load:()=>{throw Error('warm decode');}});
-assert.equal(loads,1);assert.equal(sprites.diagnostics.decodes,1);assert.equal(sprites.diagnostics.decodedBytes,64000);
-const entity={characterSpriteId:'test',facing:0},actor={entity,x:100,footY:200,scale:1.1};
-const before=JSON.stringify(actor),right=sprites.geometry(actor);assert.equal(right.bottom-right.top,54);
-assert.equal(right.left,100-25*54/80);assert.equal(right.top,200-74*54/80);
-entity.facing=Math.PI;const left=sprites.geometry(actor);assert.equal(left.flip,-1);
-assert.equal(left.right,100+25*54/80,'asymmetric source feet remain planted when mirrored');
-assert.equal(left.top,right.top);entity.facing=0;
-const calls=[],stack=[];const context={globalAlpha:.8,imageSmoothingEnabled:false,
- save(){stack.push([this.globalAlpha,this.imageSmoothingEnabled]);},restore(){[this.globalAlpha,this.imageSmoothingEnabled]=stack.pop();},translate(...args){calls.push(['translate',...args]);},scale(...args){calls.push(['scale',...args]);},transform(...args){calls.push(['transform',...args]);},drawImage(...args){calls.push(['image',...args]);}};
-assert(sprites.draw(context,actor));assert.equal(JSON.stringify(actor),before,'rendering never moves the gameplay body or changes collision');
-assert.deepEqual(calls[0],['translate',100,200]);assert.deepEqual(calls[1],['scale',1,1]);
-assert.deepEqual(calls[2].slice(2,6),[40,10,80,80]);assert.equal(context.globalAlpha,.8);assert.equal(context.imageSmoothingEnabled,false);
-for(const id of ['missing','constructor','__proto__'])assert.equal(sprites.draw(context,{...actor,entity:{characterSpriteId:id}}),false);
+assert.equal(characterSprites.ready,false,'importing the shared renderer has no image-loading side effects');
+assert.equal(Object.keys(CHARACTER_SPRITES).length,9,'eight approved identities and a distinct troupe leader');
+for(const [id,atlas] of Object.entries(CHARACTER_SPRITE_ATLASES)){
+  const png=readFileSync(new URL(atlas.path,new URL('./dist/',import.meta.url)));
+  assert.equal(png.subarray(1,4).toString(),'PNG',`${id}: published asset is PNG`);
+  assert.equal(png.readUInt32BE(16),atlas.width,`${id}: source width matches manifest`);
+  assert.equal(png.readUInt32BE(20),atlas.height,`${id}: source height matches manifest`);
+  assert([4,6].includes(png[25])||png.includes(Buffer.from('tRNS')),`${id}: PNG retains a transparency channel`);
+}
+for(const [id,definition] of Object.entries(CHARACTER_SPRITES)){
+  const entity={characterSpriteId:id,facing:0,moving:false},actor={entity,x:100,footY:200,scale:definition.referenceScale};
+  const first=characterSprites.geometry(actor);assert(first&&first.top<actor.footY&&first.bottom>=actor.footY);
+  for(const direction of ['front','back'])for(const [clip,frames] of Object.entries(definition.clips[direction]))for(let index=0;index<frames.length;index++){
+    const sample={id,direction,clip,index,flip:1,...frames[index]},geometry=characterSprites.geometry(actor,{sample});
+    const {frame,anchor}=frames[index],scale=definition.worldHeight/definition.pixelHeight;
+    assert(Math.abs(geometry.scale-scale)<1e-12,`${id}: every action uses one body scale`);
+    assert(100-anchor.x*scale>=first.left-1e-8&&100+(frame.w-anchor.x)*scale<=first.right+1e-8,`${id}/${clip}: complete frame stays in culling bounds`);
+    assert(200-anchor.y*scale>=first.top-1e-8&&200+(frame.h-anchor.y)*scale<=first.bottom+1e-8,`${id}/${clip}: feet and raised props remain in bounds`);
+  }
+  entity.facing=Math.PI;const mirrored=characterSprites.geometry(actor);assert.equal(mirrored.flip,-1);
+  assert.equal(mirrored.top,first.top);assert(Math.abs((mirrored.right-100)-(100-first.left))<1e-8,`${id}: horizontal reflection keeps the authored foot pivot`);
+}
 
-// Moving silhouettes derive motion from resolved footsteps, stop immediately
-// when blocked, and never move their gameplay/collision anchor.
-const walker={...actor,entity:{...entity,moving:true,walkSpeed:285,walkPhase:Math.PI/2}};
-const walkerBefore=JSON.stringify(walker);calls.length=0;sprites.draw(context,walker);
-assert.deepEqual(calls[0],['translate',100,200]);assert(calls.some(call=>call[0]==='transform'));
-assert.equal(JSON.stringify(walker),walkerBefore);
-walker.entity.moving=false;calls.length=0;sprites.draw(context,walker);
-assert(!calls.some(call=>call[0]==='transform'),'stopped actors do not step in place from a stale phase');
-calls.length=0;sprites.draw(context,actor,{pose:{mode:'windup',progress:1}});
-const transform=calls.find(call=>call[0]==='transform');assert(transform&&transform[3]<0);
-assert.deepEqual(transform.slice(-2),[0,0],'attack anticipation stays planted at the shared foot anchor');
-
-const invalid=new CharacterSprites({atlas,definitions});
-await assert.rejects(invalid.preload({load:async()=>({width:159,height:100})}),/dimensions/);
-assert.equal(invalid.ready,false);await invalid.preload({load:async()=>image});assert(invalid.ready,'a failed optional load can be retried');
-const late=new CharacterSprites({atlas,definitions});let resolveLate;
-await assert.rejects(late.preload({load:()=>new Promise(resolve=>{resolveLate=resolve;}),decodeTimeoutMs:5}),/timed out/);
-resolveLate(image);await new Promise(resolve=>setTimeout(resolve,0));assert.equal(late.ready,false,'timed-out work cannot replace the current atlas');
-assert.throws(()=>new CharacterSprites({atlas,definitions:{bad:{...definitions.test,frame:{x:100,y:0,w:80,h:80}}}}),/Invalid character sprite frame/);
-
-// Exercise the production opt-in branch while confirming the actual hero still
-// takes the existing directional/weapon animation path even if marked by a test.
+// The actual hero keeps the existing directional weapon/hand animation path;
+// an NPC with authored frames takes the atlas path instead.
 const source=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8');
 const body=source.slice(source.indexOf('function drawActorArtwork('),source.indexOf('function actorSpriteGeometry('));
-const hero={characterSpriteId:'test'},npc={characterSpriteId:'test',isTownNpc:true},events=[];
+const hero={characterSpriteId:'hunter'},npc={characterSpriteId:'hunter',isTownNpc:true},events=[];
 const draw=new Function('game','drawCharacterSpriteActor','player','clock','ctx',`${body};return drawActorArtwork;`)(
  {player:hero},a=>{events.push(['sprite',a.entity]);return true;},(...args)=>events.push(['hero',args.at(-1)]),0,{});
 draw({entity:npc,x:0,y:0,scale:1.1,isPlayer:true});draw({entity:hero,x:0,y:0,scale:1.1,isPlayer:true});
 assert.deepEqual(events,[['sprite',npc],['hero',hero]]);
-console.log('Character sprites passed: opt-in loading, one decode, foot anchors, mirroring, failure retry, state isolation and unchanged hero rendering.');
+console.log('Character sprite assets passed: published atlas dimensions/transparency, nine identities, grounded stable pose bounds and unchanged hero rendering.');

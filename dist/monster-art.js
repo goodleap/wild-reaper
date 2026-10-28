@@ -31,13 +31,12 @@ export class MonsterArt {
   }
   draw(c,e,{time=0,reduced=false,dense=false,frozen=false,playerX=e.x+1}={}){
     const kind=enemyArtId(e),art=ENEMY_ART[kind],visual=ENEMY_VISUALS[kind];if(!art||!visual)return false;
-    // An atlas-backed painter must never leave an empty body in the shared
-    // pose cache while its single image is still loading.
+    // Never cache an empty body while that character's atlas is loading.
     if(art.ready&&!art.ready())return false;
     if(art.animated){
       const prior=this.lastPoses.get(e),sharedPose=art.samplePose?.(e,{time,reduced,frozen});
       const animation=sharedPose??(frozen&&prior?prior.animation:sampleEnemyPose(enemyAnimationPose(e,{time,reduced})));
-      const flip=sharedPose?art.facing?.(e,{playerX,facings:this.beetleFacing,frozen})??1:
+      const flip=Number.isFinite(sharedPose?.spriteFlip)?sharedPose.spriteFlip:sharedPose?art.facing?.(e,{playerX,facings:this.beetleFacing,frozen})??1:
         frozen&&prior?prior.flip:art.facing?.(e,{playerX,facings:this.beetleFacing})??1;
       const paintTime=frozen&&prior?prior.time:time;
       this.lastPoses.set(e,{animation,flip,time:paintTime});
