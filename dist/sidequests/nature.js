@@ -11,7 +11,7 @@ class BowRest extends SideQuestScene {
     // Keep the pen west of the existing 420-unit hunting relic disk. A
     // compact two-stage enclosure fits the clearing without covering it.
     this.c=this.point('pen','05',-280,20,35);this.out=this.safePoint(add(this.c,0,220),20,this.c);
-    this.giver=this.actor('giver',this.point('giver','05',210,220),{kind:'warden',name:'收弓的猎人'});
+    this.giver=this.actor('giver',this.point('giver','05',210,220),{kind:'warden',name:'收弓的猎人',characterSpriteId:'hunter'});
     for(const [key,x,y] of [['leader',-55,-75],['doe',55,-75],['calf',0,-40]])this.actor(key,add(this.c,x,y),{kind:'deer',name:key==='calf'?'幼鹿':'林鹿',r:key==='calf'?10:13,speed:180});
     this.prop('bell','bell',add(this.c,65,185),{label:'饲铃'});this.prop('rack','feed-rack',add(this.c,-75,-95));
     this.prop('inside-crank','lever',add(this.c,0,95));this.prop('outside-crank','lever',add(this.c,0,185));this.syncGates();
@@ -98,14 +98,14 @@ class DividedStone extends SideQuestScene {
     this.inside=false;this.cave=this.game.riftExploration?.sites.find(site=>site.caveId==='west-maze');
     if(!this.cave)throw new Error('Divided stone requires the authored rock-root cave');
     const p=this.safePoint(add(this.cave,80,105),20,this.cave);
-    this.giver=this.actor('giver',p,{kind:'warden',name:this.completed?'归来的探险者':'洞口守望人'});
+    this.giver=this.actor('giver',p,{kind:'warden',name:this.completed?'归来的探险者':'洞口守望人',characterSpriteId:'swordsman'});
     this.prop('sign','trail-marker',add(p,35,35),{label:'岩根洞里的呼声',state:this.completed?'done':'ready'});
   }
   handlesDungeon(state){return state?.site?.caveId==='west-maze';}
   onDungeonEnter(state){
     if(!this.handlesDungeon(state))return;this.checkpoint();this.clearFixtures();this.inside=true;this.dungeonState=state;
     this.call=this.safePoint({x:0,y:-50},18);this.latch=this.safePoint({x:545,y:150},18);this.plate=this.safePoint({x:90,y:220},18);this.exit={x:state.entrance.x,y:state.entrance.y-45};this.cache=this.safePoint({x:800,y:170},20);
-    this.explorer=this.actor('helper',this.completed?this.exit:this.safePoint({x:0,y:-290},18),{kind:'warden',name:this.completed?'归来的探险者':'被隔开的探险者',speed:280,hidden:this.completed&&this.state.flags.cache});
+    this.explorer=this.actor('helper',this.completed?this.exit:this.safePoint({x:0,y:-290},18),{kind:'warden',name:this.completed?'归来的探险者':'被隔开的探险者',characterSpriteId:'swordsman',speed:280,hidden:this.completed&&this.state.flags.cache});
     this.prop('call','trail-marker',this.call,{label:'隔着石门呼唤'});this.prop('plate','lever',this.plate,{label:'守住机括'});this.prop('latch','lever',this.latch,{label:'内栓'});this.prop('cache','chest',this.cache,{state:this.state.flags.cache?'claimed':'ready'});
     if(this.record.objectives.contact)this.openOriginalGate();this.syncGate();
   }
@@ -155,7 +155,7 @@ class DividedStone extends SideQuestScene {
 class CourierRace extends SideQuestScene {
   setup(){
     this.start=this.point('start','14',90,100);this.checks=[this.point('check-one','13',0,0),this.point('check-two','16',0,0),this.point('finish','15',80,60)];
-    this.runner=this.actor('giver',this.start,{kind:'warden',name:'林间送信人',speed:285});this.prop('start','finish-post',add(this.start,-40,0),{label:'林路起点'});
+    this.runner=this.actor('giver',this.start,{kind:'warden',name:'林间送信人',characterSpriteId:'courier',speed:285});this.prop('start','finish-post',add(this.start,-40,0),{label:'林路起点'});
     this.checks.forEach((p,i)=>this.prop(`check-${['one','two','three'][i]}`,'checkpoint',p,{label:i===2?'高原终点':`赛程路标 ${i+1}`,state:'ready'}));
     if(this.state.flags.racing){this.state.flags.racing=false;this.state.values.player=0;this.state.values.runner=0;this.placeActor(this.runner,this.start);this.changed();}
   }
@@ -188,7 +188,7 @@ class CourierRace extends SideQuestScene {
 class LastRollcall extends SideQuestScene {
   setup(){
     this.c=this.point('main','10',-40,0,220);this.side=this.safePoint(add(this.c,330,150),25,this.c);this.spawn=this.safePoint(add(this.c,300,-240),30,this.c);
-    this.giver=this.actor('giver',this.point('giver','10',-250,180),{kind:'elder',name:'溺钟守望人'});
+    this.giver=this.actor('giver',this.point('giver','10',-250,180),{kind:'elder',name:'溺钟守望人',characterSpriteId:'bellkeeper'});
     this.prop('main','bell',this.c,{label:'溺钟'});this.prop('side','bell',this.side,{label:'远处的小钟'});this.prop('stone','memorial',add(this.c,-130,100),{state:this.completed?'named':'blank'});
     for(const [i,x,y] of [[0,-80,-100],[1,90,-100],[2,0,115]])this.actor(`soul-${['one','two','three'][i]}`,this.safePoint(add(this.c,x,y),15,this.c),{kind:i===1?'warden':'elder',name:['背篓的亡魂','断桨的亡魂','铜扣的亡魂'][i],sideQuestGhost:true,hidden:!this.record.objectives.summoned||this.completed});
   }

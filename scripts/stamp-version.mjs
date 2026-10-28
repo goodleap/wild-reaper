@@ -119,8 +119,8 @@ function bootGroup(entry){
   return [...resources].sort(([a],[b])=>a.localeCompare(b,'en'));
 }
 const bootResources={
-  groups:{config:bootGroup('./content-config.js'),art:bootGroup('./enemy-art/frostcrown-assets.js'),app:bootGroup('./app.js')},
-  assets:Object.fromEntries(['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png'].map(file=>[file,assetBuffer(localURL(file)).length]))
+  groups:{config:bootGroup('./content-config.js'),art:bootGroup('./boot-art.js'),app:bootGroup('./app.js')},
+  assets:Object.fromEntries(['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png','./assets/units/humanoids-013f39c762b0ef5c.png'].map(file=>[file,assetBuffer(localURL(file)).length]))
 };
 
 let updated=html.replace(slot,`$1${version}$2`);

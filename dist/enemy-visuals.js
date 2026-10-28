@@ -23,7 +23,7 @@ export const ENEMY_VISUALS=Object.freeze({
   royalarbalist:define(16,20,29,34,17,21,54,[72,64,36,39],3,{bobMode:'steps'}),
   royalmage:define(17,20,35,35,18,22,55,[84,74,36,48],3,{bobMode:'steps'}),
   searchcaptain:define(26,26,40,53,25,29,79,[104,90,58,61],3,{bobMode:'steps',hitRecoil:.035,portraitRadius:26,portraitScale:1,edgeColor:'#d3b37b',arrival:()=>`搜寻队长逼近`}),
-  escortmarshal:define(28,28,47,50,27,30,78,[112,98,46,64],3,{bobMode:'steps',hitRecoil:.035,portraitRadius:28,portraitScale:1,edgeColor:'#ceb68b',arrival:()=>`押运护卫统领列阵`}),
+  escortmarshal:define(28,28,56,50,27,30,78,[128,104,62,68],3,{cacheRatio:1.5,bobMode:'steps',hitRecoil:.035,portraitRadius:28,portraitScale:1,edgeColor:'#ceb68b',arrival:()=>`押运护卫统领列阵`}),
   stoneape:define(22,24,35,34,23,25,58,[80,70,40,40],3,{bobMode:'steps'}),
   windhunter:define(17,15,39,33,23,22,null,[86,56,43,37],3,{bobFrequency:11,bobAmplitude:2}),
   frostmage:define(18,20,28,38,17,23,58,[62,66,31,42],3,{bobMode:'steps'}),

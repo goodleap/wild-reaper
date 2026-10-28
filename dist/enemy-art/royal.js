@@ -1,6 +1,10 @@
 import { clamp, line, oval, poly } from './drawing.js';
 import { capsulePath } from '../attack-capsule.js';
 import { humanAttackCapsules } from '../royal-attack-geometry.js';
+import { characterSprites, CHARACTER_SPRITES } from '../character-sprites.js';
+import { ENEMY_VISUALS } from '../enemy-visuals.js';
+
+const CHARACTER_ART=Object.freeze({royalmage:'emberpriest',escortmarshal:'ironmarshal'});
 
 const P={edge:'#3d493e',metal:'#a5b0a2',metalDark:'#788b80',light:'#d9ddc3',cloth:'#9e6b57',clothDark:'#725244',linen:'#d9cba1',gold:'#c7ab70',skin:'#e5c9a0',skinDark:'#bd9e7c',eye:'#354334',leather:'#665845'};
 const fill=(c,color,edge=P.edge,width=1.2)=>{c.fillStyle=color;c.fill();if(edge){c.strokeStyle=edge;c.lineWidth=width;c.stroke();}};
@@ -108,6 +112,15 @@ function hammer(c,x,y,a){
   poly(c,[[-9,-34],[8,-36],[11,-31],[-6,-29]],P.light,P.edge,.7);line(c,[[-2,-31],[-2,-24]],P.gold,3);c.restore();
 }
 export function paintRoyalUnit(c,kind,p=0,flip=1,pose={}){
+  const characterSpriteId=CHARACTER_ART[kind];
+  if(characterSpriteId){
+    const visual=ENEMY_VISUALS[kind],definition=CHARACTER_SPRITES[characterSpriteId];
+    // Retain this enemy's grounded size and shared combat pose. The atlas is
+    // a complete body, so pose feedback moves it without inventing limb frames.
+    c.save();c.scale(flip,1);
+    const drawn=characterSprites.draw(c,{x:0,footY:visual.foot,scale:definition.referenceScale*visual.bodyHeight/definition.worldHeight,entity:{characterSpriteId,facing:0}},{pose});
+    c.restore();return drawn;
+  }
   const a=state(p,pose),scale=kind==='searchcaptain'?1.25:kind==='escortmarshal'?1.33:1;
   c.save();c.scale(flip*scale,scale);c.translate(-a.hit,0);
   boot(c,-6+a.step*1.3,Math.max(0,a.step)*1.7);boot(c,6-a.step*1.3,Math.max(0,-a.step)*1.7);
@@ -143,4 +156,4 @@ function telegraph(c,e){
   else for(const capsule of humanAttackCapsules(a))capsulePath(c,capsule);
   c.fillStyle=`rgba(194,96,63,${.12+progress*.15})`;c.fill();c.strokeStyle='#c47953';c.globalAlpha=.65+progress*.3;c.lineWidth=1.8;c.stroke();c.restore();
 }
-export const ROYAL_ART=Object.freeze(Object.fromEntries(['royalguard','royallancer','royalarbalist','royalmage','searchcaptain','escortmarshal'].map(kind=>[kind,Object.freeze({animated:true,facing,telegraph,paint:(c,p,flip,pose)=>paintRoyalUnit(c,kind,p,flip,pose)})])));
+export const ROYAL_ART=Object.freeze(Object.fromEntries(['royalguard','royallancer','royalarbalist','royalmage','searchcaptain','escortmarshal'].map(kind=>[kind,Object.freeze({animated:true,facing,telegraph,...(CHARACTER_ART[kind]?{ready:()=>characterSprites.ready}:{}),paint:(c,p,flip,pose)=>paintRoyalUnit(c,kind,p,flip,pose)})])));

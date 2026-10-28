@@ -302,7 +302,7 @@ class MarketPickpocket extends SettlementScene {
     this.route=[this.point('turn-one','07',210,20,25),this.point('turn-two','07',390,230,25),this.point('hideout','07',610,330,45)];
     this.prop('stall','stall',this.stall,{label:'杂货摊'});
     this.prop('watch','footprints',this.watch,{label:'蹲守街角',floor:true});
-    this.actor('thief',this.startPoint,{kind:'rogue',name:'压低帽檐的人',speed:210,hidden:this.completed});
+    this.actor('thief',this.startPoint,{kind:'rogue',name:'可疑的盗贼',characterSpriteId:'bandit',speed:210,hidden:this.completed});
     this.state.choices.phase=this.completed?'done':this.state.flags.recovered?'recovered':'idle';
     this.syncOutcome();
   }

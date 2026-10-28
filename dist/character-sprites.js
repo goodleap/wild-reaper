@@ -25,8 +25,8 @@ function decodeImage(url,load,timeoutMs){
   });
 }
 
-// Only explicitly requested previews use this atlas. Importing the renderer
-// neither fetches images nor replaces existing humanoid animation renderers.
+// Boot owns loading. Importing this shared renderer has no side effects; both
+// quest actors and cached combat painters use the same decoded image.
 export class CharacterSprites{
   constructor({atlas=CHARACTER_SPRITE_ATLAS,definitions=CHARACTER_SPRITES}={}){
     validateAtlas(atlas,definitions);this.atlas=atlas;this.definitions=definitions;this.image=null;this.pending=null;this.decodes=0;
@@ -63,10 +63,19 @@ export class CharacterSprites{
     const left=x-(flip<0?frame.w-anchor.x:anchor.x)*scale,top=footY-anchor.y*scale;
     return {frame,anchor,scale,flip,x,footY,left,top,right:left+frame.w*scale,bottom:top+frame.h*scale};
   }
-  draw(context,actor){
+  draw(context,actor,{pose}={}){
     if(!this.ready)return false;const geometry=this.geometry(actor);if(!geometry)return false;
     const {frame:f,anchor:a,scale,flip,x,footY}=geometry;
     context.save();context.translate(x,footY);context.scale(flip,1);context.imageSmoothingEnabled=true;
+    // A single authored silhouette supports modest planted-foot body motion.
+    // Use actual locomotion or the shared combat pose, never an idle timer;
+    // this does not pretend to provide independent weapon or direction frames.
+    const e=actor.entity,p=pose||{mode:e.moving&&e.walkSpeed>.1?'move':'idle',cycle:e.walkPhase||0};
+    const progress=Math.max(0,Math.min(1,p.progress||0)),smooth=progress*progress*(3-2*progress);
+    const step=p.mode==='move'?Math.sin(p.cycle||0):0;
+    const lean=p.mode==='windup'?-.045*smooth:p.mode==='active'?.055:p.mode==='recovery'?.055*(1-smooth):step*.012;
+    const squash=1-Math.abs(step)*.014-(p.mode==='windup'?.018*smooth:0);
+    if(lean||squash!==1)context.transform(1+(1-squash)*.35,0,lean,squash,0,0);
     if(actor.entity.sideQuestGhost)context.globalAlpha*=.52;
     context.drawImage(this.image,f.x,f.y,f.w,f.h,-a.x*scale,-a.y*scale,f.w*scale,f.h*scale);context.restore();return true;
   }

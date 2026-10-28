@@ -17,11 +17,23 @@ entity.facing=Math.PI;const left=sprites.geometry(actor);assert.equal(left.flip,
 assert.equal(left.right,100+25*54/80,'asymmetric source feet remain planted when mirrored');
 assert.equal(left.top,right.top);entity.facing=0;
 const calls=[],stack=[];const context={globalAlpha:.8,imageSmoothingEnabled:false,
- save(){stack.push([this.globalAlpha,this.imageSmoothingEnabled]);},restore(){[this.globalAlpha,this.imageSmoothingEnabled]=stack.pop();},translate(...args){calls.push(['translate',...args]);},scale(...args){calls.push(['scale',...args]);},drawImage(...args){calls.push(['image',...args]);}};
+ save(){stack.push([this.globalAlpha,this.imageSmoothingEnabled]);},restore(){[this.globalAlpha,this.imageSmoothingEnabled]=stack.pop();},translate(...args){calls.push(['translate',...args]);},scale(...args){calls.push(['scale',...args]);},transform(...args){calls.push(['transform',...args]);},drawImage(...args){calls.push(['image',...args]);}};
 assert(sprites.draw(context,actor));assert.equal(JSON.stringify(actor),before,'rendering never moves the gameplay body or changes collision');
 assert.deepEqual(calls[0],['translate',100,200]);assert.deepEqual(calls[1],['scale',1,1]);
 assert.deepEqual(calls[2].slice(2,6),[40,10,80,80]);assert.equal(context.globalAlpha,.8);assert.equal(context.imageSmoothingEnabled,false);
 for(const id of ['missing','constructor','__proto__'])assert.equal(sprites.draw(context,{...actor,entity:{characterSpriteId:id}}),false);
+
+// Moving silhouettes derive motion from resolved footsteps, stop immediately
+// when blocked, and never move their gameplay/collision anchor.
+const walker={...actor,entity:{...entity,moving:true,walkSpeed:285,walkPhase:Math.PI/2}};
+const walkerBefore=JSON.stringify(walker);calls.length=0;sprites.draw(context,walker);
+assert.deepEqual(calls[0],['translate',100,200]);assert(calls.some(call=>call[0]==='transform'));
+assert.equal(JSON.stringify(walker),walkerBefore);
+walker.entity.moving=false;calls.length=0;sprites.draw(context,walker);
+assert(!calls.some(call=>call[0]==='transform'),'stopped actors do not step in place from a stale phase');
+calls.length=0;sprites.draw(context,actor,{pose:{mode:'windup',progress:1}});
+const transform=calls.find(call=>call[0]==='transform');assert(transform&&transform[3]<0);
+assert.deepEqual(transform.slice(-2),[0,0],'attack anticipation stays planted at the shared foot anchor');
 
 const invalid=new CharacterSprites({atlas,definitions});
 await assert.rejects(invalid.preload({load:async()=>({width:159,height:100})}),/dimensions/);
@@ -34,9 +46,9 @@ assert.throws(()=>new CharacterSprites({atlas,definitions:{bad:{...definitions.t
 // Exercise the production opt-in branch while confirming the actual hero still
 // takes the existing directional/weapon animation path even if marked by a test.
 const source=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8');
-const body=source.slice(source.indexOf('function drawActorBody('),source.indexOf('function drawActor(actor)'));
+const body=source.slice(source.indexOf('function drawActorArtwork('),source.indexOf('function actorSpriteGeometry('));
 const hero={characterSpriteId:'test'},npc={characterSpriteId:'test',isTownNpc:true},events=[];
-const draw=new Function('game','drawCharacterSpriteActor','player','clock','ctx',`${body};return drawActorBody;`)(
+const draw=new Function('game','drawCharacterSpriteActor','player','clock','ctx',`${body};return drawActorArtwork;`)(
  {player:hero},a=>{events.push(['sprite',a.entity]);return true;},(...args)=>events.push(['hero',args.at(-1)]),0,{});
 draw({entity:npc,x:0,y:0,scale:1.1,isPlayer:true});draw({entity:hero,x:0,y:0,scale:1.1,isPlayer:true});
 assert.deepEqual(events,[['sprite',npc],['hero',hero]]);

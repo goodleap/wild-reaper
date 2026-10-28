@@ -54,7 +54,10 @@ function release(html,count){
       assert.equal(bytes,readFileSync(resolve(temporary,'dist',decodeURIComponent(url.pathname.slice('/wild-reaper/'.length)))).length,`${file} reports exact on-disk bytes`);
     }
   }
-  assert.deepEqual(Object.keys(boot.assets),['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png']);
+  assert.deepEqual(Object.keys(boot.assets),['./content-pack.json','./assets/units/frostcrown-0d4e3d938dc5e6e0.png','./assets/units/humanoids-013f39c762b0ef5c.png']);
+  for(const file of ['./boot-art.js','./enemy-art/frostcrown-assets.js','./character-sprites.js','./character-sprite-manifest.js']){
+    assert(boot.groups.art.some(([path])=>path===file),`${file} belongs to the art boot closure`);
+  }
   for(const [file,bytes] of Object.entries(boot.assets))assert.equal(bytes,readFileSync(resolve(temporary,'dist',file)).length,`${file} reports exact asset bytes`);
   return {imports,entry:entryURL,styles,boot};
 }
@@ -184,12 +187,11 @@ import './comment-only.js';
   stamp(53,/Missing local release asset/);
   assert.equal(readPage(),valid,'missing transitive modules fail before writing');
   rmSync(resolve(temporary,'dist/release-fixture/missing.js'));
-  const image=resolve(temporary,'dist/assets/units/frostcrown-0d4e3d938dc5e6e0.png');
-  const imageBytes=readFileSync(image);
-  rmSync(image);
-  stamp(53,/Missing local release asset/);
-  assert.equal(readPage(),valid,'missing boot assets fail before writing');
-  writeFileSync(image,imageBytes);
+  for(const name of ['frostcrown-0d4e3d938dc5e6e0.png','humanoids-013f39c762b0ef5c.png']){
+    const image=resolve(temporary,'dist/assets/units',name),imageBytes=readFileSync(image);
+    rmSync(image);stamp(53,/Missing local release asset/);
+    assert.equal(readPage(),valid,'missing boot assets fail before writing');writeFileSync(image,imageBytes);
+  }
   writeFileSync(page,valid.replace('</head>','<script type="application/json" id="boot-resources">{}</script>\n</head>'));
   const duplicateMetadata=readPage();
   stamp(53,/at most one boot resource manifest/);

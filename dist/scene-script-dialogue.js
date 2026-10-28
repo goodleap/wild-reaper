@@ -2,7 +2,7 @@ const placements=new WeakMap();
 
 // Script-owned speech follows its actor directly. It has no ambient queue,
 // combat interruption, or layout reflow; the script owns its lifetime.
-export function drawScriptedSceneDialogue(ctx,items,{project,width,height,isVisible=()=>true}={}){
+export function drawScriptedSceneDialogue(ctx,items,{project,width,height,isVisible=()=>true,avoid=[]}={}){
   if(typeof project!=='function')return [];
   if(!items?.length){placements.delete(ctx);return [];}
   let saved=placements.get(ctx);if(!saved){saved=new Map();placements.set(ctx,saved);}
@@ -24,9 +24,14 @@ export function drawScriptedSceneDialogue(ctx,items,{project,width,height,isVisi
       // stands near an edge. Later movement carries this same actor-relative
       // offset, rather than causing the text to bounce between placements.
       const left=Math.max(6,Math.min(width-w-6,anchor.x-w/2));
-      placement={actor,text:item.text,viewport:width,dx:left-anchor.x};saved.set(item.id,placement);
+      const clear=y=>!avoid.some(r=>left<r.x+r.width&&left+w>r.x&&y<r.y+r.height&&y+h+5>r.y);
+      const y=[7,27,47,67,87,107].map(gap=>anchor.y-h-gap).find(y=>y>=6&&clear(y));
+      if(y===undefined)continue;
+      placement={actor,text:item.text,viewport:width,dx:left-anchor.x,dy:y-anchor.y};saved.set(item.id,placement);
     }
-    const rect={x:anchor.x+placement.dx,y:anchor.y-h-7,width:w,height:h};
+    const rect={x:anchor.x+placement.dx,y:anchor.y+placement.dy,width:w,height:h};
+    // Names constrain the first placement only. A passer-by cannot interrupt
+    // script-owned speech or make a fixed bubble flicker on subsequent frames.
     if(rect.x<6||rect.x+w>width-6||rect.y<6||rect.y+h>height-6)continue;
     ctx.fillStyle='#182e25ef';ctx.strokeStyle=marker?'#d5cfab':'#d8c99f';ctx.lineWidth=1;
     ctx.beginPath();ctx.roundRect(rect.x,rect.y,w,h,marker?9:6);ctx.fill();ctx.stroke();

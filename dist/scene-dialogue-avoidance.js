@@ -1,5 +1,5 @@
-import { actorShape, ACTOR_VISUALS } from './actor-visuals.js';
-import { COMPANION_VISUALS } from './companion-art.js';
+import { actorShape } from './actor-visuals.js';
+import { actorNameplate, actorVisibleBounds, labelActorVisual } from './actor-labels.js';
 import { visitSceneUnits } from './unit-counts.js';
 import { sceneEntityVisible } from './scene-rendering.js';
 
@@ -11,7 +11,7 @@ const landingEffects=new Set(['bossSlam','bloomBurst','eliteSummon','mushroomBla
 // Match the live world painters in app.js and ability-art.js. Only screen-space
 // exclusions are produced: no combat queries, random calls or simulation writes.
 // isVisible receives a world entity, as sceneEntityVisible does (not a speaker).
-export function sceneDialogueAvoidance(game,{offsetX=0,offsetY=0,width,height,isVisible}={}){
+export function sceneDialogueAvoidance(game,{offsetX=0,offsetY=0,width,height,isVisible,actorVisual=labelActorVisual,spriteGeometry=()=>null,namesOnly=false}={}){
   if(!game||!finite(width)||!finite(height)||width<=0||height<=0)return [];
   const result=[],vision=game.dungeon?.active?game.dungeon.vision:null;
   const visible=e=>e&&finite(e.x)&&finite(e.y)&&sceneEntityVisible(e,vision)&&(!isVisible||isVisible(e));
@@ -46,28 +46,20 @@ export function sceneDialogueAvoidance(game,{offsetX=0,offsetY=0,width,height,is
     const w=Math.max(30,Array.from(text||'').length*9+8);
     rect(e.x-w/2,y-11,w,16);
   };
-  visitSceneUnits(game,(e)=>{
+  visitSceneUnits(game,(e,isPlayer)=>{
     if(e===game.player||!visible(e)||!alive(e)&&e.state!=='recovering')return;
-    if(e.isTownNpc){
-      label(e,e.y-53,e.name);rect(e.x-25,e.y-43,50,58);return;
-    }
-    if(e.storyActor){
-      const shape=ACTOR_VISUALS.player,scale=(e.r||shape.radius)/shape.radius;
-      label(e,e.y-shape.top*scale-9,e.name);
-      rect(e.x-shape.halfWidth*scale-3,e.y-shape.top*scale-4,shape.halfWidth*scale*2+6,shape.top*scale+12);return;
-    }
+    const actor=actorVisual(e,isPlayer),sprite=spriteGeometry(actor),plate=actorNameplate(actor,{player:game.player,sprite});
+    const sink=actor.immersion?.sink||0;
+    if(plate){const b=plate.bounds;rect(b.x,b.y+sink,b.width,b.height);}
+    if(namesOnly)return;
+    const body=actorVisibleBounds(actor,sprite);
+    rect(body.left-3,body.top+sink-4,body.right-body.left+6,body.bottom-body.top+8);
+    if(e.isTownNpc||e.storyActor||e.sideQuestActor)return;
     if(e.isCompanion||e.isCaptive){
-      const shape=COMPANION_VISUALS[e.kind||e.heroId]||ACTOR_VISUALS.player;
-      const scale=COMPANION_VISUALS[e.kind||e.heroId]?(e.r||shape.radius)/shape.radius:1.1;
-      const top=e.y-shape.top*scale;
-      const suffix=e.isCaptive?(e.state==='ready'?' · 等待同行':e.kind==='golem'?' · 沉睡':' · 受困'):e.state==='recovering'?' · 恢复中':'';
-      label(e,top-9,(e.name||'伙伴')+suffix);
-      rect(e.x-shape.halfWidth*scale,top,shape.halfWidth*scale*2,shape.top*scale+8);
-      if(!e.isCaptive&&e.hp<e.maxHp&&e.state!=='recovering')rect(e.x-16,top-7,32,7);
+      if(!e.isCaptive&&e.hp<e.maxHp&&e.state!=='recovering')rect(e.x-16,body.top+sink-7,32,7);
       return;
     }
-    const shape=actorShape(e),scale=(e.r||shape.radius)/shape.radius,lift=Math.max(0,Math.min(60,e.specialLift||0));
-    rect(e.x-shape.halfWidth*scale-3,e.y-shape.top*scale-lift-4,shape.halfWidth*scale*2+6,shape.top*scale+lift+12);
+    const shape=actorShape(e),scale=(e.r||shape.radius)/shape.radius;
     if((e.hp<e.maxHp||e.elite)&&e.type!=='boss'){
       const w=e.r*(e.elite?2.1:1.7),y=e.y-e.r-(e.elite?14:10);
       rect(e.x-w/2-3,y-2,w+6,(e.elite?4:3)+4);
@@ -76,6 +68,7 @@ export function sceneDialogueAvoidance(game,{offsetX=0,offsetY=0,width,height,is
     if(e.affix)label(e,e.y-shape.top*scale-10,`${e.affix.name||''}精英`);
     if(e.rescueId)label(e,e.y-shape.top*scale-16,'围困者');
   });
+  if(namesOnly)return result;
   for(const e of game.enemies||[]){
     if(!alive(e)||!visible(e))continue;
     // Spore casts glow at the casting hand rather than drawing a ground lane.

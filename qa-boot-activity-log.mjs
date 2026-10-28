@@ -8,8 +8,9 @@ const source=fs.readFileSync(new URL('./dist/bootstrap.js',import.meta.url),'utf
   .replace(/^import .* from '[^']+';\s*$/gm,'')
   .replace(/import\('([^']+)'\)/g,"importModule('$1')");
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-async function boot({fallback=false,retry=false,failure,moduleStorage=new Map()}={}){
+async function boot({fallback=false,retry=false,failure,cachedSprites=false,moduleStorage=new Map()}={}){
   const records=[],events=new Map(),nodes=new Map(),order=[];let current=null,clock=0,flushes=0;
+  const readyImages=new Set(),resolvedImages=[];
   let reloads=0;
   const node=id=>{if(!nodes.has(id))nodes.set(id,{textContent:id==='game-version'?'v-test':'{}',disabled:true,setAttribute(){}});return nodes.get(id);};
   const document={getElementById:node,baseURI:'https://game.example/',hidden:false,
@@ -25,7 +26,9 @@ async function boot({fallback=false,retry=false,failure,moduleStorage=new Map()}
     end(id,{details,...result}){Object.assign(find(id),result);Object.assign(find(id).details,details);},
     flush(){flushes++;}};
   const loading={start(){},finish(){},fail(){},};
-  const progress={setStage(){},modulesReady(){},download(){},resolvedDownload(){},completeTask(){},finish(){},stop(){}};
+  const progress={setStage(){},modulesReady(){},download(){},resolvedDownload:path=>resolvedImages.push(path),completeTask(name){
+    if(name==='image')assert.equal(readyImages.size,2,'the image stage cannot finish while an actor atlas is still decoding');
+  },finish(){},stop(){}};
   const importModule=async path=>{
     order.push(path);
     if(failure==='module')throw new TypeError('Importing a module script failed.');
@@ -36,11 +39,15 @@ async function boot({fallback=false,retry=false,failure,moduleStorage=new Map()}
         if(!fallback)onDownloadProgress({loaded:12,total:12,done:true});
         onProgress({stage:'确认配置版本'});
       }};
-    if(path==='./enemy-art/frostcrown-assets.js')return {FROSTCROWN_ASSET:{path:'../image.png'},frostcrownAssets:{async preload({onProgress}){
-      if(retry){onProgress({phase:'download',loaded:3,total:5});onProgress({phase:'retry',error:Object.assign(new Error('HTTP 503'),{code:'http'})});}
-      onProgress({phase:'download',loaded:0,total:5});onProgress({phase:'download',loaded:5,total:5,done:true});
-      onProgress({phase:'decode'});if(failure==='decode')throw new Error('decode rejected');onProgress({phase:'ready'});
-    }}};
+    if(path==='./boot-art.js')return {BOOT_IMAGE_ASSETS:[['./image.png','角色图片',5],['./characters.png','人物图集',13]].map(([path,label,bytes],index)=>({path,label,assets:{async preload({onProgress}){
+      if(cachedSprites&&index===1){readyImages.add(path);return;}
+      if(retry&&index===0){onProgress({phase:'download',loaded:3,total:bytes});onProgress({phase:'retry',error:Object.assign(new Error('HTTP 503'),{code:'http'})});}
+      onProgress({phase:'download',loaded:0,total:bytes});onProgress({phase:'download',loaded:bytes,total:bytes,done:true});
+      onProgress({phase:'decode'});
+      if(failure===(index===0?'decode':'character-decode'))throw new Error('decode rejected');
+      readyImages.add(path);onProgress({phase:'ready'});
+    }}}))};
+    assert.equal(readyImages.size,2,'the app must not render before both decoded actor sources exist');
     if(failure==='app')throw new Error('application import rejected');
     return {};
   };
@@ -48,7 +55,7 @@ async function boot({fallback=false,retry=false,failure,moduleStorage=new Map()}
     createBootModules:options=>createBootModules({...options,storage:()=>({getItem:key=>moduleStorage.get(key),setItem:(key,value)=>moduleStorage.set(key,value),removeItem:key=>moduleStorage.delete(key)})}),
     createActivityLogView:()=>order.push('log-view'),waitForPaint:async()=>{},performance:{now:()=>++clock},importModule,console:{error(){}}};
   await new AsyncFunction(...Object.keys(input),source)(...Object.values(input));
-  return {records,events,document,window,activityLog,order,nodes,get current(){return current;},get flushes(){return flushes;},get reloads(){return reloads;}};
+  return {records,events,document,window,activityLog,order,nodes,resolvedImages,get current(){return current;},get flushes(){return flushes;},get reloads(){return reloads;}};
 }
 
 {
@@ -61,6 +68,10 @@ async function boot({fallback=false,retry=false,failure,moduleStorage=new Map()}
   const image=record.details.resources['./image.png'];
   assert.equal(image.loadedBytes,5);assert.equal(image.downloadedBytes,8,'bytes include the failed partial attempt');
   assert.equal(image.retries,1);assert(image.downloadMs>0&&image.decodeMs>0);
+  const characters=record.details.resources['./characters.png'];
+  assert.equal(characters.loadedBytes,13);assert.equal(characters.downloadedBytes,13);assert.equal(characters.retries,0);
+  assert(characters.downloadMs>0&&characters.decodeMs>0,'the second atlas has its own timings and bytes');
+  assert.deepEqual(fixture.resolvedImages,['./content-pack.json','./image.png','./characters.png']);
   const retryStage=record.stages.indexOf('重试下载角色图片 1/1');
   assert.equal(record.stages[retryStage+1],'下载角色图片','a retry returns to the download stage before decoding');
   assert.deepEqual(fixture.activityLog.context.viewport,{width:390,height:844});assert.equal(fixture.activityLog.context.dpr,2);
@@ -78,15 +89,20 @@ async function boot({fallback=false,retry=false,failure,moduleStorage=new Map()}
   assert.equal(resource.options.context.filename,'/app.js');assert.equal(resource.options.context.resource,'/image.png');
   assert(!JSON.stringify(resource).includes('secret'),'resource failure metadata only includes URL paths');
 }
-for(const failure of ['decode','app']){
+for(const failure of ['decode','character-decode','app']){
   const fixture=await boot({failure}),record=fixture.records[0];
   assert.equal(fixture.records.length,1,'startup errors stay within the boot activity');
   assert.equal(fixture.current,null,'failed startup also releases the current activity');
   assert.equal(record.status,'error');assert.equal(record.events.filter(event=>event.level==='error').length,1);
-  assert.equal(record.events.at(-1).options.phase,failure==='decode'?'解码角色图片':'加载游戏模块');
+  assert.equal(record.events.at(-1).options.phase,({decode:'解码角色图片','character-decode':'解码人物图集',app:'加载游戏模块'})[failure]);
   assert(record.details.resources['./content-pack.json'].downloadMs<record.details.resources['./image.png'].downloadMs,
     'later failures do not extend a completed configuration download');
   assert.equal(fixture.nodes.get('start-button')?.disabled??true,true,'failed boot does not enable gameplay');
+}
+{
+  const fixture=await boot({cachedSprites:true}),record=fixture.records[0];
+  assert.equal(record.summary,'首页已就绪');assert.equal(record.details.resources['./characters.png'].downloadedBytes,0);
+  assert(fixture.resolvedImages.includes('./characters.png'),'an already decoded atlas resolves its weight without inventing downloaded bytes');
 }
 {
   const moduleStorage=new Map(),first=await boot({failure:'module',moduleStorage});
@@ -100,4 +116,4 @@ for(const failure of ['decode','app']){
   const success=await boot({moduleStorage});
   assert.equal(success.records[0].summary,'首页已就绪');assert.equal(moduleStorage.size,0);
 }
-console.log('Boot activity log QA passed: early access, fallback/retry reasons, cumulative bytes, download/decode timing, boot failures, runtime error ownership and lifecycle flush.');
+console.log('Boot activity log QA passed: early access, fallback/retry reasons, both actor atlases, cumulative bytes, download/decode timing, cached readiness, boot failures, runtime error ownership and lifecycle flush.');

@@ -83,29 +83,32 @@ try{
     (configStatus.source==='server-cache'?'已启用缓存配置':'已启用内置配置'):'加载图片模块');
   await waitForPaint();
   setStage('正在准备画面与操作','加载图片模块');
-  const {frostcrownAssets,FROSTCROWN_ASSET}=await modules.load('art',()=>import('./enemy-art/frostcrown-assets.js'));
+  const {BOOT_IMAGE_ASSETS}=await modules.load('art',()=>import('./boot-art.js'));
   progress.modulesReady('art');
-  const imagePath='./'+FROSTCROWN_ASSET.path.replace(/^\.\.\//,'');
-  setStage('正在准备画面与操作','下载角色图片');
-  const imageDownload=startDownload(imagePath);
-  await frostcrownAssets.preload({expectedBytes:manifest.assets?.[imagePath],onProgress:event=>{
-    if(event.phase==='download'){
-      if(currentStage!=='下载角色图片')setStage('正在准备画面与操作','下载角色图片');
-      downloadProgress(imagePath,event);progress.download(imagePath,event);
-    }else if(event.phase==='decode'){
-      imageDownload.downloadMs=now()-imageDownload.startedAt;imageDownload.downloadComplete=true;imageDownload.decodeStartedAt=now();
-      recordResources();setStage('正在准备画面与操作','解码角色图片');
-    }else if(event.phase==='retry'){
-      imageDownload.retries++;imageDownload.loadedBytes=0;imageDownload.downloadComplete=false;imageDownload.downloadMs=now()-imageDownload.startedAt;
-      activityLog.event(bootId,'warning','角色图片下载重试',{attempt:imageDownload.retries,reason:event.error?.message,
-        code:event.error?.code,detail:event.error?.detail});
-      recordResources();setStage('正在准备画面与操作','重试下载角色图片 1/1');
-    }else if(event.phase==='ready'&&imageDownload.decodeStartedAt!==undefined){
-      imageDownload.decodeMs=now()-imageDownload.decodeStartedAt;delete imageDownload.decodeStartedAt;
-    }
-  }});
-  recordResources();
-  progress.resolvedDownload(imagePath);progress.completeTask('image');
+  for(const {path:imagePath,label,assets} of BOOT_IMAGE_ASSETS){
+    setStage('正在准备画面与操作',`下载${label}`);
+    const imageDownload=startDownload(imagePath);
+    await assets.preload({expectedBytes:manifest.assets?.[imagePath],onProgress:event=>{
+      if(event.phase==='download'){
+        if(currentStage!==`下载${label}`)setStage('正在准备画面与操作',`下载${label}`);
+        downloadProgress(imagePath,event);progress.download(imagePath,event);
+      }else if(event.phase==='decode'){
+        imageDownload.downloadMs=now()-imageDownload.startedAt;imageDownload.downloadComplete=true;imageDownload.decodeStartedAt=now();
+        recordResources();setStage('正在准备画面与操作',`解码${label}`);
+      }else if(event.phase==='retry'){
+        imageDownload.retries++;imageDownload.loadedBytes=0;imageDownload.downloadComplete=false;imageDownload.downloadMs=now()-imageDownload.startedAt;
+        activityLog.event(bootId,'warning',`${label}下载重试`,{resource:imagePath,attempt:imageDownload.retries,reason:event.error?.message,
+          code:event.error?.code,detail:event.error?.detail});
+        recordResources();setStage('正在准备画面与操作',`重试下载${label} 1/1`);
+      }else if(event.phase==='ready'&&imageDownload.decodeStartedAt!==undefined){
+        imageDownload.decodeMs=now()-imageDownload.decodeStartedAt;delete imageDownload.decodeStartedAt;
+      }
+    }});
+    if(!imageDownload.downloadComplete)imageDownload.downloadMs=now()-imageDownload.startedAt;
+    imageDownload.downloadComplete=true;
+    recordResources();progress.resolvedDownload(imagePath);
+  }
+  progress.completeTask('image');
   setStage('正在准备画面与操作','加载游戏模块');
   await waitForPaint();
   await modules.load('app',()=>import('./app.js'));
